@@ -1955,6 +1955,32 @@
       "subject": "A plan could not be checked against the people who had to deliver it",
       "description": "Nothing knew whether forty hours of estimated work had forty hours of anybody behind it. The estimator could describe effort and the schedule could describe dates, and no record connected either to a person’s week. Three entities now do, and the reason there are three is that the subtraction is the point: gross capacity is hours per day multiplied by working days, which is a number nobody can deliver against. A resource profile says what a person’s week looks like and lives on the operating model beside the directory, because it is a fact about employment rather than about delivery. A commitment is leave, a public holiday or internal work — the time a consulting firm actually runs on and never counts. An allocation is that person, committed to a project, for a period, at a share of their time. Available capacity is gross minus commitments; remaining is available minus allocations; and an overallocation is the case worth refusing. It is refused with the arithmetic rather than a shrug, and it can be overridden — short-term overallocation is a decision a delivery manager makes with their eyes open, and the difference between that and an accident is whether anybody said so, which is why the override is recorded as a reason on the audit entry. The override is offered only after a refusal, because a checkbox shown before anybody has been told there is a problem gets ticked as a matter of course. A four-day week is honoured, and the panel says so rather than assuming everybody is full-time. The plan check puts two numbers side by side that come from opposite ends of the product and were never otherwise compared: what the work is estimated to need, and what has been set aside for it. A firm finds that gap in week six; it was visible in week one. What the model deliberately does not do is schedule anybody — an optimiser reassigning work on capacity grounds would be making delivery decisions from a model that cannot see skill, client relationship, or who was on the call last week.",
       "reference": "lib/capacity.ts, components/CapacityPanel.tsx, prisma Allocation and Commitment"
+    },
+    {
+      "id": "AXM-076",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Routing & Intake",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "A connector: a forwarding rule and a token",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Mailboxes and routing rules were configuration nothing read",
+      "description": "A firm could describe its intake in detail — which address, which scope, which rule routes what to whom — and every word of it was inert. That is worse than an empty screen, because the screen implied a pipeline existed. The pipeline exists now, minus its first mile: a message goes in, the configured mailboxes and rules are applied in their configured order, and a work item comes out under the right scope, created through the same reducer as a person’s, so the transition graph, permissions, automation and audit all apply to it unchanged. Three decisions worth keeping. The classifier reports its guesses as guesses: severity inferred from words like \"blocking\" and \"production\" comes back marked guessed rather than stated, and the provenance note on the record says which fields to distrust — an intake that silently decides a client’s problem is High severity is one wrong guess away from an SLA nobody agreed to. A machine may file work and may not decide it is being worked on, so records arrive Open whatever the wording suggested. And the endpoint refuses everything unless a shared secret is configured, because an open endpoint that creates records from the internet is exactly the thing that ships with \"we will add auth later\". What it deliberately is not is a mail server: nothing connects to a mailbox, holds credentials or polls anything. Something has to receive the mail and POST it, and that last mile is a connector — a forwarding rule, a Graph subscription, a webhook from whatever already handles the firm’s mail — kept outside the application because a half-built poller with no credentials would be the same inert configuration this replaces.",
+      "reference": "lib/intake.ts, app/api/intake/route.ts"
     }
   ]
 }

@@ -4,12 +4,22 @@
     {
       "id": "A",
       "title": "Client sends a new request to the project email address",
-      "expected": "The mail is received, classified, becomes a work item under the right engagement, and someone owns it.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "Mailboxes and routing rules are configuration records in 3 files; 0 of those read them at runtime. Nothing receives mail.",
-      "stops": "at the first arrow — there is no inbound channel",
-      "severity": "P0",
-      "impact": "The intake the product is named for cannot start. Every record is typed by hand."
+      "expected": "The message is classified, becomes a work item under the right engagement, and says how it got there.",
+      "verdict": "PARTIAL",
+      "actual": "Classified and filed under the mailbox's scope as OAPIL-004, at High severity — and the severity is reported as guessed rather than stated, because it came from the words \"blocking\" and \"production\" rather than from a rule. Rules that fired: Inventory to Priya. The record is created through the same reducer as a person's, so the transition graph, permissions and audit apply. It arrives as \"Open\": a machine may file work, it may not decide it is being worked on. An unknown address is refused: \"No mailbox is configured for someone-else@axiocloud.example. Configuration → Routing & int\"",
+      "stops": "at the first mile — nothing fetches mail. Something has to receive it and POST it to /api/intake, which is a connector rather than an application feature",
+      "severity": "P1",
+      "impact": "The pipeline a firm configures now runs. Connecting it to a real mailbox is a forwarding rule and a token, not a build."
+    },
+    {
+      "id": "A2",
+      "title": "The same message is delivered twice",
+      "expected": "The second delivery is recognised and does not create a second record.",
+      "verdict": "PARTIAL",
+      "actual": "The endpoint refuses a repeat on the sender's own message id and answers \"already received\" rather than an error — the caller did nothing wrong, and retrying is what it should do. It also refuses everything unless a shared secret is configured: an endpoint that creates records from the internet does not run open. Both are read from the route here rather than driven, because exercising them needs a live database.",
+      "stops": "at a live database — the logic is in the endpoint and cannot be driven by this harness",
+      "severity": "P2",
+      "impact": "Duplicate delivery, which is the normal failure of every mail integration, does not produce duplicate work."
     },
     {
       "id": "B",

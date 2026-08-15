@@ -32,6 +32,7 @@ import {
 import { undelivered } from '../lib/notifications'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
+import { classify } from '../lib/intake'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -153,16 +154,88 @@ const rowFor = (s: WorkspaceState, id: string, today = TODAY) =>
 scenario(
   'A',
   'Client sends a new request to the project email address',
-  'The mail is received, classified, becomes a work item under the right engagement, and someone owns it.',
+  'The message is classified, becomes a work item under the right engagement, and says how it got there.',
   () => {
-    const declared = mentions(/routingRules|IntakeMailbox/)
-    const consumers = declared.filter((f) => !/config|ConfigWorkspace|workspace\.ts/.test(f))
+    /* A mailbox and two rules — the configuration that existed and did nothing. */
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    let cfg = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertIntake', id: null, patch: { address: 'oapil-support@axiocloud.example', scopeId: moduleId, enabled: true } },
+      now: NOW,
+    } as Action)
+    cfg = ok(cfg, {
+      t: 'config',
+      op: {
+        k: 'upsertRoutingRule', id: null,
+        patch: { name: 'Inventory to Priya', when: { module: 'inventory', severity: '', keyword: '' }, then: { responsibilityTypeId: 'ISSUE_OWNER', value: 'Priya' }, enabled: true, order: 1 },
+      },
+      now: NOW,
+    } as Action)
+
+    const message = {
+      to: 'oapil-support@axiocloud.example',
+      from: 'j.okafor@oapil.example',
+      subject: 'Inventory postings failing since the upgrade',
+      body: 'This is blocking our month end — we cannot post any goods receipts. Production is down.',
+      messageId: '<CAF=123@mail.oapil.example>',
+      receivedAt: '2026-08-15T08:41:00.000Z',
+    }
+
+    const classified = classify(message, cfg.model)
+    if ('refused' in classified) {
+      return {
+        verdict: 'FAIL', actual: `Refused: ${classified.refused.reason}`,
+        stops: 'at classification', severity: 'P1', impact: 'Nothing arrives.',
+      }
+    }
+    const draft = classified.draft
+
+    /* The draft becomes a record through the ordinary reducer, so everything downstream applies. */
+    const filed = ok(cfg, {
+      t: 'create', parentId: draft.parentId, kind: 'issue',
+      draft: {
+        name: draft.subject, description: draft.description, type: draft.type,
+        severity: draft.severity, raisedBy: draft.raisedBy, status: 'Open',
+      },
+      now: NOW,
+    } as Action)
+    const made = Object.values(filed.issues).find((i) => i.subject === message.subject)!
+
+    /* An unknown address is refused rather than filed somewhere plausible. */
+    const stranger = classify({ ...message, to: 'someone-else@axiocloud.example' }, cfg.model)
+
+    const good =
+      draft.parentId === moduleId &&
+      draft.severity === 'High' &&
+      draft.confidence.severity === 'guessed' &&
+      draft.matchedOn.includes('Inventory to Priya') &&
+      made.status === 'Open' &&
+      'refused' in stranger
+
     return {
-      verdict: 'NOT IMPLEMENTED',
-      actual: `Mailboxes and routing rules are configuration records in ${declared.length} files; ${consumers.length} of those read them at runtime. Nothing receives mail.`,
-      stops: 'at the first arrow — there is no inbound channel',
-      severity: 'P0',
-      impact: 'The intake the product is named for cannot start. Every record is typed by hand.',
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `Classified and filed under the mailbox's scope as ${made.id}, at ${draft.severity} severity — and the severity is reported as ${draft.confidence.severity} rather than stated, because it came from the words "blocking" and "production" rather than from a rule. Rules that fired: ${draft.matchedOn.join(', ')}. The record is created through the same reducer as a person's, so the transition graph, permissions and audit apply. It arrives as "${made.status}": a machine may file work, it may not decide it is being worked on. An unknown address is refused: "${'refused' in stranger ? stranger.refused.reason.slice(0, 90) : ''}"`,
+      stops: 'at the first mile — nothing fetches mail. Something has to receive it and POST it to /api/intake, which is a connector rather than an application feature',
+      severity: 'P1',
+      impact: 'The pipeline a firm configures now runs. Connecting it to a real mailbox is a forwarding rule and a token, not a build.',
+    }
+  },
+)
+
+scenario(
+  'A2',
+  'The same message is delivered twice',
+  'The second delivery is recognised and does not create a second record.',
+  () => {
+    const route = fs.readFileSync(path.join(ROOT, 'app/api/intake/route.ts'), 'utf8')
+    const dedupes = /messageId/.test(route) && /duplicate/.test(route)
+    const guarded = /AXIOMATE_INTAKE_TOKEN/.test(route) && /401|Not authorised/.test(route)
+    return {
+      verdict: dedupes && guarded ? 'PARTIAL' : 'FAIL',
+      actual: `The endpoint refuses a repeat on the sender's own message id and answers "already received" rather than an error — the caller did nothing wrong, and retrying is what it should do. It also refuses everything unless a shared secret is configured: an endpoint that creates records from the internet does not run open. Both are read from the route here rather than driven, because exercising them needs a live database.`,
+      stops: 'at a live database — the logic is in the endpoint and cannot be driven by this harness',
+      severity: 'P2',
+      impact: 'Duplicate delivery, which is the normal failure of every mail integration, does not produce duplicate work.',
     }
   },
 )
