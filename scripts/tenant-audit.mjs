@@ -72,6 +72,34 @@ if (findings.length === 0) {
   process.exitCode = 1
 }
 
+/**
+ * The reducer must not read ambient identity.
+ *
+ * `apply()` is the single funnel every mutation goes through, and the server replays the
+ * client's actions through it. It used to read a module-level constant at forty-seven sites,
+ * which meant every audited change in every workspace carried one hardcoded name and the
+ * server had no way to substitute its own. The actor is a parameter now; this checks that it
+ * stayed one.
+ */
+const reducer = fs.readFileSync('lib/workspace.ts', 'utf8')
+const ambient = [
+  ["reads CURRENT_ACTOR", /CURRENT_ACTOR/],
+  ["imports from ./session", /from '\.\/session'/],
+  ["apply() takes an actor", /export function apply\([^)]*actor: Actor[^)]*\)/, true],
+]
+const attribution = ambient
+  .map(([what, re, mustMatch]) => {
+    const hit = re.test(reducer)
+    const ok = mustMatch ? hit : !hit
+    return { what, ok }
+  })
+  .filter((r) => !r.ok)
+
+console.log(
+  `\nReducer attribution: ${attribution.length ? 'FAIL — ' + attribution.map((r) => r.what).join(', ') : 'no ambient identity; the actor is a parameter'}`,
+)
+if (attribution.length) process.exitCode = 1
+
 /* The mappers must all stamp the tenant onto the row they build. */
 const map = fs.readFileSync('lib/db/map.ts', 'utf8')
 const toRow = [...map.matchAll(/export function (\w+ToRow)\(/g)].map((m) => m[1])

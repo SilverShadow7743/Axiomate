@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CURRENT_USER, formatSessionLong, formatSessionTime } from '@/lib/session'
+import type { Actor } from '@/lib/actor'
 
 /**
  * Who is operating the system, and when.
@@ -14,7 +15,7 @@ import { CURRENT_USER, formatSessionLong, formatSessionTime } from '@/lib/sessio
  * The minute is the smallest unit displayed, so the tick aligns to the next minute boundary
  * rather than polling every second.
  */
-export default function UserContext() {
+export default function UserContext({ actor }: { actor: Actor }) {
   const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -32,7 +33,10 @@ export default function UserContext() {
     return () => window.clearTimeout(timer)
   }, [])
 
-  const { displayName, timeZone, locale } = CURRENT_USER
+  const { timeZone, locale } = CURRENT_USER
+  // The name comes from the actor, so the header and the audit trail cannot disagree about
+  // who is operating — they now read the same value rather than two copies of one string.
+  const displayName = actor.name
 
   // Before mount, reserve the space with the name alone so the header does not jump.
   if (!now) {

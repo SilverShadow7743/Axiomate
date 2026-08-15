@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server'
 import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
+import { currentActor } from '@/lib/identity'
 import type { Action } from '@/lib/workspace'
 
 export const runtime = 'nodejs'
@@ -82,15 +83,17 @@ export async function POST(req: Request) {
 
   try {
     /**
-     * The tenant is resolved here, from the server's own configuration — never from the
-     * request body.
+     * Both the tenant and the actor are resolved here, from the server's own configuration —
+     * never from the request body.
      *
      * That is the whole point of the seam. A client-supplied tenant id would let anyone read
      * and write any firm's workspace by changing one field, which is worse than having no
-     * tenancy at all: it would look like isolation while being an open door. When identity
-     * arrives, this call learns to read the session; the request body still never gets a say.
+     * tenancy at all: it would look like isolation while being an open door. The same
+     * argument applies to attribution, and `Action` has no actor field precisely so that the
+     * browser has nothing to forge. When authentication arrives, both calls learn to read the
+     * session; the request body still never gets a say.
      */
-    const result = await persistActions(currentTenantId(), list as Action[])
+    const result = await persistActions(currentTenantId(), currentActor(), list as Action[])
     return NextResponse.json(result, { status: result.ok ? 200 : 409 })
   } catch (err) {
     return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })

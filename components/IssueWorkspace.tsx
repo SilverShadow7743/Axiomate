@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
+import type { Actor } from '@/lib/actor'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
@@ -81,6 +82,14 @@ interface Props {
    * never merge. It is not an authority: the server never trusts a tenant the client sends.
    */
   tenantId: string
+  /**
+   * Who this session's changes are attributed to, resolved on the server.
+   *
+   * Used for the optimistic audit entries the reducer writes locally, so History reads the
+   * same before and after the server confirms. The server does not trust it — it resolves
+   * its own and that is what is stored.
+   */
+  actor: Actor
   meta: {
     source: string
     issueCount: number
@@ -100,6 +109,7 @@ export default function IssueWorkspace({
   initialState,
   persistence,
   tenantId,
+  actor,
   meta,
   today,
 }: Props) {
@@ -157,7 +167,7 @@ export default function IssueWorkspace({
   /** Single funnel for every mutation, so validation and audit are never bypassed. */
   const dispatch = useCallback(
     (action: Action): boolean => {
-      const res = apply(state, action)
+      const res = apply(state, action, actor)
       if (res.error) {
         notify(res.error, true)
         return false
@@ -168,7 +178,7 @@ export default function IssueWorkspace({
       persist(action)
       return true
     },
-    [state, notify, persist],
+    [state, notify, persist, actor],
   )
 
   /**
@@ -186,7 +196,7 @@ export default function IssueWorkspace({
       let createdId: string | undefined
       let message: string | undefined
       for (const action of actions) {
-        const res = apply(cur, action)
+        const res = apply(cur, action, actor)
         if (res.error) {
           notify(res.error, true)
           return { ok: false }
@@ -207,7 +217,7 @@ export default function IssueWorkspace({
       // back off `state`.
       return { ok: true, createdId, state: cur }
     },
-    [state, notify, autosave],
+    [state, notify, autosave, actor],
   )
 
   /* ---------------- configuration ---------------- */
@@ -1203,6 +1213,7 @@ export default function IssueWorkspace({
       </div>
 
       <FilterBar
+        actor={actor}
         filters={filters}
         setFilters={setFilters}
         facets={facets}

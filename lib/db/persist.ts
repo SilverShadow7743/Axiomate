@@ -4,6 +4,7 @@ import { apply, type Action, type WorkspaceState } from '../workspace'
 import { prisma } from './client'
 import { loadWorkspace } from './repo'
 import type { TenantId } from '../tenant'
+import type { Actor } from '../actor'
 import {
   activityToRow,
   auditToRow,
@@ -54,6 +55,7 @@ export interface PersistResult {
  */
 export async function persistActions(
   tenantId: TenantId,
+  actor: Actor,
   actions: Action[],
 ): Promise<PersistResult> {
   // Retried because serializable isolation aborts a transaction that would have interleaved.
@@ -61,7 +63,7 @@ export async function persistActions(
   // the winner produced, which is precisely what "each action sees the one before it" means.
   for (let attempt = 0; ; attempt++) {
     try {
-      return await runBatch(tenantId, actions)
+      return await runBatch(tenantId, actor, actions)
     } catch (err) {
       if (attempt >= MAX_SERIALIZATION_RETRIES || !isSerializationFailure(err)) throw err
     }
@@ -76,7 +78,11 @@ function isSerializationFailure(err: unknown): boolean {
 
 const MAX_SERIALIZATION_RETRIES = 3
 
-async function runBatch(tenantId: TenantId, actions: Action[]): Promise<PersistResult> {
+async function runBatch(
+  tenantId: TenantId,
+  actor: Actor,
+  actions: Action[],
+): Promise<PersistResult> {
   /**
    * The read happens INSIDE the transaction, and that placement is the whole point.
    *
@@ -96,7 +102,9 @@ async function runBatch(tenantId: TenantId, actions: Action[]): Promise<PersistR
       let createdId: string | undefined
 
       for (const [index, action] of actions.entries()) {
-        const result = apply(current, action)
+        // The server's actor, never the client's: the action carries no attribution to
+        // forge, so what is written down is whoever this request resolved to.
+        const result = apply(current, action, actor)
         if (result.error) {
           failure = { error: result.error, index }
           break
@@ -146,8 +154,12 @@ async function runBatch(tenantId: TenantId, actions: Action[]): Promise<PersistR
 }
 
 /** Single-action convenience, in terms of the batch. */
-export function persistAction(tenantId: TenantId, action: Action): Promise<PersistResult> {
-  return persistActions(tenantId, [action])
+export function persistAction(
+  tenantId: TenantId,
+  actor: Actor,
+  action: Action,
+): Promise<PersistResult> {
+  return persistActions(tenantId, actor, [action])
 }
 
 type Tx = Prisma.TransactionClient

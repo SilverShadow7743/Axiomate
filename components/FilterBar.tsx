@@ -5,6 +5,7 @@ import type { FilterState, SlaPolicy, ZoomLevel } from '@/lib/types'
 import { EMPTY_FILTERS } from '@/lib/types'
 import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
+import type { Actor } from '@/lib/actor'
 import { useLabels } from './labels'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
@@ -50,6 +51,8 @@ function FilterDropdown({
 }
 
 interface Props {
+  /** Who is operating, for the header chip. Resolved on the server; see lib/identity.ts. */
+  actor: Actor
   filters: FilterState
   setFilters: (f: FilterState) => void
   facets: {
@@ -86,6 +89,7 @@ interface Props {
 }
 
 export default function FilterBar({
+  actor,
   filters,
   setFilters,
   facets,
@@ -245,7 +249,7 @@ export default function FilterBar({
       </div>
 
       <span className="sep" />
-      <UserContext />
+      <UserContext actor={actor} />
     </div>
   )
 }

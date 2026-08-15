@@ -1,13 +1,13 @@
 /**
- * The operator of the current session.
+ * How the viewer wants dates and times rendered.
  *
- * There is no authentication in this app yet, so this is a single stand-in rather than
- * something read from a login. It is defined once so that when auth arrives there is exactly
- * one place to replace — and so the header and the audit trail can never disagree about who
- * performed an action.
+ * Preferences, not identity. Who is acting is an `Actor` (see `lib/actor.ts`), resolved on the
+ * server and passed down; this record only decides how a moment is formatted for the person
+ * looking at it. The two used to be one thing — `displayName` lived here and the reducer read
+ * a constant derived from it — which made a viewer preference and a durable attribution the
+ * same field, and meant every audited change in every workspace carried one hardcoded name.
  */
 export interface SessionUser {
-  displayName: string
   /** IANA zone from the user's profile, when there is one to read. */
   timeZone: string | null
   /**
@@ -22,14 +22,10 @@ export interface SessionUser {
 }
 
 export const CURRENT_USER: SessionUser = {
-  displayName: 'Nishant Sekhar',
   // Null means "use the device settings", the honest default without a profile to read.
   timeZone: null,
   locale: 'en-IN',
 }
-
-/** Actor recorded against every audited change. */
-export const CURRENT_ACTOR = CURRENT_USER.displayName
 
 /**
  * Format the moment for the header.

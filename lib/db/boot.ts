@@ -4,6 +4,8 @@ import { loadSeed, type SeedFile } from '../data'
 import { databaseConfigured, describeDbError } from './client'
 import { importWorkspace, loadWorkspace } from './repo'
 import { currentTenantId } from '../tenant'
+import { currentActor } from '../identity'
+import type { Actor } from '../actor'
 
 /**
  * What the page gets on boot.
@@ -25,6 +27,15 @@ export interface Boot {
    * in `currentTenantId`, and nowhere else.
    */
   tenantId: string
+  /**
+   * Who the server will attribute this session's changes to.
+   *
+   * Passed to the client so its optimistic audit entries carry the same name the server
+   * will write. It is a preview, not an authority: the value that reaches the database is
+   * whatever `currentActor()` returns on the server for that request, and the client has no
+   * field to override it with.
+   */
+  actor: Actor
   persistence: {
     enabled: boolean
     /** One sentence, shown in the app, explaining exactly where changes go. */
@@ -38,12 +49,14 @@ export async function boot(): Promise<Boot> {
   const seed = await loadSeed()
   // Resolved once, here, and passed down. Nothing further in the request re-derives it.
   const tenantId = currentTenantId()
+  const actor = currentActor()
 
   if (!databaseConfigured()) {
     return {
       seed,
       state: null,
       tenantId,
+      actor,
       persistence: {
         enabled: false,
         note: 'In-memory session. Set DATABASE_URL and run `npm run db:push` to save changes.',
@@ -66,6 +79,7 @@ export async function boot(): Promise<Boot> {
       seed,
       state,
       tenantId,
+      actor,
       persistence: {
         enabled: true,
         note: orphans.length
@@ -80,6 +94,7 @@ export async function boot(): Promise<Boot> {
       seed,
       state: null,
       tenantId,
+      actor,
       persistence: {
         enabled: false,
         note: 'Running from the issue log. Changes are not being saved.',
