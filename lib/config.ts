@@ -181,6 +181,47 @@ export interface Person {
 }
 
 /**
+ * What kind of work an item is.
+ *
+ * This is the discriminator that makes one table the right answer to "one work-item table, or
+ * ten?" — and the log had already answered it before anyone asked. The imported records carry
+ * ten distinct types, Change Request and Defect and Query among them, coexisting in one table
+ * with one schema and no strain. The blueprint's Work Item taxonomy (task, action, request,
+ * defect, change request, risk, decision, deliverable) is the same shape at a different
+ * altitude: adding one has to be configuration, not a migration.
+ *
+ * It was free text until now. That is why the types were unfilterable, unvalidated, and
+ * invisible to the assistant, which could invent an eleventh by typo.
+ *
+ * Seeded from the types actually present in the imported log, never from the blueprint's list.
+ * A registry pre-loaded with `Risk` and `Decision` would be asserting that this firm tracks
+ * them, which the records do not show — the same rule that keeps the engagement fields blank.
+ */
+export interface WorkType {
+  /** Stable system key. Discovered types get `WT_<SLUG>`; ones added here get `WT_<n>`. */
+  id: string
+  label: string
+  description: string
+  /** Discovered in the imported log rather than entered here, as with `Person`. */
+  fromSource: boolean
+  deletedAt: string | null
+}
+
+/** The work types on offer, in a stable order. */
+export function liveWorkTypes(model: OperatingModel): WorkType[] {
+  // `?? {}` because this can be reached with a model parsed from storage that predates the
+  // key. `mergeModel` is what should prevent that; this is what stops it being a blank page.
+  return Object.values(model.workTypes ?? {})
+    .filter((t) => !t.deletedAt)
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** A readable, stable key for a type discovered in the log. */
+export function workTypeId(label: string): string {
+  return `WT_${label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+}
+
+/**
  * What a responsibility can be filled with.
  *  - `person` resolves against the directory (Owner, Raised By)
  *  - `party`  resolves against the accountable-party vocabulary (an organisation, not a human)
@@ -361,6 +402,8 @@ export interface OperatingModel {
   roles: Record<string, OrgRole>
   people: Record<string, Person>
   responsibilities: Record<string, ResponsibilityType>
+  /** What kind of work an item is — the discriminator that keeps this one table. */
+  workTypes: Record<string, WorkType>
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -630,7 +673,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
  * no roles, which is the honest state: the log records who was working an issue, never what
  * they are.
  */
-export function initModel(sourceOwners: string[]): OperatingModel {
+export function initModel(sourceOwners: string[], sourceTypes: string[] = []): OperatingModel {
   const roles: Record<string, OrgRole> = {}
   for (const r of SEED_ROLES) roles[r.id] = { ...r, deletedAt: null }
 
@@ -644,6 +687,16 @@ export function initModel(sourceOwners: string[]): OperatingModel {
     if (!clean || clean === 'Unassigned') continue
     n += 1
     people[`PERSON_${n}`] = { id: `PERSON_${n}`, name: clean, roleIds: [], fromSource: true }
+  }
+
+  // Discovered, not invented: whatever the imported records actually say they are.
+  const workTypes: Record<string, WorkType> = {}
+  for (const label of sourceTypes) {
+    const clean = label.trim()
+    if (!clean) continue
+    const id = workTypeId(clean)
+    if (workTypes[id]) continue
+    workTypes[id] = { id, label: clean, description: '', fromSource: true, deletedAt: null }
   }
 
   const agents: Record<string, AgentRecord> = {}
@@ -660,6 +713,7 @@ export function initModel(sourceOwners: string[]): OperatingModel {
     roles,
     people,
     responsibilities,
+    workTypes,
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -865,6 +919,40 @@ function storeKey(tenantId: string): string {
 const LEGACY_MODEL_KEY = 'axiomate.operating-model.v1'
 
 /**
+ * Fold a stored operating model over the shipped one.
+ *
+ * Every record map is merged *explicitly*, and that is the whole point rather than a style
+ * choice: a stored model predates every key added since it was written, so a bare
+ * `{ ...seed, ...stored }` sets each of those keys to `undefined` — which is not "the old
+ * value", it is a crash the next time anything reads one. `workTypes` was the key that
+ * proved it.
+ *
+ * Exported because there are two places a stored model arrives from, and until now only one
+ * of them merged. The browser mirror carries the whole workspace including its model, and
+ * `loadWorkspaceLocally` was taking that model wholesale — so on any browser that had ever
+ * run the app, a newly added part of the operating model was invisible no matter how
+ * carefully this function handled it.
+ */
+export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>): OperatingModel {
+  if (!stored || typeof stored !== 'object') return seed
+  return {
+    ...seed,
+    ...stored,
+    roles: { ...seed.roles, ...(stored.roles ?? {}) },
+    people: { ...seed.people, ...(stored.people ?? {}) },
+    responsibilities: { ...seed.responsibilities, ...(stored.responsibilities ?? {}) },
+    workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
+    agents: mergeAgents(seed.agents, stored.agents),
+    workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
+    templates: { ...seed.templates, ...(stored.templates ?? {}) },
+    organization: { ...seed.organization, ...(stored.organization ?? {}) },
+    parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
+    overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
+    seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,
+  }
+}
+
+/**
  * Mirror the model to local storage.
  *
  * The workspace itself is in-memory per session, but configuration is not workspace data —
@@ -897,21 +985,7 @@ export function loadModel(tenantId: string, seed: OperatingModel): OperatingMode
     }
     const raw = window.localStorage.getItem(storeKey(tenantId))
     if (!raw) return seed
-    const stored = JSON.parse(raw) as Partial<OperatingModel>
-    return {
-      ...seed,
-      ...stored,
-      roles: { ...seed.roles, ...(stored.roles ?? {}) },
-      people: { ...seed.people, ...(stored.people ?? {}) },
-      responsibilities: { ...seed.responsibilities, ...(stored.responsibilities ?? {}) },
-      agents: mergeAgents(seed.agents, stored.agents),
-      workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
-      templates: { ...seed.templates, ...(stored.templates ?? {}) },
-      organization: { ...seed.organization, ...(stored.organization ?? {}) },
-      parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
-      overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
-      seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,
-    }
+    return mergeModel(seed, JSON.parse(raw) as Partial<OperatingModel>)
   } catch {
     return seed
   }

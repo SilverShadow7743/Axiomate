@@ -57,6 +57,7 @@ interface Props {
   setFilters: (f: FilterState) => void
   facets: {
     clients: string[]
+    types: string[]
     modules: string[]
     statuses: string[]
     severities: string[]
@@ -129,6 +130,7 @@ export default function FilterBar({
   return (
     <div className="filterbar">
       <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
+      <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
       <FilterDropdown label={labels.TIER_MODULE} name="module" options={facets.modules} value={filters.module} onChange={set} />
       <FilterDropdown label={labels.FIELD_STATUS} name="status" options={facets.statuses} value={filters.status} onChange={set} />
       <FilterDropdown label={labels.FIELD_SEVERITY} name="severity" options={facets.severities} value={filters.severity} onChange={set} />

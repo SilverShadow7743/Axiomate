@@ -11,6 +11,7 @@ import {
   ROOT_SCOPE,
   kindLabel,
   liveResponsibilities,
+  liveWorkTypes,
   liveRoles,
   resolveAgentEnabled,
   resolveLabel,
@@ -51,11 +52,13 @@ type Tab =
   | 'agents'
   | 'workflows'
   | 'routing'
+  | 'workTypes'
   | 'scopes'
 
 const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
+  { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
@@ -171,6 +174,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'roles' && <RolesAndPeople state={state} onConfig={onConfig} />}
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
+          {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'scopes' && (
@@ -596,6 +600,109 @@ function RolesAndPeople({
         {!people.length && <div className="cfg-empty">Nobody matches that filter.</div>}
       </section>
     </>
+  )
+}
+
+
+/* ================================================================== *
+ * Work types
+ * ================================================================== */
+
+function WorkTypes({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const model = state.model
+  const types = liveWorkTypes(model)
+  const [newType, setNewType] = useState('')
+
+  /** How many records carry each type — so archiving one is an informed decision. */
+  const counts = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const i of Object.values(state.issues)) {
+      if (i.deletedAt) continue
+      n[i.type] = (n[i.type] ?? 0) + 1
+    }
+    return n
+  }, [state.issues])
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Work types</h3>
+      <p className="cfg-note">
+        What kind of work a record is. Every record lives in one table and is told apart by
+        this — which is why adding a type here is configuration rather than a schema change,
+        and why the imported log can carry Change Requests and Defects side by side.
+      </p>
+      <p className="cfg-note">
+        The list started as whatever the imported records actually said they were, not as a
+        standard taxonomy. Types marked <em>from the log</em> were discovered that way.
+      </p>
+
+      {types.map((t) => {
+        const used = counts[t.label] ?? 0
+        return (
+          <div className="cfg-card" key={t.id}>
+            <div className="cfg-card-head">
+              <input
+                defaultValue={t.label}
+                aria-label={`Name for ${t.id}`}
+                onBlur={(e) =>
+                  e.target.value.trim() !== t.label &&
+                  onConfig({ k: 'upsertWorkType', id: t.id, label: e.target.value, description: t.description })
+                }
+              />
+              <span className="cfg-key">{t.id}</span>
+              {t.fromSource && <Badge kind="seeded">from the log</Badge>}
+              <span className="cfg-inherit">{used === 1 ? '1 record' : `${used} records`}</span>
+              <span className="grow" />
+              <button
+                className="btn ghost"
+                disabled={used > 0}
+                title={
+                  used > 0
+                    ? `${used} record${used === 1 ? '' : 's'} are classified as this. Reclassify them first.`
+                    : 'Archive this work type'
+                }
+                onClick={() => onConfig({ k: 'deleteWorkType', id: t.id })}
+              >
+                Archive
+              </button>
+            </div>
+            <input
+              defaultValue={t.description}
+              placeholder="What this type is for — when someone should choose it"
+              aria-label={`Description for ${t.label}`}
+              onBlur={(e) =>
+                e.target.value.trim() !== t.description &&
+                onConfig({ k: 'upsertWorkType', id: t.id, label: t.label, description: e.target.value })
+              }
+            />
+          </div>
+        )
+      })}
+
+      <div className="cfg-inline">
+        <input
+          value={newType}
+          placeholder="Add a work type — e.g. Risk, Decision, Deliverable"
+          aria-label="New work type name"
+          onChange={(e) => setNewType(e.target.value)}
+        />
+        <button
+          className="btn primary"
+          disabled={!newType.trim()}
+          onClick={() => {
+            if (onConfig({ k: 'upsertWorkType', id: null, label: newType, description: '' })) setNewType('')
+          }}
+        >
+          Add work type
+        </button>
+      </div>
+    </section>
   )
 }
 

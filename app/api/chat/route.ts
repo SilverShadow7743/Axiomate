@@ -110,6 +110,13 @@ function parseConfig(raw: unknown): ChatConfig {
     ? c.parties.filter((p): p is string => typeof p === 'string' && !!p.trim())
     : []
 
+  // Same treatment as parties: filtered rather than trusted, and left empty when the request
+  // sends nothing usable — an empty registry imposes no constraint, which is the honest
+  // outcome, whereas a defaulted list would constrain against types this workspace may not have.
+  const workTypes = Array.isArray(c.workTypes)
+    ? c.workTypes.filter((t): t is string => typeof t === 'string' && !!t.trim())
+    : []
+
   return {
     terms: {
       owner: pick('owner'),
@@ -120,6 +127,7 @@ function parseConfig(raw: unknown): ChatConfig {
       organization: pick('organization'),
     },
     parties: parties.length ? parties : d.parties,
+    workTypes,
     autonomy,
   }
 }

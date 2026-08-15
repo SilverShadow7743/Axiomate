@@ -50,6 +50,8 @@ import {
   checkAssignment,
   emptyOverride,
   initModel,
+  liveWorkTypes,
+  type WorkType,
   resolveLabel,
   type Autonomy,
   type IntakeMailbox,
@@ -371,7 +373,7 @@ export function initWorkspace(
     relationships,
     evidence: {},
     engagements,
-    model: initModel(owners),
+    model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
     seq: 1,
   }
@@ -450,6 +452,8 @@ export type ConfigOp =
   | { k: 'setLabel'; scopeId: string; key: LabelKey; label: string }
   | { k: 'upsertRole'; id: string | null; label: string; description: string }
   | { k: 'deleteRole'; id: string }
+  | { k: 'upsertWorkType'; id: string | null; label: string; description: string }
+  | { k: 'deleteWorkType'; id: string }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -618,7 +622,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               from: null,
               to: `${termFor(state, a.kind)} "${name}" under ${nameOf(state, a.parentId)}`,
               at: a.now,
-              by: by,
+              by,
             }),
           },
           createdId: id,
@@ -693,7 +697,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               from: null,
               to: `${a.kind === 'sub-issue' ? 'Sub-issue' : 'Issue'} "${name}" under ${nameOf(state, a.parentId)}`,
               at: a.now,
-              by: by,
+              by,
             }),
           },
           createdId: id,
@@ -739,7 +743,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: null,
             to: `${isMilestone ? 'Milestone' : a.kind} on ${issueId}`,
             at: a.now,
-            by: by,
+            by,
           }),
         },
         createdId: id,
@@ -765,7 +769,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: String((n as unknown as Record<string, unknown>)[k] ?? ''),
             to: String(v ?? ''),
             at: a.now,
-            by: by,
+            by,
           },
         )
       }
@@ -792,7 +796,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: String((i as unknown as Record<string, unknown>)[k] ?? ''),
             to: String(v ?? ''),
             at: a.now,
-            by: by,
+            by,
           },
         )
       }
@@ -819,7 +823,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               from: i.actualEnd ?? '',
               to: derivedEnd ?? '(cleared)',
               at: a.now,
-              by: by,
+              by,
               reason: `Derived from the status change to “${a.patch.status}”.`,
             },
           )
@@ -842,7 +846,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: String((act as unknown as Record<string, unknown>)[k] ?? ''),
             to: String(v ?? ''),
             at: a.now,
-            by: by,
+            by,
           },
         )
       }
@@ -911,7 +915,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: 'active',
             to: detail,
             at: a.now,
-            by: by,
+            by,
             reason: 'Soft delete — the record is retained in history and can be restored.',
           }),
         },
@@ -939,7 +943,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: 'archived',
             to: 'active',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: 'Record restored.',
@@ -990,7 +994,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: from ? nameOf(state, from) : '(root)',
             to: nameOf(state, a.newParentId),
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: `Moved to ${nameOf(state, a.newParentId)}.`,
@@ -1030,7 +1034,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: null,
             to: `${a.relationshipType.replace(/_/g, ' ')} ${a.targetIssueId}`,
             at: a.now,
-            by: by,
+            by,
             reason: 'Business relationship — carries no scheduling effect.',
           }),
         },
@@ -1051,7 +1055,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: `${rel.relationshipType} ${rel.targetIssueId}`,
             to: '(removed)',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: 'Relationship removed.',
@@ -1077,7 +1081,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               from: i.plannedStart && i.plannedEnd ? `${i.plannedStart} → ${i.plannedEnd}` : 'not scheduled',
               to: `${a.start} → ${a.end}`,
               at: a.now,
-              by: by,
+              by,
               reason: a.reason,
             }),
           },
@@ -1105,7 +1109,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: `${act.plannedStartDate} → ${act.plannedEndDate}`,
             to: `${a.start} → ${a.end}`,
             at: a.now,
-            by: by,
+            by,
             reason: a.reason,
           }),
         },
@@ -1153,7 +1157,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: null,
             to: `${a.dependencyType}${a.lagDays ? `+${a.lagDays}d` : ''} from ${nameOf(state, a.predecessorId)}`,
             at: a.now,
-            by: by,
+            by,
             reason: 'Scheduling constraint — distinct from a business relationship.',
           }),
         },
@@ -1174,7 +1178,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: `${dep.dependencyType} from ${nameOf(state, dep.predecessorId)}`,
             to: '(removed)',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: 'Dependency removed.',
@@ -1217,7 +1221,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: null,
             to: `${a.kind}: ${name}${a.purpose ? ` (${a.purpose})` : ''}`,
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: `Attached “${name}”.`,
@@ -1241,7 +1245,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: String((ev as unknown as Record<string, unknown>)[k] ?? ''),
             to: String(v ?? ''),
             at: a.now,
-            by: by,
+            by,
           },
         )
       }
@@ -1268,7 +1272,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: `${ev.kind}: ${ev.name}`,
             to: '(removed)',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: `Removed “${ev.name}”.`,
@@ -1355,7 +1359,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: null,
             to: `${ACTIVITY_PHASES.length} activities linked finish-to-start`,
             at: a.now,
-            by: by,
+            by,
             reason: `Sized against a ${a.slaDays} working-day SLA window from the raised date. The log contains no activity breakdown, so these dates originate here, not from the source.`,
           }),
         },
@@ -1385,7 +1389,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: `${n} activities`,
             to: '(removed)',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: `Lifecycle plan removed from ${a.issueId}.`,
@@ -1433,7 +1437,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: String((current as unknown as Record<string, unknown>)[k] ?? '') || '(not recorded)',
             to: String((next as unknown as Record<string, unknown>)[k] ?? '') || '(cleared)',
             at: a.now,
-            by: by,
+            by,
           },
         )
       }
@@ -1486,7 +1490,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             from: before.join(', ') || '—',
             to: after.join(', ') || '—',
             at: a.now,
-            by: by,
+            by,
           }),
         },
         message: `${type.label} updated.`,
@@ -1552,7 +1556,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: previous || '(inherited)',
           to: label || '(inherited)',
           at: now,
-          by: by,
+          by,
           reason: `Terminology for ${scopeName(op.scopeId)}.`,
         },
         label ? `“${key}” now reads “${label}”.` : 'Term reset to the inherited value.',
@@ -1579,7 +1583,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: existing?.label ?? null,
           to: label,
           at: now,
-          by: by,
+          by,
         },
         existing ? `Role “${label}” updated.` : `Role “${label}” added.`,
       )
@@ -1600,8 +1604,54 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       }
       return done(
         { ...m, roles: { ...m.roles, [op.id]: { ...role, deletedAt: now } } },
-        { rowId: op.id, field: 'role', from: role.label, to: '(archived)', at: now, by: by },
+        { rowId: op.id, field: 'role', from: role.label, to: '(archived)', at: now, by },
         `Role “${role.label}” archived.`,
+      )
+    }
+
+    case 'upsertWorkType': {
+      const label = op.label.trim()
+      if (!label) return { state, error: 'A work type needs a name.' }
+      const id = op.id ?? `WT_${m.seq}`
+      const existing = m.workTypes[id]
+      // Two types with one name would make the filter ambiguous and the assistant's choice
+      // arbitrary, so the name is the thing that must stay unique — not just the key.
+      const clash = liveWorkTypes(m).find(
+        (t) => t.id !== id && t.label.toLowerCase() === label.toLowerCase(),
+      )
+      if (clash) return { state, error: `A work type called "${clash.label}" already exists.` }
+      const workType: WorkType = {
+        id,
+        label,
+        description: op.description.trim(),
+        fromSource: existing?.fromSource ?? false,
+        deletedAt: null,
+      }
+      return done(
+        { ...m, workTypes: { ...m.workTypes, [id]: workType }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'workType', from: existing?.label ?? null, to: label, at: now, by },
+        existing ? `Work type "${label}" updated.` : `Work type "${label}" added.`,
+      )
+    }
+
+    case 'deleteWorkType': {
+      const workType = m.workTypes[op.id]
+      if (!workType) return { state, error: 'Work type not found.' }
+      // Archiving a type that records still carry would leave those records classified as
+      // something the workspace no longer offers — invisible to the filter, and unexplained.
+      const used = Object.values(state.issues).filter(
+        (i) => !i.deletedAt && i.type === workType.label,
+      )
+      if (used.length) {
+        return {
+          state,
+          error: `${used.length} ${used.length === 1 ? 'record is' : 'records are'} classified as "${workType.label}". Reclassify them first.`,
+        }
+      }
+      return done(
+        { ...m, workTypes: { ...m.workTypes, [op.id]: { ...workType, deletedAt: now } } },
+        { rowId: op.id, field: 'workType', from: workType.label, to: '(archived)', at: now, by },
+        `Work type "${workType.label}" archived.`,
       )
     }
 
@@ -1627,7 +1677,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: existing ? `${existing.name} — ${existing.roleIds.map((r) => m.roles[r]?.label ?? r).join(', ') || 'no role'}` : null,
           to: `${name} — ${roleNames}`,
           at: now,
-          by: by,
+          by,
         },
         existing ? `${name} updated.` : `${name} added to the directory.`,
       )
@@ -1640,7 +1690,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       delete people[op.id]
       return done(
         { ...m, people },
-        { rowId: op.id, field: 'person', from: person.name, to: '(removed)', at: now, by: by },
+        { rowId: op.id, field: 'person', from: person.name, to: '(removed)', at: now, by },
         `${person.name} removed from the directory.`,
       )
     }
@@ -1682,7 +1732,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: existing ? describeResponsibility(m, existing) : null,
           to: describeResponsibility(m, type),
           at: now,
-          by: by,
+          by,
         },
         existing ? `“${label}” updated.` : `Responsibility “${label}” added.`,
       )
@@ -1706,7 +1756,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: type.label,
           to: '(archived)',
           at: now,
-          by: by,
+          by,
           reason: assigned.length ? `${assigned.length} issues still hold values for it; they are kept.` : undefined,
         },
         `“${type.label}” archived.`,
@@ -1752,7 +1802,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: m.organization.name,
           to: name,
           at: now,
-          by: by,
+          by,
         },
         `This workspace now belongs to ${name}.`,
       )
@@ -1777,7 +1827,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: m.parties.join(', '),
           to: parties.join(', '),
           at: now,
-          by: by,
+          by,
         },
         'Accountable parties updated.',
       )
@@ -1794,7 +1844,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       if (from === to) return { state }
       return done(
         { ...m, agents: { ...m.agents, [op.id]: next } },
-        { rowId: op.id, field: 'agent', from, to, at: now, by: by },
+        { rowId: op.id, field: 'agent', from, to, at: now, by },
         `${agent.name}: ${to}.`,
       )
     }
@@ -1816,7 +1866,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: wf.enabled ? 'on' : 'off',
           to: op.enabled ? 'on' : 'off',
           at: now,
-          by: by,
+          by,
         },
         `${wf.name} ${op.enabled ? 'enabled' : 'disabled'}.`,
       )
@@ -1839,7 +1889,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: null,
           to: op.value === null ? '(inherited)' : op.value ? 'on' : 'off',
           at: now,
-          by: by,
+          by,
           reason: `${agent.name} for ${scopeName(op.scopeId)}.`,
         },
         op.value === null
@@ -1865,7 +1915,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: null,
           to: op.value === null ? '(inherited)' : op.value ? 'required' : 'optional',
           at: now,
-          by: by,
+          by,
           reason: `${type.label} for ${scopeName(op.scopeId)}.`,
         },
         `${type.label} is now ${op.value === null ? 'inherited' : op.value ? 'required' : 'optional'} for ${scopeName(op.scopeId)}.`,
@@ -1893,7 +1943,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: m.overrides[op.scopeId]?.templateId ?? '(none)',
           to: tpl?.name ?? '(none)',
           at: now,
-          by: by,
+          by,
           reason: tpl ? `Enabled ${tpl.agentIds.length} agents for ${scopeName(op.scopeId)}.` : undefined,
         },
         tpl ? `${scopeName(op.scopeId)} now follows “${tpl.name}”.` : 'Template cleared.',
@@ -1919,7 +1969,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         : [...m.routingRules, rule]
       return done(
         { ...m, routingRules, seq: m.seq + (op.id ? 0 : 1) },
-        { rowId: id, field: 'routingRule', from: existing?.name ?? null, to: name, at: now, by: by },
+        { rowId: id, field: 'routingRule', from: existing?.name ?? null, to: name, at: now, by },
         existing ? `Rule “${name}” updated.` : `Rule “${name}” added.`,
       )
     }
@@ -1929,7 +1979,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       if (!rule) return { state, error: 'Rule not found.' }
       return done(
         { ...m, routingRules: m.routingRules.filter((r) => r.id !== op.id) },
-        { rowId: op.id, field: 'routingRule', from: rule.name, to: '(removed)', at: now, by: by },
+        { rowId: op.id, field: 'routingRule', from: rule.name, to: '(removed)', at: now, by },
         `Rule “${rule.name}” removed.`,
       )
     }
@@ -1953,7 +2003,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const intake = existing ? m.intake.map((i) => (i.id === id ? box : i)) : [...m.intake, box]
       return done(
         { ...m, intake, seq: m.seq + (op.id ? 0 : 1) },
-        { rowId: id, field: 'intake', from: existing?.address ?? null, to: address, at: now, by: by },
+        { rowId: id, field: 'intake', from: existing?.address ?? null, to: address, at: now, by },
         existing ? `${address} updated.` : `${address} configured.`,
       )
     }
@@ -1963,7 +2013,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       if (!box) return { state, error: 'Mailbox not found.' }
       return done(
         { ...m, intake: m.intake.filter((i) => i.id !== op.id) },
-        { rowId: op.id, field: 'intake', from: box.address, to: '(removed)', at: now, by: by },
+        { rowId: op.id, field: 'intake', from: box.address, to: '(removed)', at: now, by },
         `${box.address} removed.`,
       )
     }
@@ -1994,7 +2044,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           from: `${Object.keys(m.roles).length} roles, ${Object.keys(m.responsibilities).length} responsibilities, ${m.routingRules.length} rules`,
           to: '(shipped defaults)',
           at: now,
-          by: by,
+          by,
           reason: `Reset ${changed} configured items. Issue data was not changed.`,
         },
         'Operating model reset to the shipped defaults.',

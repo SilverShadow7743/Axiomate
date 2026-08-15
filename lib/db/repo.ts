@@ -109,7 +109,11 @@ export async function loadWorkspace(
     relationships: relationships.map(relationshipFromRow),
     evidence: Object.fromEntries(evidence.map((e) => [e.id, evidenceFromRow(e)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
-    model: readModel(config?.model, issues.map((i) => [i.owner, i.raisedBy]).flat()),
+    model: readModel(
+      config?.model,
+      issues.map((i) => [i.owner, i.raisedBy]).flat(),
+      issues.map((i) => i.type),
+    ),
     audit: audit.map((r) => ({
       id: r.id,
       rowId: r.rowId,
@@ -136,14 +140,17 @@ export async function loadWorkspace(
  * object to the resolvers. A configuration that has been corrupted should look like defaults,
  * not like a broken app.
  */
-function readModel(raw: unknown, owners: string[]): OperatingModel {
-  const seed = initModel([...new Set(owners)])
+function readModel(raw: unknown, owners: string[], types: string[]): OperatingModel {
+  const seed = initModel([...new Set(owners)], [...new Set(types)])
   if (!raw || typeof raw !== 'object') return seed
   const stored = raw as Partial<OperatingModel>
   if (!stored.agents || !stored.responsibilities) return seed
   return {
     ...seed,
     ...stored,
+    // Same reason as the browser mirror: a stored model predating this key would spread
+    // `undefined` over the seeded registry.
+    workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
     // `runtime` and `maxAutonomy` always come from the seed: they describe what this build
     // implements, and a stored record must never claim a capability the code does not have.
     agents: Object.fromEntries(

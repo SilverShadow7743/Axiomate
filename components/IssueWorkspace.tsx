@@ -7,6 +7,7 @@ import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
   ROOT_SCOPE,
+  liveWorkTypes,
   loadModel,
   resolveAutonomy,
   resolveLabels,
@@ -1396,6 +1397,7 @@ export default function IssueWorkspace({
               organization: scopedLabels.TIER_ORGANIZATION,
             },
             parties: state.model.parties,
+            workTypes: liveWorkTypes(state.model).map((t) => t.label),
             autonomy: assistantAutonomy,
           }}
           onReveal={revealIssue}

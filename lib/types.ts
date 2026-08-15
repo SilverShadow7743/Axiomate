@@ -289,6 +289,8 @@ export const DEFAULT_SLA: SlaPolicy = { High: 5, Medium: 10, Low: 20 }
 export interface FilterState {
   search: string
   client: string
+  /** Work type — the discriminator that keeps issues and change requests in one table. */
+  type: string
   module: string
   status: string
   severity: string
@@ -300,6 +302,7 @@ export interface FilterState {
 export const EMPTY_FILTERS: FilterState = {
   search: '',
   client: 'All',
+  type: 'All',
   module: 'All',
   status: 'All',
   severity: 'All',

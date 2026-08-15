@@ -105,6 +105,14 @@ export interface ChatConfig {
   }
   /** The configured accountable-party vocabulary. */
   parties: string[]
+  /**
+   * The configured work types.
+   *
+   * Sent because `type` was the one classification field with no vocabulary behind it: the
+   * assistant could file a new record as "Chnage Request" and nothing would object, leaving
+   * a work item that no filter would ever show.
+   */
+  workTypes: string[]
   /** How much the assistant may do here, from the agent registry. */
   autonomy: 'off' | 'suggest' | 'propose' | 'act'
 }
@@ -119,6 +127,9 @@ export const DEFAULT_CHAT_CONFIG: ChatConfig = {
     organization: 'Client',
   },
   parties: ['Axiocloud', 'OAPIL', 'SLG', 'Shared', 'Unassigned'],
+  // Empty rather than a plausible list: with no workspace to read, the honest answer is that
+  // this deployment's types are unknown, and `enumsFor` then imposes no constraint at all.
+  workTypes: [],
   autonomy: 'propose',
 }
 
@@ -171,6 +182,8 @@ export function enumsFor(cfg: ChatConfig): Record<string, readonly string[]> {
     status: ISSUE_STATUSES,
     severity: SEVERITIES,
     accountable: cfg.parties.length ? cfg.parties : ACCOUNTABLE,
+    // Only constrains when the workspace actually has a registry to constrain against.
+    ...(cfg.workTypes.length ? { type: cfg.workTypes } : {}),
   }
 }
 

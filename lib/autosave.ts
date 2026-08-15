@@ -1,5 +1,6 @@
 import { COMPANY_NODE_ID, type WorkspaceState } from './workspace'
 import { NODE_KINDS } from './types'
+import { mergeModel } from './config'
 
 /**
  * Autosave: what it means here, and where work actually goes.
@@ -174,7 +175,10 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       relationships: parsed.relationships ?? [],
       evidence: parsed.evidence ?? {},
       engagements: { ...seed.engagements, ...(parsed.engagements ?? {}) },
-      model: parsed.model,
+      // Merged, not taken whole. The mirror's model predates every operating-model key added
+      // since it was written, and adopting it verbatim made those keys `undefined` — which is
+      // how a newly configurable work-type registry arrived empty on every existing browser.
+      model: mergeModel(seed.model, parsed.model),
       audit: parsed.audit ?? [],
       // The mirror's counter is authoritative — it has minted ids the seed's has not.
       seq: Math.max(parsed.seq, seed.seq),

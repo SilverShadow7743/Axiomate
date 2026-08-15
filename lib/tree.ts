@@ -324,6 +324,7 @@ export function facetsOf(state: WorkspaceState) {
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort()
   return {
     clients: uniq(live.map((i) => i.client)),
+    types: uniq(live.map((i) => i.type)),
     modules: uniq(live.map((i) => i.module)),
     statuses: uniq(live.map((i) => i.status)),
     severities: ['High', 'Medium', 'Low'],
@@ -337,6 +338,7 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   const i = row.issue
   if (!i) return false
   if (f.client !== 'All' && i.client !== f.client) return false
+  if (f.type !== 'All' && i.type !== f.type) return false
   if (f.module !== 'All' && i.module !== f.module) return false
   if (f.status !== 'All' && i.status !== f.status) return false
   if (f.severity !== 'All' && i.severity !== f.severity) return false
@@ -346,7 +348,9 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   if (f.search.trim()) {
     const q = f.search.toLowerCase()
     const hay =
-      `${i.id} ${i.subject} ${i.owner} ${i.module} ${i.nextAction} ${i.description}`.toLowerCase()
+      // `type` is in here because it was not: searching "change request" matched nothing
+      // while forty-eight of them sat in the grid.
+      `${i.id} ${i.subject} ${i.owner} ${i.module} ${i.type} ${i.nextAction} ${i.description}`.toLowerCase()
     if (!hay.includes(q)) return false
   }
   return true
