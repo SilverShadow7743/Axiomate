@@ -7,3 +7,6 @@ generated/
 
 # Machine-local Claude Code permissions — not shared.
 .claude/settings.local.json
+
+# Generated from data/validation.json by validate:report.
+data/validation-report.html

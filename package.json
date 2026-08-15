@@ -16,7 +16,8 @@
     "audit:attribution": "npx tsx scripts/attribution-proof.ts",
     "audit:restore": "npx tsx scripts/restore-proof.ts",
     "audit:estimation": "npx tsx scripts/estimation-proof.ts",
-    "validate:scenarios": "npx tsx scripts/scenario-validation.ts"
+    "validate:scenarios": "npx tsx scripts/scenario-validation.ts",
+    "validate:report": "node scripts/build-validation-report.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

@@ -26,7 +26,7 @@
       "title": "Client sends an ambiguous request",
       "expected": "The system marks it as needing clarification, asks the client, and does not start an SLA clock on work nobody has defined.",
       "verdict": "PARTIAL",
-      "actual": "The status exists and the row reports health \"Blocked\" — blocked statuses are excluded from at-risk. But nothing asks the client, and the SLA target is not suspended: due dates are set once and never recomputed.",
+      "actual": "The status exists and the row reports health \"Blocked\" — blocked statuses are excluded from at-risk, so the issue stops being counted as slipping. The due date does not move: 2026-08-10 before, 2026-08-10 after. Waiting on a client consumes the same clock as working on it, and nothing asks the client anything.",
       "stops": "at the clock — waiting on a client still consumes the SLA",
       "severity": "P1",
       "impact": "Issues breach on client time. The report calls it our failure."
@@ -233,6 +233,7 @@
     },
     {
       "id": "ST4",
+      "alias": "AB",
       "title": "A record is archived and later restored",
       "expected": "Nothing is orphaned, and anything moved out during the archive comes back.",
       "verdict": "PASS",
@@ -303,6 +304,7 @@
     },
     {
       "id": "AI1",
+      "alias": "X",
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
@@ -340,6 +342,86 @@
       "stops": "at the database — it has never been connected in this environment",
       "severity": "P1",
       "impact": "The most reversible-looking layer is the least verified. A mapper mistake would surface as data loss on first deployment."
+    },
+    {
+      "id": "U",
+      "title": "A consultant submits a timesheet",
+      "expected": "The week is presented for approval, and approval freezes what was approved.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "No timesheet or period exists (a type exists), because there is no time entry for one to gather. Approval of any kind is absent from the reducer.",
+      "stops": "at the entity — see J",
+      "severity": "P1",
+      "impact": "Time cannot be approved, so it cannot be billed or costed."
+    },
+    {
+      "id": "V",
+      "title": "A submitted timesheet is rejected",
+      "expected": "The rejection returns specific lines, says why, and the corrected resubmission is traceable.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Requires U. Nothing in the product can be returned to its author with a reason — the only rejection-shaped mechanism is the estimate revision log, which is specific to estimates.",
+      "stops": "at the same missing entity",
+      "severity": "P1",
+      "impact": "No correction loop exists for the record that drives revenue."
+    },
+    {
+      "id": "W",
+      "title": "A notification fails to deliver",
+      "expected": "The failure is visible, retried, and audited — a silent non-delivery is the dangerous case.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "There is no delivery mechanism to fail: no mail, Teams or webhook client appears anywhere in the source. Communication today is a note somebody types on an issue.",
+      "stops": "at the channel",
+      "severity": "P1",
+      "impact": "Nobody is ever told anything by the system, so nothing can fail to tell them — which is not the same as working."
+    },
+    {
+      "id": "Y",
+      "title": "The assistant recommends something wrong",
+      "expected": "A person rejects it, the rejection is recorded, and the original recommendation is preserved.",
+      "verdict": "PARTIAL",
+      "actual": "Proposals are rendered as cards a person accepts or rejects (3 chat module(s) implement it), and an accepted proposal goes through the same reducer as a human edit, so it is audited identically. A rejection changes nothing and is recorded nowhere — no rejection log exists in source — so the system cannot learn which recommendations were wrong.",
+      "stops": "at the rejection — it disappears",
+      "severity": "P2",
+      "impact": "Agent quality cannot be measured, because only the accepted half of its output is kept."
+    },
+    {
+      "id": "Z",
+      "title": "An automation fails part-way through",
+      "expected": "The run stops safely, the partial effect is visible, and someone is told.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "There is no automation runtime (no rule engine, event dispatcher or scheduler in source). Routing rules are records; nothing evaluates them.",
+      "stops": "at the engine",
+      "severity": "P0",
+      "impact": "Every rule the firm configures is inert. The screen implies otherwise."
+    },
+    {
+      "id": "AA",
+      "title": "An integration fails",
+      "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "No outbound integration exists. The only network call the product makes is to the model behind the chat route; no DevOps, SharePoint or Teams client appears in source.",
+      "stops": "at the integration",
+      "severity": "P2",
+      "impact": "Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4."
+    },
+    {
+      "id": "FL4",
+      "title": "The same write is delivered twice",
+      "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
+      "verdict": "FAIL",
+      "actual": "Replaying an identical action produces 2 records, because ids are minted server-side from the workspace counter and nothing identifies a request — there is no idempotency key. The unload flush makes this reachable rather than theoretical: a beacon fires on visibilitychange and can re-send a batch that is already in flight.",
+      "stops": "at request identity",
+      "severity": "P1",
+      "impact": "Hiding a tab mid-save can duplicate notes, evidence and dependencies. The user sees two of something they did once."
+    },
+    {
+      "id": "XM1",
+      "title": "An issue changes owner, and eight dependent areas should follow",
+      "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",
+      "verdict": "PARTIAL",
+      "actual": "4 of 8 dependent areas follow the change — the work item, the audit trail, activity history, the daily report. The other four are absent rather than stale: resource workload, capacity, notifications, AI context. Nothing derived is stored, so within the areas that exist there is no drift to find: the report recomputes from the same rows the grid does.",
+      "stops": "at the four areas that have no entity behind them",
+      "severity": "P2",
+      "impact": "Propagation is correct as far as it goes. It goes half as far as the operating model describes."
     }
   ]
 }

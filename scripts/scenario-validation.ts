@@ -39,6 +39,8 @@ type Severity = 'P0' | 'P1' | 'P2' | 'P3' | '—'
 
 interface Finding {
   id: string
+  /** The letter this scenario answers, where it differs from the id. */
+  alias?: string
   title: string
   expected: string
   verdict: Verdict
@@ -54,9 +56,10 @@ function scenario(
   id: string,
   title: string,
   expected: string,
-  run: () => Omit<Finding, 'id' | 'title' | 'expected'>,
+  run: () => Omit<Finding, 'id' | 'title' | 'expected' | 'alias'>,
+  alias?: string,
 ) {
-  let r: Omit<Finding, 'id' | 'title' | 'expected'>
+  let r: Omit<Finding, 'id' | 'title' | 'expected' | 'alias'>
   try {
     r = run()
   } catch (err) {
@@ -69,7 +72,7 @@ function scenario(
       impact: 'unknown — the failure is unhandled',
     }
   }
-  findings.push({ id, title, expected, ...r })
+  findings.push({ id, alias, title, expected, ...r })
 }
 
 const ROOT = path.resolve(import.meta.dirname, '..')
@@ -179,13 +182,17 @@ scenario(
   'Client sends an ambiguous request',
   'The system marks it as needing clarification, asks the client, and does not start an SLA clock on work nobody has defined.',
   () => {
-    const s = ok(BASE, {
+    const dated = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-03', end: '2026-08-10', now: NOW } as Action)
+    const dueBefore = rowFor(dated, 'OAPIL-1').plannedEndDate
+    const s = ok(dated, {
       t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Needs clarification' }, now: NOW,
     } as Action)
     const row = rowFor(s, 'OAPIL-1')
+    // Measured, not asserted: does waiting on the client move the committed date?
+    const dueAfter = row.plannedEndDate
     return {
       verdict: 'PARTIAL',
-      actual: `The status exists and the row reports health "${row.scheduleHealth}" — blocked statuses are excluded from at-risk. But nothing asks the client, and the SLA target is not suspended: due dates are set once and never recomputed.`,
+      actual: `The status exists and the row reports health "${row.scheduleHealth}" — blocked statuses are excluded from at-risk, so the issue stops being counted as slipping. The due date does not move: ${dueBefore} before, ${dueAfter} after. Waiting on a client consumes the same clock as working on it, and nothing asks the client anything.`,
       stops: 'at the clock — waiting on a client still consumes the SLA',
       severity: 'P1',
       impact: 'Issues breach on client time. The report calls it our failure.',
@@ -610,6 +617,7 @@ scenario(
       impact: 'The data lifecycle is reversible and cannot produce an unreachable record.',
     }
   },
+  'AB',
 )
 
 /* ================================================================== *
@@ -775,6 +783,7 @@ scenario(
       impact: '37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy.',
     }
   },
+  'X',
 )
 
 scenario(
@@ -831,6 +840,142 @@ scenario(
   },
 )
 
+
+/* ================================================================== *
+ * 11 — Time approval, delivery and failure of the machinery
+ * ================================================================== */
+
+scenario(
+  'U',
+  'A consultant submits a timesheet',
+  'The week is presented for approval, and approval freezes what was approved.',
+  () => ({
+    verdict: 'NOT IMPLEMENTED',
+    actual: `No timesheet or period exists (${absent(/Timesheet|submitPeriod|TimePeriod/) ? 'no such type in source' : 'a type exists'}), because there is no time entry for one to gather. Approval of any kind is absent from the reducer.`,
+    stops: 'at the entity — see J',
+    severity: 'P1',
+    impact: 'Time cannot be approved, so it cannot be billed or costed.',
+  }),
+)
+
+scenario(
+  'V',
+  'A submitted timesheet is rejected',
+  'The rejection returns specific lines, says why, and the corrected resubmission is traceable.',
+  () => ({
+    verdict: 'NOT IMPLEMENTED',
+    actual: 'Requires U. Nothing in the product can be returned to its author with a reason — the only rejection-shaped mechanism is the estimate revision log, which is specific to estimates.',
+    stops: 'at the same missing entity',
+    severity: 'P1',
+    impact: 'No correction loop exists for the record that drives revenue.',
+  }),
+)
+
+scenario(
+  'W',
+  'A notification fails to deliver',
+  'The failure is visible, retried, and audited — a silent non-delivery is the dangerous case.',
+  () => ({
+    verdict: 'NOT IMPLEMENTED',
+    actual: `There is no delivery mechanism to fail: ${absent(/sendMail|nodemailer|smtp|graph\.microsoft|webhook/i) ? 'no mail, Teams or webhook client appears anywhere in the source' : 'a delivery client exists'}. Communication today is a note somebody types on an issue.`,
+    stops: 'at the channel',
+    severity: 'P1',
+    impact: 'Nobody is ever told anything by the system, so nothing can fail to tell them — which is not the same as working.',
+  }),
+)
+
+scenario(
+  'Y',
+  'The assistant recommends something wrong',
+  'A person rejects it, the rejection is recorded, and the original recommendation is preserved.',
+  () => {
+    const cards = mentions(/accept|reject/i).filter((f) => /Chat|chat/.test(f))
+    return {
+      verdict: 'PARTIAL',
+      actual: `Proposals are rendered as cards a person accepts or rejects (${cards.length} chat module(s) implement it), and an accepted proposal goes through the same reducer as a human edit, so it is audited identically. A rejection changes nothing and is recorded nowhere — ${absent(/rejectedProposal|proposalOutcome|recommendationLog/) ? 'no rejection log exists in source' : 'a rejection log exists'} — so the system cannot learn which recommendations were wrong.`,
+      stops: 'at the rejection — it disappears',
+      severity: 'P2',
+      impact: 'Agent quality cannot be measured, because only the accepted half of its output is kept.',
+    }
+  },
+)
+
+scenario(
+  'Z',
+  'An automation fails part-way through',
+  'The run stops safely, the partial effect is visible, and someone is told.',
+  () => ({
+    verdict: 'NOT IMPLEMENTED',
+    actual: `There is no automation runtime (${absent(/runRule|evaluateRules|automationEngine|dispatchEvent/) ? 'no rule engine, event dispatcher or scheduler in source' : 'an engine exists'}). Routing rules are records; nothing evaluates them.`,
+    stops: 'at the engine',
+    severity: 'P0',
+    impact: 'Every rule the firm configures is inert. The screen implies otherwise.',
+  }),
+)
+
+scenario(
+  'AA',
+  'An integration fails',
+  'The failure is contained, retried where safe, surfaced, and never leaves records half-written.',
+  () => ({
+    verdict: 'NOT IMPLEMENTED',
+    actual: `No outbound integration exists. The only network call the product makes is to the model behind the chat route; ${absent(/DevOps|sharepoint|graph\.microsoft|jira/i) ? 'no DevOps, SharePoint or Teams client appears in source' : 'an integration client exists'}.`,
+    stops: 'at the integration',
+    severity: 'P2',
+    impact: 'Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4.',
+  }),
+)
+
+scenario(
+  'FL4',
+  'The same write is delivered twice',
+  'The second delivery is recognised and ignored, rather than creating a second record.',
+  () => {
+    const src = fs.readFileSync(path.join(ROOT, 'components/useAutosave.ts'), 'utf8')
+    const beaconOnHide = /visibilitychange/.test(src) && /sendBeacon/.test(src)
+    const hasKey = /idempotenc|requestId|clientActionId|Idempotency-Key/i.test(src)
+    // The reducer mints ids from its own counter, so a replay creates a new record rather
+    // than overwriting one. Demonstrated rather than asserted:
+    const once = ok(BASE, { t: 'addNote', issueId: 'OAPIL-1', body: 'Same note.', noteType: 'General Update', pinned: false, now: NOW } as Action)
+    const twice = ok(once, { t: 'addNote', issueId: 'OAPIL-1', body: 'Same note.', noteType: 'General Update', pinned: false, now: NOW } as Action)
+    const duplicated = Object.values(twice.notes).filter((n) => n.body === 'Same note.').length
+    return {
+      verdict: 'FAIL',
+      actual: `Replaying an identical action produces ${duplicated} records, because ids are minted server-side from the workspace counter and nothing identifies a request ${hasKey ? '(a key exists but is unused)' : '— there is no idempotency key'}. The unload flush makes this reachable rather than theoretical: ${beaconOnHide ? 'a beacon fires on visibilitychange and can re-send a batch that is already in flight' : 'no beacon path exists'}.`,
+      stops: 'at request identity',
+      severity: 'P1',
+      impact: 'Hiding a tab mid-save can duplicate notes, evidence and dependencies. The user sees two of something they did once.',
+    }
+  },
+)
+
+scenario(
+  'XM1',
+  'An issue changes owner, and eight dependent areas should follow',
+  'Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.',
+  () => {
+    const s = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action)
+    const row = rowFor(s, 'OAPIL-1')
+    const audited = s.audit.filter((e) => e.rowId === 'OAPIL-1' && e.field === 'owner').length
+    const ims = buildDailyIms(s, rowsOf(s), TODAY, 'OAPIL')
+    const inReport = ims.open.some((l) => l.owner === 'Sam')
+    const reached = [
+      row.owner === 'Sam' ? 'the work item' : null,
+      audited ? 'the audit trail' : null,
+      s.issues['OAPIL-1'].lastActivity === TODAY ? 'activity history' : null,
+      inReport ? 'the daily report' : null,
+    ].filter(Boolean)
+    const absentAreas = ['resource workload', 'capacity', 'notifications', 'AI context']
+    return {
+      verdict: 'PARTIAL',
+      actual: `${reached.length} of 8 dependent areas follow the change — ${reached.join(', ')}. The other four are absent rather than stale: ${absentAreas.join(', ')}. Nothing derived is stored, so within the areas that exist there is no drift to find: the report recomputes from the same rows the grid does.`,
+      stops: 'at the four areas that have no entity behind them',
+      severity: 'P2',
+      impact: 'Propagation is correct as far as it goes. It goes half as far as the operating model describes.',
+    }
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
@@ -842,10 +987,10 @@ console.log('')
 console.log('AXIOMATE — SCENARIO VALIDATION')
 console.log(`Driven against the real reducer and derivations, as at ${TODAY}.`)
 console.log('')
-console.log(`${pad('ID', 5)}${pad('VERDICT', 17)}${pad('SEV', 5)}SCENARIO`)
-console.log('-'.repeat(100))
+console.log(`${pad('ID', 8)}${pad('VERDICT', 17)}${pad('SEV', 5)}SCENARIO`)
+console.log('-'.repeat(103))
 for (const f of findings) {
-  console.log(`${pad(f.id, 5)}${pad(f.verdict, 17)}${pad(f.severity, 5)}${f.title}`)
+  console.log(`${pad(f.alias ? `${f.id}/${f.alias}` : f.id, 8)}${pad(f.verdict, 17)}${pad(f.severity, 5)}${f.title}`)
 }
 
 console.log('')
