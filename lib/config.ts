@@ -29,6 +29,7 @@
  */
 
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
+import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 
 /* ================================================================== *
  * Scope
@@ -414,6 +415,14 @@ export interface OperatingModel {
    * shipping one firm's numbers as everyone's.
    */
   sla: SlaPolicy
+  /**
+   * What each T-shirt size costs this firm, in story points and hours.
+   *
+   * Configuration for the same reason the service levels are: two firms using an identical
+   * complexity model will disagree about what an L is worth, and the estimation screen is
+   * explicitly forbidden from hardcoding it.
+   */
+  sizeBands: SizeBand[]
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -725,6 +734,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     responsibilities,
     workTypes,
     sla: { ...DEFAULT_SLA },
+    sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -957,6 +967,9 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // spread above would set it to undefined — which is not a missing policy, it is a crash
     // the next time anything reads a severity from it.
     sla: { ...seed.sla, ...(stored.sla ?? {}) },
+    // A list, so it is replaced wholesale when present rather than merged key by key — a
+    // firm that removed a band means it, and merging would resurrect it.
+    sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
     agents: mergeAgents(seed.agents, stored.agents),
     workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
     templates: { ...seed.templates, ...(stored.templates ?? {}) },

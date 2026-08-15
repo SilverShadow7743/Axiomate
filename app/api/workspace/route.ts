@@ -41,6 +41,8 @@ const KINDS = new Set([
   'addNote',
   'updateNote',
   'removeNote',
+  'setEstimate',
+  'baselineEstimate',
   'buildLifecycle',
   'clearLifecycle',
   'config',

@@ -21,6 +21,10 @@ import {
   nodeToRow,
   noteFromRow,
   noteToRow,
+  estimateFromRow,
+  estimateToRow,
+  revisionFromRow,
+  revisionToRow,
   relationshipFromRow,
   relationshipToRow,
 } from './map'
@@ -60,6 +64,8 @@ type Reader = Pick<
   | 'issueRelationship'
   | 'evidence'
   | 'issueNote'
+  | 'issueEstimate'
+  | 'estimateRevision'
   | 'engagement'
   | 'scheduleAudit'
   | 'workspaceMeta'
@@ -89,7 +95,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, engagements, audit, meta, config] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, estimates, revisions, engagements, audit, meta, config] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -98,6 +104,8 @@ export async function loadWorkspace(
       db.issueRelationship.findMany({ where: { tenantId } }),
       db.evidence.findMany({ where: { tenantId } }),
       db.issueNote.findMany({ where: { tenantId } }),
+      db.issueEstimate.findMany({ where: { tenantId } }),
+      db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
       db.engagement.findMany({ where: { tenantId } }),
       // Newest last, so the History tab's own ordering is applied to a stable list.
       db.scheduleAudit.findMany({ where: { tenantId }, orderBy: { at: 'asc' }, take: 5000 }),
@@ -115,6 +123,10 @@ export async function loadWorkspace(
     // Unordered on purpose: `sortNotes` puts pinned first and then orders by last activity on
     // the note, which no single column can express.
     notes: Object.fromEntries(notes.map((n) => [n.id, noteFromRow(n)])),
+    // Keyed by issue id rather than a row id of their own: an issue has one estimate, and the
+    // screen always arrives holding the issue.
+    estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
+    estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     model: readModel(
       config?.model,
@@ -159,6 +171,7 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     // `undefined` over the seeded registry.
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
     sla: { ...seed.sla, ...(stored.sla ?? {}) },
+    sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
     // `runtime` and `maxAutonomy` always come from the seed: they describe what this build
     // implements, and a stored record must never claim a capability the code does not have.
     agents: Object.fromEntries(
@@ -241,6 +254,15 @@ export async function importWorkspace(
     // After the issues, like evidence: a note's foreign key is its issue.
     for (const n of Object.values(seed.notes)) {
       await tx.issueNote.create({ data: noteToRow(tenantId, n) })
+    }
+    // Estimates before revisions: a revision's foreign key is the estimate, not the issue.
+    for (const e of Object.values(seed.estimates)) {
+      if (!seed.issues[e.issueId]) continue
+      await tx.issueEstimate.create({ data: estimateToRow(tenantId, e) })
+    }
+    for (const v of Object.values(seed.estimateRevisions)) {
+      if (!seed.estimates[v.issueId]) continue
+      await tx.estimateRevision.create({ data: revisionToRow(tenantId, v) })
     }
     // After the nodes: each row is keyed by the engagement node it describes.
     for (const e of Object.values(seed.engagements)) {

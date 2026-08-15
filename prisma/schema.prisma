@@ -128,6 +128,8 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  estimates     IssueEstimate[]
+  revisions     EstimateRevision[]
   audit         ScheduleAudit[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
@@ -237,6 +239,7 @@ model Issue {
   relationshipsFrom IssueRelationship[] @relation("RelSource")
   relationshipsTo   IssueRelationship[] @relation("RelTarget")
   evidenceItems     Evidence[]
+  estimate          IssueEstimate?
   notes             IssueNote[]
 
   deletedAt DateTime?
@@ -508,6 +511,94 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// An issue's estimate — one per issue, which is why the issue id *is* the key.
+///
+/// Effort and timeline are stored as their inputs rather than their results: scores, capacity,
+/// steps. Every figure the screen shows — total complexity, size, hours, duration, completion
+/// date — is recomputed from these on read, because each is a function of the others and of
+/// the T-shirt calibration, which is configuration and can change. Storing the derived numbers
+/// would freeze an estimate against a calibration nobody uses any more, which is the same rule
+/// that keeps `duration` and `scheduleHealth` out of this schema.
+model IssueEstimate {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  /// The five complexity parameters, 1–5 each. 0 means "not scored yet".
+  business    Int @default(0)
+  technical   Int @default(0)
+  integration Int @default(0)
+  testing     Int @default(0)
+  data        Int @default(0)
+
+  /// Null means "use the size the score implies" / "use the hours the size implies". A null
+  /// here is a real state, not a missing value: it says nobody has overridden the derivation.
+  sizeOverride        String?
+  approvedEffortHours Int?
+
+  /// Capacity as three columns rather than JSON. They are numbers a report will want to group
+  /// and average across issues, and JSON would put that behind a parse.
+  hoursPerDay   Int @default(8)
+  resources     Int @default(1)
+  allocationPct Int @default(100)
+
+  plannedStart DateTime
+  /// Waiting on a client, an environment, an approval. Entered — there is no dependency
+  /// engine to infer it from.
+  waitDays     Int @default(0)
+
+  /// The breakdown: `{ id, activity, effortHours, dependsOn[] }`. JSON because the steps have
+  /// no identity outside this estimate and are always read and written as one list — the same
+  /// judgement as `Issue.assignments`.
+  steps Json @default("[]")
+
+  confidence  String  @default("Medium")
+  assumptions String  @db.Text
+  notes       String  @db.Text
+
+  /// Set when the estimate is agreed. Its presence is what turns a later edit into a revision.
+  baselinedAt DateTime?
+  baselinedBy String?
+
+  updatedAt DateTime
+  updatedBy String
+
+  revisions EstimateRevision[]
+
+  @@id([tenantId, issueId])
+  @@index([tenantId, baselinedAt])
+}
+
+/// What changed to an agreed estimate, and why.
+///
+/// `from` and `to` are snapshots of both halves — effort *and* duration — because they move
+/// independently: scope can grow without the date slipping if people are added, and the date
+/// can slip with no change in effort at all when a client goes quiet. A log that captured only
+/// hours would make the second case look like nothing had happened.
+model EstimateRevision {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `rev-12`, minted from the workspace counter.
+  id      String @default(cuid())
+  issueId String
+  estimate IssueEstimate @relation(fields: [tenantId, issueId], references: [tenantId, issueId], onDelete: Cascade)
+
+  reason String @db.Text
+  by     String
+  at     DateTime
+
+  /// `EstimateSummary` either side. JSON because it is a snapshot read as a whole and never
+  /// queried field by field.
+  from Json
+  to   Json
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueId, at])
 }
 
 /// Every change to a record, including archives, restores and configuration edits.

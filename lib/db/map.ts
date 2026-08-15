@@ -7,6 +7,8 @@ import type {
   IssueActivity as ActivityRow,
   IssueDependency as DependencyRow,
   IssueNote as IssueNoteRow,
+  IssueEstimate as EstimateRow,
+  EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
   Prisma,
@@ -16,6 +18,7 @@ import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../works
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
 import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
+import type { EstimateRevision, IssueEstimate } from '../estimation'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -491,5 +494,106 @@ export function engagementFromRow(r: EngagementRow): EngagementDetail {
     notes: r.notes,
     updatedAt: r.updatedAt.toISOString(),
     updatedBy: r.updatedBy,
+  }
+}
+
+/* ================================================================== *
+ * Estimates
+ * ================================================================== */
+
+/**
+ * `plannedStart` is a plain day and uses the date helpers; `baselinedAt`, `updatedAt` and a
+ * revision's `at` are full timestamps and deliberately do not. `toDate` appends
+ * `T00:00:00.000Z` to whatever it is given, so handing it an ISO datetime produces an
+ * unparseable string and a silent null — a moment would vanish on the way in with nothing to
+ * typecheck against.
+ */
+export function estimateToRow(
+  tenantId: TenantId,
+  e: IssueEstimate,
+): Prisma.IssueEstimateUncheckedCreateInput {
+  return {
+    tenantId,
+    issueId: e.issueId,
+    business: e.scores.business,
+    technical: e.scores.technical,
+    integration: e.scores.integration,
+    testing: e.scores.testing,
+    data: e.scores.data,
+    sizeOverride: e.sizeOverride,
+    approvedEffortHours: e.approvedEffortHours,
+    hoursPerDay: e.capacity.hoursPerDay,
+    resources: e.capacity.resources,
+    allocationPct: e.capacity.allocationPct,
+    plannedStart: toDate(e.plannedStart) ?? new Date(0),
+    waitDays: e.waitDays,
+    steps: e.steps as unknown as object,
+    confidence: e.confidence,
+    assumptions: e.assumptions,
+    notes: e.notes,
+    baselinedAt: e.baselinedAt ? new Date(e.baselinedAt) : null,
+    baselinedBy: e.baselinedBy,
+    updatedAt: new Date(e.updatedAt),
+    updatedBy: e.updatedBy,
+  }
+}
+
+export function estimateFromRow(r: EstimateRow): IssueEstimate {
+  return {
+    issueId: r.issueId,
+    scores: {
+      business: r.business,
+      technical: r.technical,
+      integration: r.integration,
+      testing: r.testing,
+      data: r.data,
+    },
+    // Widened on the way out rather than asserted, following `EngagementDetail.type`: the
+    // column is free text so a size retired from the calibration still reads back.
+    sizeOverride: (r.sizeOverride as IssueEstimate['sizeOverride']) ?? null,
+    approvedEffortHours: r.approvedEffortHours,
+    capacity: {
+      hoursPerDay: r.hoursPerDay,
+      resources: r.resources,
+      allocationPct: r.allocationPct,
+    },
+    plannedStart: fromDate(r.plannedStart) ?? '',
+    waitDays: r.waitDays,
+    steps: (r.steps as unknown as IssueEstimate['steps']) ?? [],
+    confidence: r.confidence as IssueEstimate['confidence'],
+    assumptions: r.assumptions,
+    notes: r.notes,
+    baselinedAt: r.baselinedAt ? r.baselinedAt.toISOString() : null,
+    baselinedBy: r.baselinedBy,
+    updatedAt: r.updatedAt.toISOString(),
+    updatedBy: r.updatedBy,
+  }
+}
+
+export function revisionToRow(
+  tenantId: TenantId,
+  r: EstimateRevision,
+): Prisma.EstimateRevisionUncheckedCreateInput {
+  return {
+    tenantId,
+    id: r.id,
+    issueId: r.issueId,
+    reason: r.reason,
+    by: r.by,
+    at: new Date(r.at),
+    from: r.from as unknown as object,
+    to: r.to as unknown as object,
+  }
+}
+
+export function revisionFromRow(r: RevisionRow): EstimateRevision {
+  return {
+    id: r.id,
+    issueId: r.issueId,
+    reason: r.reason,
+    by: r.by,
+    at: r.at.toISOString(),
+    from: r.from as unknown as EstimateRevision['from'],
+    to: r.to as unknown as EstimateRevision['to'],
   }
 }

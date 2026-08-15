@@ -15,6 +15,8 @@ import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
+import EstimationTab from './EstimationTab'
+import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
 import type { IssueNote, NoteType } from '@/lib/notes'
 import type { IssueRecord } from '@/lib/workspace'
@@ -39,6 +41,7 @@ import {
 type Tab =
   | 'Overview'
   | 'Notes'
+  | 'Estimation'
   | 'Schedule'
   | 'Lifecycle'
   | 'Relationships'
@@ -98,6 +101,8 @@ interface Props {
    * discarding work silently.
    */
   onDirtyChange: (dirty: boolean) => void
+  onSaveEstimate: (issueId: string, patch: Partial<Estimate>, reason?: string) => boolean
+  onBaselineEstimate: (issueId: string) => void
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
 }
 
@@ -133,6 +138,8 @@ export default function DetailPanel({
   onUpdateNote,
   onDeleteNote,
   onDirtyChange,
+  onSaveEstimate,
+  onBaselineEstimate,
 }: Props) {
   const labels = useLabels()
   const [tab, setTab] = useState<Tab>('Overview')
@@ -193,6 +200,7 @@ export default function DetailPanel({
   const TABS: Tab[] = [
     'Overview',
     'Notes',
+    'Estimation',
     'Schedule',
     'Lifecycle',
     'Relationships',
@@ -290,6 +298,15 @@ export default function DetailPanel({
             onDirtyChange={onDirtyChange}
             editing={editing}
             setEditing={setEditing}
+          />
+        ) : tab === 'Estimation' ? (
+          <EstimationTab
+            issueId={issue.id}
+            state={state}
+            actor={actor}
+            today={today}
+            onSave={(patch, reason) => onSaveEstimate(issue.id, patch, reason)}
+            onBaseline={() => onBaselineEstimate(issue.id)}
           />
         ) : tab === 'Notes' ? (
           <NotesTab

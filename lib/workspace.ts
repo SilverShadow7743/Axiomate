@@ -41,6 +41,16 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
+import {
+  bandProblems,
+  emptyEstimate,
+  summarise,
+  summariesDiffer,
+  type Estimate,
+  type EstimateRevision,
+  type IssueEstimate,
+  type SizeBand,
+} from './estimation'
 import { blankEngagement, type EngagementDetail } from './engagement'
 import { addWorkingDays } from './dates'
 import { STATUS_PROGRESS } from './schedule'
@@ -161,6 +171,10 @@ export interface WorkspaceState {
   evidence: Record<string, EvidenceItem>
   /** The working record of how each issue progressed. See `./notes`. */
   notes: Record<string, IssueNote>
+  /** One estimate per issue, keyed by issue id. See `./estimation`. */
+  estimates: Record<string, IssueEstimate>
+  /** What changed to an agreed estimate, and why. */
+  estimateRevisions: Record<string, EstimateRevision>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -385,6 +399,8 @@ export function initWorkspace(
     relationships,
     evidence: {},
     notes: {},
+    estimates: {},
+    estimateRevisions: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -455,6 +471,9 @@ export type Action =
       now: string
     }
   | { t: 'removeNote'; id: string; now: string }
+  /* ---- ESTIMATION ---- */
+  | { t: 'setEstimate'; issueId: string; patch: Partial<Estimate>; reason?: string; now: string }
+  | { t: 'baselineEstimate'; issueId: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -477,6 +496,7 @@ export type ConfigOp =
   | { k: 'upsertWorkType'; id: string | null; label: string; description: string }
   | { k: 'deleteWorkType'; id: string }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
+  | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -1708,6 +1728,118 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /* ---------------- ESTIMATION ---------------- */
+
+    /**
+     * Edit an estimate, and record the revision if one has been agreed.
+     *
+     * Before a baseline exists this is ordinary editing — somebody is still working out what
+     * the number is, and every keystroke does not owe an explanation. Once the estimate has
+     * been agreed, changing anything a reader would notice becomes an event: it needs a
+     * reason, and both halves of the before and after are kept, because effort and timeline
+     * move independently. Scope can grow without the date slipping if people are added, and
+     * the date can slip with no change in effort at all when a client goes quiet.
+     */
+    case 'setEstimate': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'Issue not found.' }
+
+      const bands = state.model.sizeBands
+      const existing = state.estimates[a.issueId]
+      const base: IssueEstimate = existing ?? {
+        ...emptyEstimate(a.now.slice(0, 10)),
+        issueId: a.issueId,
+        baselinedAt: null,
+        baselinedBy: null,
+        updatedAt: a.now,
+        updatedBy: by,
+      }
+      const next: IssueEstimate = { ...base, ...a.patch, updatedAt: a.now, updatedBy: by }
+
+      const before = summarise(base, bands)
+      const after = summarise(next, bands)
+      const material = summariesDiffer(before, after)
+
+      if (base.baselinedAt && material && !a.reason?.trim()) {
+        return {
+          state,
+          error:
+            'This estimate has been agreed. Changing the effort, size, duration, date or confidence needs a reason.',
+        }
+      }
+
+      const revisions = { ...state.estimateRevisions }
+      let seq = state.seq
+      if (base.baselinedAt && material) {
+        seq += 1
+        const id = `rev-${seq}`
+        revisions[id] = {
+          id,
+          issueId: a.issueId,
+          at: a.now,
+          by,
+          reason: a.reason!.trim(),
+          from: before,
+          to: after,
+        }
+      }
+
+      return {
+        state: {
+          ...state,
+          estimates: { ...state.estimates, [a.issueId]: next },
+          estimateRevisions: revisions,
+          seq,
+          audit: material
+            ? log(state, {
+                rowId: a.issueId,
+                field: 'estimate',
+                from: `${before.effortHours ?? '—'}h / ${before.workingDays ?? '—'}d`,
+                to: `${after.effortHours ?? '—'}h / ${after.workingDays ?? '—'}d`,
+                at: a.now,
+                by,
+                reason: a.reason?.trim() || undefined,
+              })
+            : state.audit,
+        },
+        message: base.baselinedAt && material ? 'Estimate revised.' : undefined,
+      }
+    }
+
+    /**
+     * Agree the estimate.
+     *
+     * Nothing about the numbers changes; what changes is that they are now somebody's word,
+     * so every later edit that moves them has to say why.
+     */
+    case 'baselineEstimate': {
+      const est = state.estimates[a.issueId]
+      if (!est) return { state, error: 'There is no estimate to agree yet.' }
+      if (est.baselinedAt) return { state, message: 'Already agreed.' }
+      const s = summarise(est, state.model.sizeBands)
+      if (s.effortHours === null) {
+        return { state, error: 'Score the five parameters, or set an effort figure, before agreeing it.' }
+      }
+      return {
+        state: {
+          ...state,
+          estimates: {
+            ...state.estimates,
+            [a.issueId]: { ...est, baselinedAt: a.now, baselinedBy: by, updatedAt: a.now, updatedBy: by },
+          },
+          audit: log(state, {
+            rowId: a.issueId,
+            field: 'estimate',
+            from: 'draft',
+            to: `agreed — ${s.effortHours}h / ${s.workingDays ?? '—'}d / ${s.size ?? 'no size'}`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Estimate agreed. Later changes will ask for a reason.',
+      }
+    }
+
     /* ---------------- CONFIGURATION ---------------- */
     case 'config':
       return applyConfig(state, a.op, a.now, actor)
@@ -1918,6 +2050,23 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, roles: { ...m.roles, [op.id]: { ...role, deletedAt: now } } },
         { rowId: op.id, field: 'role', from: role.label, to: '(archived)', at: now, by },
         `Role “${role.label}” archived.`,
+      )
+    }
+
+    case 'setSizeBands': {
+      const problems = bandProblems(op.bands)
+      // Refused rather than warned about: a calibration with a gap produces scores that map to
+      // no size at all, and the estimate screen would have nothing to show for them.
+      if (problems.length) return { state, error: problems[0] }
+      for (const b of op.bands) {
+        if (b.storyPoints < 0 || b.effortHours < 0) {
+          return { state, error: `${b.size}: story points and hours cannot be negative.` }
+        }
+      }
+      return done(
+        { ...m, sizeBands: op.bands },
+        { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
+        'T-shirt sizing updated.',
       )
     }
 

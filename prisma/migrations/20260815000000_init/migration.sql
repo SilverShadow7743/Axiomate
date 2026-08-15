@@ -219,6 +219,48 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "IssueEstimate" (
+    "tenantId" TEXT NOT NULL,
+    "issueId" TEXT NOT NULL,
+    "business" INTEGER NOT NULL DEFAULT 0,
+    "technical" INTEGER NOT NULL DEFAULT 0,
+    "integration" INTEGER NOT NULL DEFAULT 0,
+    "testing" INTEGER NOT NULL DEFAULT 0,
+    "data" INTEGER NOT NULL DEFAULT 0,
+    "sizeOverride" TEXT,
+    "approvedEffortHours" INTEGER,
+    "hoursPerDay" INTEGER NOT NULL DEFAULT 8,
+    "resources" INTEGER NOT NULL DEFAULT 1,
+    "allocationPct" INTEGER NOT NULL DEFAULT 100,
+    "plannedStart" TIMESTAMP(3) NOT NULL,
+    "waitDays" INTEGER NOT NULL DEFAULT 0,
+    "steps" JSONB NOT NULL DEFAULT '[]',
+    "confidence" TEXT NOT NULL DEFAULT 'Medium',
+    "assumptions" TEXT NOT NULL,
+    "notes" TEXT NOT NULL,
+    "baselinedAt" TIMESTAMP(3),
+    "baselinedBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "IssueEstimate_pkey" PRIMARY KEY ("tenantId","issueId")
+);
+
+-- CreateTable
+CREATE TABLE "EstimateRevision" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "issueId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "by" TEXT NOT NULL,
+    "at" TIMESTAMP(3) NOT NULL,
+    "from" JSONB NOT NULL,
+    "to" JSONB NOT NULL,
+
+    CONSTRAINT "EstimateRevision_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "ScheduleAudit" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -288,6 +330,12 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "IssueEstimate_tenantId_baselinedAt_idx" ON "IssueEstimate"("tenantId", "baselinedAt");
+
+-- CreateIndex
+CREATE INDEX "EstimateRevision_tenantId_issueId_at_idx" ON "EstimateRevision"("tenantId", "issueId", "at");
+
+-- CreateIndex
 CREATE INDEX "ScheduleAudit_tenantId_rowId_at_idx" ON "ScheduleAudit"("tenantId", "rowId", "at");
 
 -- CreateIndex
@@ -355,6 +403,18 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IssueEstimate" ADD CONSTRAINT "IssueEstimate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IssueEstimate" ADD CONSTRAINT "IssueEstimate_tenantId_issueId_fkey" FOREIGN KEY ("tenantId", "issueId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EstimateRevision" ADD CONSTRAINT "EstimateRevision_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EstimateRevision" ADD CONSTRAINT "EstimateRevision_tenantId_issueId_fkey" FOREIGN KEY ("tenantId", "issueId") REFERENCES "IssueEstimate"("tenantId", "issueId") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ScheduleAudit" ADD CONSTRAINT "ScheduleAudit_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

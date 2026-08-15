@@ -26,6 +26,7 @@ import {
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { NODE_KINDS, type NodeKind } from '@/lib/types'
 import { isTerminal } from '@/lib/schedule'
+import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
 
 /**
@@ -57,6 +58,7 @@ type Tab =
   | 'routing'
   | 'workTypes'
   | 'serviceLevels'
+  | 'sizing'
   | 'scopes'
 
 const TABS: { id: Tab; label: string; group: string }[] = [
@@ -65,6 +67,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
+  { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
@@ -183,6 +186,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
+          {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'scopes' && (
@@ -768,6 +772,12 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       now: `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low}`,
     },
     {
+      id: 'sizing',
+      title: 'T-shirt sizing',
+      what: 'What a size is worth in story points and hours. Drives every estimate.',
+      now: `${m.sizeBands.length} sizes · ${m.sizeBands[0]?.effortHours ?? '—'}–${m.sizeBands[m.sizeBands.length - 1]?.effortHours ?? '—'} h`,
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -830,6 +840,104 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
           </button>
         ))}
       </div>
+    </section>
+  )
+}
+
+
+/* ================================================================== *
+ * T-shirt sizing
+ * ================================================================== */
+
+function Sizing({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const bands = state.model.sizeBands
+  const problems = bandProblems(bands)
+
+  /** How many estimates currently land in each band — calibration is easier with usage. */
+  const inUse = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const e of Object.values(state.estimates)) {
+      const b = bandForScore(bands, totalComplexity(e.scores))
+      if (b) n[b.size] = (n[b.size] ?? 0) + 1
+    }
+    return n
+  }, [state.estimates, bands])
+
+  const put = (size: string, patch: Partial<SizeBand>) =>
+    onConfig({
+      k: 'setSizeBands',
+      bands: bands.map((b) => (b.size === size ? { ...b, ...patch } : b)),
+    })
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">T-shirt sizing</h3>
+      <p className="cfg-note">
+        What a size is worth here. A complexity score between 5 and 25 lands in one of these
+        bands, and the band carries the story points and the hours the estimate uses — so this
+        is where the firm&rsquo;s calibration lives, rather than on the estimation screen.
+      </p>
+      <p className="cfg-note">
+        Two firms running the same five-parameter model will disagree about what an L costs.
+        These numbers are a starting point to be changed, not a recommendation.
+      </p>
+
+      {problems.length > 0 && (
+        <div className="panel-note cfg-problem">
+          {problems.map((x) => (
+            <div key={x}>{x}</div>
+          ))}
+        </div>
+      )}
+
+      <table className="cfg-table est-table">
+        <thead>
+          <tr>
+            <th>Size</th>
+            <th>Score from</th>
+            <th>to</th>
+            <th>Story points</th>
+            <th>Effort hours</th>
+            <th>In use</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bands.map((b) => (
+            <tr key={b.size}>
+              <td className="cfg-key">{b.size}</td>
+              {(['minScore', 'maxScore', 'storyPoints', 'effortHours'] as const).map((f) => (
+                <td key={f}>
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={b[f]}
+                    aria-label={`${b.size} ${f}`}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value)
+                      if (!Number.isFinite(v) || v === b[f]) return
+                      // Refused changes bounce the field back, so the table never shows a
+                      // value the model rejected.
+                      if (!put(b.size, { [f]: v })) e.target.value = String(b[f])
+                    }}
+                  />
+                </td>
+              ))}
+              <td className="cfg-inherit">{inUse[b.size] ?? 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="cfg-inherit">
+        Bands must cover 5 to 25 without gaps or overlaps: a score with no size leaves an
+        estimate with nothing to show, and a score in two bands makes the answer depend on
+        which row happens to come first. A change that would break either is refused.
+      </p>
     </section>
   )
 }

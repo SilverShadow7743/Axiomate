@@ -14,6 +14,8 @@ import {
   issueToRow,
   nodeToRow,
   noteToRow,
+  estimateToRow,
+  revisionToRow,
   relationshipToRow,
 } from './map'
 
@@ -288,6 +290,33 @@ async function writeAction(
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    /**
+     * The estimate, and the revision the edit may have minted.
+     *
+     * Both are written from the state the reducer returned rather than from the action: the
+     * action carries a patch, and whether that patch amounted to a revision is a judgement the
+     * reducer already made against the size calibration. Re-deciding it here would be a second
+     * implementation of the same rule, free to disagree with the first.
+     */
+    case 'setEstimate':
+    case 'baselineEstimate': {
+      for (const [issueId, est] of Object.entries(after.estimates)) {
+        if (before.estimates[issueId] === est) continue
+        const row = estimateToRow(tenantId, est)
+        await tx.issueEstimate.upsert({
+          where: { tenantId_issueId: { tenantId, issueId } },
+          create: row,
+          update: row,
+        })
+      }
+      for (const [id, rev] of Object.entries(after.estimateRevisions)) {
+        if (before.estimateRevisions[id]) continue
+        // Created, never edited — a revision is a record of something that happened.
+        await tx.estimateRevision.create({ data: revisionToRow(tenantId, rev) })
+      }
       return
     }
 

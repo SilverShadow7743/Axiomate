@@ -1565,6 +1565,12 @@ export default function IssueWorkspace({
           }
           actor={actor}
           onDirtyChange={setDirty}
+          onSaveEstimate={(issueId, patch, reason) =>
+            dispatch({ t: 'setEstimate', issueId, patch, reason, now: new Date().toISOString() })
+          }
+          onBaselineEstimate={(issueId) =>
+            dispatch({ t: 'baselineEstimate', issueId, now: new Date().toISOString() })
+          }
           /**
            * One commit, two possible actions.
            *

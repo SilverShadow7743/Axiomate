@@ -3569,3 +3569,170 @@ select.cell-editor {
   color: var(--text-muted);
   line-height: 1.45;
 }
+
+/* ------------------------------------------------------------------ *
+   Estimation — effort and timeline, laid out to keep them apart
+ * ------------------------------------------------------------------ */
+
+.est {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Effort and timeline sit side by side so neither reads as the other's restatement. */
+.est-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.est-sum-group dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+}
+.est-sum-group dt {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.est-sum-group dd {
+  margin: 0;
+  font-size: 12px;
+}
+.est-sum-head {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+.est-strong {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.est-section {
+  border-top: 1px solid var(--grid-line);
+  padding-top: 10px;
+}
+.est-section h4 {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.est-sub {
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.est-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.est-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 4px 8px 4px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.est-table td {
+  padding: 4px 8px 4px 0;
+  vertical-align: top;
+}
+.est-what {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.est-scale {
+  white-space: nowrap;
+}
+/* One to five, as buttons rather than a select: the whole scale stays visible, so scoring is
+   a comparison rather than a recall exercise. */
+.est-dot {
+  width: 24px;
+  height: 24px;
+  margin-right: 3px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.est-dot:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.est-dot.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 650;
+}
+.est-dot:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The derivation chain, shown rather than described. */
+.est-derive {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0;
+  padding: 6px 9px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.est-arrow {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.est-steps input,
+.est-steps select {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--text);
+}
+.est-steps select[multiple] {
+  min-height: 46px;
+}
+.est-revs td {
+  border-top: 1px solid var(--grid-line);
+  font-size: 11.5px;
+}
+
+.est-reason {
+  border-left: 3px solid var(--h-atrisk);
+  background: var(--surface);
+  padding: 8px 11px;
+}
+
+.conf-high { color: var(--h-ontrack); font-weight: 600; }
+.conf-medium { color: var(--h-atrisk); font-weight: 600; }
+.conf-low { color: var(--h-overdue); font-weight: 600; }
+
+/* A configuration value the model refused, or a calibration that does not cover its range. */
+.cfg-problem {
+  border-left: 3px solid var(--h-overdue);
+  color: var(--h-overdue);
+}
