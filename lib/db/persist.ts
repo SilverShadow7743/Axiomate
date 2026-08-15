@@ -15,6 +15,7 @@ import {
   nodeToRow,
   noteToRow,
   estimateToRow,
+  timeToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -289,6 +290,29 @@ async function writeAction(
       }
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
+      for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    /**
+     * The entry, and the issue whose activity date it moved.
+     *
+     * Two records for the same reason a note writes two: somebody spending four hours on an
+     * issue today *is* activity on it, and persisting the hours alone would leave a stored
+     * issue reporting itself as stale while its own time says otherwise.
+     */
+    case 'addTime':
+    case 'updateTime':
+    case 'removeTime': {
+      for (const [id, entry] of Object.entries(after.timeEntries)) {
+        if (before.timeEntries[id] === entry) continue
+        const row = timeToRow(tenantId, entry)
+        await tx.timeEntry.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
       return
     }

@@ -26,6 +26,8 @@ import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
+import { effortVariance, hoursOn, summariseTime } from '../lib/time'
+import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
@@ -395,32 +397,126 @@ scenario(
 scenario(
   'J',
   'A consultant records time against an issue',
-  'The hours land on the work item and feed cost, utilisation and remaining effort.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `No time entry exists — ${absent(/TimeEntry|timesheet/i) ? 'the words do not appear in the source' : 'the words appear but no action writes one'}. No action in the reducer records hours.`,
-    stops: 'at the entity',
-    severity: 'P0',
-    impact: 'Cost, margin, utilisation and estimate accuracy are all unavailable, because all four are functions of this one record.',
-  }),
+  'The hours land on the work item, move it off stale, and become the actual half of the estimate.',
+  () => {
+    const logged = ok(BASE, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-14',
+      hours: 3.5, activity: 'Investigation', billable: true, note: 'Traced the batch failure.', now: NOW,
+    } as Action)
+    const more = ok(logged, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: TODAY,
+      hours: 2, activity: 'Resolution', billable: false, note: 'Rework after our own misconfiguration.', now: NOW,
+    } as Action)
+
+    const total = hoursOn(more.timeEntries, 'OAPIL-1')
+    const summary = summariseTime(more.timeEntries, 'OAPIL-1')
+    const activityMoved = more.issues['OAPIL-1'].lastActivity === TODAY
+    const audited = more.audit.filter((e) => e.rowId === 'OAPIL-1' && e.field === 'time').length
+
+    // What it refuses. Each of these is a way a timesheet quietly becomes fiction.
+    const future = act(more, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-09-01',
+      hours: 1, activity: 'Meeting', billable: true, note: '', now: NOW,
+    } as Action)
+    const marathon = act(more, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: TODAY,
+      hours: 18, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const precise = act(more, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: TODAY,
+      hours: 1.37, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+
+    const good =
+      total === 5.5 && summary.billable === 3.5 && summary.nonBillable === 2 &&
+      activityMoved && audited === 2 &&
+      Boolean(future.error) && Boolean(marathon.error) && Boolean(precise.error)
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `${total}h recorded across ${summary.byActivity.length} activities — ${summary.billable}h billable, ${summary.nonBillable}h not — and the issue is no longer stale (last activity ${more.issues['OAPIL-1'].lastActivity}). Refused: a future day ("${future.error}"), an 18-hour entry, and 1.37 hours. Removing an entry withdraws it rather than destroying it.`,
+      stops: 'at money — hours are recorded, and a rate to multiply them by does not exist anywhere',
+      severity: 'P2',
+      impact: 'Actual effort, variance and utilisation now have a source. Cost and margin still do not.',
+    }
+  },
+)
+
+scenario(
+  'J2',
+  "Somebody logs hours in a colleague's name",
+  "It is refused unless they hold the grant for it, because hours are that person's account of their own day.",
+  () => {
+    const existing = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const withRole = (roleId: string) =>
+      ok(BASE, {
+        t: 'config', op: { k: 'upsertPerson', id: existing.id, name: 'Priya', roleIds: [roleId] }, now: NOW,
+      } as Action)
+    const staffed = withRole('ROLE_FUNCTIONAL')
+    const priya: Actor = { id: existing.id, name: 'Priya' }
+
+    const forOther = apply(staffed, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Sam', date: TODAY,
+      hours: 2, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action, priya)
+
+    const forSelf = apply(staffed, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: TODAY,
+      hours: 2, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action, priya)
+
+    const asManager = withRole('ROLE_PROJECT_MANAGER')
+    const nowAllowed = apply(asManager, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Sam', date: TODAY,
+      hours: 2, activity: 'Resolution', billable: true, note: 'Logged on his behalf while he was on site.', now: NOW,
+    } as Action, priya)
+
+    const good = Boolean(forOther.error) && !forSelf.error && !nowAllowed.error
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A consultant logging their own hours is fine; logging Sam's is refused — "${forOther.error}" A project manager holds the grant and may, and the entry keeps Sam's name while the trail records who typed it.`,
+      stops: '—',
+      severity: '—',
+      impact: "Hours cannot be attributed to somebody who did not agree they worked them, except by a role the firm chose to trust with it.",
+    }
+  },
 )
 
 scenario(
   'K',
   'Actual effort overruns the estimate',
-  'The variance is visible on the issue, and it moves the project and the commercial picture.',
+  'The variance is visible on the issue, and it is honest about what it is measured against.',
   () => {
-    const s1 = ok(BASE, {
+    const estimated = ok(BASE, {
       t: 'setEstimate', issueId: 'OAPIL-1',
-      patch: { scores: { business: 3, technical: 4, integration: 3, testing: 3, data: 2 } }, now: NOW,
+      patch: { scores: { business: 2, technical: 2, integration: 1, testing: 2, data: 1 } }, now: NOW,
     } as Action)
-    const agreed = ok(s1, { t: 'baselineEstimate', issueId: 'OAPIL-1', now: NOW } as Action)
+    const agreed = ok(estimated, { t: 'baselineEstimate', issueId: 'OAPIL-1', now: NOW } as Action)
+    const bands = agreed.model.sizeBands
+    const planned = summarise(agreed.estimates['OAPIL-1'], bands).effortHours!
+
+    // Spend half again as long as agreed.
+    let spent = agreed
+    for (const day of ['2026-08-11', '2026-08-12', '2026-08-13']) {
+      spent = ok(spent, {
+        t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: day,
+        hours: Math.round((planned / 2) * 4) / 4, activity: 'Resolution', billable: true, note: '', now: NOW,
+      } as Action)
+    }
+
+    const v = effortVariance(spent.timeEntries, 'OAPIL-1', spent.estimates['OAPIL-1'], bands)
+    const unestimated = effortVariance(spent.timeEntries, 'OAPIL-2', spent.estimates['OAPIL-2'], bands)
+
+    const good =
+      v.estimated === planned && v.actual > planned && v.varianceHours! > 0 &&
+      v.againstBaseline && unestimated.estimated === null && unestimated.varianceHours === null
+
     return {
-      verdict: 'PARTIAL',
-      actual: `The estimate side is complete and agreed (baselined ${agreed.estimates['OAPIL-1'].baselinedAt?.slice(0, 10)}), and revisions are refused without a reason. The actual side does not exist, so variance is undefined — the tab says so rather than showing a zero.`,
-      stops: 'at actuals — see J',
-      severity: 'P1',
-      impact: 'Estimates cannot be calibrated, because nothing ever tells the firm it was wrong.',
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `${v.actual}h spent against ${v.estimated}h agreed — ${v.varianceHours! > 0 ? '+' : ''}${v.varianceHours}h, ${Math.round(v.variancePct!)}%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.`,
+      stops: 'before it reaches the project — the variance is per issue, and nothing rolls it up to a milestone, a SOW or a margin',
+      severity: 'P2',
+      impact: 'A consultant can see the overrun on the record. A partner still cannot see it on the engagement.',
     }
   },
 )
@@ -1092,24 +1188,24 @@ scenario(
 scenario(
   'U',
   'A consultant submits a timesheet',
-  'The week is presented for approval, and approval freezes what was approved.',
+  'The week is presented for approval, and approval freezes exactly what was approved.',
   () => ({
     verdict: 'NOT IMPLEMENTED',
-    actual: `No timesheet or period exists (${absent(/Timesheet|submitPeriod|TimePeriod/) ? 'no such type in source' : 'a type exists'}), because there is no time entry for one to gather. Approval of any kind is absent from the reducer.`,
-    stops: 'at the entity — see J',
+    actual: `Entries exist and are the record; there is no period, no submission and no approval — ${absent(/submitPeriod|TimePeriod|interface Timesheet/) ? 'no such type in source' : 'a type exists'}. The entry-as-record decision is the half that had to come first: attaching approval to a container is what lets an edited entry silently change an approved total.`,
+    stops: 'at approval, which is the same missing mechanism as scenario P',
     severity: 'P1',
-    impact: 'Time cannot be approved, so it cannot be billed or costed.',
+    impact: 'Time is recorded and cannot yet be signed off, so it cannot be billed.',
   }),
 )
 
 scenario(
   'V',
   'A submitted timesheet is rejected',
-  'The rejection returns specific lines, says why, and the corrected resubmission is traceable.',
+  'The rejection returns specific entries, says why, and the corrected resubmission is traceable.',
   () => ({
     verdict: 'NOT IMPLEMENTED',
-    actual: 'Requires U. Nothing in the product can be returned to its author with a reason — the only rejection-shaped mechanism is the estimate revision log, which is specific to estimates.',
-    stops: 'at the same missing entity',
+    actual: 'Requires U. The nearest existing mechanism is the estimate revision log, which refuses to let an agreed number move without a reason — the same shape this needs, applied to a different record.',
+    stops: 'at the same missing approval',
     severity: 'P1',
     impact: 'No correction loop exists for the record that drives revenue.',
   }),

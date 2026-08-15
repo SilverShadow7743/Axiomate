@@ -16,6 +16,8 @@ import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
 import EstimationTab from './EstimationTab'
+import TimeTab from './TimeTab'
+import type { TimeActivity } from '@/lib/time'
 import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
 import type { IssueNote, NoteType } from '@/lib/notes'
@@ -42,6 +44,7 @@ type Tab =
   | 'Overview'
   | 'Notes'
   | 'Estimation'
+  | 'Time'
   | 'Schedule'
   | 'Lifecycle'
   | 'Relationships'
@@ -108,6 +111,11 @@ interface Props {
    */
   onDirtyChange: (dirty: boolean) => void
   onSaveEstimate: (issueId: string, patch: Partial<Estimate>, reason?: string) => boolean
+  onAddTime: (
+    issueId: string,
+    entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string },
+  ) => boolean
+  onRemoveTime: (id: string) => void
   onBaselineEstimate: (issueId: string) => void
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
 }
@@ -145,6 +153,8 @@ export default function DetailPanel({
   onDeleteNote,
   onDirtyChange,
   onSaveEstimate,
+  onAddTime,
+  onRemoveTime,
   onBaselineEstimate,
 }: Props) {
   const labels = useLabels()
@@ -207,6 +217,7 @@ export default function DetailPanel({
     'Overview',
     'Notes',
     'Estimation',
+    'Time',
     'Schedule',
     'Lifecycle',
     'Relationships',
@@ -313,6 +324,15 @@ export default function DetailPanel({
             today={today}
             onSave={(patch, reason) => onSaveEstimate(issue.id, patch, reason)}
             onBaseline={() => onBaselineEstimate(issue.id)}
+          />
+        ) : tab === 'Time' ? (
+          <TimeTab
+            issueId={issue.id}
+            state={state}
+            actor={actor}
+            today={today}
+            onAdd={(entry) => onAddTime(issue.id, entry)}
+            onRemove={onRemoveTime}
           />
         ) : tab === 'Notes' ? (
           <NotesTab

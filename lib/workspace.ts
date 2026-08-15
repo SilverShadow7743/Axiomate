@@ -48,6 +48,7 @@ import {
   policyProblems,
   type StatusPolicy,
 } from './statusPolicy'
+import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import {
   bandProblems,
   emptyEstimate,
@@ -182,6 +183,8 @@ export interface WorkspaceState {
   estimates: Record<string, IssueEstimate>
   /** What changed to an agreed estimate, and why. */
   estimateRevisions: Record<string, EstimateRevision>
+  /** Hours spent, against the work they were spent on. See `./time`. */
+  timeEntries: Record<string, TimeEntry>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -408,6 +411,7 @@ export function initWorkspace(
     notes: {},
     estimates: {},
     estimateRevisions: {},
+    timeEntries: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -481,6 +485,20 @@ export type Action =
   /* ---- ESTIMATION ---- */
   | { t: 'setEstimate'; issueId: string; patch: Partial<Estimate>; reason?: string; now: string }
   | { t: 'baselineEstimate'; issueId: string; now: string }
+  /* ---- TIME ---- */
+  | {
+      t: 'addTime'
+      issueId: string
+      person: string
+      date: string
+      hours: number
+      activity: TimeActivity
+      billable: boolean
+      note: string
+      now: string
+    }
+  | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
+  | { t: 'removeTime'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -1903,6 +1921,151 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Estimate agreed. Later changes will ask for a reason.',
+      }
+    }
+
+    /* ---------------- TIME ---------------- */
+
+    /**
+     * Record hours against an issue.
+     *
+     * Two things happen that are easy to miss. The entry moves the issue's `lastActivity`,
+     * because somebody working on it *is* activity — the same rule notes follow, and for the
+     * same reason: an issue with four hours logged today is not stale. And logging time on
+     * somebody else's behalf is a separate permission, checked here rather than in the action
+     * map, because only this arm knows whose name is on the entry.
+     */
+    case 'addTime': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'Issue not found.' }
+      if (issue.deletedAt) return { state, error: 'That record is archived.' }
+
+      const today = a.now.slice(0, 10)
+      const problem = checkEntry({ hours: a.hours, date: a.date, person: a.person }, today)
+      if (problem) return { state, error: problem.message }
+
+      if (a.person.trim().toLowerCase() !== by.toLowerCase()) {
+        const may = can(state.model, actor, 'time.recordForOthers')
+        if (!may.allowed) {
+          return {
+            state,
+            error: `${may.reason ?? 'Not permitted.'} Time is recorded by the person who did the work.`,
+          }
+        }
+      }
+
+      const seq = state.seq + 1
+      const id = `time-${seq}`
+      const entry: TimeEntry = {
+        id,
+        issueId: a.issueId,
+        person: a.person.trim(),
+        date: a.date,
+        hours: a.hours,
+        activity: a.activity,
+        billable: a.billable,
+        note: a.note.trim(),
+        createdBy: by,
+        createdAt: a.now,
+        updatedBy: null,
+        updatedAt: null,
+        deletedAt: null,
+      }
+
+      return {
+        state: {
+          ...state,
+          timeEntries: { ...state.timeEntries, [id]: entry },
+          issues: { ...state.issues, [a.issueId]: { ...issue, lastActivity: today } },
+          seq,
+          audit: log(state, {
+            rowId: a.issueId,
+            field: 'time',
+            from: '',
+            to: `${a.hours}h · ${a.activity} · ${a.person}${a.billable ? '' : ' · non-billable'}`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${a.hours}h recorded.`,
+      }
+    }
+
+    /**
+     * Correct an entry.
+     *
+     * Authorship again, and the same rule as notes: hours are somebody's account of their own
+     * day. Correcting another person's is a supervisor act, and it keeps their name on the
+     * entry while recording who changed it.
+     */
+    case 'updateTime': {
+      const entry = state.timeEntries[a.id]
+      if (!entry) return { state, error: 'That time entry no longer exists.' }
+      if (entry.deletedAt) return { state, error: 'That entry has been removed.' }
+
+      if (entry.person.toLowerCase() !== by.toLowerCase()) {
+        const may = can(state.model, actor, 'time.recordForOthers')
+        if (!may.allowed) {
+          return { state, error: `Recorded by ${entry.person}. Correcting somebody else's hours needs the grant for it.` }
+        }
+      }
+
+      const next: TimeEntry = { ...entry, ...a.patch, updatedBy: by, updatedAt: a.now }
+      const problem = checkEntry(
+        { hours: next.hours, date: next.date, person: next.person },
+        a.now.slice(0, 10),
+      )
+      if (problem) return { state, error: problem.message }
+
+      const changed = (Object.keys(a.patch) as (keyof TimeEntry)[]).filter((k) => entry[k] !== next[k])
+      if (!changed.length) return { state, message: 'Nothing changed.' }
+
+      let audit = state.audit
+      for (const k of changed) {
+        audit = log(
+          { ...state, audit },
+          {
+            rowId: entry.issueId,
+            field: `time.${String(k)}`,
+            from: String(entry[k] ?? ''),
+            to: String(next[k] ?? ''),
+            at: a.now,
+            by,
+          },
+        )
+      }
+      return { state: { ...state, timeEntries: { ...state.timeEntries, [a.id]: next }, audit }, message: 'Saved.' }
+    }
+
+    /**
+     * Withdraw an entry.
+     *
+     * Soft, like every other record here — and more pointedly than most. Hours drive money;
+     * an entry that can be made to vanish is an entry nobody can reconcile against an invoice.
+     */
+    case 'removeTime': {
+      const entry = state.timeEntries[a.id]
+      if (!entry) return { state, error: 'That time entry no longer exists.' }
+      if (entry.person.toLowerCase() !== by.toLowerCase()) {
+        const may = can(state.model, actor, 'time.recordForOthers')
+        if (!may.allowed) {
+          return { state, error: `Recorded by ${entry.person}. Removing somebody else's hours needs the grant for it.` }
+        }
+      }
+      return {
+        state: {
+          ...state,
+          timeEntries: { ...state.timeEntries, [a.id]: { ...entry, deletedAt: a.now } },
+          audit: log(state, {
+            rowId: entry.issueId,
+            field: 'time',
+            from: `${entry.hours}h · ${entry.activity} · ${entry.person}`,
+            to: '(removed)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Entry removed.',
       }
     }
 

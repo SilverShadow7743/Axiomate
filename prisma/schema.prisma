@@ -128,6 +128,7 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  timeEntries   TimeEntry[]
   estimates     IssueEstimate[]
   revisions     EstimateRevision[]
   audit         ScheduleAudit[]
@@ -240,6 +241,7 @@ model Issue {
   relationshipsTo   IssueRelationship[] @relation("RelTarget")
   evidenceItems     Evidence[]
   estimate          IssueEstimate?
+  timeEntries       TimeEntry[]
   notes             IssueNote[]
 
   deletedAt DateTime?
@@ -511,6 +513,49 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// Hours spent, against the work they were spent on.
+///
+/// The entry is the record, not the timesheet. A timesheet is a week of these presented for
+/// approval, and treating *it* as the record is how an entry edited after approval silently
+/// changes an approved total. When approval arrives it will name the entries it covered.
+///
+/// `hours` is a Decimal rather than a Float. Quarter hours summed across a month feed an
+/// invoice, and binary floating point cannot hold 0.25 + 0.25 + 0.25 exactly enough to be
+/// argued about with a client.
+model TimeEntry {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id      String @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  /// Who did the work, by name — the same join the rest of the model uses until people have keys.
+  person String
+  /// The day the work happened, not the day it was typed in.
+  date   DateTime
+  hours  Decimal @db.Decimal(5, 2)
+
+  activity String
+  billable Boolean @default(true)
+  note     String  @db.Text
+
+  createdBy String
+  createdAt DateTime
+  updatedBy String?
+  updatedAt DateTime?
+  /// Soft, and more pointedly than elsewhere: hours drive money, and an entry that can vanish
+  /// is an entry nobody can reconcile against an invoice.
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  /// The three questions asked of this table: what did this issue cost, what did this person
+  /// do, and what happened in this period.
+  @@index([tenantId, issueId])
+  @@index([tenantId, person, date])
+  @@index([tenantId, date])
 }
 
 /// An issue's estimate — one per issue, which is why the issue id *is* the key.

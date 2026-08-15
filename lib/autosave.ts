@@ -179,6 +179,7 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       notes: parsed.notes ?? {},
       estimates: parsed.estimates ?? {},
       estimateRevisions: parsed.estimateRevisions ?? {},
+      timeEntries: parsed.timeEntries ?? {},
       engagements: { ...seed.engagements, ...(parsed.engagements ?? {}) },
       // Merged, not taken whole. The mirror's model predates every operating-model key added
       // since it was written, and adopting it verbatim made those keys `undefined` — which is

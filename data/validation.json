@@ -124,22 +124,32 @@
     {
       "id": "J",
       "title": "A consultant records time against an issue",
-      "expected": "The hours land on the work item and feed cost, utilisation and remaining effort.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "No time entry exists — the words appear but no action writes one. No action in the reducer records hours.",
-      "stops": "at the entity",
-      "severity": "P0",
-      "impact": "Cost, margin, utilisation and estimate accuracy are all unavailable, because all four are functions of this one record."
+      "expected": "The hours land on the work item, move it off stale, and become the actual half of the estimate.",
+      "verdict": "PARTIAL",
+      "actual": "5.5h recorded across 2 activities — 3.5h billable, 2h not — and the issue is no longer stale (last activity 2026-08-15). Refused: a future day (\"Time cannot be recorded for a day that has not happened.\"), an 18-hour entry, and 1.37 hours. Removing an entry withdraws it rather than destroying it.",
+      "stops": "at money — hours are recorded, and a rate to multiply them by does not exist anywhere",
+      "severity": "P2",
+      "impact": "Actual effort, variance and utilisation now have a source. Cost and margin still do not."
+    },
+    {
+      "id": "J2",
+      "title": "Somebody logs hours in a colleague's name",
+      "expected": "It is refused unless they hold the grant for it, because hours are that person's account of their own day.",
+      "verdict": "PASS",
+      "actual": "A consultant logging their own hours is fine; logging Sam's is refused — \"Record others' time is not something Functional Consultant can do here. Time is recorded by the person who did the work.\" A project manager holds the grant and may, and the entry keeps Sam's name while the trail records who typed it.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Hours cannot be attributed to somebody who did not agree they worked them, except by a role the firm chose to trust with it."
     },
     {
       "id": "K",
       "title": "Actual effort overruns the estimate",
-      "expected": "The variance is visible on the issue, and it moves the project and the commercial picture.",
+      "expected": "The variance is visible on the issue, and it is honest about what it is measured against.",
       "verdict": "PARTIAL",
-      "actual": "The estimate side is complete and agreed (baselined 2026-08-15), and revisions are refused without a reason. The actual side does not exist, so variance is undefined — the tab says so rather than showing a zero.",
-      "stops": "at actuals — see J",
-      "severity": "P1",
-      "impact": "Estimates cannot be calibrated, because nothing ever tells the firm it was wrong."
+      "actual": "12h spent against 8h agreed — +4h, 50%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.",
+      "stops": "before it reaches the project — the variance is per issue, and nothing rolls it up to a milestone, a SOW or a margin",
+      "severity": "P2",
+      "impact": "A consultant can see the overrun on the record. A partner still cannot see it on the engagement."
     },
     {
       "id": "N",
@@ -386,20 +396,20 @@
     {
       "id": "U",
       "title": "A consultant submits a timesheet",
-      "expected": "The week is presented for approval, and approval freezes what was approved.",
+      "expected": "The week is presented for approval, and approval freezes exactly what was approved.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "No timesheet or period exists (a type exists), because there is no time entry for one to gather. Approval of any kind is absent from the reducer.",
-      "stops": "at the entity — see J",
+      "actual": "Entries exist and are the record; there is no period, no submission and no approval — no such type in source. The entry-as-record decision is the half that had to come first: attaching approval to a container is what lets an edited entry silently change an approved total.",
+      "stops": "at approval, which is the same missing mechanism as scenario P",
       "severity": "P1",
-      "impact": "Time cannot be approved, so it cannot be billed or costed."
+      "impact": "Time is recorded and cannot yet be signed off, so it cannot be billed."
     },
     {
       "id": "V",
       "title": "A submitted timesheet is rejected",
-      "expected": "The rejection returns specific lines, says why, and the corrected resubmission is traceable.",
+      "expected": "The rejection returns specific entries, says why, and the corrected resubmission is traceable.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "Requires U. Nothing in the product can be returned to its author with a reason — the only rejection-shaped mechanism is the estimate revision log, which is specific to estimates.",
-      "stops": "at the same missing entity",
+      "actual": "Requires U. The nearest existing mechanism is the estimate revision log, which refuses to let an agreed number move without a reason — the same shape this needs, applied to a different record.",
+      "stops": "at the same missing approval",
       "severity": "P1",
       "impact": "No correction loop exists for the record that drives revenue."
     },

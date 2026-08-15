@@ -1589,6 +1589,10 @@ export default function IssueWorkspace({
             if (res.ok) setDirty(false)
             return res.ok
           }}
+          onAddTime={(issueId, entry) =>
+            dispatch({ t: 'addTime', issueId, ...entry, now: new Date().toISOString() })
+          }
+          onRemoveTime={(id) => dispatch({ t: 'removeTime', id, now: new Date().toISOString() })}
           onAddNote={(issueId, body, noteType, pinned) =>
             dispatch({ t: 'addNote', issueId, body, noteType, pinned, now: new Date().toISOString() })
           }

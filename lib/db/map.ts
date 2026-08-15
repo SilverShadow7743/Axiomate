@@ -8,6 +8,7 @@ import type {
   IssueDependency as DependencyRow,
   IssueNote as IssueNoteRow,
   IssueEstimate as EstimateRow,
+  TimeEntry as TimeRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
@@ -19,6 +20,7 @@ import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
 import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
 import type { EstimateRevision, IssueEstimate } from '../estimation'
+import type { TimeActivity, TimeEntry } from '../time'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -595,5 +597,50 @@ export function revisionFromRow(r: RevisionRow): EstimateRevision {
     at: r.at.toISOString(),
     from: r.from as unknown as EstimateRevision['from'],
     to: r.to as unknown as EstimateRevision['to'],
+  }
+}
+
+/* ================================================================== *
+ * Time
+ * ================================================================== */
+
+export function timeToRow(tenantId: TenantId, e: TimeEntry): Prisma.TimeEntryUncheckedCreateInput {
+  return {
+    tenantId,
+    id: e.id,
+    issueId: e.issueId,
+    person: e.person,
+    // A plain day, so it uses the date helper — unlike the timestamps below, which carry a
+    // moment and would be silently destroyed by `toDate`'s midnight suffix.
+    date: toDate(e.date) ?? new Date(0),
+    hours: e.hours,
+    activity: e.activity,
+    billable: e.billable,
+    note: e.note,
+    createdBy: e.createdBy,
+    createdAt: new Date(e.createdAt),
+    updatedBy: e.updatedBy,
+    updatedAt: e.updatedAt ? new Date(e.updatedAt) : null,
+    deletedAt: e.deletedAt ? new Date(e.deletedAt) : null,
+  }
+}
+
+export function timeFromRow(r: TimeRow): TimeEntry {
+  return {
+    id: r.id,
+    issueId: r.issueId,
+    person: r.person,
+    date: fromDate(r.date) ?? '',
+    // Decimal on the way out, number in the domain. `Number()` is exact here because the
+    // column is (5,2) — five digits total — and every such value is representable.
+    hours: Number(r.hours),
+    activity: r.activity as TimeActivity,
+    billable: r.billable,
+    note: r.note,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt.toISOString(),
+    updatedBy: r.updatedBy,
+    updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

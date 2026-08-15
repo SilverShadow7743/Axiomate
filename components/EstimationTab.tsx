@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { effortVariance } from '@/lib/time'
 import type { Actor } from '@/lib/actor'
 import { canEditIssue } from '@/lib/permissions'
 import { formatIso } from '@/lib/dates'
@@ -101,6 +102,15 @@ export default function EstimationTab({
     })
 
   const variance = scheduleVarianceDays(timeline.finish, issue?.actualEnd ?? null)
+  /**
+   * The other half of "estimated versus actual", which this tab used to say plainly it could
+   * not produce. It can now: hours are recorded against the issue, and the comparison is
+   * recomputed from them rather than stored anywhere.
+   */
+  const effortActual = useMemo(
+    () => effortVariance(state.timeEntries, issueId, stored, bands),
+    [state.timeEntries, issueId, stored, bands],
+  )
 
   return (
     <div className="est">
@@ -165,6 +175,30 @@ export default function EstimationTab({
             </dd>
             <dt>Revisions</dt>
             <dd className="mono">{revisions.length}</dd>
+            <dt>Effort variance</dt>
+            <dd className="mono">
+              {effortActual.estimated === null ? (
+                <span className="prov">
+                  {effortActual.actual > 0
+                    ? `${effortActual.actual}h spent, nothing estimated`
+                    : 'nothing estimated'}
+                </span>
+              ) : effortActual.actual === 0 ? (
+                <span className="prov">no time recorded yet</span>
+              ) : (
+                <>
+                  {effortActual.actual}h of {effortActual.estimated}h{' '}
+                  <span className={effortActual.varianceHours! > 0 ? 'est-over' : 'est-under'}>
+                    ({effortActual.varianceHours! > 0 ? '+' : ''}
+                    {effortActual.varianceHours}h
+                    {effortActual.variancePct === null ? '' : `, ${effortActual.variancePct > 0 ? '+' : ''}${Math.round(effortActual.variancePct)}%`})
+                  </span>
+                  {!effortActual.againstBaseline && (
+                    <span className="prov"> · against a draft, not an agreed figure</span>
+                  )}
+                </>
+              )}
+            </dd>
             <dt>Schedule variance</dt>
             <dd className="mono">
               {variance === null ? (
@@ -568,11 +602,19 @@ export default function EstimationTab({
         </section>
       )}
 
-      {/* The half of "estimated versus actual" this system cannot produce, said plainly. */}
+      {/* What the comparison is worth, and what it still cannot reach. */}
       <p className="panel-note">
-        Effort variance is not shown because nothing records actual hours — Time Management does
-        not exist in this application yet, and a variance against a blank is arithmetic, not
-        information. Schedule variance is above, and is real: completion dates are recorded.
+        Effort variance compares recorded hours against this estimate, and both halves are real:
+        the hours are entries somebody made on the Time tab, and the estimate is the figure
+        derived from the scores and the firm&rsquo;s own calibration. An overrun against a
+        <em> draft</em> is labelled as such — a number nobody agreed is not yet a commitment
+        anybody broke.
+      </p>
+      <p className="panel-note">
+        What it still cannot show is money. Cost needs a rate, and there is no rate anywhere in
+        this application — not on a person, not on a role, not on an engagement. Hours are the
+        input to that arithmetic and are now recorded; the arithmetic itself is absent, and a
+        cost figure invented from a default hourly rate would be worse than none.
       </p>
     </div>
   )

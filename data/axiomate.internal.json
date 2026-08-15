@@ -1825,6 +1825,32 @@
       "subject": "Every permission question returned yes, so no rule about who may do what could be stated",
       "description": "The permission module was a seam that returned ALLOWED, and the reasoning was sound while it held: a permission model over an unverified principal is theatre, reading as a security boundary in every screen while enforcing nothing. It stops being sound once the rules themselves are the thing being got wrong. A firm could not state that a client user may raise work but not close it, that an analyst may triage but not agree an estimate, or that only an administrator may change the operating model — and validation could not test any of it, because there was nothing to test. Authorisation is now real: eighteen coarse permissions, a role-to-permission map in the operating model, and one check at the top of the reducer rather than twenty-odd scattered through its arms — a check per arm is twenty-odd chances to forget one, and a forgotten check is invisible because the action keeps working. The distinction the map makes that matters most is on the client side: client roles may raise work, comment and attach evidence, and may not close, schedule or estimate. A client confirming a resolution is a status the firm moves the record into on their word; letting the client move it themselves would make Closed - confirmed unfalsifiable. Enforcing this also exposed an older hole: note authorship had been checked in the panel since notes shipped and never in the reducer, so the rule held for people using the button and for nothing else that could dispatch an action. What is deliberately not claimed: authentication. Every request still resolves to one operator from an environment variable, so this stops a mistake rather than an attacker, and the fallback role — which ships as Administrator because a deployment with one operator and no login must still be usable — is where that honesty is concentrated. The screen says so in as many words, and the validation harness carries it as a separate open finding rather than letting the authorisation work absorb it.",
       "reference": "lib/access.ts, lib/permissions.ts, lib/workspace.ts apply(), ConfigWorkspace Permissions"
+    },
+    {
+      "id": "AXM-071",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Time Management",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "Rate, then cost — AXM-072 onwards",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Nothing recorded hours, so five different figures could not be computed at all",
+      "description": "Actual effort, effort variance, cost, utilisation and how much of a fixed-price engagement had been consumed are all functions of one record that did not exist. The Estimation tab said so in as many words rather than showing a zero, which was the right answer while it held. Time entries exist now, and the entry is the record rather than the timesheet: a timesheet is a week of entries presented for approval, and treating the container as the record is exactly how an entry edited after approval silently changes an approved total. Hours are Decimal(5,2) in the schema, not Float — quarter hours summed across a month feed an invoice, and binary floating point cannot hold 0.25 three times over accurately enough to argue about with a client. Four things are refused: a day that has not happened, more than twelve hours in one entry, precision finer than a quarter hour, and logging in somebody else’s name without the grant for it. That last one is the same rule notes follow — hours are a person’s account of their own day — and a project manager who holds the grant may log on their behalf, with the entry keeping their name and the trail recording who typed it. Recording time also moves the issue’s activity date, because somebody spending four hours on an issue is activity on it. What this does not reach is money: cost needs a rate, and there is no rate anywhere in this application — not on a person, not on a role, not on an engagement. The tab says that too, rather than inventing a default hourly figure.",
+      "reference": "lib/time.ts, components/TimeTab.tsx, prisma TimeEntry, EstimationTab effort variance"
     }
   ]
 }

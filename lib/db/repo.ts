@@ -21,6 +21,8 @@ import {
   nodeToRow,
   noteFromRow,
   noteToRow,
+  timeFromRow,
+  timeToRow,
   estimateFromRow,
   estimateToRow,
   revisionFromRow,
@@ -64,6 +66,7 @@ type Reader = Pick<
   | 'issueRelationship'
   | 'evidence'
   | 'issueNote'
+  | 'timeEntry'
   | 'issueEstimate'
   | 'estimateRevision'
   | 'engagement'
@@ -95,7 +98,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, estimates, revisions, engagements, audit, meta, config] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, estimates, revisions, engagements, audit, meta, config] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -104,6 +107,7 @@ export async function loadWorkspace(
       db.issueRelationship.findMany({ where: { tenantId } }),
       db.evidence.findMany({ where: { tenantId } }),
       db.issueNote.findMany({ where: { tenantId } }),
+      db.timeEntry.findMany({ where: { tenantId } }),
       db.issueEstimate.findMany({ where: { tenantId } }),
       db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
       db.engagement.findMany({ where: { tenantId } }),
@@ -125,6 +129,7 @@ export async function loadWorkspace(
     notes: Object.fromEntries(notes.map((n) => [n.id, noteFromRow(n)])),
     // Keyed by issue id rather than a row id of their own: an issue has one estimate, and the
     // screen always arrives holding the issue.
+    timeEntries: Object.fromEntries(timeEntries.map((e) => [e.id, timeFromRow(e)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
@@ -267,6 +272,10 @@ export async function importWorkspace(
     // After the issues, like evidence: a note's foreign key is its issue.
     for (const n of Object.values(seed.notes)) {
       await tx.issueNote.create({ data: noteToRow(tenantId, n) })
+    }
+    for (const e of Object.values(seed.timeEntries)) {
+      if (!seed.issues[e.issueId]) continue
+      await tx.timeEntry.create({ data: timeToRow(tenantId, e) })
     }
     // Estimates before revisions: a revision's foreign key is the estimate, not the issue.
     for (const e of Object.values(seed.estimates)) {

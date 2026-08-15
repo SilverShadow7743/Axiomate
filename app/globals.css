@@ -3810,3 +3810,46 @@ select.cell-editor {
 .perm-table td.perm-cell {
   text-align: center;
 }
+
+/* ---------- time ----------
+   The recording form is one row of small fields because logging time competes with going home:
+   every extra line between finishing a task and recording it is a reason to do it tomorrow. */
+.time-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.time-form {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.time-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 8px;
+}
+.time-row .fld {
+  min-width: 110px;
+}
+.time-fld-hours {
+  max-width: 90px;
+}
+.time-fld-billable {
+  max-width: 70px;
+}
+.time-fld-note {
+  flex: 1 1 260px;
+}
+.time-fld-person {
+  min-width: 150px;
+}
+.est-over {
+  color: var(--h-overdue);
+}
+.est-under {
+  color: var(--h-ontrack);
+}

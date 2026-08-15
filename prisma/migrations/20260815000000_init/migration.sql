@@ -219,6 +219,26 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "TimeEntry" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "issueId" TEXT NOT NULL,
+    "person" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "hours" DECIMAL(5,2) NOT NULL,
+    "activity" TEXT NOT NULL,
+    "billable" BOOLEAN NOT NULL DEFAULT true,
+    "note" TEXT NOT NULL,
+    "createdBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "TimeEntry_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "IssueEstimate" (
     "tenantId" TEXT NOT NULL,
     "issueId" TEXT NOT NULL,
@@ -330,6 +350,15 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "TimeEntry_tenantId_issueId_idx" ON "TimeEntry"("tenantId", "issueId");
+
+-- CreateIndex
+CREATE INDEX "TimeEntry_tenantId_person_date_idx" ON "TimeEntry"("tenantId", "person", "date");
+
+-- CreateIndex
+CREATE INDEX "TimeEntry_tenantId_date_idx" ON "TimeEntry"("tenantId", "date");
+
+-- CreateIndex
 CREATE INDEX "IssueEstimate_tenantId_baselinedAt_idx" ON "IssueEstimate"("tenantId", "baselinedAt");
 
 -- CreateIndex
@@ -403,6 +432,12 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TimeEntry" ADD CONSTRAINT "TimeEntry_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TimeEntry" ADD CONSTRAINT "TimeEntry_tenantId_issueId_fkey" FOREIGN KEY ("tenantId", "issueId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "IssueEstimate" ADD CONSTRAINT "IssueEstimate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
