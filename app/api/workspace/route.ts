@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server'
 import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
-import { currentActor } from '@/lib/identity'
+import { getSession } from '@/lib/principal'
 import type { Action } from '@/lib/workspace'
 
 export const runtime = 'nodejs'
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
      * browser has nothing to forge. When authentication arrives, both calls learn to read the
      * session; the request body still never gets a say.
      */
-    const result = await persistActions(currentTenantId(), currentActor(), list as Action[])
+    const result = await persistActions(currentTenantId(), getSession(req).actor, list as Action[])
     return NextResponse.json(result, { status: result.ok ? 200 : 409 })
   } catch (err) {
     return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })

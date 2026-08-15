@@ -321,11 +321,11 @@ footer {
 
 <section class="blk">
   <span class="num">§ 01 — Executive summary</span>
-  <h2>The system now refuses things. It still cannot act.</h2>
-  <p class="lede">${by('PASS').length} scenarios pass end to end, and the character of the passing set has changed. The first run's passes were all about <em>keeping a record straight</em>. Several now are about <strong>holding a line</strong>: an issue cannot jump from Open to Closed, a closure that claims the client agreed needs evidence behind it, an analyst who may triage may not close or reopen, and hours cannot be logged in a colleague's name by somebody without the grant for it.</p>
-  <p>Nothing yet passes that requires the system to act <em>on its own</em>. No scenario ends with somebody being told something, a rule firing on an event, or work arriving without a person typing it. That is the remaining shape: a system of record that now enforces its own rules, with no operating machinery attached to it.</p>
-  <p>The gaps that remain are mostly structural — an entity does not exist — rather than defects. ${sev('P0').length} scenarios carry P0. ${list(['ST2b'])} is the exception worth calling out: authorisation is enforced, but the identity it is enforced against is still read from an environment variable, so the model stops a mistake rather than an attacker. The code says so where it is defined, and the configuration screen says so where it is edited.</p>
-  <div class="note"><b>On severity.</b> P0 means the intended business outcome cannot be produced correctly. They split into two kinds: <em>active</em>, where the system does something and it is unguarded, and <em>structural</em>, where the entity the outcome depends on does not exist. Both prevent the outcome; only the first can mislead somebody into thinking it happened. The active ones from the first run — an ungoverned status field and an absent permission model — are now closed.</div>
+  <h2>It keeps a record, holds a line, and now acts. What it cannot yet do is prove who you are.</h2>
+  <p class="lede">${by('PASS').length} scenarios pass end to end and ${by('PARTIAL').length} get part of the way, and the shape of the result has changed twice. The first run's passes were all about <em>keeping a record straight</em>. The second run added <em>holding a line</em> — an issue cannot jump from Open to Closed, a confirmed closure needs evidence, an analyst who may triage may not close. This run adds the third thing: the system <strong>acts</strong>. Rules fire on events and raise notifications; a message posted to the intake endpoint becomes a work item under the right scope; an overallocation is refused with the arithmetic behind it.</p>
+  <p>The rule that makes the acting safe is worth stating on its own: <strong>automation dispatches ordinary actions</strong>. A rule goes through the same reducer, permission check, transition graph and audit trail a person's click does — so it cannot do anything a person could not, everything it does is attributed to the rule that caused it, and a failure is partial and recorded rather than silent and total.</p>
+  <p>One P0 remains, and it is the one that should not be closed by writing code without being asked. Authorisation is real and enforced; the identity it is enforced against is still read from an environment variable. The boundary a provider plugs into is built and every server path already asks it — what is missing is the decision about <em>which provider</em>, which belongs to whoever operates this rather than to whoever last had the editor open.</p>
+  <div class="note"><b>On severity.</b> P0 means the intended business outcome cannot be produced correctly. Of the nine P0s in the first run, eight are closed: the ungoverned status field, the absent permission model, the missing time record, the inert automation engine, the uncontracted scope boundary, the uncounted capacity, the unapproved change, and the intake that read nothing. The ninth is <code>ST2b</code>, above.</div>
 </section>
 
 <section class="blk">
@@ -346,12 +346,12 @@ footer {
     <button class="f" id="clear" aria-pressed="false">Show all</button>
   </div>
 
-  ${group('Intake and client contact', 'Everything that happens before a consultant opens the app. This is the group with no passes at all — work arrives only by being typed in.', ['A', 'B', 'C', 'D', 'E'])}
+  ${group('Intake and client contact', 'Everything that happens before a consultant opens the app. This is the group with no passes at all — work arrives only by being typed in.', ['A', 'A2', 'B', 'C', 'D', 'E'])}
   ${group('Ownership, capacity and assignment', 'Who does the work, and whether they can. The capacity model has no entity behind it, so three of these stop at the same place.', ['F', 'G', 'L', 'M'])}
   ${group('Who may do what', 'Authorisation is enforced in the reducer. Authentication is not — that split is the whole of ST2b.', ['ST2', 'ST2b', 'ST2c'])}
   ${group('Schedule, SLA and risk', 'The derivations are correct and nobody is told. Every row here computes the right answer and stops before the person who needs it.', ['H', 'I', 'Q'])}
   ${group('Effort, estimate and actuals', 'Both halves of the loop now exist. What it cannot reach is money.', ['J', 'J2', 'K'])}
-  ${group('Scope and change control', 'The commercial control the product exists to provide. There is no SOW, so there is no boundary for anything to be outside of.', ['N', 'O', 'P'])}
+  ${group('Scope and change control', 'The commercial control the product exists to provide. There is no SOW, so there is no boundary for anything to be outside of.', ['N', 'O', 'P', 'P2'])}
   ${group('Resolution, evidence and closure', 'Closing work is where the record is strongest and the gates are weakest.', ['R', 'S', 'T'])}
   ${group('State transitions and concurrency', 'What the system will let people do. The transition graph closed three of these; concurrency is the one still open.', ['ST1', 'ST5', 'ST6', 'ST3', 'ST4'])}
   ${group('Configuration reaching runtime', 'Whether changing a setting actually changes behaviour — tested by changing it and then running a scenario.', ['CF1', 'CF2', 'CF3'])}
@@ -402,28 +402,28 @@ footer {
   <h2>What would still hurt a real engagement</h2>
 
   <div class="risk">
-    <h4>Scope leakage is undetectable by construction</h4>
-    <p>There is no SOW, so a request outside it cannot be recognised as outside anything. This is the margin control the product exists to provide, and no amount of care in the UI compensates for it.</p>
+    <h4>Authorisation rests on a claimed identity</h4>
+    <p>The permission model is real, enforced in the reducer, and configurable. The actor behind it comes from an environment variable, so it stops a mistake rather than an attacker — and the fallback role, which ships as Administrator so a single-operator deployment is usable, is effectively everyone until a login exists.</p>
   </div>
   <div class="risk">
-    <h4>Nothing is ever sent to anybody</h4>
-    <p>An issue that goes at-risk computes its health correctly and tells no one. A breach reaches a report, not a person with authority to act. There is no channel to fail, which is not the same as working.</p>
+    <h4>Nothing wakes up</h4>
+    <p>Automation is event-driven and works. An issue going at-risk is not an event — it is time passing against a date nobody moved — so the one thing a delivery firm most wants automated is the one thing this cannot express. A scheduled pass is the missing piece, and it is a clock rather than a channel.</p>
   </div>
   <div class="risk">
-    <h4>Plans cannot be checked against the people who must deliver them</h4>
-    <p>An estimate can say an issue needs forty hours. Nothing knows whether forty hours exist, who has them, or what else they are already committed to.</p>
+    <h4>Ownership is a string</h4>
+    <p>The owner column accepts any text. A leaver, a misspelling, or somebody who left the engagement six months ago all pass silently, and the daily report will list work owned by a person who cannot do it. The directory exists; the column does not reference it.</p>
   </div>
   <div class="risk">
     <h4>Concurrent edits lose silently</h4>
-    <p>Two consultants on the same issue both succeed; the second write wins and the first is recoverable only by reading the audit trail. The reducer rejects impossible states, not out-of-date ones.</p>
+    <p>Two consultants on the same issue both succeed; the second write wins and the first is recoverable only from the audit trail. The reducer rejects impossible states, not out-of-date ones.</p>
   </div>
   <div class="risk">
     <h4>An outage ends persistence for the session, and a re-delivered batch duplicates records</h4>
-    <p>Four failed attempts halt the queue permanently while editing continues into the browser mirror and looks saved. Separately, no request carries an identity, so a batch delivered twice creates two of everything in it.</p>
+    <p>Four failed attempts halt the queue permanently while editing continues into the browser mirror and looks saved. Separately, no request carries an identity, so a batch delivered twice creates two of everything in it — the intake endpoint dedupes on the sender's message id, and the workspace endpoint has no equivalent.</p>
   </div>
   <div class="risk">
-    <h4>Authorisation rests on a claimed identity</h4>
-    <p>The permission model is real and enforced, and the actor behind it comes from an environment variable. It stops a mistake, not an attacker, and every deployment should read the fallback-role setting as the open question it is.</p>
+    <h4>Hours are recorded and money is not</h4>
+    <p>Time, estimates and a contracted baseline all exist, so effort consumption is arithmetic. Cost and margin are not, because there is no rate anywhere — not on a person, a role or an engagement. Every commercial figure stops at hours.</p>
   </div>
 </section>
 
@@ -436,21 +436,20 @@ footer {
     <div>
       <span class="step">First — close the active failures</span>
       <ol>
-        <li><b>Make owner a reference to a person.</b> The directory exists; the column is still free text, so work can be assigned to a leaver or a typo. <code>G</code></li>
+        <li><b>Choose an identity provider.</b> The seam is built and every server path asks it; what is missing is the decision. Entra ID is what the firm already runs. <code>ST2b</code></li>
+        <li><b>Make owner a reference to a person.</b> The directory exists; the column is still free text. <code>G</code></li>
         <li><b>Clear the autosave halt on the next successful action, and stop the beacon clearing unsent work.</b> Two small changes in <code>useAutosave.ts</code>. <code>FL1</code></li>
-        <li><b>Give each dispatched action a client-minted id</b> and ignore one already applied. Needed before any retry or integration is safe. <code>FL4</code></li>
-        <li><b>Detect a stale write.</b> A row version, checked on replay, turns silent last-writer-wins into a refusal the client can resolve. <code>ST3</code></li>
-        <li><s>Enforce the configured workflow</s>, <s>gate closure on evidence</s>, <s>build the permission model</s> — done, and covered by <code>ST1 R ST2</code>.</li>
+        <li><b>Give each dispatched action a client-minted id.</b> The intake endpoint already dedupes on the sender's id; the workspace endpoint has no equivalent. <code>FL4</code></li>
+        <li><b>Detect a stale write.</b> A row version checked on replay turns silent last-writer-wins into a refusal the client can resolve. <code>ST3</code></li>
       </ol>
     <div>
       <span class="step">Then — the entities everything waits on</span>
       <ol>
-        <li><b>Approval.</b> Permissions can now express authority, so approval has somewhere to hang. It unblocks timesheet sign-off and the CR path at once. <code>P U V</code></li>
-        <li><b>An event dispatcher.</b> One mechanism behind notification, automation and agent triggers — three subsystems that are otherwise built three times. <code>W Z</code></li>
-        <li><b>SOW.</b> The boundary that makes scope control possible at all. <code>N O</code></li>
-        <li><b>Person, Resource Profile, Allocation.</b> Until these exist, no plan can be checked against the people who must deliver it. <code>L M</code></li>
-        <li><b>Rate.</b> Hours are recorded now; a rate is what turns them into cost and margin. It belongs in the configuration chain, not on a person.</li>
-        <li><b>Authentication.</b> A firm decision, not a technical one: an identity provider the firm already uses, rather than a credential store built here. <code>ST2b</code></li>
+        <li><b>A scheduled pass.</b> One process waking daily turns the SLA watch, the at-risk alert and the impossible-plan check from calculations a screen can run into things somebody is told. It is the single highest-value piece left. <code>H I M</code></li>
+        <li><b>Rate, in the configuration chain.</b> Hours are recorded; a rate is what turns them into cost and margin. It belongs beside the service levels, not on a person. <code>K N</code></li>
+        <li><b>A period to approve.</b> Time entries and approvals both exist and nothing joins them — an approval will have to name the entries it covered, or an edit afterwards silently changes an approved total. <code>U V</code></li>
+        <li><b>A client-visible boundary.</b> No field marks a record or a note as safe to send, which is what stands between the daily report and a weekly client pack. <code>RP2</code></li>
+        <li><b>An intake connector.</b> A forwarding rule and a token, not a build — the pipeline behind it already runs. <code>A</code></li>
       </ol>
     <div>
       <span class="step">Keep — and make it a gate</span>

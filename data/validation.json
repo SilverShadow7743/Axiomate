@@ -276,8 +276,8 @@
       "title": "Somebody claims to be a colleague",
       "expected": "The claim is verified against an identity provider before anything is allowed.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "No authentication exists: no session, no token verification, no provider. Every request resolves to one operator read from an environment variable, so authorisation is enforced against a claimed identity rather than a proven one. The permission model stops a mistake, not an attacker — the code says so where it is defined.",
-      "stops": "at proving who somebody is",
+      "actual": "No authentication exists: no login, no token verification, no provider. Every request resolves to one operator read from an environment variable, so authorisation — real and enforced since ST2 — rests on a claimed identity rather than a proven one. The boundary a provider plugs into is built: every server path asks one function that already takes the request and returns a session reporting verified: false, so nothing downstream moves on the day a provider is chosen. The permission model stops a mistake, not an attacker, and the code says so where it is defined.",
+      "stops": "at choosing a provider — a decision for whoever operates this, not something to settle by building a credential store that an identity provider would then replace",
       "severity": "P0",
       "impact": "Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone."
     },
@@ -378,7 +378,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (12 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (13 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."

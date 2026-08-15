@@ -1243,10 +1243,11 @@ scenario(
   'The claim is verified against an identity provider before anything is allowed.',
   () => {
     const hasAuth = !absent(/next-auth|@azure\/msal|getServerSession|verifyToken|jwtVerify/)
+    const seam = !absent(/export function getSession/)
     return {
       verdict: 'NOT IMPLEMENTED',
-      actual: `${hasAuth ? 'An auth library appears in source.' : 'No authentication exists: no session, no token verification, no provider.'} Every request resolves to one operator read from an environment variable, so authorisation is enforced against a claimed identity rather than a proven one. The permission model stops a mistake, not an attacker — the code says so where it is defined.`,
-      stops: 'at proving who somebody is',
+      actual: `${hasAuth ? 'An auth library appears in source.' : 'No authentication exists: no login, no token verification, no provider.'} Every request resolves to one operator read from an environment variable, so authorisation — real and enforced since ST2 — rests on a claimed identity rather than a proven one. ${seam ? 'The boundary a provider plugs into is built: every server path asks one function that already takes the request and returns a session reporting verified: false, so nothing downstream moves on the day a provider is chosen.' : 'There is not even a seam for one.'} The permission model stops a mistake, not an attacker, and the code says so where it is defined.`,
+      stops: 'at choosing a provider — a decision for whoever operates this, not something to settle by building a credential store that an identity provider would then replace',
       severity: 'P0',
       impact: 'Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone.',
     }
