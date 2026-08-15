@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env
+*.tsbuildinfo
+.playwright-mcp/
+generated/
+
+# Machine-local Claude Code permissions — not shared.
+.claude/settings.local.json

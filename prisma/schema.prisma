@@ -1,0 +1,481 @@
+// Axiomate TMS — durable model for the Issue Tree & Resolution Schedule.
+//
+// The concerns the application keeps apart are kept apart here too:
+//
+//   TENANCY       Tenant           — whose data this is; the isolation boundary
+//   HIERARCHY     HierarchyNode.parentId / Issue.parentIssueId — where a record sits
+//   RELATIONSHIPS IssueRelationship — business links, no scheduling effect
+//   SCHEDULING    IssueDependency  — timing constraints between activities
+//   EVIDENCE      Evidence         — what was attached, and what it proves
+//   CONFIGURATION OperatingModel   — terminology, roles, responsibilities, agents
+//   AUDIT         ScheduleAudit    — every change, including soft deletes
+//
+// IssueRelationship and IssueDependency are deliberately separate tables. "OAPIL-007 relates
+// to OAPIL-008" and "Corrective Action FS→ Verification" are different statements; merging
+// them would make it impossible to explain why a date moved.
+//
+// ---------------------------------------------------------------------------
+// Three rules this schema follows, all learned the hard way in this codebase
+//
+// 1. IDS ARE SUPPLIED BY THE APPLICATION, NOT GENERATED HERE.
+//    `client:OAPIL`, `module:OAPIL:Inventory`, `OAPIL-143`, `OAPIL-143#7` are not opaque
+//    keys — they are looked up by construction (`moduleNodeId`) and used as configuration
+//    scope keys. A database-generated cuid would silently detach every scope override and
+//    send chat-created issues to the wrong parent. `@default(cuid())` remains only as a
+//    fallback for rows nothing constructs by hand.
+//
+// 2. THOSE IDS ARE UNIQUE WITHIN A TENANT, NOT GLOBALLY — SO EVERY KEY IS COMPOSITE.
+//    This follows from rule 1 rather than being a separate choice. Two firms running
+//    Axiomate both have a `company:root`; both mint `rel-1`, `dep-1` and `ev-1` from their
+//    own counter; both may serve a client whose code is `OAPIL`. So the primary key of every
+//    table is `(tenantId, id)`, every foreign key carries the tenant across with it, and
+//    every uniqueness constraint is scoped by it. One rule, applied without exception —
+//    a single table where it does not hold is a table two tenants can collide in.
+//
+//    What this does NOT do is enforce isolation. Nothing here stops a query that forgets its
+//    `where`; the compiler does that (see `TenantId` in lib/tenant.ts), and row-level
+//    security would do it properly — but RLS needs a database role per request, which needs
+//    identity, which this application does not yet have. Stated rather than implied.
+//
+// 3. DERIVED VALUES ARE NOT STORED AS FACT.
+//    `duration`, `scheduleHealth` and `projectedCompletionDate` used to have columns here.
+//    Nothing in the reducer produces them — they are recomputed from dates and status on
+//    every render — so a stored copy is a stale computation wearing the costume of a
+//    recorded one. They are gone. The same rule already governs `% complete`, which is
+//    stored only when a user overrides the status-derived figure.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 takes the connection URL from prisma.config.ts, not from here.
+datasource db {
+  provider = "postgresql"
+}
+
+enum NodeKind {
+  COMPANY
+  CLIENT
+  ENGAGEMENT
+  PROJECT
+  MODULE
+}
+
+enum Severity {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ScheduleMode {
+  MANUAL
+  AUTO
+}
+
+enum DependencyType {
+  FS
+  SS
+  FF
+  SF
+}
+
+/// Where an activity's dates and progress came from. `GENERATED` rows were synthesised by the
+/// lifecycle builder and were never reported by anyone; they flip to `USER` on first edit.
+enum ActivityOrigin {
+  GENERATED
+  USER
+}
+
+enum EvidenceKind {
+  SNAPSHOT
+  DATA
+  DOCUMENT
+  LINK
+}
+
+/// `IMPORTED` items were reconstructed from the issue log's evidence text and are read-only
+/// descriptions of material this system does not hold. `USER` items were attached here.
+enum EvidenceOrigin {
+  IMPORTED
+  USER
+}
+
+/// The delivery firm operating a workspace, and the isolation boundary around everything it
+/// holds. Not a tier of the tree: `company:root` is how the firm *appears* in its own
+/// hierarchy and a user may rename or archive it, while this row is the key every other row
+/// hangs from and the application never edits.
+///
+/// `name` is the provisioning label only. `OperatingModel.organization.name` is the configured
+/// one and supersedes it everywhere the application renders a name — the same separation
+/// `partyCode` keeps from the firm's display name, so a rename never orphans stored rows.
+/// It exists for the case configuration cannot cover: a tenant created before it has any.
+///
+/// Deleting is restricted rather than cascaded. Everything in this schema is archived and
+/// never destroyed; a tenant that owns records is suspended with `deletedAt`, not dropped
+/// along with every issue anyone ever filed under it.
+model Tenant {
+  /// A readable slug — `axiocloud`. Appears in browser storage keys and operational queries.
+  id   String @id
+  name String
+
+  nodes         HierarchyNode[]
+  issues        Issue[]
+  activities    IssueActivity[]
+  dependencies  IssueDependency[]
+  relationships IssueRelationship[]
+  evidence      Evidence[]
+  engagements   Engagement[]
+  operatingModel OperatingModel?
+  meta          WorkspaceMeta?
+  audit         ScheduleAudit[]
+
+  /// Suspension. A suspended tenant keeps every record it owns.
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+/// Structural tiers above an issue: Company ▸ Client ▸ Engagement ▸ Project ▸ Process Area.
+/// Self-referencing so the tree can be any depth the client's delivery shape needs.
+model HierarchyNode {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Application-supplied and meaningful — e.g. `client:OAPIL`, `module:OAPIL:Inventory`.
+  /// Configuration scope overrides are keyed on this value. Unique within the tenant only.
+  id       String   @default(cuid())
+  kind     NodeKind
+  name     String
+  owner    String?
+
+  /// The tenant travels with the parent reference: a node can only be parented within its
+  /// own tenant, and the database is what says so rather than the code remembering to.
+  parentId String?
+  parent   HierarchyNode?  @relation("NodeTree", fields: [tenantId, parentId], references: [tenantId, id])
+  children HierarchyNode[] @relation("NodeTree")
+
+  issues Issue[]
+  /// Present only on engagement nodes.
+  engagement Engagement?
+
+  /// Soft delete. Records are archived, never destroyed, so history stays intact.
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@id([tenantId, id])
+  @@index([tenantId, parentId])
+  @@index([tenantId, deletedAt])
+}
+
+model Issue {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// The issue key from the log — `OAPIL-010`. Never regenerated. Unique within the tenant.
+  id      String
+  subject String
+  description String @db.Text
+
+  /// Where this issue sits. Either under a hierarchy node, or under another issue
+  /// (a sub-issue) — never both.
+  nodeId        String?
+  node          HierarchyNode? @relation(fields: [tenantId, nodeId], references: [tenantId, id])
+  parentIssueId String?
+  parentIssue   Issue?         @relation("IssueTree", fields: [tenantId, parentIssueId], references: [tenantId, id])
+  subIssues     Issue[]        @relation("IssueTree")
+
+  client String
+  module String
+  type   String
+
+  severity    Severity
+  /// Free text rather than an enum: the seven statuses come from the source log, and the
+  /// transform is the only thing entitled to interpret them.
+  status      String
+  owner       String
+  raisedBy    String
+  /// String, not an enum. The accountable-party vocabulary is configurable
+  /// (`OperatingModel.parties`), so an enum here would reject any party a user adds.
+  accountable String
+
+  // ---- Scheduling ----
+  scheduleMode     ScheduleMode @default(AUTO)
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  /// Set only when a user overrides the status-derived figure. Null means "derive it".
+  percentOverride  Int?
+
+  // ---- Provenance from the source log ----
+  raisedDate       DateTime
+  lastActivityDate DateTime
+  /// Completion date. Derived from the status change that closed the issue, and rewritten
+  /// only when the status actually changes.
+  actualEndDate    DateTime?
+  /// Days since raised / since last activity, as recorded by the transform.
+  age              Int @default(0)
+  daysSinceActivity Int @default(0)
+  nextAction       String  @db.Text
+  /// The evidence *description* carried by the source row. Attached files live in `Evidence`.
+  evidence         String  @db.Text
+  evidenceDate     DateTime?
+  /// How well the source row was corroborated: verified from thread / snippet only / register.
+  verification     String
+  source           String
+  reference        String
+  clientImpact     String  @db.Text
+
+  /// Values for configured responsibility types that have no column of their own, keyed by
+  /// responsibility type id. The three seeded types keep their own columns above.
+  assignments Json @default("{}")
+
+  activities        IssueActivity[]
+  relationshipsFrom IssueRelationship[] @relation("RelSource")
+  relationshipsTo   IssueRelationship[] @relation("RelTarget")
+  evidenceItems     Evidence[]
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@id([tenantId, id])
+  @@index([tenantId, nodeId])
+  @@index([tenantId, parentIssueId])
+  @@index([tenantId, client, module])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+}
+
+/// A scheduled lifecycle activity beneath an issue (Investigation, RCA, ...), or a milestone.
+/// The source log has no activity breakdown, so every row here originates in this app.
+model IssueActivity {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Application-supplied — `OAPIL-010#7`.
+  id      String @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  /// The phase name, or the milestone's name. Free text: the five standard phases are a
+  /// convention of the lifecycle builder, not a constraint on what a user may add.
+  phase String
+  order Int
+
+  scheduleMode     ScheduleMode @default(MANUAL)
+  plannedStartDate DateTime
+  plannedEndDate   DateTime
+  percentComplete  Int          @default(0)
+
+  isMilestone Boolean        @default(false)
+  origin      ActivityOrigin @default(USER)
+  owner       String
+
+  predecessors IssueDependency[] @relation("DepSuccessor")
+  successors   IssueDependency[] @relation("DepPredecessor")
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueId, order])
+  @@index([tenantId, deletedAt])
+}
+
+/// A SCHEDULING constraint between two activities. Drives the Critical Resolution Path.
+/// Not to be confused with IssueRelationship.
+model IssueDependency {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `dep-9`, minted from the workspace counter — unique within the tenant, not globally.
+  id String @default(cuid())
+
+  predecessorId String
+  predecessor   IssueActivity @relation("DepPredecessor", fields: [tenantId, predecessorId], references: [tenantId, id], onDelete: Cascade)
+  successorId   String
+  successor     IssueActivity @relation("DepSuccessor", fields: [tenantId, successorId], references: [tenantId, id], onDelete: Cascade)
+
+  dependencyType DependencyType @default(FS)
+  lagDays        Int            @default(0)
+
+  createdAt DateTime @default(now())
+  createdBy String
+
+  @@id([tenantId, id])
+  @@unique([tenantId, predecessorId, successorId])
+  @@index([tenantId, successorId])
+}
+
+/// A BUSINESS link between two issues. Carries no scheduling meaning and never moves a date.
+model IssueRelationship {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `rel-4`, minted from the workspace counter — unique within the tenant, not globally.
+  id String @default(cuid())
+
+  sourceIssueId String
+  sourceIssue   Issue  @relation("RelSource", fields: [tenantId, sourceIssueId], references: [tenantId, id], onDelete: Cascade)
+  targetIssueId String
+  targetIssue   Issue  @relation("RelTarget", fields: [tenantId, targetIssueId], references: [tenantId, id], onDelete: Cascade)
+
+  /// RELATED_TO | DUPLICATE_OF | CAUSED_BY | BLOCKS
+  relationshipType String
+  note             String @db.Text
+
+  createdAt DateTime @default(now())
+  createdBy String   @default("system")
+
+  @@id([tenantId, id])
+  @@unique([tenantId, sourceIssueId, targetIssueId, relationshipType])
+  @@index([tenantId, targetIssueId])
+}
+
+/// Something attached to an issue that supports a claim about it.
+///
+/// A snapshot is not a document: a snapshot is a moment captured to prove a state, and it
+/// carries the purpose it was captured for.
+///
+/// The source document a piece of evidence traces back to is deliberately NOT a column.
+/// `detectSourceDocument()` derives it from the issue's subject and reference at render time,
+/// and storing a copy would freeze a derivation that its inputs can outgrow — the same rule
+/// that keeps `duration` and `scheduleHealth` out of this schema.
+model Evidence {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `ev-12`, minted from the workspace counter — unique within the tenant, not globally.
+  id      String @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  kind EvidenceKind
+  /// File name, or link title.
+  name String
+  /// Only meaningful for snapshots — what the capture was taken to demonstrate.
+  purpose   String?
+  /// External URL for links. Object URLs for files held in one browser session are not
+  /// durable and are not written here.
+  url       String?
+  mimeType  String?
+  sizeBytes Int?
+  note      String  @db.Text
+
+  origin  EvidenceOrigin @default(USER)
+  addedAt DateTime
+  addedBy String
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueId, kind])
+  @@index([tenantId, deletedAt])
+}
+
+/// The commercial and delivery envelope around a body of work for one client.
+///
+/// Only recorded facts live here. Issue counts, date spans, process areas in scope, owners and
+/// status spread are all computed from the issues on every render — storing them would be the
+/// same mistake as storing `duration`, and would go stale the first time anyone filed an issue.
+///
+/// Every field starts empty. The issue log records issues, not contracts, so there is nothing
+/// to import: a blank engagement with a truthful derived summary beats a plausible invented one.
+model Engagement {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// The hierarchy node this describes — `engagement:OAPIL`. One row per engagement node.
+  nodeId String
+  node   HierarchyNode @relation(fields: [tenantId, nodeId], references: [tenantId, id], onDelete: Cascade)
+
+  client String
+  code   String @default("")
+  /// Implementation | Rollout | Support | Hypercare | Advisory | Managed Service. Free text
+  /// rather than an enum: engagement shapes are a commercial vocabulary, and a firm that runs
+  /// a kind this list does not name should not be blocked from recording it.
+  type   String @default("")
+  status String @default("")
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  /// Delivery side.
+  engagementLeader String @default("")
+  projectManager   String @default("")
+  /// Client side.
+  clientSponsor    String @default("")
+
+  sowReference String @default("")
+  notes        String @default("") @db.Text
+
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@id([tenantId, nodeId])
+  @@index([tenantId, client])
+}
+
+/// The operating model — terminology, roles, the person directory, responsibility types,
+/// the agent registry, workflows, templates, routing rules, mail intake and scope overrides.
+///
+/// One row per tenant, one JSON document, deliberately. It is small, it is edited as a whole,
+/// and the application already serialises exactly this shape to local storage. The tradeoff is
+/// real and worth stating: there is no referential integrity between the `overrides` keys and
+/// `HierarchyNode.id`, so a deleted node leaves an orphaned override behind. Resolution
+/// ignores overrides for scopes that no longer resolve, so the effect is dead weight rather
+/// than incorrect behaviour.
+///
+/// The primary key *is* the tenant. It was `id @default("singleton")` — a hardcoded assertion
+/// that one installation serves one firm, which is exactly the assumption tenancy removes.
+model OperatingModel {
+  tenantId  String @id
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  model     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Counters that must not restart when the process does.
+///
+/// `seq` mints `engagement:5`, `OAPIL-143#7`, `ev-12`, `dep-9`. It lives in memory during a
+/// session and would reset to 1 on every boot — handing out ids that collide with records
+/// already stored. Persisting it is what makes application-supplied ids safe across restarts.
+///
+/// Per tenant, like the operating model, and for a second reason beyond isolation: the counter
+/// is what makes those ids unique, and two tenants sharing one would make every id in the
+/// system depend on how busy the other firm had been.
+model WorkspaceMeta {
+  tenantId     String @id
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  seq          Int      @default(1)
+  /// Set once, when the seed log is imported, so import can never run twice *for this tenant*.
+  /// A global guard would refuse to seed the second firm because the first had been seeded,
+  /// and would do it silently.
+  seededAt     DateTime?
+  updatedAt    DateTime @updatedAt
+}
+
+/// Every change to a record, including archives, restores and configuration edits.
+model ScheduleAudit {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Generated here. The application's in-memory counter (`aud-3-OAPIL-010`) restarts every
+  /// session and would collide on this primary key across restarts.
+  id     String @default(cuid())
+  rowId  String
+  field  String
+  from   String? @db.Text
+  to     String? @db.Text
+  reason String? @db.Text
+  at     DateTime @default(now())
+  by     String
+
+  @@id([tenantId, id])
+  @@index([tenantId, rowId, at])
+  @@index([tenantId, at])
+}
