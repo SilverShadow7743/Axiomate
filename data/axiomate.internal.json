@@ -2033,6 +2033,32 @@
       "subject": "Authorisation rested on a claimed identity; it now rests on a proven one",
       "description": "The permission model was real and enforced, and the actor behind it came from an environment variable — so it stopped a mistake rather than an attacker, and the fallback role was effectively everyone. Sign-in is Microsoft Entra ID, chosen because it is the directory the firm already runs and because it already knows who has left, which is the fact a delivery tool most needs and is worst at being told. A username and password kept here would have meant owning hashing, session expiry, lockout and recovery — a security subsystem built to be replaced the moment somebody pointed at the real directory. The flow is authorisation-code with PKCE; the id token is verified against Entra’s published keys for issuer, audience and expiry, and the nonce is checked against the one this server generated, so a token replayed from another sign-in is refused. Verifying the signature on a token that arrived over a direct TLS channel is belt and braces, and is done anyway because the cost is one library call. Three decisions worth keeping. It activates only when configured: with no tenant and client id the application runs as the single operator exactly as before, because a deployment without credentials should work rather than show a login it cannot satisfy. When a provider is configured, an unverified request is refused rather than falling back to the operator — falling back would mean every unauthenticated request quietly acting as whoever that operator is, which is the hole switching Entra on was meant to close. And the actor id becomes the directory’s object id rather than a name, because it is the only identifier that survives somebody changing their name or their address, and attribution has to outlive both. The people directory gained an optional work address for the same reason: matching a signed-in person by display name is a join on a field two people can share and one person can change. The cookie’s arithmetic was split from the secret that keys it, so signing and expiry are driven by the validation harness rather than asserted — a valid cookie round-trips, a tampered one and one signed with another key are refused, and an expired one says so.",
       "reference": "lib/auth/entra.ts, lib/auth/seal.ts, lib/principal.ts, app/api/auth/*"
+    },
+    {
+      "id": "AXM-079",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Automation",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "Point a scheduler at /api/schedule/run",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "The product could calculate that work was at risk and had no way to raise it",
+      "description": "Automation reacts to change, and it works by comparing the state before an action with the state after — which covers everything a person does and nothing that time does. An issue going past its date, a window closing, a plan that stops fitting the people committed to it: none of those are changes anybody made, so there was nothing for a rule to subscribe to. The scheduled pass supplies the missing half. It takes an observation of the temporal conditions currently true, compares it with the observation the previous run stored, and turns the difference into ordinary events that the existing rules react to. The comparison is the whole design rather than a refinement of it. A daily job that reports \"OAPIL-14 is overdue\" every morning for six weeks trains people to ignore it, and then the seventh week’s genuinely new breach is ignored too — that is the real failure mode of scheduled alerting, and being clever about the message does not fix it. Reporting a condition only the first time it is true does, and comparing two observations achieves it by construction: a condition present in both is not news, and one that cleared and returned is news again, because a date somebody moved and then missed is a different fact from the first miss. Both halves are driven by the validation harness rather than asserted — one message on the first run, none across the following thirteen, and a second message after the date was moved out and missed again. Three further decisions. It runs as a machine actor rather than as the person who pressed the button: asking what the clock would say is not deciding it, and an operator’s name on a week of overdue notices would say they had. Machines hold their own narrow role rather than falling back to the one an unrecognised human gets, so an automated path cannot acquire administrator rights by being nobody in particular — it may file work and say things about it, and may not close anything or change the operating model. And there is no timer inside the web server: one would stop on restart, run twice with two instances, and could not be triggered by hand, so the pass is an endpoint that whatever already runs things on a schedule calls, and that the configuration screen can call now.",
+      "reference": "lib/watch.ts, lib/workspace.ts runWatch, lib/db/schedule.ts, app/api/schedule/run"
     }
   ]
 }

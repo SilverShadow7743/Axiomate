@@ -60,7 +60,15 @@ import {
   type ResourceProfile,
 } from './capacity'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
-import { deriveEvents } from './events'
+import { deriveEvents, type DomainEvent, type EventType } from './events'
+import type { WatchPolicy } from './watch'
+import {
+  diffObservations,
+  eventTypeFor,
+  observe,
+  type Observation,
+  type WatchDiff,
+} from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, type Channel, type Notification } from './notifications'
 import {
@@ -632,6 +640,7 @@ export type ConfigOp =
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
   | { k: 'setResourceProfile'; personId: string; patch: Partial<ResourceProfile> }
+  | { k: 'setWatch'; patch: Partial<WatchPolicy> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[]; email?: string }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -2972,6 +2981,28 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       )
     }
 
+    case 'setWatch': {
+      const next: WatchPolicy = { ...m.watch, ...op.patch }
+      if (!Number.isInteger(next.staleAfterDays) || next.staleAfterDays < 1 || next.staleAfterDays > 365) {
+        return { state, error: 'Staleness is a whole number of days between 1 and 365.' }
+      }
+      if (!Number.isInteger(next.warnBeforeDays) || next.warnBeforeDays < 0 || next.warnBeforeDays > 60) {
+        return { state, error: 'The warning window is a whole number of days between 0 and 60.' }
+      }
+      return done(
+        { ...m, watch: next },
+        {
+          rowId: 'WATCH',
+          field: 'watch',
+          from: `${m.watch.enabled ? 'on' : 'off'}, ${m.watch.conditions.length} conditions`,
+          to: `${next.enabled ? 'on' : 'off'}, ${next.conditions.length} conditions`,
+          at: now,
+          by,
+        },
+        next.enabled ? 'Scheduled pass updated.' : 'The scheduled pass will not run.',
+      )
+    }
+
     case 'setResourceProfile': {
       const person = m.people[op.personId]
       if (!person) return { state, error: 'That person is not in the directory.' }
@@ -3663,4 +3694,88 @@ export function applyWithRules(state: WorkspaceState, action: Action, actor: Act
     steps,
     automation: { applied, misses, refusals },
   }
+}
+
+/* ================================================================== *
+ * The scheduled pass
+ * ================================================================== */
+
+export interface WatchRun {
+  state: WorkspaceState
+  /** What changed since the last pass, including what is merely continuing. */
+  diff: WatchDiff
+  /** Store this and hand it back next time. It is the whole memory of the pass. */
+  observation: Observation
+  /** Every action the rules took, paired for the write path exactly as `applyWithRules` does. */
+  steps: { action: Action; before: WorkspaceState; after: WorkspaceState }[]
+  /** Rules that reached nobody, or asked for something the reducer refused. */
+  misses: RuleMiss[]
+  refusals: { action: Action; error: string }[]
+}
+
+/**
+ * Look at the clock, and tell the rules what became true.
+ *
+ * The one thing worth understanding here is the memory. A pass with no memory re-reports every
+ * overdue issue every morning, which trains people to ignore the message and then to ignore the
+ * new one. This takes an observation — the conditions true right now — compares it with the
+ * observation the previous pass stored, and raises only what has appeared since. A condition
+ * that is still true is counted, not repeated; a condition that cleared and came back is news
+ * again, because a date somebody moved and then missed is a different fact from the first miss.
+ *
+ * Everything after the comparison is ordinary. The onsets become events, the same rules react
+ * to them as react to a person's click, and the actions go through the same reducer with the
+ * same permission check — under the machine actor, whose grants are narrow and stated.
+ */
+export function runWatch(
+  state: WorkspaceState,
+  previous: Observation,
+  today: string,
+  now: string,
+  actor: Actor,
+): WatchRun {
+  const policy = state.model.watch
+  const empty: WatchRun = {
+    state,
+    diff: { onset: [], cleared: [], continuing: 0 },
+    observation: previous,
+    steps: [],
+    misses: [],
+    refusals: [],
+  }
+  // Switched off means switched off: the previous observation is returned untouched, so
+  // turning it back on later does not raise a month of accumulated onsets in one go.
+  if (!policy?.enabled) return empty
+
+  const { observation, findings } = observe(state, today, policy)
+  const diff = diffObservations(previous, observation, findings)
+  if (!diff.onset.length) return { ...empty, observation, diff }
+
+  const events: DomainEvent[] = diff.onset.map((f) => ({
+    type: eventTypeFor(f.condition) as EventType,
+    subjectId: f.subjectId,
+    from: '',
+    // The detail is the event's `to`, so a rule's message can carry the actual numbers —
+    // "{to}" reads as "Due 2026-08-10, and 3 working days have passed."
+    to: f.detail,
+    at: now,
+    by: actor.name,
+  }))
+
+  const { actions, misses } = planActions(state, events, now)
+  let current = state
+  const steps: { action: Action; before: WorkspaceState; after: WorkspaceState }[] = []
+  const refusals: { action: Action; error: string }[] = []
+
+  for (const action of actions) {
+    const result = apply(current, action, actor)
+    if (result.error) {
+      refusals.push({ action, error: result.error })
+      continue
+    }
+    steps.push({ action, before: current, after: result.state })
+    current = result.state
+  }
+
+  return { state: current, diff, observation, steps, misses, refusals }
 }

@@ -1,4 +1,4 @@
-import type { Actor } from './actor'
+import { isMachineActor, type Actor } from './actor'
 import type { OperatingModel } from './config'
 
 /**
@@ -102,10 +102,22 @@ export interface AccessPolicy {
    * records who worked an issue and never records what they are.
    */
   defaultRoleIds: string[]
+  /** Roles held by the intake endpoint and the scheduled pass. See `MACHINE_ROLE_ID`. */
+  machineRoleIds: string[]
 }
 
 /** Administrator is a platform role, not a delivery one, which is why it is not in the seeded nine. */
 export const ADMIN_ROLE_ID = 'ROLE_ADMIN'
+
+/**
+ * What the intake endpoint and the scheduled pass may do.
+ *
+ * Separate from every human role, and deliberately narrow: a machine that inherits
+ * Administrator because nobody assigned it anything is how an automated path ends up able to
+ * change the operating model. These two file work and say things about it. They cannot close
+ * anything, commit a date, agree an estimate or touch configuration.
+ */
+export const MACHINE_ROLE_ID = 'ROLE_AUTOMATION'
 
 const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 
@@ -128,6 +140,7 @@ const DELIVERY_CORE: PermissionKey[] = [
  */
 export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   [ADMIN_ROLE_ID]: ALL,
+  [MACHINE_ROLE_ID]: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'approval.request'],
   ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
   ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
@@ -147,6 +160,7 @@ export function defaultAccessPolicy(): AccessPolicy {
     grants: Object.fromEntries(Object.entries(DEFAULT_GRANTS).map(([k, v]) => [k, [...v]])),
     // See the module comment. This is the line that should empty on the day a login exists.
     defaultRoleIds: [ADMIN_ROLE_ID],
+    machineRoleIds: [MACHINE_ROLE_ID],
   }
 }
 
@@ -164,6 +178,10 @@ export function defaultAccessPolicy(): AccessPolicy {
  * removes.
  */
 export function rolesFor(model: OperatingModel, actor: Actor): string[] {
+  // Checked before the directory: a machine is not a person, and falling through to the
+  // fallback role would hand it whatever an unrecognised human gets.
+  if (isMachineActor(actor)) return model.access.machineRoleIds ?? []
+
   const people = Object.values(model.people ?? {})
   // Directory key first, then the address a provider supplied, then the display name. The
   // order is strongest-join-first: an object id is stable, an address is unique but changeable,

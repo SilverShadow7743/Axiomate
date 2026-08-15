@@ -406,8 +406,8 @@ footer {
     <p>Entra sign-in exists and the write endpoint refuses an unverified request once a provider is configured. This deployment has no tenant id set, so it still runs as a single operator on trust — and the fallback role, which ships as Administrator so that deployment is usable, is effectively everyone until the four environment values are filled in.</p>
   </div>
   <div class="risk">
-    <h4>Nothing wakes up</h4>
-    <p>Automation is event-driven and works. An issue going at-risk is not an event — it is time passing against a date nobody moved — so the one thing a delivery firm most wants automated is the one thing this cannot express. A scheduled pass is the missing piece, and it is a clock rather than a channel.</p>
+    <h4>The clock is an endpoint somebody has to call</h4>
+    <p>The scheduled pass exists and is the thing that turns a date passing into a message. It has no timer of its own — deliberately, because one inside the web server stops on restart and runs twice with two instances — so until a scheduler is pointed at <code>/api/schedule/run</code>, nothing runs it but the button on the configuration screen.</p>
   </div>
   <div class="risk">
     <h4>Ownership is a string</h4>
@@ -449,7 +449,7 @@ footer {
     <div>
       <span class="step">Then — the entities everything waits on</span>
       <ol>
-        <li><b>A scheduled pass.</b> One process waking daily turns the SLA watch, the at-risk alert and the impossible-plan check from calculations a screen can run into things somebody is told. It is the single highest-value piece left. <code>H I M</code></li>
+        <li><b>Point a scheduler at the pass.</b> Built, tested and idempotent; what is left is a cron entry and a token. <code>H I M</code></li>
         <li><b>Rate, in the configuration chain.</b> Hours are recorded; a rate is what turns them into cost and margin. It belongs beside the service levels, not on a person. <code>K N</code></li>
         <li><b>A period to approve.</b> Time entries and approvals both exist and nothing joins them — an approval will have to name the entries it covered, or an edit afterwards silently changes an approved total. <code>U V</code></li>
         <li><b>A client-visible boundary.</b> No field marks a record or a note as safe to send, which is what stands between the daily report and a weekly client pack. <code>RP2</code></li>

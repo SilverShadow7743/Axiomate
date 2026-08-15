@@ -24,8 +24,36 @@ export interface Actor {
   name: string
 }
 
+/**
+ * Actors that are not people.
+ *
+ * There was deliberately no such thing here for a long time, and the reasoning below is kept
+ * because it was right: the two candidates at the time — the assistant and the lifecycle
+ * generator — both turned out to belong to the person who triggered them, and an exported
+ * constant with no honest call site is the pattern this codebase keeps deleting.
+ *
+ * Two things arrived since that genuinely have nobody behind them. A message that comes in on
+ * the intake endpoint was not typed by anyone here, and the scheduled pass runs at seven in the
+ * morning because a clock said so. Attributing either to a person would be a lie in the audit
+ * trail of exactly the kind the actor parameter exists to prevent — so they are named, and
+ * named as machines, so a reader of the trail can tell instantly.
+ *
+ * They are not people in the directory either, which is why `rolesFor` resolves them through
+ * their own grant rather than through the fallback role. A machine that inherits Administrator
+ * because nobody assigned it anything is the accident that mechanism exists to avoid.
+ */
+export const INTAKE_ACTOR: Actor = { id: 'machine:intake', name: 'Intake' }
+export const SCHEDULE_ACTOR: Actor = { id: 'machine:schedule', name: 'Scheduled pass' }
+
+/** Whether an actor is one of the above. Prefix-matched so a third does not need a new check. */
+export function isMachineActor(actor: Actor): boolean {
+  return actor.id.startsWith('machine:')
+}
+
 /*
- * There is deliberately no `SYSTEM_ACTOR` constant.
+ * The original note, kept because the reasoning still holds for what it covered.
+ *
+ * There is deliberately no general `SYSTEM_ACTOR` constant.
  *
  * One was written here and then removed, because nothing legitimately needed it and an
  * exported value with no call sites is the "declared, with no runtime" pattern this codebase

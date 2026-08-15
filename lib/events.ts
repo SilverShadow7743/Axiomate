@@ -36,6 +36,20 @@ export const EVENT_TYPES = [
   { key: 'approval.requested', label: 'An approval is asked for' },
   { key: 'approval.decided', label: 'An approval is decided' },
   { key: 'estimate.agreed', label: 'An estimate is agreed' },
+
+  /*
+   * Raised by the scheduled pass rather than by an action.
+   *
+   * Everything above is something somebody did; everything below became true while nobody did
+   * anything. They are in the same list because a rule should not have to care which — the
+   * difference is in how they are produced, not in what they mean.
+   */
+  { key: 'issue.overdue', label: 'Work passes its due date' },
+  { key: 'issue.atRisk', label: 'Work goes at risk' },
+  { key: 'issue.dueSoon', label: 'Work is due soon' },
+  { key: 'issue.stale', label: 'Nothing has happened on work for too long' },
+  { key: 'project.planImpossible', label: 'A plan needs more than has been committed' },
+  { key: 'sow.overConsumed', label: 'A statement of work goes over its agreed effort' },
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]['key']

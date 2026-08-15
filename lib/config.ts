@@ -31,7 +31,8 @@
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
-import { ADMIN_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
+import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
+import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
 import type { ResourceProfile } from './capacity'
@@ -461,6 +462,8 @@ export interface OperatingModel {
    * which is a real state — `capacityFor` falls back to a stated default and says so.
    */
   resourceProfiles: Record<string, ResourceProfile>
+  /** What the scheduled pass looks for, and how sensitive it is. See `./watch`. */
+  watch: WatchPolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -494,6 +497,7 @@ export interface OperatingModel {
 const SEED_ROLES: Omit<OrgRole, 'deletedAt'>[] = [
   // Administering the platform is not a delivery role, which is why it sits outside the nine
   // and why nobody holds it by virtue of leading an engagement.
+  { id: MACHINE_ROLE_ID, label: 'Automation', description: 'Not a person. Held by the intake endpoint and the scheduled pass, so what they may do is stated rather than inherited.', seeded: true },
   { id: ADMIN_ROLE_ID, label: 'Platform Administrator', description: 'Axiocloud. Maintains the operating model itself — terminology, roles, service levels, transitions and permissions.', seeded: true },
   { id: 'ROLE_ENGAGEMENT_LEAD', label: 'Engagement Leader', description: 'Axiocloud. Answerable for the engagement as a whole and for the client relationship.', seeded: true },
   { id: 'ROLE_PRINCIPAL', label: 'Principal Consultant', description: 'Axiocloud. Owns solution design and the hardest delivery calls.', seeded: true },
@@ -781,6 +785,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     approvalRules: defaultApprovalRules(),
     automationRules: defaultAutomationRules(),
     resourceProfiles: {},
+    watch: defaultWatchPolicy(),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1030,6 +1035,11 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
     automationRules: Array.isArray(stored.automationRules) ? stored.automationRules : seed.automationRules,
     resourceProfiles: { ...seed.resourceProfiles, ...(stored.resourceProfiles ?? {}) },
+    watch: {
+      ...seed.watch,
+      ...(stored.watch ?? {}),
+      conditions: stored.watch?.conditions ?? seed.watch.conditions,
+    },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

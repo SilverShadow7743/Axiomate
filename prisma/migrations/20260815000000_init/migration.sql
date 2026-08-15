@@ -220,6 +220,16 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "ScheduleWatch" (
+    "tenantId" TEXT NOT NULL,
+    "lastRunAt" TIMESTAMP(3),
+    "observation" JSONB NOT NULL DEFAULT '{}',
+    "lastSummary" TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT "ScheduleWatch_pkey" PRIMARY KEY ("tenantId")
+);
+
+-- CreateTable
 CREATE TABLE "Allocation" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -560,6 +570,9 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScheduleWatch" ADD CONSTRAINT "ScheduleWatch_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Allocation" ADD CONSTRAINT "Allocation_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

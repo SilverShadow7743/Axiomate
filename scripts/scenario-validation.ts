@@ -25,6 +25,7 @@ import {
   apply,
   applyWithRules,
   initWorkspace,
+  runWatch,
   type Action,
   type SeedIssueInput,
   type WorkspaceState,
@@ -32,6 +33,8 @@ import {
 import { undelivered } from '../lib/notifications'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
+import { rolesFor } from '../lib/access'
+import { SCHEDULE_ACTOR } from '../lib/actor'
 import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { buildTree } from '../lib/tree'
@@ -509,11 +512,11 @@ scenario(
 
     const good = check.plannedHours === 90 && check.allocatedHours === 36 && !check.possible && check.unestimatedCount === 1
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `The plan needs ${check.plannedHours}h and ${check.allocatedHours}h have been committed to it — a shortfall of ${check.shortfallHours}h, visible in week one rather than week six. ${check.unestimatedCount} record has no estimate and is invisible to the figure, which is stated rather than treated as zero.`,
-      stops: 'at the alert — the check is a calculation a screen can run, and nothing raises it on its own, because an impossible plan becomes impossible by time passing rather than by anybody doing something',
-      severity: 'P2',
-      impact: 'A delivery manager can see the gap. Nobody is told about it unless they look.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The plan needs ${check.plannedHours}h and ${check.allocatedHours}h have been committed to it — a shortfall of ${check.shortfallHours}h, visible in week one rather than week six. ${check.unestimatedCount} record has no estimate and is invisible to the figure, which is stated rather than treated as zero. The scheduled pass watches this condition too, so a plan that stops fitting is raised once rather than found in week six.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A delivery manager can see the gap, and the pass raises it once when it appears rather than leaving it to be found.',
     }
   },
 )
@@ -527,15 +530,27 @@ scenario(
   'An issue approaches its SLA target',
   'It is flagged at risk before it breaches, and the person who can act is told.',
   () => {
-    const s = ok(BASE, { t: 'setDates', id: 'OAPIL-3', start: '2026-08-10', end: '2026-08-16', now: NOW } as Action)
-    const row = rowFor(s, 'OAPIL-3', '2026-08-15')
-    const health = computeHealth(row, '2026-08-15')
+    /* An owner the directory knows, so a notification has somewhere to land. */
+    const person = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-16', now: NOW } as Action)
+
+    const row = rowFor(dated, 'OAPIL-1', TODAY)
+    const health = computeHealth(row, TODAY)
+
+    /* The pass with no memory, as a scheduler would run it the first time. */
+    const first = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const atRisk = first.diff.onset.find((f) => f.subjectId === 'OAPIL-1' && f.condition === 'atRisk')
+
+    const good = health === 'At Risk' && Boolean(atRisk)
     return {
-      verdict: health === 'At Risk' ? 'PARTIAL' : 'FAIL',
-      actual: `Health computes as "${health}" from dates and progress, and the grid shows it. Nobody is told, and the reason is now sharper than "no notifications exist": notifications and rules both exist, and every rule reacts to something that *changed*. Becoming at risk is not a change — it is the passage of time against a date that has not moved — so there is no event for a rule to subscribe to.`,
-      stops: 'at the clock — automation is event-driven, and going at-risk is something that happens by time passing rather than by anybody doing anything',
-      severity: 'P1',
-      impact: 'At-risk work is still found by opening the app. A scheduled pass is the missing piece, not a channel.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Health computes as "${health}" from dates and progress, and the scheduled pass turns it into an event: "${atRisk?.detail}". Going at-risk is not something anybody does — it is time passing against a date nobody moved — so it needed a clock rather than a channel, and a rule subscribes to it like any other event.`,
+      stops: '—',
+      severity: '—',
+      impact: 'Work at risk reaches the person who can act, instead of waiting to be noticed by whoever happens to open the app.',
     }
   },
 )
@@ -543,20 +558,114 @@ scenario(
 scenario(
   'I',
   'An issue breaches its SLA',
-  'It is overdue, it is escalated to the accountable party, and it appears on the report.',
+  'It is overdue, somebody is told, and it appears on the report.',
   () => {
-    const s = ok(BASE, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
-    const row = rowFor(s, 'OAPIL-2')
+    const person = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+
+    const row = rowFor(dated, 'OAPIL-2')
     const health = computeHealth(row, TODAY)
-    const ims = buildDailyIms(s, rowsOf(s), TODAY, 'OAPIL')
+    const ims = buildDailyIms(dated, rowsOf(dated), TODAY, 'OAPIL')
     const overdueSection = ims.sections.find((x) => /overdue/i.test(x.title))
-    const listed = Boolean(overdueSection?.lines.some((l) => l.id === 'OAPIL-2' || l.subject.includes('OAPIL-2')))
+
+    const run = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const toOwner = Object.values(run.state.notifications).find(
+      (n) => n.to === 'Sam' && n.aboutId === 'OAPIL-2',
+    )
+
+    const good = health === 'Overdue' && Boolean(overdueSection) && Boolean(toOwner)
     return {
-      verdict: health === 'Overdue' && listed ? 'PARTIAL' : 'FAIL',
-      actual: `Health is "${health}" and the daily IMS lists it under "${overdueSection?.title ?? 'no overdue section'}". Escalation could now be expressed as a rule — telling a role is one action away — but nothing fires it, because a breach is a date passing rather than a change anybody made.`,
-      stops: 'at the same clock as H — the machinery to route a breach exists, and nothing wakes up to notice one',
-      severity: 'P1',
-      impact: 'A breach reaches a report, not a person with authority to fix it.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Health is "${health}", the daily IMS lists it, and the pass tells the owner: "${toOwner?.body}". The message is attributed to the scheduled pass rather than to a person, because a clock decided it.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A breach is routed to somebody rather than only reported to whoever opens the report.',
+    }
+  },
+)
+
+scenario(
+  'SC1',
+  'The pass runs every morning for a fortnight and nothing changes',
+  'The same condition is reported once, not fourteen times.',
+  () => {
+    const person = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+
+    /* Monday. */
+    const monday = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const firstCount = Object.values(monday.state.notifications).length
+
+    /* Every morning after, each run given the memory the last one stored. */
+    let state = monday.state
+    let observation = monday.observation
+    let laterOnsets = 0
+    for (let day = 1; day <= 13; day++) {
+      const run = runWatch(state, observation, TODAY, NOW, SCHEDULE_ACTOR)
+      state = run.state
+      observation = run.observation
+      laterOnsets += run.diff.onset.length
+    }
+    const afterFortnight = Object.values(state.notifications).length
+
+    /* A date moved out, then missed again, is news a second time. */
+    const rescheduled = ok(state, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-25', now: NOW } as Action)
+    const cleared = runWatch(rescheduled, observation, TODAY, NOW, SCHEDULE_ACTOR)
+    const slipped = runWatch(cleared.state, cleared.observation, '2026-08-26', NOW, SCHEDULE_ACTOR)
+    const reRaised = slipped.diff.onset.some((f) => f.subjectId === 'OAPIL-2' && f.condition === 'overdue')
+
+    const good = firstCount > 0 && afterFortnight === firstCount && laterOnsets === 0 && reRaised
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `${firstCount} message on the first run and ${afterFortnight - firstCount} across the next thirteen: the condition is counted, not repeated. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.`,
+      stops: '—',
+      severity: '—',
+      impact: 'This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to.',
+    }
+  },
+)
+
+scenario(
+  'SC2',
+  'The pass acts as a machine',
+  'What it does is attributed to the clock, and limited to what a machine may do.',
+  () => {
+    const person = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    const run = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+
+    const entry = run.state.audit.find((e) => e.field === 'notification')
+    const roles = rolesFor(dated.model, SCHEDULE_ACTOR)
+
+    /* What it may not do, driven rather than read off the grant list. */
+    const tryClose = apply(dated, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Closed - no defect' }, now: NOW, reason: 'The machine says so.',
+    } as Action, SCHEDULE_ACTOR)
+    const tryConfigure = apply(dated, {
+      t: 'config', op: { k: 'setSla', patch: { High: 1 } }, now: NOW,
+    } as Action, SCHEDULE_ACTOR)
+
+    const good =
+      entry?.by === SCHEDULE_ACTOR.name &&
+      roles.join() === 'ROLE_AUTOMATION' &&
+      Boolean(tryClose.error) &&
+      Boolean(tryConfigure.error)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The trail says "${entry?.by}" rather than a person's name, because nobody decided it. The pass holds ${roles.join(', ')} — not the fallback role an unrecognised human would get — so it may file work and say things about it, and may not close anything ("${tryClose.error}") or change the operating model ("${tryConfigure.error}").`,
+      stops: '—',
+      severity: '—',
+      impact: 'An automated path cannot quietly acquire administrator rights by being nobody in particular.',
     }
   },
 )

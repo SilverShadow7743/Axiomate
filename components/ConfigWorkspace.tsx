@@ -31,6 +31,7 @@ import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
 import { EVENT_TYPES, type EventType } from '@/lib/events'
 import { CHANNELS, type Channel } from '@/lib/notifications'
+import { WATCH_CONDITIONS, observe, type ConditionKey } from '@/lib/watch'
 import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
 
@@ -67,6 +68,7 @@ type Tab =
   | 'permissions'
   | 'approvals'
   | 'automation'
+  | 'watch'
   | 'sizing'
   | 'scopes'
 
@@ -80,6 +82,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
   { id: 'approvals', label: 'Approvals', group: 'Operating model' },
   { id: 'automation', label: 'Automation', group: 'Operating model' },
+  { id: 'watch', label: 'Scheduled pass', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -206,6 +209,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onCl
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
           {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
+          {tab === 'watch' && <Watch state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -856,6 +860,14 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       })(),
     },
     {
+      id: 'watch',
+      title: 'Scheduled pass',
+      what: 'What a clock notices when nobody is doing anything — overdue, at risk, over budget.',
+      now: m.watch.enabled
+        ? `${m.watch.conditions.length} conditions watched`
+        : 'Off — nothing is noticed',
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -1023,6 +1035,178 @@ function Sizing({
 
 
 
+
+
+/* ================================================================== *
+ * Scheduled pass
+ * ================================================================== */
+
+function Watch({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const policy = state.model.watch
+  const [result, setResult] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
+
+  /** How many records each condition would raise if the pass ran right now, with no memory. */
+  const preview = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const { findings } = observe(state, today, { ...policy, enabled: true })
+    const counts: Record<string, number> = {}
+    for (const f of findings) counts[f.condition] = (counts[f.condition] ?? 0) + 1
+    return counts
+  }, [state, policy])
+
+  const toggle = (key: ConditionKey) =>
+    onConfig({
+      k: 'setWatch',
+      patch: {
+        conditions: policy.conditions.includes(key)
+          ? policy.conditions.filter((c) => c !== key)
+          : [...policy.conditions, key],
+      },
+    })
+
+  const runNow = async () => {
+    setRunning(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/schedule/run', { method: 'POST' })
+      const data = (await res.json()) as { ok: boolean; summary?: string; error?: string }
+      setResult(data.ok ? data.summary ?? 'Done.' : (data.error ?? 'The run failed.'))
+    } catch {
+      setResult('Could not reach the server.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Scheduled pass</h3>
+      <p className="cfg-note">
+        Automation reacts to what people do. This is the other half: a pass that reads the clock
+        and notices what became true while nobody was doing anything — a date that passed, a
+        window that closed, a budget that ran out. Each of those becomes an ordinary event, and
+        the rules on the Automation screen react to it exactly as they react to a click.
+      </p>
+      <p className="cfg-note">
+        <b>It reports a condition once.</b> The pass remembers what it raised last time and
+        compares, so an issue that has been overdue for six weeks is counted rather than
+        announced every morning — and one that cleared and slipped again <em>is</em> announced,
+        because that is a different fact from the first miss.
+      </p>
+
+      <div className="cfg-card">
+        <label className="cfg-check">
+          <input
+            type="checkbox"
+            checked={policy.enabled}
+            onChange={(e) => onConfig({ k: 'setWatch', patch: { enabled: e.target.checked } })}
+          />
+          <span>
+            <b>Run the pass.</b> Turning it off stops it noticing anything, and leaves its memory
+            where it is — so switching it back on later does not raise a month of accumulated
+            conditions at once.
+          </span>
+        </label>
+
+        <div className="cfg-fld-row" style={{ marginTop: '10px' }}>
+          <label className="cfg-fld">
+            <span>Call work stale after</span>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              defaultValue={policy.staleAfterDays}
+              onBlur={(e) => {
+                const days = Number(e.target.value)
+                if (days === policy.staleAfterDays) return
+                if (!onConfig({ k: 'setWatch', patch: { staleAfterDays: days } })) {
+                  e.target.value = String(policy.staleAfterDays)
+                }
+              }}
+            />
+          </label>
+          <label className="cfg-fld">
+            <span>Warn this many days before a date</span>
+            <input
+              type="number"
+              min={0}
+              max={60}
+              defaultValue={policy.warnBeforeDays}
+              onBlur={(e) => {
+                const days = Number(e.target.value)
+                if (days === policy.warnBeforeDays) return
+                if (!onConfig({ k: 'setWatch', patch: { warnBeforeDays: days } })) {
+                  e.target.value = String(policy.warnBeforeDays)
+                }
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      <h4 className="cfg-sub">What it looks for</h4>
+      <table className="cfg-table">
+        <thead>
+          <tr>
+            <th>Condition</th>
+            <th>Watched</th>
+            <th>True right now</th>
+          </tr>
+        </thead>
+        <tbody>
+          {WATCH_CONDITIONS.map((c) => (
+            <tr key={c.key}>
+              <td className="cfg-key">{c.label}</td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={policy.conditions.includes(c.key)}
+                  aria-label={`Watch for ${c.label}`}
+                  onChange={() => toggle(c.key)}
+                />
+              </td>
+              <td className="mono">{preview[c.key] ?? 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="cfg-inherit">
+        The right-hand column is what is true today, not what would be raised — a first run
+        against a workspace with history would raise all of it at once, and every run after that
+        only what is new. Run it once by hand before pointing a scheduler at it.
+      </p>
+
+      <h4 className="cfg-sub">Running it</h4>
+      <div className="cfg-card">
+        <p className="cfg-note">
+          Nothing in this application wakes itself up. Point whatever already runs things on a
+          schedule at <code>POST /api/schedule/run</code>, with{' '}
+          <code>Authorization: Bearer $AXIOMATE_SCHEDULE_TOKEN</code>. A timer inside the web
+          server would stop when the process restarted, run twice when there were two instances,
+          and could not be triggered by hand — which is what the button below does.
+        </p>
+        <div className="cfg-inline">
+          <button className="btn" onClick={runNow} disabled={running}>
+            {running ? 'Running…' : 'Run it now'}
+          </button>
+          {result && <span className="prov">{result}</span>}
+        </div>
+        <p className="cfg-inherit">
+          A run by hand is attributed to the pass rather than to you: asking what the clock would
+          say is not the same as deciding it, and your name on a week of overdue notices would
+          say you had.
+        </p>
+      </div>
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Automation

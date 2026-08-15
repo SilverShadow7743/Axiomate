@@ -112,6 +112,41 @@ export const DEFAULT_AUTOMATION_RULES: AutomationRule[] = [
     enabled: true,
   },
   {
+    /*
+     * The rule the scheduled pass exists for. It cannot fire without a clock — an issue going
+     * past its date is not something anybody did — which is why it sat unexpressible until
+     * there was something to wake up and notice.
+     */
+    id: 'AUTO_OVERDUE',
+    label: 'Tell the owner when their work goes overdue',
+    on: 'issue.overdue',
+    when: [],
+    then: [
+      {
+        kind: 'notify',
+        audience: 'owner',
+        channel: 'in-app',
+        text: '{id} is overdue — {subject}. {to}',
+      },
+    ],
+    enabled: true,
+  },
+  {
+    id: 'AUTO_SOW_OVER',
+    label: 'Tell the engagement lead when a statement of work goes over its agreed effort',
+    on: 'sow.overConsumed',
+    when: [],
+    then: [
+      {
+        kind: 'notify',
+        audience: 'role:ROLE_ENGAGEMENT_LEAD',
+        channel: 'in-app',
+        text: '{to}',
+      },
+    ],
+    enabled: true,
+  },
+  {
     id: 'AUTO_OWNER_CHANGED',
     label: 'Tell somebody when work becomes theirs',
     on: 'issue.owner',

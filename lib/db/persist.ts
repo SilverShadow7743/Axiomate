@@ -141,7 +141,7 @@ async function runBatch(
       const newAudit = current.audit.slice(state.audit.length)
 
       for (const step of applied) {
-        await writeAction(tx, tenantId, step.action, step.before, step.after)
+        await persistSteps(tx, tenantId, step.action, step.before, step.after)
       }
       if (newAudit.length) {
         await tx.scheduleAudit.createMany({ data: newAudit.map((a) => auditToRow(tenantId, a)) })
@@ -187,7 +187,15 @@ export function persistAction(
 type Tx = Prisma.TransactionClient
 
 /** Write the records this action touched, and only those. */
-async function writeAction(
+/**
+ * Persist one applied action, given the state either side of it.
+ *
+ * Exported for the scheduled pass, which produces its steps outside `persistActions` — it
+ * starts from the clock rather than from a list of actions — and must still write them through
+ * the same arms. A second writer for the same rows is how two paths end up disagreeing about
+ * which table an action touches.
+ */
+export async function persistSteps(
   tx: Tx,
   tenantId: TenantId,
   action: Action,

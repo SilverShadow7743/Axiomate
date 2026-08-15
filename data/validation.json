@@ -95,31 +95,51 @@
       "id": "M",
       "title": "New work arrives and there is not enough capacity for it",
       "expected": "The delivery plan is shown to be impossible before it is agreed.",
-      "verdict": "PARTIAL",
-      "actual": "The plan needs 90h and 36h have been committed to it — a shortfall of 54h, visible in week one rather than week six. 1 record has no estimate and is invisible to the figure, which is stated rather than treated as zero.",
-      "stops": "at the alert — the check is a calculation a screen can run, and nothing raises it on its own, because an impossible plan becomes impossible by time passing rather than by anybody doing something",
-      "severity": "P2",
-      "impact": "A delivery manager can see the gap. Nobody is told about it unless they look."
+      "verdict": "PASS",
+      "actual": "The plan needs 90h and 36h have been committed to it — a shortfall of 54h, visible in week one rather than week six. 1 record has no estimate and is invisible to the figure, which is stated rather than treated as zero. The scheduled pass watches this condition too, so a plan that stops fitting is raised once rather than found in week six.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A delivery manager can see the gap, and the pass raises it once when it appears rather than leaving it to be found."
     },
     {
       "id": "H",
       "title": "An issue approaches its SLA target",
       "expected": "It is flagged at risk before it breaches, and the person who can act is told.",
-      "verdict": "PARTIAL",
-      "actual": "Health computes as \"At Risk\" from dates and progress, and the grid shows it. Nobody is told, and the reason is now sharper than \"no notifications exist\": notifications and rules both exist, and every rule reacts to something that *changed*. Becoming at risk is not a change — it is the passage of time against a date that has not moved — so there is no event for a rule to subscribe to.",
-      "stops": "at the clock — automation is event-driven, and going at-risk is something that happens by time passing rather than by anybody doing anything",
-      "severity": "P1",
-      "impact": "At-risk work is still found by opening the app. A scheduled pass is the missing piece, not a channel."
+      "verdict": "PASS",
+      "actual": "Health computes as \"At Risk\" from dates and progress, and the scheduled pass turns it into an event: \"Due 2026-08-16 and 0% complete with most of the window gone.\". Going at-risk is not something anybody does — it is time passing against a date nobody moved — so it needed a clock rather than a channel, and a rule subscribes to it like any other event.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Work at risk reaches the person who can act, instead of waiting to be noticed by whoever happens to open the app."
     },
     {
       "id": "I",
       "title": "An issue breaches its SLA",
-      "expected": "It is overdue, it is escalated to the accountable party, and it appears on the report.",
-      "verdict": "PARTIAL",
-      "actual": "Health is \"Overdue\" and the daily IMS lists it under \"Overdue\". Escalation could now be expressed as a rule — telling a role is one action away — but nothing fires it, because a breach is a date passing rather than a change anybody made.",
-      "stops": "at the same clock as H — the machinery to route a breach exists, and nothing wakes up to notice one",
-      "severity": "P1",
-      "impact": "A breach reaches a report, not a person with authority to fix it."
+      "expected": "It is overdue, somebody is told, and it appears on the report.",
+      "verdict": "PASS",
+      "actual": "Health is \"Overdue\", the daily IMS lists it, and the pass tells the owner: \"OAPIL-2 is overdue — Subject OAPIL-2. Due 2026-08-10, and 5 working days have passed.\". The message is attributed to the scheduled pass rather than to a person, because a clock decided it.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A breach is routed to somebody rather than only reported to whoever opens the report."
+    },
+    {
+      "id": "SC1",
+      "title": "The pass runs every morning for a fortnight and nothing changes",
+      "expected": "The same condition is reported once, not fourteen times.",
+      "verdict": "PASS",
+      "actual": "1 message on the first run and 0 across the next thirteen: the condition is counted, not repeated. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to."
+    },
+    {
+      "id": "SC2",
+      "title": "The pass acts as a machine",
+      "expected": "What it does is attributed to the clock, and limited to what a machine may do.",
+      "verdict": "PASS",
+      "actual": "The trail says \"Scheduled pass\" rather than a person's name, because nobody decided it. The pass holds ROLE_AUTOMATION — not the fallback role an unrecognised human would get — so it may file work and say things about it, and may not close anything (\"Close work is not something Automation can do here.\") or change the operating model (\"Configure the platform is not something Automation can do here.\").",
+      "stops": "—",
+      "severity": "—",
+      "impact": "An automated path cannot quietly acquire administrator rights by being nobody in particular."
     },
     {
       "id": "Q",

@@ -205,6 +205,11 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
     automationRules: Array.isArray(stored.automationRules) ? stored.automationRules : seed.automationRules,
     resourceProfiles: { ...seed.resourceProfiles, ...(stored.resourceProfiles ?? {}) },
+    watch: {
+      ...seed.watch,
+      ...(stored.watch ?? {}),
+      conditions: stored.watch?.conditions ?? seed.watch.conditions,
+    },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),
