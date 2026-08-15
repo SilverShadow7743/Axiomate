@@ -1612,6 +1612,10 @@ export default function IssueWorkspace({
             if (res.ok) setDirty(false)
             return res.ok
           }}
+          onAllocate={(projectId, a) =>
+            dispatch({ t: 'upsertAllocation', id: null, projectId, ...a, now: new Date().toISOString() })
+          }
+          onRelease={(id) => dispatch({ t: 'removeAllocation', id, now: new Date().toISOString() })}
           onUpsertSow={(id, engagementId, patch) =>
             dispatch({ t: 'upsertSow', id, engagementId, patch, now: new Date().toISOString() })
           }

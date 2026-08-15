@@ -128,6 +128,8 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  allocations   Allocation[]
+  commitments   Commitment[]
   sows          Sow[]
   notifications Notification[]
   approvals     Approval[]
@@ -176,6 +178,7 @@ model HierarchyNode {
   sow   Sow?    @relation("SowDelivery", fields: [tenantId, sowId], references: [tenantId, id], onDelete: Restrict)
   /// SOWs filed against this node, when it is an engagement.
   sowsHere Sow[] @relation("SowEngagement")
+  allocations Allocation[] @relation("ProjectAllocation")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -527,6 +530,60 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// Somebody committed to a project, for a period, at a share of their time.
+///
+/// The share is a percentage of *that person's* available time rather than of a standard week,
+/// so part-time is expressed once — on their resource profile — instead of being re-derived
+/// wherever an allocation is read.
+model Allocation {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String        @default(cuid())
+  person    String
+  projectId String
+  project   HierarchyNode @relation("ProjectAllocation", fields: [tenantId, projectId], references: [tenantId, id], onDelete: Cascade)
+
+  startDate  DateTime
+  endDate    DateTime
+  percentage Int
+  note       String @db.Text
+
+  createdBy String
+  createdAt DateTime
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, person, startDate])
+  @@index([tenantId, projectId])
+}
+
+/// Leave, a public holiday, or internal work — what comes off capacity before anything is sold.
+///
+/// Not attached to a project, deliberately: this is the time that exists outside delivery, and
+/// filing it under a project would make it disappear the day that project closes.
+model Commitment {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id     String @default(cuid())
+  person String
+  kind   String
+
+  startDate   DateTime
+  endDate     DateTime
+  /// Hours a day this takes, so a period can be extended without recomputing a total.
+  hoursPerDay Decimal @db.Decimal(4, 2)
+  note        String  @db.Text
+
+  createdBy String
+  createdAt DateTime
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, person, startDate])
 }
 
 /// What has been contracted, under one engagement.

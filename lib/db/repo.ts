@@ -29,6 +29,10 @@ import {
   notificationToRow,
   sowFromRow,
   sowToRow,
+  allocationFromRow,
+  allocationToRow,
+  commitmentFromRow,
+  commitmentToRow,
   estimateFromRow,
   estimateToRow,
   revisionFromRow,
@@ -76,6 +80,8 @@ type Reader = Pick<
   | 'approval'
   | 'notification'
   | 'sow'
+  | 'allocation'
+  | 'commitment'
   | 'issueEstimate'
   | 'estimateRevision'
   | 'engagement'
@@ -107,7 +113,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, estimates, revisions, engagements, audit, meta, config] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -120,6 +126,8 @@ export async function loadWorkspace(
       db.approval.findMany({ where: { tenantId } }),
       db.notification.findMany({ where: { tenantId } }),
       db.sow.findMany({ where: { tenantId } }),
+      db.allocation.findMany({ where: { tenantId } }),
+      db.commitment.findMany({ where: { tenantId } }),
       db.issueEstimate.findMany({ where: { tenantId } }),
       db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
       db.engagement.findMany({ where: { tenantId } }),
@@ -145,6 +153,8 @@ export async function loadWorkspace(
     approvals: Object.fromEntries(approvals.map((a) => [a.id, approvalFromRow(a)])),
     notifications: Object.fromEntries(notifications.map((n) => [n.id, notificationFromRow(n)])),
     sows: Object.fromEntries(sows.map((s) => [s.id, sowFromRow(s)])),
+    allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
+    commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
@@ -194,6 +204,7 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
     automationRules: Array.isArray(stored.automationRules) ? stored.automationRules : seed.automationRules,
+    resourceProfiles: { ...seed.resourceProfiles, ...(stored.resourceProfiles ?? {}) },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),
@@ -293,6 +304,13 @@ export async function importWorkspace(
     // SOWs before the nodes that point at them would be ideal, but the nodes are written
     // first and carry the reference — so these are laid down here and the projects' `sowId`
     // is set by the node write that follows on a later import.
+    for (const c of Object.values(seed.commitments)) {
+      await tx.commitment.create({ data: commitmentToRow(tenantId, c) })
+    }
+    for (const a of Object.values(seed.allocations)) {
+      if (!seed.nodes[a.projectId]) continue
+      await tx.allocation.create({ data: allocationToRow(tenantId, a) })
+    }
     for (const s of Object.values(seed.sows)) {
       if (!seed.nodes[s.engagementId]) continue
       await tx.sow.create({ data: sowToRow(tenantId, s) })

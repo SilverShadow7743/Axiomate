@@ -20,6 +20,8 @@ import {
   approvalToRow,
   notificationToRow,
   sowToRow,
+  allocationToRow,
+  commitmentToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -307,6 +309,34 @@ async function writeAction(
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    case 'upsertAllocation':
+    case 'removeAllocation': {
+      for (const [id, alloc] of Object.entries(after.allocations)) {
+        if (before.allocations[id] === alloc) continue
+        const row = allocationToRow(tenantId, alloc)
+        await tx.allocation.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'upsertCommitment':
+    case 'removeCommitment': {
+      for (const [id, c] of Object.entries(after.commitments)) {
+        if (before.commitments[id] === c) continue
+        const row = commitmentToRow(tenantId, c)
+        await tx.commitment.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       return
     }
 

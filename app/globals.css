@@ -4137,3 +4137,13 @@ select.cell-editor {
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
+
+/* ---------- capacity ---------- */
+.cap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cap-panel .comm-head .fld {
+  min-width: 130px;
+}

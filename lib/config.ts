@@ -34,6 +34,7 @@ import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { ADMIN_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
+import type { ResourceProfile } from './capacity'
 
 /* ================================================================== *
  * Scope
@@ -444,6 +445,14 @@ export interface OperatingModel {
   approvalRules: ApprovalRule[]
   /** Event → condition → action. See `./automation`. */
   automationRules: AutomationRule[]
+  /**
+   * What each person's week looks like, keyed by directory id.
+   *
+   * Master data rather than a delivery record: it is a fact about employment, and it changes
+   * when somebody goes part-time rather than when a project starts. Absent for most people,
+   * which is a real state — `capacityFor` falls back to a stated default and says so.
+   */
+  resourceProfiles: Record<string, ResourceProfile>
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -763,6 +772,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     access: defaultAccessPolicy(),
     approvalRules: defaultApprovalRules(),
     automationRules: defaultAutomationRules(),
+    resourceProfiles: {},
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1011,6 +1021,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // A list, replaced wholesale when present: a firm that deleted a rule means it.
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
     automationRules: Array.isArray(stored.automationRules) ? stored.automationRules : seed.automationRules,
+    resourceProfiles: { ...seed.resourceProfiles, ...(stored.resourceProfiles ?? {}) },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

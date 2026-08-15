@@ -31,6 +31,7 @@ import {
 } from '../lib/workspace'
 import { undelivered } from '../lib/notifications'
 import { describePosition, sowPosition } from '../lib/sow'
+import { capacityFor, planCheck } from '../lib/capacity'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -315,27 +316,132 @@ scenario(
 scenario(
   'L',
   'A consultant is already overallocated',
-  'Assigning more work surfaces the conflict before it is committed.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `No allocation, capacity or availability record exists (${absent(/interface (Allocation|Capacity|ResourceProfile)\b/) ? 'no such type in source' : 'a type exists'}). Capacity in the estimator is three numbers typed on one issue.`,
-    stops: 'at the entity — there is nothing to be over',
-    severity: 'P0',
-    impact: 'The plan cannot be checked against the people who have to deliver it.',
-  }),
+  'Committing more of their time surfaces the conflict before it is agreed, and the numbers behind it.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const twoProjects = (() => {
+      let cur = BASE
+      for (const name of ['Remediation', 'Rollout']) {
+        cur = ok(cur, { t: 'create', parentId: engagementId, kind: 'project', draft: { name }, now: NOW } as Action)
+      }
+      return cur
+    })()
+    const projects = Object.values(twoProjects.nodes).filter((n) => n.kind === 'project')
+    const [first, second] = projects
+
+    /* A four-day week, so the model is not quietly assuming everybody is full-time. */
+    const person = Object.values(twoProjects.model.people).find((p) => p.name === 'Priya')!
+    const profiled = ok(twoProjects, {
+      t: 'config',
+      op: { k: 'setResourceProfile', personId: person.id, patch: { hoursPerDay: 8, daysPerWeek: 4 } },
+      now: NOW,
+    } as Action)
+
+    /* 60% on one project for a fortnight. */
+    const committed = ok(profiled, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: first.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
+    } as Action)
+
+    /* 60% more on another, over the same fortnight, is more than exists. */
+    const clash = act(committed, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: second.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
+    } as Action)
+
+    /* It can still be done — deliberately, and recorded as a decision. */
+    const forced = ok(committed, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: second.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: 'Short-term, agreed with Priya.',
+      acceptOverallocation: true, now: NOW,
+    } as Action)
+    const entry = forced.audit.find((e) => e.field === 'allocation' && e.reason)
+
+    /* Leave comes off before anything is sold, so booking it changes the same arithmetic. */
+    const onLeave = ok(committed, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-09-07', endDate: '2026-09-11', hoursPerDay: 8, note: '', now: NOW,
+    } as Action)
+    const before = capacityFor('Priya', onLeave.model.resourceProfiles[person.id], [], Object.values(onLeave.allocations), '2026-09-01', '2026-09-11')
+    const after = capacityFor('Priya', onLeave.model.resourceProfiles[person.id], Object.values(onLeave.commitments), Object.values(onLeave.allocations), '2026-09-01', '2026-09-11')
+
+    const good =
+      Boolean(clash.error) && Boolean(entry?.reason) &&
+      after.availableHours < before.availableHours && after.overallocated && !before.overallocated
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused with the arithmetic rather than a shrug: "${clash.error}" Committing it anyway is allowed and recorded as a decision — the trail says "${entry?.reason?.slice(0, 80)}…". Booking a week of leave moves the same figures: available falls from ${before.availableHours}h to ${after.availableHours}h and the existing commitment becomes an overallocation. A four-day week is honoured, so nobody is assumed full-time.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A plan can now be checked against the people who have to deliver it, and deliberate overallocation is distinguishable from an accident.',
+    }
+  },
 )
 
 scenario(
   'M',
   'New work arrives and there is not enough capacity for it',
   'The delivery plan is shown to be impossible before it is agreed.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: 'Requires L. The estimator can say an issue needs 40 hours; nothing knows whether 40 hours exist.',
-    stops: 'at the same missing entity',
-    severity: 'P0',
-    impact: 'Commitments are made against capacity nobody has counted.',
-  }),
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    const withProject = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Remediation' }, now: NOW,
+    } as Action)
+    const project = Object.values(withProject.nodes).find((n) => n.kind === 'project')!
+    let live = ok(withProject, { t: 'move', id: moduleId, newParentId: project.id, now: NOW } as Action)
+
+    /* Three pieces of work, estimated at 30 hours each, and one unestimated. */
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) {
+      live = ok(live, {
+        t: 'setEstimate', issueId: id, patch: { approvedEffortHours: 30 }, now: NOW,
+      } as Action)
+    }
+    live = ok(live, {
+      t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Not estimated yet' }, now: NOW,
+    } as Action)
+
+    /* One person, half their time, for a fortnight. */
+    const person = Object.values(live.model.people).find((p) => p.name === 'Priya')!
+    live = ok(live, {
+      t: 'config', op: { k: 'setResourceProfile', personId: person.id, patch: { hoursPerDay: 8, daysPerWeek: 5 } }, now: NOW,
+    } as Action)
+    live = ok(live, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: project.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 50, note: '', now: NOW,
+    } as Action)
+
+    const issues = Object.values(live.issues).filter((i) => !i.deletedAt)
+    const planned = issues.reduce((n, i) => {
+      const e = live.estimates[i.id]
+      return n + (e ? summarise(e, live.model.sizeBands).effortHours ?? 0 : 0)
+    }, 0)
+    const unestimated = issues.filter((i) => !live.estimates[i.id]).length
+
+    const byName: Record<string, string> = {}
+    for (const p of Object.values(live.model.people)) byName[p.name.toLowerCase()] = p.id
+
+    const check = planCheck(
+      planned,
+      unestimated,
+      Object.values(live.allocations),
+      live.model.resourceProfiles,
+      byName,
+      project.id,
+      '2026-09-01',
+      '2026-09-11',
+    )
+
+    const good = check.plannedHours === 90 && check.allocatedHours === 36 && !check.possible && check.unestimatedCount === 1
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `The plan needs ${check.plannedHours}h and ${check.allocatedHours}h have been committed to it — a shortfall of ${check.shortfallHours}h, visible in week one rather than week six. ${check.unestimatedCount} record has no estimate and is invisible to the figure, which is stated rather than treated as zero.`,
+      stops: 'at the alert — the check is a calculation a screen can run, and nothing raises it on its own, because an impossible plan becomes impossible by time passing rather than by anybody doing something',
+      severity: 'P2',
+      impact: 'A delivery manager can see the gap. Nobody is told about it unless they look.',
+    }
+  },
 )
 
 /* ================================================================== *

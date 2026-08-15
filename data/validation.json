@@ -74,22 +74,22 @@
     {
       "id": "L",
       "title": "A consultant is already overallocated",
-      "expected": "Assigning more work surfaces the conflict before it is committed.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "No allocation, capacity or availability record exists (a type exists). Capacity in the estimator is three numbers typed on one issue.",
-      "stops": "at the entity — there is nothing to be over",
-      "severity": "P0",
-      "impact": "The plan cannot be checked against the people who have to deliver it."
+      "expected": "Committing more of their time surfaces the conflict before it is agreed, and the numbers behind it.",
+      "verdict": "PASS",
+      "actual": "Refused with the arithmetic rather than a shrug: \"Priya is committed to 86.4h against 57.6h available — 28.8h more than exists. Commit it anyway if that is the decision — it will be recorded as one.\" Committing it anyway is allowed and recorded as a decision — the trail says \"Deliberately overallocated: Priya is committed to 86.4h against 57.6h available …\". Booking a week of leave moves the same figures: available falls from 57.6h to 17.6h and the existing commitment becomes an overallocation. A four-day week is honoured, so nobody is assumed full-time.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A plan can now be checked against the people who have to deliver it, and deliberate overallocation is distinguishable from an accident."
     },
     {
       "id": "M",
       "title": "New work arrives and there is not enough capacity for it",
       "expected": "The delivery plan is shown to be impossible before it is agreed.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "Requires L. The estimator can say an issue needs 40 hours; nothing knows whether 40 hours exist.",
-      "stops": "at the same missing entity",
-      "severity": "P0",
-      "impact": "Commitments are made against capacity nobody has counted."
+      "verdict": "PARTIAL",
+      "actual": "The plan needs 90h and 36h have been committed to it — a shortfall of 54h, visible in week one rather than week six. 1 record has no estimate and is invisible to the figure, which is stated rather than treated as zero.",
+      "stops": "at the alert — the check is a calculation a screen can run, and nothing raises it on its own, because an impossible plan becomes impossible by time passing rather than by anybody doing something",
+      "severity": "P2",
+      "impact": "A delivery manager can see the gap. Nobody is told about it unless they look."
     },
     {
       "id": "H",
@@ -368,7 +368,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (11 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (12 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."

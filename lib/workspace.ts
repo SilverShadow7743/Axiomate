@@ -49,6 +49,16 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import {
+  capacityFor,
+  checkAllocation,
+  defaultProfile,
+  describeCapacity,
+  type Allocation,
+  type Commitment,
+  type CommitmentKind,
+  type ResourceProfile,
+} from './capacity'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents } from './events'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
@@ -213,6 +223,10 @@ export interface WorkspaceState {
   notifications: Record<string, Notification>
   /** What has been contracted, per engagement. See `./sow`. */
   sows: Record<string, Sow>
+  /** Who is committed to what, and for how long. See `./capacity`. */
+  allocations: Record<string, Allocation>
+  /** Leave, holidays and internal work — what comes off capacity before anything is sold. */
+  commitments: Record<string, Commitment>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -443,6 +457,8 @@ export function initWorkspace(
     approvals: {},
     notifications: {},
     sows: {},
+    allocations: {},
+    commitments: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -555,6 +571,39 @@ export type Action =
   | { t: 'archiveSow'; id: string; now: string }
   /** Which SOW a project is delivered under. `sowId: null` detaches it. */
   | { t: 'attributeToSow'; nodeId: string; sowId: string | null; now: string }
+  /* ---- CAPACITY ---- */
+  | {
+      t: 'upsertAllocation'
+      id: string | null
+      person: string
+      projectId: string
+      startDate: string
+      endDate: string
+      percentage: number
+      note: string
+      /**
+       * Commit somebody who does not have the time.
+       *
+       * Refused by default and allowed explicitly, because short-term overallocation is a real
+       * decision a delivery manager makes with their eyes open — and the difference between
+       * that and an accident is whether anybody said so. Recorded in the audit trail either way.
+       */
+      acceptOverallocation?: boolean
+      now: string
+    }
+  | { t: 'removeAllocation'; id: string; now: string }
+  | {
+      t: 'upsertCommitment'
+      id: string | null
+      person: string
+      kind: CommitmentKind
+      startDate: string
+      endDate: string
+      hoursPerDay: number
+      note: string
+      now: string
+    }
+  | { t: 'removeCommitment'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -582,6 +631,7 @@ export type ConfigOp =
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
+  | { k: 'setResourceProfile'; personId: string; patch: Partial<ResourceProfile> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -722,6 +772,19 @@ export function descendantsOf(state: WorkspaceState, id: string): string[] {
 /* ================================================================== *
  * Reducer
  * ================================================================== */
+
+/**
+ * The profile for a person named on an allocation.
+ *
+ * Matched by name, like everything else that joins to the directory until people have real
+ * keys. Returns undefined rather than a default, so `capacityFor` is the single place that
+ * decides what an unknown person's week looks like.
+ */
+function profileFor(state: WorkspaceState, person: string): ResourceProfile | undefined {
+  const key = person.trim().toLowerCase()
+  const match = Object.values(state.model.people).find((p) => p.name.toLowerCase() === key)
+  return match ? state.model.resourceProfiles[match.id] : undefined
+}
 
 export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult {
   /**
@@ -2486,6 +2549,180 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /* ---------------- CAPACITY ---------------- */
+
+    case 'upsertAllocation': {
+      const project = state.nodes[a.projectId]
+      if (!project || project.kind !== 'project') {
+        return { state, error: 'People are allocated to a project.' }
+      }
+      const problem = checkAllocation(a)
+      if (problem) return { state, error: problem.message }
+
+      const existing = a.id ? state.allocations[a.id] : null
+      if (a.id && !existing) return { state, error: 'That allocation no longer exists.' }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `alloc-${seq}`
+      const next: Allocation = {
+        id,
+        person: a.person.trim(),
+        projectId: a.projectId,
+        startDate: a.startDate,
+        endDate: a.endDate,
+        percentage: a.percentage,
+        note: a.note.trim(),
+        createdBy: existing?.createdBy ?? by,
+        createdAt: existing?.createdAt ?? a.now,
+        deletedAt: null,
+      }
+
+      /**
+       * Is there time for this?
+       *
+       * Checked against the person's whole window rather than this project's share of it,
+       * because the conflict a delivery manager needs to see is with the *other* projects —
+       * an allocation that fits inside this project's plan and still cannot be delivered is
+       * exactly the surprise this exists to prevent.
+       */
+      const others = Object.values(state.allocations).filter((x) => x.id !== id)
+      const profile = profileFor(state, next.person)
+      const position = capacityFor(
+        next.person,
+        profile,
+        Object.values(state.commitments),
+        [...others, next],
+        a.startDate,
+        a.endDate,
+      )
+      if (position.overallocated && !a.acceptOverallocation) {
+        return {
+          state,
+          error: `${describeCapacity(position)} Commit it anyway if that is the decision — it will be recorded as one.`,
+        }
+      }
+
+      return {
+        state: {
+          ...state,
+          allocations: { ...state.allocations, [id]: next },
+          seq,
+          audit: log(state, {
+            rowId: a.projectId,
+            field: 'allocation',
+            from: existing ? `${existing.person} ${existing.percentage}%` : '',
+            to: `${next.person} ${next.percentage}% ${next.startDate} → ${next.endDate}`,
+            at: a.now,
+            by,
+            reason: position.overallocated
+              ? `Deliberately overallocated: ${describeCapacity(position)}`
+              : undefined,
+          }),
+        },
+        message: position.overallocated
+          ? `Committed, and ${next.person} is now over capacity.`
+          : 'Committed.',
+      }
+    }
+
+    case 'removeAllocation': {
+      const alloc = state.allocations[a.id]
+      if (!alloc) return { state, error: 'That allocation no longer exists.' }
+      return {
+        state: {
+          ...state,
+          allocations: { ...state.allocations, [a.id]: { ...alloc, deletedAt: a.now } },
+          audit: log(state, {
+            rowId: alloc.projectId,
+            field: 'allocation',
+            from: `${alloc.person} ${alloc.percentage}%`,
+            to: '(released)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Released.',
+      }
+    }
+
+    case 'upsertCommitment': {
+      if (!a.person.trim()) return { state, error: 'Time off belongs to somebody.' }
+      if (!a.startDate || !a.endDate) return { state, error: 'A period needs a start and an end.' }
+      if (a.endDate < a.startDate) return { state, error: 'The end date falls before the start date.' }
+      if (!Number.isFinite(a.hoursPerDay) || a.hoursPerDay <= 0) {
+        return { state, error: 'How many hours a day does this take?' }
+      }
+
+      const existing = a.id ? state.commitments[a.id] : null
+      if (a.id && !existing) return { state, error: 'That record no longer exists.' }
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `commit-${seq}`
+      const next: Commitment = {
+        id,
+        person: a.person.trim(),
+        kind: a.kind,
+        startDate: a.startDate,
+        endDate: a.endDate,
+        hoursPerDay: a.hoursPerDay,
+        note: a.note.trim(),
+        createdBy: existing?.createdBy ?? by,
+        createdAt: existing?.createdAt ?? a.now,
+        deletedAt: null,
+      }
+
+      /**
+       * Booking leave can push somebody over on work already committed, and that is worth
+       * saying rather than refusing: the leave is not the problem, the plan around it is.
+       */
+      const position = capacityFor(
+        next.person,
+        profileFor(state, next.person),
+        [...Object.values(state.commitments).filter((c) => c.id !== id), next],
+        Object.values(state.allocations),
+        a.startDate,
+        a.endDate,
+      )
+
+      return {
+        state: {
+          ...state,
+          commitments: { ...state.commitments, [id]: next },
+          seq,
+          audit: log(state, {
+            rowId: 'CAPACITY',
+            field: 'commitment',
+            from: existing ? `${existing.kind} ${existing.startDate}→${existing.endDate}` : '',
+            to: `${next.person}: ${next.kind} ${next.startDate}→${next.endDate}`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: position.overallocated
+          ? `Recorded. ${describeCapacity(position)}`
+          : 'Recorded.',
+      }
+    }
+
+    case 'removeCommitment': {
+      const c = state.commitments[a.id]
+      if (!c) return { state, error: 'That record no longer exists.' }
+      return {
+        state: {
+          ...state,
+          commitments: { ...state.commitments, [a.id]: { ...c, deletedAt: a.now } },
+          audit: log(state, {
+            rowId: 'CAPACITY',
+            field: 'commitment',
+            from: `${c.person}: ${c.kind}`,
+            to: '(removed)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Removed.',
+      }
+    }
+
     /* ---------------- CONFIGURATION ---------------- */
     case 'config':
       return applyConfig(state, a.op, a.now, actor)
@@ -2713,6 +2950,40 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sizeBands: op.bands },
         { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
         'T-shirt sizing updated.',
+      )
+    }
+
+    case 'setResourceProfile': {
+      const person = m.people[op.personId]
+      if (!person) return { state, error: 'That person is not in the directory.' }
+      const existing = m.resourceProfiles[op.personId]
+      const next: ResourceProfile = {
+        ...defaultProfile(op.personId),
+        ...existing,
+        ...op.patch,
+        // Last, because a patch describes a week rather than whose it is.
+        personId: op.personId,
+      }
+      if (next.hoursPerDay <= 0 || next.hoursPerDay > 24) {
+        return { state, error: 'A working day is between 0 and 24 hours.' }
+      }
+      if (next.daysPerWeek <= 0 || next.daysPerWeek > 7) {
+        return { state, error: 'A working week is between 0 and 7 days.' }
+      }
+      if (next.billableTargetPct < 0 || next.billableTargetPct > 100) {
+        return { state, error: 'A billable target is a percentage.' }
+      }
+      return done(
+        { ...m, resourceProfiles: { ...m.resourceProfiles, [op.personId]: next } },
+        {
+          rowId: 'CAPACITY',
+          field: 'resourceProfile',
+          from: existing ? `${existing.hoursPerDay}h × ${existing.daysPerWeek}d` : '(default)',
+          to: `${next.hoursPerDay}h × ${next.daysPerWeek}d`,
+          at: now,
+          by,
+        },
+        `${person.name}'s week updated.`,
       )
     }
 

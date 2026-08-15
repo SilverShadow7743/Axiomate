@@ -1929,6 +1929,32 @@
       "subject": "Scope leakage was undetectable by construction, because nothing was contracted",
       "description": "The statement of work was a text field on the engagement — a string naming a document nothing could be computed against — so there was no boundary for a request to be outside of, and the product could not do the thing a delivery firm most needs it for. A SOW is now a record under an engagement carrying a baseline: agreed effort and agreed value, both, because they answer different questions and move independently. A fixed-price piece of work can be on budget and badly over on effort, which is the case a firm needs to see before pricing the next one the same way. Against that baseline two figures are real rather than notional, because both of their sources now exist: planned consumption from the estimates on the work, and actual consumption from the recorded hours. The difference is scope position, and it is arithmetic. Attribution is by project rather than per record, following the domain model — a SOW sits between the engagement and the project, and work inherits it by where it lives. Per-record attribution would let two issues in one project belong to different contracts, which does not happen, and would make consumption a question with no reliable answer. Three refusals fell out of it: a draft SOW cannot have work delivered under it, a SOW cannot be archived while projects still point at it, and a project cannot be attributed to a SOW from another engagement. What the screen deliberately does not do is read a scope statement and pronounce on whether a request is inside it. That is a commercial judgement, and a machine answer would be wrong occasionally and confidently. It shows the consequence instead — agreed, planned, spent, left — and names the work its forecast could not see, because a forecast that treats unestimated records as zero is why a project looks fine until the week it does not.",
       "reference": "lib/sow.ts, components/CommercialPanel.tsx, prisma Sow, HierarchyNode.sowId"
+    },
+    {
+      "id": "AXM-075",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Resources & Capacity",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "A plan could not be checked against the people who had to deliver it",
+      "description": "Nothing knew whether forty hours of estimated work had forty hours of anybody behind it. The estimator could describe effort and the schedule could describe dates, and no record connected either to a person’s week. Three entities now do, and the reason there are three is that the subtraction is the point: gross capacity is hours per day multiplied by working days, which is a number nobody can deliver against. A resource profile says what a person’s week looks like and lives on the operating model beside the directory, because it is a fact about employment rather than about delivery. A commitment is leave, a public holiday or internal work — the time a consulting firm actually runs on and never counts. An allocation is that person, committed to a project, for a period, at a share of their time. Available capacity is gross minus commitments; remaining is available minus allocations; and an overallocation is the case worth refusing. It is refused with the arithmetic rather than a shrug, and it can be overridden — short-term overallocation is a decision a delivery manager makes with their eyes open, and the difference between that and an accident is whether anybody said so, which is why the override is recorded as a reason on the audit entry. The override is offered only after a refusal, because a checkbox shown before anybody has been told there is a problem gets ticked as a matter of course. A four-day week is honoured, and the panel says so rather than assuming everybody is full-time. The plan check puts two numbers side by side that come from opposite ends of the product and were never otherwise compared: what the work is estimated to need, and what has been set aside for it. A firm finds that gap in week six; it was visible in week one. What the model deliberately does not do is schedule anybody — an optimiser reassigning work on capacity grounds would be making delivery decisions from a model that cannot see skill, client relationship, or who was on the call last week.",
+      "reference": "lib/capacity.ts, components/CapacityPanel.tsx, prisma Allocation and Commitment"
     }
   ]
 }

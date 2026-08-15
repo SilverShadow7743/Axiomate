@@ -52,6 +52,10 @@ const KINDS = new Set([
   'upsertSow',
   'archiveSow',
   'attributeToSow',
+  'upsertAllocation',
+  'removeAllocation',
+  'upsertCommitment',
+  'removeCommitment',
   // `notify` is deliberately absent. Notifications are raised by rules, and the server plans
   // the same rules the browser does — so a notify action arriving over the wire could only be
   // one the client invented.

@@ -18,6 +18,7 @@ import NotesTab from './NotesTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
 import CommercialPanel from './CommercialPanel'
+import CapacityPanel from './CapacityPanel'
 import type { Sow } from '@/lib/sow'
 import type { TimeActivity } from '@/lib/time'
 import type { ApprovalDecision } from '@/lib/approval'
@@ -125,6 +126,11 @@ interface Props {
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
   onUpsertSow: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
   onAttributeToSow: (nodeId: string, sowId: string | null) => void
+  onAllocate: (
+    projectId: string,
+    a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
+  ) => boolean
+  onRelease: (id: string) => void
 }
 
 export default function DetailPanel({
@@ -155,6 +161,8 @@ export default function DetailPanel({
   onUpdateEngagement,
   onUpsertSow,
   onAttributeToSow,
+  onAllocate,
+  onRelease,
   actor,
   onSaveIssue,
   onAddNote,
@@ -318,6 +326,16 @@ export default function DetailPanel({
               />
             )}
           </>
+        ) : !issue && row.kind === 'project' ? (
+          <CapacityPanel
+            row={row}
+            state={state}
+            actor={actor}
+            allRows={allRows}
+            today={today}
+            onAllocate={(a) => onAllocate(row.id, a)}
+            onRelease={onRelease}
+          />
         ) : !issue ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
             <b>{row.name}</b> is a {row.kind} summary row covering{' '}

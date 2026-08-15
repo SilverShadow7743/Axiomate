@@ -220,6 +220,40 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "Allocation" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "person" TEXT NOT NULL,
+    "projectId" TEXT NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
+    "percentage" INTEGER NOT NULL,
+    "note" TEXT NOT NULL,
+    "createdBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Allocation_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
+CREATE TABLE "Commitment" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "person" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
+    "hoursPerDay" DECIMAL(4,2) NOT NULL,
+    "note" TEXT NOT NULL,
+    "createdBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Commitment_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "Sow" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -414,6 +448,15 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "Allocation_tenantId_person_startDate_idx" ON "Allocation"("tenantId", "person", "startDate");
+
+-- CreateIndex
+CREATE INDEX "Allocation_tenantId_projectId_idx" ON "Allocation"("tenantId", "projectId");
+
+-- CreateIndex
+CREATE INDEX "Commitment_tenantId_person_startDate_idx" ON "Commitment"("tenantId", "person", "startDate");
+
+-- CreateIndex
 CREATE INDEX "Sow_tenantId_engagementId_idx" ON "Sow"("tenantId", "engagementId");
 
 -- CreateIndex
@@ -517,6 +560,15 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Allocation" ADD CONSTRAINT "Allocation_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Allocation" ADD CONSTRAINT "Allocation_tenantId_projectId_fkey" FOREIGN KEY ("tenantId", "projectId") REFERENCES "HierarchyNode"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Commitment" ADD CONSTRAINT "Commitment_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sow" ADD CONSTRAINT "Sow_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

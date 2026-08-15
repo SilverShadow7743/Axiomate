@@ -12,6 +12,8 @@ import type {
   Approval as ApprovalRow,
   Notification as NotificationRow,
   Sow as SowRow,
+  Allocation as AllocationRow,
+  Commitment as CommitmentRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
@@ -27,6 +29,7 @@ import type { TimeActivity, TimeEntry } from '../time'
 import type { Approval, ApprovalDecision } from '../approval'
 import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
+import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -783,6 +786,72 @@ export function sowFromRow(r: SowRow): Sow {
     createdAt: r.createdAt.toISOString(),
     updatedBy: r.updatedBy,
     updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Capacity
+ * ================================================================== */
+
+export function allocationToRow(tenantId: TenantId, a: Allocation): Prisma.AllocationUncheckedCreateInput {
+  return {
+    tenantId,
+    id: a.id,
+    person: a.person,
+    projectId: a.projectId,
+    startDate: toDate(a.startDate) ?? new Date(0),
+    endDate: toDate(a.endDate) ?? new Date(0),
+    percentage: a.percentage,
+    note: a.note,
+    createdBy: a.createdBy,
+    createdAt: new Date(a.createdAt),
+    deletedAt: a.deletedAt ? new Date(a.deletedAt) : null,
+  }
+}
+
+export function allocationFromRow(r: AllocationRow): Allocation {
+  return {
+    id: r.id,
+    person: r.person,
+    projectId: r.projectId,
+    startDate: fromDate(r.startDate) ?? '',
+    endDate: fromDate(r.endDate) ?? '',
+    percentage: r.percentage,
+    note: r.note,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function commitmentToRow(tenantId: TenantId, c: Commitment): Prisma.CommitmentUncheckedCreateInput {
+  return {
+    tenantId,
+    id: c.id,
+    person: c.person,
+    kind: c.kind,
+    startDate: toDate(c.startDate) ?? new Date(0),
+    endDate: toDate(c.endDate) ?? new Date(0),
+    hoursPerDay: c.hoursPerDay,
+    note: c.note,
+    createdBy: c.createdBy,
+    createdAt: new Date(c.createdAt),
+    deletedAt: c.deletedAt ? new Date(c.deletedAt) : null,
+  }
+}
+
+export function commitmentFromRow(r: CommitmentRow): Commitment {
+  return {
+    id: r.id,
+    person: r.person,
+    kind: r.kind as CommitmentKind,
+    startDate: fromDate(r.startDate) ?? '',
+    endDate: fromDate(r.endDate) ?? '',
+    hoursPerDay: Number(r.hoursPerDay),
+    note: r.note,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
