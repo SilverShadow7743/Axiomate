@@ -30,6 +30,7 @@
 
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
+import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 
 /* ================================================================== *
  * Scope
@@ -423,6 +424,14 @@ export interface OperatingModel {
    * explicitly forbidden from hardcoding it.
    */
   sizeBands: SizeBand[]
+  /**
+   * How work is allowed to move through the status vocabulary.
+   *
+   * Configuration rather than code for the same reason the service levels are: the vocabulary
+   * is fixed because progress is derived from it, but the route through it is a delivery
+   * process, and delivery processes differ between firms.
+   */
+  statusPolicy: StatusPolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -735,6 +744,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     workTypes,
     sla: { ...DEFAULT_SLA },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
+    statusPolicy: defaultStatusPolicy(),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -970,6 +980,16 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // A list, so it is replaced wholesale when present rather than merged key by key — a
     // firm that removed a band means it, and merging would resurrect it.
     sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
+    // Merged one key at a time rather than replaced: a model stored before the graph existed
+    // has no `statusPolicy` at all, and a stored one written before a requirement was added
+    // would otherwise drop it to undefined the first time anything read it.
+    statusPolicy: {
+      ...seed.statusPolicy,
+      ...(stored.statusPolicy ?? {}),
+      transitions: { ...seed.statusPolicy.transitions, ...(stored.statusPolicy?.transitions ?? {}) },
+      requireEvidence: stored.statusPolicy?.requireEvidence ?? seed.statusPolicy.requireEvidence,
+      requireReason: stored.statusPolicy?.requireReason ?? seed.statusPolicy.requireReason,
+    },
     agents: mergeAgents(seed.agents, stored.agents),
     workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
     templates: { ...seed.templates, ...(stored.templates ?? {}) },

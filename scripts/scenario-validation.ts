@@ -232,10 +232,11 @@ scenario(
     const linked = s.relationships.length === 1
     const superseded = ok(s, {
       t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Superseded' }, now: NOW,
+      reason: 'Duplicate of OAPIL-1 — same batch failure, same root cause.',
     } as Action)
     return {
       verdict: linked ? 'PARTIAL' : 'FAIL',
-      actual: `The link and the Superseded status both work, and closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}. Detection is manual: the duplicate-detection agent is a registry record with no runtime.`,
+      actual: `The link and the Superseded status both work, closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.`,
       stops: 'at detection — a person must notice',
       severity: 'P2',
       impact: 'Duplicates are found late, after two people have worked the same fault.',
@@ -490,17 +491,71 @@ scenario(
 scenario(
   'R',
   'An issue is closed with no evidence attached',
-  'Closure is refused or flagged, because the resolution cannot be produced later.',
+  'Closure is refused, because the resolution could not be produced later.',
   () => {
-    const s = act(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW } as Action)
-    const closed = !s.error && isTerminal(s.state.issues['OAPIL-1'].status)
-    const hasEvidence = Object.values(s.state.evidence).some((e) => e.issueId === 'OAPIL-1')
+    // Walk to the door legitimately, so the only thing missing is the evidence.
+    const awaiting = ok(
+      ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'In Progress' }, now: NOW } as Action),
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Awaiting client confirmation' }, now: NOW } as Action,
+    )
+    const bare = act(awaiting, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW,
+    } as Action)
+
+    const withEvidence = ok(awaiting, {
+      t: 'addEvidence', issueId: 'OAPIL-1', kind: 'document', name: 'uat-signoff.pdf',
+      purpose: 'Client confirmation', url: null, mimeType: 'application/pdf', sizeBytes: 22_000, note: '', now: NOW,
+    } as Action)
+    const closed = act(withEvidence, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW,
+    } as Action)
+
+    // Closing without the client's word does not require evidence — it makes no claim about them.
+    const noDefect = act(awaiting, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Closed - no defect' }, now: NOW,
+      reason: 'Configuration was correct; the client was looking at the wrong environment.',
+    } as Action)
+
+    const good = Boolean(bare.error) && !closed.error && !noDefect.error
     return {
-      verdict: closed && !hasEvidence ? 'FAIL' : 'PASS',
-      actual: `Closed with no evidence, no verification note and no comment. actualEnd was set to ${s.state.issues['OAPIL-1'].actualEnd}. The evidence requirement is configuration nobody enforces at the transition.`,
-      stops: 'at the gate — there is no gate',
-      severity: 'P1',
-      impact: 'Closed work cannot be defended to a client who disputes it.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused without evidence: "${bare.error}" Accepted once a sign-off document is attached. Closing as "no defect" needs no evidence but does need a reason, because it makes a claim about the work rather than about the client.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A confirmed closure now has something behind it that can be shown to a client who disputes it.',
+    }
+  },
+)
+
+scenario(
+  'ST6',
+  'Work is closed as “no defect” with no explanation',
+  'The change is refused until somebody says why, and the why survives on the trail.',
+  () => {
+    const started = ok(BASE, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'In Progress' }, now: NOW } as Action)
+    const silent = act(started, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - no defect' }, now: NOW,
+    } as Action)
+    const explained = ok(started, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - no defect' }, now: NOW,
+      reason: 'Behaviour is as designed; raised against an out-of-date specification.',
+    } as Action)
+    const entry = explained.audit.find((e) => e.rowId === 'OAPIL-3' && e.field === 'status')
+    // The reason belongs to the status change, not to every field in the same patch.
+    const withOther = ok(started, {
+      t: 'updateIssue', id: 'OAPIL-3',
+      patch: { status: 'Closed - no defect', nextAction: 'None' }, now: NOW,
+      reason: 'As designed.',
+    } as Action)
+    const otherEntry = withOther.audit.find((e) => e.rowId === 'OAPIL-3' && e.field === 'nextAction')
+
+    const good = Boolean(silent.error) && Boolean(entry?.reason) && !otherEntry?.reason
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused without a reason: "${silent.error}" With one, the change lands and the trail carries it — "${entry?.reason ?? 'none'}". The reason is stamped only on the status entry, so a closure rationale is never attributed to an unrelated field in the same save.`,
+      stops: '—',
+      severity: '—',
+      impact: 'The two closures a client queries later now come with the firm\u2019s own explanation attached.',
     }
   },
 )
@@ -529,14 +584,24 @@ scenario(
   'An issue is verified and closed',
   'Closure is recorded with a date, and it cannot be reopened without a trace.',
   () => {
-    const closed = ok(BASE, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - confirmed' }, now: NOW } as Action)
+    // The route the graph requires: work it, ask the client, attach what they said, close it.
+    const awaiting = ok(
+      ok(BASE, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'In Progress' }, now: NOW } as Action),
+      { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation' }, now: NOW } as Action,
+    )
+    const evidenced = ok(awaiting, {
+      t: 'addEvidence', issueId: 'OAPIL-3', kind: 'link', name: 'Client confirmation email',
+      purpose: 'Client confirmation', url: 'https://example.invalid/mail/1', mimeType: null,
+      sizeBytes: null, note: '', now: NOW,
+    } as Action)
+    const closed = ok(evidenced, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - confirmed' }, now: NOW } as Action)
     const end = closed.issues['OAPIL-3'].actualEnd
     const reopened = ok(closed, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'In Progress' }, now: NOW } as Action)
     const cleared = reopened.issues['OAPIL-3'].actualEnd === null
     const trail = reopened.audit.filter((e) => e.rowId === 'OAPIL-3' && e.field === 'actualEnd').length
     return {
       verdict: end === TODAY && cleared && trail >= 2 ? 'PASS' : 'FAIL',
-      actual: `Closing derived actualEnd = ${end}; reopening cleared it, and both derived writes are in the trail (${trail} entries). The derivation guards on the status having changed, so an unrelated edit cannot overwrite a closure date.`,
+      actual: `Reached along the route the graph requires — In Progress, Awaiting client confirmation, evidence attached, then closed. Closing derived actualEnd = ${end}; reopening cleared it, and both derived writes are in the trail (${trail} entries). The derivation guards on the status having changed, so an unrelated edit cannot overwrite a closure date.`,
       stops: '—',
       severity: '—',
       impact: 'Closure and reopening are both honest about the date.',
@@ -551,16 +616,74 @@ scenario(
 scenario(
   'ST1',
   'An issue jumps straight from Open to Closed, skipping every intermediate state',
-  'The transition is refused, because the configured workflow does not allow it.',
+  'The transition is refused, and the refusal says where the work can actually go from here.',
   () => {
-    const s = act(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW } as Action)
-    const workflows = Object.values(BASE.model.workflows).length
+    const jump = act(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW,
+    } as Action)
+
+    // The legitimate route still works, one step at a time — a graph that only refuses would
+    // be no better than the free-for-all it replaced.
+    const started = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'In Progress' }, now: NOW } as Action)
+    const awaiting = ok(started, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Awaiting client confirmation' }, now: NOW,
+    } as Action)
+    const withEvidence = ok(awaiting, {
+      t: 'addEvidence', issueId: 'OAPIL-1', kind: 'snapshot', name: 'client-signoff.png',
+      purpose: 'Client confirmation', url: null, mimeType: 'image/png', sizeBytes: 4200, note: '', now: NOW,
+    } as Action)
+    const closed = ok(withEvidence, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW,
+    } as Action)
+
+    // The patch is refused whole: a rejected status must not let its siblings through.
+    const mixed = act(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1',
+      patch: { status: 'Closed - confirmed', nextAction: 'Chase the client' }, now: NOW,
+    } as Action)
+    const nothingLeaked = mixed.state.issues['OAPIL-1'].nextAction === BASE.issues['OAPIL-1'].nextAction
+
+    const good = Boolean(jump.error) && closed.issues['OAPIL-1'].status === 'Closed - confirmed' && nothingLeaked
     return {
-      verdict: s.error ? 'PASS' : 'FAIL',
-      actual: `Accepted. ${workflows} workflow definitions are configured with named states, and no code path consults them on a status change — ${absent(/allowedTransitions|canTransition|nextStates/) ? 'no transition check exists anywhere in the source' : 'a transition check exists'}.`,
-      stops: 'at the workflow engine — the definitions are documentation',
-      severity: 'P0',
-      impact: 'Every workflow the firm configures is advisory. Work can reach any state from any state.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused: "${jump.error}" The same move succeeds along the route the graph allows — In Progress, Awaiting client confirmation, then Closed - confirmed with evidence attached. A patch carrying a refused status is rejected whole, so the other fields in it are not quietly saved.`,
+      stops: '—',
+      severity: '—',
+      impact: 'Closure now requires the steps that make it defensible, and the graph is configuration a firm can change.',
+    }
+  },
+)
+
+scenario(
+  'ST5',
+  'A firm turns transition enforcement off',
+  'Every move is allowed again, and the change is recorded as the decision it is.',
+  () => {
+    const relaxed = ok(BASE, {
+      t: 'config', op: { k: 'setStatusPolicy', patch: { enforced: false } }, now: NOW,
+    } as Action)
+    const jump = act(relaxed, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - confirmed' }, now: NOW,
+    } as Action)
+    const logged = relaxed.audit.some((e) => e.field === 'statusPolicy')
+
+    // A graph that traps work is refused rather than stored.
+    const trap = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'setStatusPolicy',
+        patch: { transitions: { 'In Progress': [] } as unknown as Record<string, string[]> },
+      },
+      now: NOW,
+    } as Action)
+
+    const good = !jump.error && logged && Boolean(trap.error)
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `With enforcement off the direct close is accepted again, and the switch is audited with before and after. A table that would trap work is refused rather than saved: "${trap.error}"`,
+      stops: '—',
+      severity: '—',
+      impact: 'The control is the firm\u2019s to relax, and relaxing it is a recorded decision rather than a silent default.',
     }
   },
 )
@@ -710,7 +833,10 @@ scenario(
   () => {
     const s = ok(
       ok(BASE, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action),
-      { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - confirmed' }, now: NOW } as Action,
+      {
+        t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - no defect' }, now: NOW,
+        reason: 'Environment issue at the client end; no change required.',
+      } as Action,
     )
     const rows = rowsOf(s)
     const ims = buildDailyIms(s, rows, TODAY, 'OAPIL')

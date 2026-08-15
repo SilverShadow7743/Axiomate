@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { canEditIssue } from '@/lib/permissions'
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow, type Severity } from '@/lib/types'
+import { allowedNext } from '@/lib/statusPolicy'
 import { liveWorkTypes } from '@/lib/config'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
@@ -73,7 +74,11 @@ export default function OverviewTab({
   actor: Actor
   customResponsibilities: { id: string; label: string; requiredHere: boolean; values: string[] }[]
   onSetAssignment: (responsibilityId: string, values: string[]) => void
-  onSave: (patch: Partial<IssueRecord>, dates: { start: string; end: string } | null) => boolean
+  onSave: (
+    patch: Partial<IssueRecord>,
+    dates: { start: string; end: string } | null,
+    reason?: string,
+  ) => boolean
   onDirtyChange: (dirty: boolean) => void
   editing: boolean
   setEditing: (v: boolean) => void
@@ -84,6 +89,25 @@ export default function OverviewTab({
   const workTypes = useMemo(() => liveWorkTypes(state.model).map((t) => t.label), [state.model])
 
   const [draft, setDraft] = useState<IssueDraft>(() => (record ? draftOf(record) : draftOf(issue as IssueRecord)))
+  /** Held outside the draft: it explains a change rather than being part of the record. */
+  const [reason, setReason] = useState('')
+
+  const policy = state.model.statusPolicy
+  const current = record?.status ?? issue.status
+  const routes = useMemo(() => allowedNext(policy, current), [policy, current])
+  /** What the graph rules out from here — shown, so the absence is explained rather than odd. */
+  const blocked = useMemo(
+    () => ISSUE_STATUSES.filter((s) => !routes.includes(s)),
+    [routes],
+  )
+  const movingTo = draft.status !== current ? draft.status : null
+  const needsReason = Boolean(movingTo && policy.enforced && policy.requireReason.includes(movingTo))
+  const needsEvidence = Boolean(
+    movingTo &&
+      policy.enforced &&
+      policy.requireEvidence.includes(movingTo) &&
+      !Object.values(state.evidence).some((e) => e.issueId === issue.id && !e.deletedAt),
+  )
 
   // Re-seed when the underlying record changes identity or is saved from elsewhere. Keyed on
   // the id so switching issues never carries one record's draft onto another.
@@ -106,6 +130,7 @@ export default function OverviewTab({
 
   const cancel = () => {
     if (record) setDraft(draftOf(record))
+    setReason('')
     setEditing(false)
   }
 
@@ -125,7 +150,10 @@ export default function OverviewTab({
       datesChanged && draft.plannedStart && draft.plannedEnd
         ? { start: draft.plannedStart, end: draft.plannedEnd }
         : null
-    if (onSave(patch, dates)) setEditing(false)
+    if (onSave(patch, dates, reason.trim() || undefined)) {
+      setReason('')
+      setEditing(false)
+    }
   }
 
   /* ---------------- view ---------------- */
@@ -291,11 +319,38 @@ export default function OverviewTab({
               onChange={(e) => set('status', e.target.value as IssueStatus)}
               aria-label={labels.FIELD_STATUS}
             >
-              {ISSUE_STATUSES.map((s) => (
+              {routes.map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </select>
+            {policy.enforced && blocked.length > 0 && (
+              <p className="prov ov-routes">
+                Not reachable from “{current}”: {blocked.join(', ')}.
+              </p>
+            )}
+            {needsEvidence && (
+              <p className="ov-gate">
+                “{movingTo}” needs at least one piece of evidence on the record first — that is
+                what makes the closure producible later. Add it on the Evidence tab.
+              </p>
+            )}
           </dd>
+          {needsReason && (
+            <>
+              <dt>Reason</dt>
+              <dd>
+                <input
+                  value={reason}
+                  onChange={(ev) => setReason(ev.target.value)}
+                  aria-label="Reason for this status change"
+                  placeholder={`Why is this “${movingTo}”?`}
+                />
+                <p className="prov">
+                  Kept on the audit entry. This is the outcome people ask about months later.
+                </p>
+              </dd>
+            </>
+          )}
         </dl>
 
         <dl className="kv">

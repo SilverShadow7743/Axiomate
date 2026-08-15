@@ -1482,6 +1482,7 @@ export default function IssueWorkspace({
             criticalIds={criticalIds}
             onCellCommit={commitCell}
             ownerOptions={facets.owners}
+          statusPolicy={state.model.statusPolicy}
           />
         </div>
 
@@ -1578,10 +1579,10 @@ export default function IssueWorkspace({
            * scheduling validation and a reason — but a user pressing Save once expects one
            * outcome, so they are folded through a single batch that either lands or does not.
            */
-          onSaveIssue={(id, patch, dates) => {
+          onSaveIssue={(id, patch, dates, reason) => {
             const now = new Date().toISOString()
             const actions: Action[] = []
-            if (Object.keys(patch).length) actions.push({ t: 'updateIssue', id, patch, now })
+            if (Object.keys(patch).length) actions.push({ t: 'updateIssue', id, patch, now, reason })
             if (dates) actions.push({ t: 'setDates', id, start: dates.start, end: dates.end, now })
             if (!actions.length) return true
             const res = dispatchMany(actions)
@@ -1610,6 +1611,7 @@ export default function IssueWorkspace({
           targetId={issueForm.targetId}
           state={state}
           ownerOptions={facets.owners}
+          statusPolicy={state.model.statusPolicy}
           onClose={() => setDialog(null)}
           onSubmit={submitDialog}
           onManageEvidence={setEvidenceFor}

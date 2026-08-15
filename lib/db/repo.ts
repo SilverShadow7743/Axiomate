@@ -172,6 +172,13 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
     sla: { ...seed.sla, ...(stored.sla ?? {}) },
     sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
+    statusPolicy: {
+      ...seed.statusPolicy,
+      ...(stored.statusPolicy ?? {}),
+      transitions: { ...seed.statusPolicy.transitions, ...(stored.statusPolicy?.transitions ?? {}) },
+      requireEvidence: stored.statusPolicy?.requireEvidence ?? seed.statusPolicy.requireEvidence,
+      requireReason: stored.statusPolicy?.requireReason ?? seed.statusPolicy.requireReason,
+    },
     // `runtime` and `maxAutonomy` always come from the seed: they describe what this build
     // implements, and a stored record must never claim a capability the code does not have.
     agents: Object.fromEntries(

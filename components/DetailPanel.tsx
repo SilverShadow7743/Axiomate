@@ -89,7 +89,13 @@ interface Props {
   /** Who is acting — for attribution on notes and for the permission checks. */
   actor: Actor
   /** Commit an Overview edit. Returns false if the reducer refused it. */
-  onSaveIssue: (id: string, patch: Partial<IssueRecord>, dates: { start: string; end: string } | null) => boolean
+  onSaveIssue: (
+    id: string,
+    patch: Partial<IssueRecord>,
+    dates: { start: string; end: string } | null,
+    /** Why, when the transition graph demands one. */
+    reason?: string,
+  ) => boolean
   onAddNote: (issueId: string, body: string, noteType: NoteType, pinned: boolean) => void
   onUpdateNote: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
   onDeleteNote: (id: string) => void
@@ -294,7 +300,7 @@ export default function DetailPanel({
             actor={actor}
             customResponsibilities={customResponsibilities}
             onSetAssignment={(rid, values) => onSetAssignment(issue.id, rid, values)}
-            onSave={(patch, dates) => onSaveIssue(issue.id, patch, dates)}
+            onSave={(patch, dates, reason) => onSaveIssue(issue.id, patch, dates, reason)}
             onDirtyChange={onDirtyChange}
             editing={editing}
             setEditing={setEditing}

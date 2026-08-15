@@ -24,7 +24,7 @@ import {
   type ValueKind,
 } from '@/lib/config'
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
-import { NODE_KINDS, type NodeKind } from '@/lib/types'
+import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import { isTerminal } from '@/lib/schedule'
 import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
@@ -58,6 +58,7 @@ type Tab =
   | 'routing'
   | 'workTypes'
   | 'serviceLevels'
+  | 'transitions'
   | 'sizing'
   | 'scopes'
 
@@ -67,6 +68,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
+  { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -186,6 +188,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
+          {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -778,6 +781,16 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       now: `${m.sizeBands.length} sizes · ${m.sizeBands[0]?.effortHours ?? '—'}–${m.sizeBands[m.sizeBands.length - 1]?.effortHours ?? '—'} h`,
     },
     {
+      id: 'transitions',
+      title: 'Status transitions',
+      what: 'How work is allowed to move, and what a closure has to carry.',
+      now: (() => {
+        const p = m.statusPolicy
+        const routes = Object.values(p.transitions).reduce((n, t) => n + t.length, 0)
+        return p.enforced ? `Enforced · ${routes} routes` : 'Advisory — not applied'
+      })(),
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -937,6 +950,168 @@ function Sizing({
         Bands must cover 5 to 25 without gaps or overlaps: a score with no size leaves an
         estimate with nothing to show, and a score in two bands makes the answer depend on
         which row happens to come first. A change that would break either is refused.
+      </p>
+    </section>
+  )
+}
+
+
+/* ================================================================== *
+ * Status transitions
+ * ================================================================== */
+
+function Transitions({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const policy = state.model.statusPolicy
+  const labels = useLabels()
+
+  /** How many live records sit in each status — a route out of a busy one matters more. */
+  const population = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const i of Object.values(state.issues)) {
+      if (i.deletedAt) continue
+      n[i.status] = (n[i.status] ?? 0) + 1
+    }
+    return n
+  }, [state.issues])
+
+  const toggle = (from: IssueStatus, to: IssueStatus) => {
+    const current = policy.transitions[from] ?? []
+    const next = current.includes(to) ? current.filter((s) => s !== to) : [...current, to]
+    onConfig({ k: 'setStatusPolicy', patch: { transitions: { [from]: next } as Record<IssueStatus, IssueStatus[]> } })
+  }
+
+  const toggleList = (key: 'requireEvidence' | 'requireReason', status: IssueStatus) => {
+    const current = policy[key]
+    const next = current.includes(status)
+      ? current.filter((s) => s !== status)
+      : [...current, status]
+    onConfig({ k: 'setStatusPolicy', patch: { [key]: next } })
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Status transitions</h3>
+      <p className="cfg-note">
+        Which moves are allowed, and what a move has to carry. The {labels.FIELD_STATUS.toLowerCase()}{' '}
+        vocabulary itself is fixed — progress is derived from it, so a status nobody had mapped
+        would produce records with no percentage — but the route through it is a delivery
+        process, and delivery processes differ between firms.
+      </p>
+      <p className="cfg-note">
+        The graph governs <em>changes</em>, not history. Records imported from a client&rsquo;s log
+        sit wherever that log left them, and none of them are made read-only by a rule written
+        afterwards.
+      </p>
+
+      <div className="cfg-card">
+        <label className="cfg-check">
+          <input
+            type="checkbox"
+            checked={policy.enforced}
+            onChange={(e) => onConfig({ k: 'setStatusPolicy', patch: { enforced: e.target.checked } })}
+          />
+          <span>
+            <b>Apply this graph.</b> Turn it off and every move is allowed again. Worth saying
+            plainly: an unenforced table describes a process and changes nothing, which is how
+            this screen looked before the graph was applied at all.
+          </span>
+        </label>
+      </div>
+
+      <div className="tablewrap">
+        <table className="cfg-table trans-table">
+          <thead>
+            <tr>
+              <th>From ↓ &nbsp; To →</th>
+              {ISSUE_STATUSES.map((s) => (
+                <th key={s} className="trans-col">
+                  {s}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ISSUE_STATUSES.map((from) => (
+              <tr key={from}>
+                <td className="cfg-key">
+                  {from}
+                  <span className="cfg-inherit"> · {population[from] ?? 0} live</span>
+                </td>
+                {ISSUE_STATUSES.map((to) => {
+                  const same = from === to
+                  const on = (policy.transitions[from] ?? []).includes(to)
+                  return (
+                    <td key={to} className={`trans-cell${same ? ' trans-self' : ''}`}>
+                      {same ? (
+                        <span aria-hidden="true">·</span>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          aria-label={`Allow ${from} to ${to}`}
+                          onChange={() => toggle(from, to)}
+                        />
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="cfg-inherit">
+        A change that would leave any status unable to reach a closure is refused: work would
+        enter it and never leave, and whoever edited the table would find out weeks later from
+        somebody who could not close a record.
+      </p>
+
+      <h4 className="cfg-sub">What a move has to carry</h4>
+      <div className="cfg-card">
+        <table className="cfg-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Needs evidence</th>
+              <th>Needs a reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ISSUE_STATUSES.map((s) => (
+              <tr key={s}>
+                <td className="cfg-key">{s}</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={policy.requireEvidence.includes(s)}
+                    aria-label={`${s} requires evidence`}
+                    onChange={() => toggleList('requireEvidence', s)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={policy.requireReason.includes(s)}
+                    aria-label={`${s} requires a reason`}
+                    onChange={() => toggleList('requireReason', s)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="cfg-inherit">
+        Evidence is checked against the record at the moment of the move — a closure that
+        claims the client confirmed it should have something behind it. A reason is kept on the
+        audit entry rather than on the record, because it explains a change rather than
+        describing the work.
       </p>
     </section>
   )

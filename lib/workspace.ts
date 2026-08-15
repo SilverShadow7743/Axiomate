@@ -42,6 +42,11 @@ export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import {
+  checkTransition,
+  policyProblems,
+  type StatusPolicy,
+} from './statusPolicy'
+import {
   bandProblems,
   emptyEstimate,
   summarise,
@@ -435,7 +440,7 @@ export type Action =
   /* ---- CRUD ---- */
   | { t: 'create'; parentId: string; kind: CreatableKind; draft: Record<string, string>; now: string }
   | { t: 'updateNode'; id: string; patch: Partial<HierarchyNode>; now: string }
-  | { t: 'updateIssue'; id: string; patch: Partial<IssueRecord>; now: string }
+  | { t: 'updateIssue'; id: string; patch: Partial<IssueRecord>; now: string; reason?: string }
   | { t: 'updateActivity'; id: string; patch: Partial<ActivityRec>; now: string }
   | { t: 'softDelete'; id: string; mode: 'cascade' | 'reparent'; now: string }
   | { t: 'restore'; id: string; now: string }
@@ -497,6 +502,7 @@ export type ConfigOp =
   | { k: 'deleteWorkType'; id: string }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setSizeBands'; bands: SizeBand[] }
+  | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -851,6 +857,24 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'updateIssue': {
       const i = state.issues[a.id]
       if (!i) return { state, error: 'Issue not found.' }
+
+      /**
+       * A status change is a transition, and the graph decides whether it is allowed.
+       *
+       * Checked before anything else in the arm, so a refused move leaves the record exactly
+       * as it was — including the other fields in the same patch. Saving the rest and dropping
+       * the status would be the worst outcome: the form would report success while quietly
+       * discarding the change the person actually came to make.
+       */
+      if (a.patch.status != null && a.patch.status !== i.status) {
+        const problem = checkTransition(state.model.statusPolicy, i.status, a.patch.status, {
+          hasEvidence: Object.values(state.evidence).some(
+            (e) => e.issueId === a.id && !e.deletedAt,
+          ),
+          reason: a.reason,
+        })
+        if (problem) return { state, error: problem.message }
+      }
       const changed = Object.entries(a.patch).filter(
         ([k, v]) => (i as unknown as Record<string, unknown>)[k] !== v,
       )
@@ -866,6 +890,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             to: String(v ?? ''),
             at: a.now,
             by,
+            // Only on the field the reason was given about. Stamping it on every field in the
+            // patch would attribute a closure rationale to an unrelated typo fix.
+            reason: k === 'status' ? a.reason?.trim() || undefined : undefined,
           },
         )
       }
@@ -2067,6 +2094,28 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sizeBands: op.bands },
         { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
         'T-shirt sizing updated.',
+      )
+    }
+
+    case 'setStatusPolicy': {
+      const next: StatusPolicy = {
+        ...m.statusPolicy,
+        ...op.patch,
+        transitions: { ...m.statusPolicy.transitions, ...(op.patch.transitions ?? {}) },
+      }
+      // Refused rather than warned about, like the size bands: a graph with no route to a
+      // closing status produces work that can never be finished, and the person who edited it
+      // finds out weeks later from somebody who cannot close an issue.
+      const problems = policyProblems(next)
+      if (problems.length) return { state, error: problems[0] }
+
+      const was = m.statusPolicy
+      const describe = (p: StatusPolicy) =>
+        `${p.enforced ? 'enforced' : 'advisory'}, ${Object.values(p.transitions).reduce((n, t) => n + t.length, 0)} routes`
+      return done(
+        { ...m, statusPolicy: next },
+        { rowId: 'STATUS_POLICY', field: 'statusPolicy', from: describe(was), to: describe(next), at: now, by },
+        next.enforced ? 'Status transitions updated.' : 'Status transitions are now advisory.',
       )
     }
 

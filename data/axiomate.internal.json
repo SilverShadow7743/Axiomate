@@ -1773,6 +1773,32 @@
       "subject": "The validation report is generated from the run, not written alongside it",
       "description": "A report typed by hand can disagree with the run it describes, and the disagreement is invisible — the reader has no way to tell which is stale. `npm run validate:report` renders the page from `data/validation.json`, so every count, verdict, failure point and quoted measurement comes out of the run and only the surrounding prose is written. This is the same rule that keeps derived values out of the schema: the T-shirt size is recomputed from the score and the calibration rather than stored, because storing it freezes an answer against inputs that have moved on. A generated page also makes the harness worth extending — adding a scenario updates the report with no second edit, which is what makes it plausible that scenarios keep being added rather than the file rotting after the first pass. The rendered HTML is gitignored: it is output, and committing it would create a second copy free to drift from the first.",
       "reference": "scripts/build-validation-report.mjs, data/validation.json"
+    },
+    {
+      "id": "AXM-069",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Work Management",
+      "type": "Defect",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "An issue could move from any status to any other in one step",
+      "description": "Open to Closed - confirmed, with no investigation, no client involvement, no evidence and no comment, was one click in the grid and the workspace accepted it silently. The product looked as though it had a lifecycle because it had one in two other senses — a plan of activities and a pipeline of agents — and neither governs the status field, so nothing did. The first validation run recorded this as workflow definitions that no code path consults; that was wrong in an interesting way, because those definitions are agent pipelines and were never a state machine. There was no transition model at all. There is now: a graph over the fixed status vocabulary, held in the operating model rather than in code, because the vocabulary is fixed (progress is derived from it) while the route through it is a delivery process that differs between firms. The rule worth arguing about is that Closed - confirmed is reachable only from Awaiting client confirmation: it is the only status whose name asserts something about the client, and reaching it directly means a consultant confirmed on the client’s behalf. Two requirements ride on the same object — a confirmed closure needs evidence on the record, and the two \"we are not doing this\" outcomes need a reason, which lands on the audit entry for the status field alone rather than on every field in the same save. Enforcement is itself configuration and defaults to on, because an unenforced default would reproduce the exact defect: configuration that describes a process and changes nothing. The graph governs changes, not history, so 600 imported records sitting in combinations it would never produce are not made read-only by a rule written afterwards. Every control that offers a status now offers only the reachable ones and says what is missing, because offering a value the reducer will refuse is worse than not offering it.",
+      "reference": "lib/statusPolicy.ts, lib/workspace.ts updateIssue, ConfigWorkspace Transitions"
     }
   ]
 }

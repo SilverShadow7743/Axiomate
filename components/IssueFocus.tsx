@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { allowedNext, type StatusPolicy } from '@/lib/statusPolicy'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
-import type { IssueStatus, Severity } from '@/lib/types'
+import { ISSUE_STATUSES, type IssueStatus, type Severity } from '@/lib/types'
 import { STATUS_PROGRESS } from '@/lib/schedule'
 import { daysBetween, formatIso } from '@/lib/dates'
 import { nameOf, type WorkspaceState } from '@/lib/workspace'
@@ -45,6 +46,14 @@ export interface IssueFocusProps {
   targetId: string
   state: WorkspaceState
   ownerOptions: string[]
+  /**
+   * The transition graph. Applied in edit mode only.
+   *
+   * Creating a record is not a transition: a firm entering last quarter's log needs to file
+   * something that is already closed, and refusing that would make the import path narrower
+   * than the reality it is importing.
+   */
+  statusPolicy: StatusPolicy
   onClose: () => void
   onSubmit: (payload: Record<string, string>) => void
   /** Opens the evidence manager; kept out of this form so it stays a form. */
@@ -56,12 +65,21 @@ export default function IssueFocus({
   targetId,
   state,
   ownerOptions,
+  statusPolicy,
   onClose,
   onSubmit,
   onManageEvidence,
 }: IssueFocusProps) {
   const labels = useLabels()
   const issue = mode === 'edit' ? state.issues[targetId] : null
+  /**
+   * Where the work can go from where it is.
+   *
+   * In add mode this is the whole vocabulary — see `statusPolicy` on the props. In edit mode
+   * it is the graph, so the form cannot offer a move the reducer will refuse.
+   */
+  const reachable: string[] =
+    mode === 'edit' ? allowedNext(statusPolicy, issue?.status ?? null) : [...ISSUE_STATUSES]
   const parentName = mode === 'add' ? nameOf(state, targetId) : null
 
   const activityCount = useMemo(
@@ -337,12 +355,12 @@ export default function IssueFocus({
                     onChange={(e) => set('status', e.target.value)}
                   >
                     <optgroup label="Active">
-                      {ACTIVE_STATUSES.map((s) => (
+                      {ACTIVE_STATUSES.filter((s) => reachable.includes(s)).map((s) => (
                         <option key={s}>{s}</option>
                       ))}
                     </optgroup>
                     <optgroup label="Closing">
-                      {CLOSING_STATUSES.map((s) => (
+                      {CLOSING_STATUSES.filter((s) => reachable.includes(s)).map((s) => (
                         <option key={s}>{s}</option>
                       ))}
                     </optgroup>

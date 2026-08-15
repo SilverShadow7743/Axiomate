@@ -1,5 +1,6 @@
 import type { ScheduleRow } from './types'
 import { ISSUE_STATUSES, isGroupRow } from './types'
+import { allowedNext, type StatusPolicy } from './statusPolicy'
 
 /**
  * Which grid cells can be edited in place, and with what control.
@@ -34,6 +35,15 @@ export function editorFor(
   row: ScheduleRow,
   colKey: string,
   owners: readonly string[] = [],
+  /**
+   * The transition graph, when the caller has one.
+   *
+   * Optional so the two call sites that only ask *whether* a cell is editable do not have to
+   * carry it. When it is absent the status editor offers the whole vocabulary — which is what
+   * this function did for every caller until the graph existed, and is still correct for a
+   * question about editability rather than about values.
+   */
+  policy?: StatusPolicy,
 ): EditorSpec | null {
   if (READ_ONLY.has(colKey)) return null
 
@@ -58,7 +68,16 @@ export function editorFor(
 
     case 'status':
       // Status belongs to an issue. Activities carry progress, not a lifecycle status.
-      return isIssue ? { kind: 'select', value: row.status ?? 'Open', options: ISSUE_STATUSES } : null
+      // Offering a status the reducer will refuse is worse than not offering it: the person
+      // picks it, the grid appears to accept it, and the refusal arrives afterwards as an
+      // error about something they have already stopped thinking about.
+      return isIssue
+        ? {
+            kind: 'select',
+            value: row.status ?? 'Open',
+            options: policy ? allowedNext(policy, row.status) : ISSUE_STATUSES,
+          }
+        : null
 
     case 'severity':
       return isIssue ? { kind: 'select', value: row.severity ?? 'Medium', options: SEVERITIES } : null

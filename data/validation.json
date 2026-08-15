@@ -46,7 +46,7 @@
       "title": "The same defect is reported twice",
       "expected": "The duplicate is detected, linked to the original, and does not become a second stream of work.",
       "verdict": "PARTIAL",
-      "actual": "The link and the Superseded status both work, and closing sets actualEnd to 2026-08-15. Detection is manual: the duplicate-detection agent is a registry record with no runtime.",
+      "actual": "The link and the Superseded status both work, closing sets actualEnd to 2026-08-15, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.",
       "stops": "at detection — a person must notice",
       "severity": "P2",
       "impact": "Duplicates are found late, after two people have worked the same fault."
@@ -174,12 +174,22 @@
     {
       "id": "R",
       "title": "An issue is closed with no evidence attached",
-      "expected": "Closure is refused or flagged, because the resolution cannot be produced later.",
-      "verdict": "FAIL",
-      "actual": "Closed with no evidence, no verification note and no comment. actualEnd was set to 2026-08-15. The evidence requirement is configuration nobody enforces at the transition.",
-      "stops": "at the gate — there is no gate",
-      "severity": "P1",
-      "impact": "Closed work cannot be defended to a client who disputes it."
+      "expected": "Closure is refused, because the resolution could not be produced later.",
+      "verdict": "PASS",
+      "actual": "Refused without evidence: \"“Closed - confirmed” needs at least one piece of evidence on the record — that is what makes the closure producible later.\" Accepted once a sign-off document is attached. Closing as \"no defect\" needs no evidence but does need a reason, because it makes a claim about the work rather than about the client.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A confirmed closure now has something behind it that can be shown to a client who disputes it."
+    },
+    {
+      "id": "ST6",
+      "title": "Work is closed as “no defect” with no explanation",
+      "expected": "The change is refused until somebody says why, and the why survives on the trail.",
+      "verdict": "PASS",
+      "actual": "Refused without a reason: \"“Closed - no defect” needs a reason. This is the outcome people ask about months later.\" With one, the change lands and the trail carries it — \"Behaviour is as designed; raised against an out-of-date specification.\". The reason is stamped only on the status entry, so a closure rationale is never attributed to an unrelated field in the same save.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The two closures a client queries later now come with the firm’s own explanation attached."
     },
     {
       "id": "S",
@@ -196,7 +206,7 @@
       "title": "An issue is verified and closed",
       "expected": "Closure is recorded with a date, and it cannot be reopened without a trace.",
       "verdict": "PASS",
-      "actual": "Closing derived actualEnd = 2026-08-15; reopening cleared it, and both derived writes are in the trail (2 entries). The derivation guards on the status having changed, so an unrelated edit cannot overwrite a closure date.",
+      "actual": "Reached along the route the graph requires — In Progress, Awaiting client confirmation, evidence attached, then closed. Closing derived actualEnd = 2026-08-15; reopening cleared it, and both derived writes are in the trail (2 entries). The derivation guards on the status having changed, so an unrelated edit cannot overwrite a closure date.",
       "stops": "—",
       "severity": "—",
       "impact": "Closure and reopening are both honest about the date."
@@ -204,12 +214,22 @@
     {
       "id": "ST1",
       "title": "An issue jumps straight from Open to Closed, skipping every intermediate state",
-      "expected": "The transition is refused, because the configured workflow does not allow it.",
-      "verdict": "FAIL",
-      "actual": "Accepted. 2 workflow definitions are configured with named states, and no code path consults them on a status change — no transition check exists anywhere in the source.",
-      "stops": "at the workflow engine — the definitions are documentation",
-      "severity": "P0",
-      "impact": "Every workflow the firm configures is advisory. Work can reach any state from any state."
+      "expected": "The transition is refused, and the refusal says where the work can actually go from here.",
+      "verdict": "PASS",
+      "actual": "Refused: \"“Open” cannot move straight to “Closed - confirmed”. From here the work can go to: In Progress, Needs clarification, Closed - no defect, Superseded.\" The same move succeeds along the route the graph allows — In Progress, Awaiting client confirmation, then Closed - confirmed with evidence attached. A patch carrying a refused status is rejected whole, so the other fields in it are not quietly saved.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Closure now requires the steps that make it defensible, and the graph is configuration a firm can change."
+    },
+    {
+      "id": "ST5",
+      "title": "A firm turns transition enforcement off",
+      "expected": "Every move is allowed again, and the change is recorded as the decision it is.",
+      "verdict": "PASS",
+      "actual": "With enforcement off the direct close is accepted again, and the switch is audited with before and after. A table that would trap work is refused rather than saved: \"Work in “In Progress” could never be closed — no route from it reaches a closing status.\"",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The control is the firm’s to relax, and relaxing it is a recorded decision rather than a silent default."
     },
     {
       "id": "ST2",

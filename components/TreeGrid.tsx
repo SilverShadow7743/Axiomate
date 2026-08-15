@@ -7,6 +7,7 @@ import type { ColumnDef } from '@/lib/columns'
 import { formatIso } from '@/lib/dates'
 import { ROW_H } from '@/lib/layout'
 import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
+import type { StatusPolicy } from '@/lib/statusPolicy'
 
 interface Props {
   rows: ScheduleRow[]
@@ -31,6 +32,7 @@ interface Props {
   onCellCommit: (rowId: string, colKey: string, value: string) => boolean
   /** Known owner names, offered as suggestions when editing an owner cell. */
   ownerOptions: string[]
+  statusPolicy: StatusPolicy
 }
 
 export default function TreeGrid({
@@ -54,6 +56,7 @@ export default function TreeGrid({
   criticalIds,
   onCellCommit,
   ownerOptions,
+  statusPolicy,
 }: Props) {
   const widthOf = useCallback((c: ColumnDef) => colWidths[c.key] ?? c.width, [colWidths])
 
@@ -103,11 +106,11 @@ export default function TreeGrid({
 
   const beginEdit = useCallback(
     (row: ScheduleRow, colKey: string) => {
-      if (!editorFor(row, colKey, ownerOptions)) return
+      if (!editorFor(row, colKey, ownerOptions, statusPolicy)) return
       setEditing({ rowId: row.id, colKey })
       ensureColumnVisible(colKey)
     },
-    [ownerOptions, ensureColumnVisible],
+    [ownerOptions, statusPolicy, ensureColumnVisible],
   )
 
   /**
@@ -372,7 +375,7 @@ export default function TreeGrid({
               >
                 {columns.map((c, i) => {
                   const frozen = i < frozenCount
-                  const spec = editorFor(r, c.key, ownerOptions)
+                  const spec = editorFor(r, c.key, ownerOptions, statusPolicy)
                   const isEditing = editing?.rowId === r.id && editing.colKey === c.key
                   return (
                     <div
