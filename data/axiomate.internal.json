@@ -1227,6 +1227,32 @@
       "source": "Axiomate build log",
       "reference": "lib/config.ts mergeModel, lib/autosave.ts loadWorkspaceLocally",
       "clientImpact": ""
+    },
+    {
+      "id": "AXM-048",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Configuration",
+      "subject": "The forms hardcoded the vocabularies the configuration screen edits",
+      "description": "Five literal lists sat in the two surfaces where records are actually classified: two work-type lists and three accountable-party lists, in the create dialog and the full issue editor. None read the operating model. So the accountable-party vocabulary was fully configurable — add and remove, with an editor and an audit trail — and adding one never made it selectable anywhere. The whole premise of the configuration plane, contradicted in the app’s own forms. The work-type list was also wrong on its own terms: it named nine of the ten types the workspace uses. Limitation was missing, so eleven existing records carried a type no form could produce, and no user could ever file another one. All five now read the model. Verified end to end: a type added in the configuration screen appears in the create form with no code change, which is the property the registry existed to provide and did not yet have.",
+      "type": "Defect",
+      "severity": "Medium",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Axiomate build",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "reference": "components/Dialogs.tsx, components/IssueFocus.tsx, lib/workspace.ts create",
+      "clientImpact": ""
     }
   ]
 }

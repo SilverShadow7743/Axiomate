@@ -661,7 +661,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           module: mod || 'Unclassified',
           subject: name,
           description: a.draft.description || '',
-          type: a.draft.type || 'Defect',
+          // Falls back to the first configured type rather than a literal. `'Defect'` was
+          // hardcoded here, so a workspace that had archived Defect — or never had one —
+          // would still mint records classified as it, and no filter would show them.
+          type: a.draft.type || liveWorkTypes(state.model)[0]?.label || '',
           severity: (a.draft.severity as Severity) || 'Medium',
           status,
           owner: a.draft.owner || 'Unassigned',

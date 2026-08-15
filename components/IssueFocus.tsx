@@ -7,6 +7,7 @@ import type { IssueStatus, Severity } from '@/lib/types'
 import { STATUS_PROGRESS } from '@/lib/schedule'
 import { daysBetween, formatIso } from '@/lib/dates'
 import { nameOf, type WorkspaceState } from '@/lib/workspace'
+import { liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
 import {
   KIND_ICON,
@@ -31,18 +32,6 @@ import {
  */
 
 const SEVERITIES: Severity[] = ['High', 'Medium', 'Low']
-const ACCOUNTABLES = ['Unassigned', 'Axiocloud', 'OAPIL', 'SLG', 'Shared']
-const TYPES = [
-  'Defect',
-  'Change Request',
-  'Query',
-  'Data Issue',
-  'Escalation',
-  'Access Request',
-  'Environment/Build',
-  'Estimate Request',
-  'Status Chase',
-]
 const ACTIVE_STATUSES: IssueStatus[] = [
   'Open',
   'In Progress',
@@ -123,7 +112,9 @@ export default function IssueFocus({
             description: '',
             status: 'Open',
             severity: 'Medium',
-            type: 'Defect',
+            // Blank rather than a hardcoded 'Defect': the select resolves it to the first
+            // configured type, so a workspace with a different registry gets its own default.
+            type: '',
             owner: '',
             accountable: 'Unassigned',
             nextAction: '',
@@ -136,6 +127,11 @@ export default function IssueFocus({
 
   const [f, setF] = useState<Record<string, string>>(initial)
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
+  // The configured vocabularies, not copies of them. Both used to be module constants here,
+  // which meant adding a work type or an accountable party in configuration changed every
+  // filter and column and left this form — where records are actually classified — behind.
+  const workTypes = liveWorkTypes(state.model).map((t) => t.label)
+  const parties = state.model.parties
 
   const [manualProgress, setManualProgress] = useState(initial.percent !== '')
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -309,8 +305,8 @@ export default function IssueFocus({
                   </label>
                   <label className="fld">
                     <span className="fld-label">Type</span>
-                    <select value={f.type} onChange={(e) => set('type', e.target.value)}>
-                      {TYPES.map((t) => (
+                    <select value={f.type || workTypes[0] || ''} onChange={(e) => set('type', e.target.value)}>
+                      {workTypes.map((t) => (
                         <option key={t}>{t}</option>
                       ))}
                     </select>
@@ -449,7 +445,7 @@ export default function IssueFocus({
               <label className="fld">
                 <span className="fld-label">Accountable party</span>
                 <select value={f.accountable} onChange={(e) => set('accountable', e.target.value)}>
-                  {ACCOUNTABLES.map((a) => (
+                  {parties.map((a) => (
                     <option key={a}>{a}</option>
                   ))}
                 </select>

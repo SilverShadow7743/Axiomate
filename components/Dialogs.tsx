@@ -15,7 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
-import { kindLabel } from '@/lib/config'
+import { kindLabel, liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
 
 export type DialogState =
@@ -169,6 +169,10 @@ function AddForm({
   // A tier below the client — derived from the tier list rather than named, so a new tier
   // gets the structural form instead of silently falling into the client branch.
   const isStructural = isNodeKind(dialog.kind) && dialog.kind !== 'client'
+  // Read from the operating model, so a type or party added in configuration is selectable
+  // here without a code change — which is the entire premise of the configuration plane.
+  const workTypes = liveWorkTypes(state.model).map((t) => t.label)
+  const parties = state.model.parties
 
   return (
     <form
@@ -216,12 +220,13 @@ function AddForm({
           </div>
           <div className="fld-row">
             <Field label="Type">
-              <select value={f.type ?? 'Defect'} onChange={(e) => set('type', e.target.value)}>
-                {['Defect', 'Change Request', 'Query', 'Data Issue', 'Escalation', 'Access Request', 'Environment/Build', 'Estimate Request', 'Status Chase'].map(
-                  (t) => (
-                    <option key={t}>{t}</option>
-                  ),
-                )}
+              {/* The configured registry, not a copy of it. The literal that used to be here
+                  listed nine of the ten types this workspace actually uses — Limitation was
+                  missing, so eleven existing records carried a type no form could produce. */}
+              <select value={f.type ?? workTypes[0] ?? ''} onChange={(e) => set('type', e.target.value)}>
+                {workTypes.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
               </select>
             </Field>
             <Field label="Accountable party">
@@ -229,7 +234,7 @@ function AddForm({
                 value={f.accountable ?? 'Unassigned'}
                 onChange={(e) => set('accountable', e.target.value)}
               >
-                {['Unassigned', 'Axiocloud', 'OAPIL', 'SLG', 'Shared'].map((t) => (
+                {parties.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
@@ -295,6 +300,7 @@ function EditForm({
 }) {
   const node = state.nodes[id]
   const issue = state.issues[id]
+  const parties = state.model.parties
   const act = state.activities[id]
   const labels = useLabels()
 
@@ -375,7 +381,7 @@ function EditForm({
             </Field>
             <Field label="Accountable party">
               <select value={f.accountable} onChange={(e) => set('accountable', e.target.value)}>
-                {['Unassigned', 'Axiocloud', 'OAPIL', 'SLG', 'Shared'].map((t) => (
+                {parties.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
