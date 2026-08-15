@@ -3793,3 +3793,20 @@ select.cell-editor {
 .cfg-check b {
   color: var(--text);
 }
+
+/* ---------- permission matrix ----------
+   Eighteen columns of checkboxes. The labels are the widest thing in each column, so they set
+   the width and wrap; the table scrolls inside its own container rather than the page. */
+.perm-table th.perm-col {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  vertical-align: bottom;
+  min-width: 54px;
+  max-width: 68px;
+  white-space: normal;
+}
+.perm-table td.perm-cell {
+  text-align: center;
+}

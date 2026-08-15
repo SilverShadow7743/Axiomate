@@ -172,6 +172,12 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
     sla: { ...seed.sla, ...(stored.sla ?? {}) },
     sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
+    access: {
+      ...seed.access,
+      ...(stored.access ?? {}),
+      grants: { ...seed.access.grants, ...(stored.access?.grants ?? {}) },
+      defaultRoleIds: stored.access?.defaultRoleIds ?? seed.access.defaultRoleIds,
+    },
     statusPolicy: {
       ...seed.statusPolicy,
       ...(stored.statusPolicy ?? {}),

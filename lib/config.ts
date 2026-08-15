@@ -31,6 +31,7 @@
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
+import { ADMIN_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 
 /* ================================================================== *
  * Scope
@@ -432,6 +433,11 @@ export interface OperatingModel {
    * process, and delivery processes differ between firms.
    */
   statusPolicy: StatusPolicy
+  /**
+   * Who may do what. See `./access` — authorisation is enforced, authentication is not yet,
+   * and the difference is stated there rather than implied here.
+   */
+  access: AccessPolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -463,6 +469,9 @@ export interface OperatingModel {
  * and never records what they are.
  */
 const SEED_ROLES: Omit<OrgRole, 'deletedAt'>[] = [
+  // Administering the platform is not a delivery role, which is why it sits outside the nine
+  // and why nobody holds it by virtue of leading an engagement.
+  { id: ADMIN_ROLE_ID, label: 'Platform Administrator', description: 'Axiocloud. Maintains the operating model itself — terminology, roles, service levels, transitions and permissions.', seeded: true },
   { id: 'ROLE_ENGAGEMENT_LEAD', label: 'Engagement Leader', description: 'Axiocloud. Answerable for the engagement as a whole and for the client relationship.', seeded: true },
   { id: 'ROLE_PRINCIPAL', label: 'Principal Consultant', description: 'Axiocloud. Owns solution design and the hardest delivery calls.', seeded: true },
   { id: 'ROLE_PROJECT_MANAGER', label: 'Project Manager', description: 'Axiocloud. Owns plan, schedule and delivery governance.', seeded: true },
@@ -745,6 +754,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     sla: { ...DEFAULT_SLA },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
+    access: defaultAccessPolicy(),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -989,6 +999,14 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
       transitions: { ...seed.statusPolicy.transitions, ...(stored.statusPolicy?.transitions ?? {}) },
       requireEvidence: stored.statusPolicy?.requireEvidence ?? seed.statusPolicy.requireEvidence,
       requireReason: stored.statusPolicy?.requireReason ?? seed.statusPolicy.requireReason,
+    },
+    access: {
+      ...seed.access,
+      ...(stored.access ?? {}),
+      // Grants are merged per role rather than replaced, so a role added to the product since
+      // the model was stored keeps its shipped grant instead of silently having none.
+      grants: { ...seed.access.grants, ...(stored.access?.grants ?? {}) },
+      defaultRoleIds: stored.access?.defaultRoleIds ?? seed.access.defaultRoleIds,
     },
     agents: mergeAgents(seed.agents, stored.agents),
     workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },

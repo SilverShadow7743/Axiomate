@@ -26,6 +26,7 @@ import {
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import { isTerminal } from '@/lib/schedule'
+import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
 
@@ -59,6 +60,7 @@ type Tab =
   | 'workTypes'
   | 'serviceLevels'
   | 'transitions'
+  | 'permissions'
   | 'sizing'
   | 'scopes'
 
@@ -69,6 +71,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
+  { id: 'permissions', label: 'Permissions', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -189,6 +192,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
+          {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -791,6 +795,16 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       })(),
     },
     {
+      id: 'permissions',
+      title: 'Permissions',
+      what: 'What each role may do. Enforced in the reducer, not only in the screens.',
+      now: (() => {
+        const a = m.access
+        const withGrants = Object.values(a.grants).filter((g) => g.length).length
+        return a.enforced ? `Enforced · ${withGrants} roles granted` : 'Advisory — not applied'
+      })(),
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -955,6 +969,146 @@ function Sizing({
   )
 }
 
+
+
+/* ================================================================== *
+ * Permissions
+ * ================================================================== */
+
+function Permissions({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const model = state.model
+  const access = model.access
+  const roles = liveRoles(model)
+
+  /** How many people hold each role — a grant on a role nobody holds changes nothing today. */
+  const holders = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const person of Object.values(model.people)) {
+      for (const rid of person.roleIds) n[rid] = (n[rid] ?? 0) + 1
+    }
+    return n
+  }, [model.people])
+
+  const unassigned = useMemo(
+    () => Object.values(model.people).filter((p) => !p.roleIds.length).length,
+    [model.people],
+  )
+
+  const toggle = (roleId: string, key: PermissionKey) => {
+    const current = access.grants[roleId] ?? []
+    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
+    onConfig({ k: 'setAccess', patch: { grants: { [roleId]: next } } })
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Permissions</h3>
+      <p className="cfg-note">
+        What each role may do. Checked in the reducer — the one funnel every change passes
+        through — so the rule holds for the grid, the forms, the assistant&rsquo;s applied
+        proposals and anything that reaches the write endpoint, not only for the buttons.
+      </p>
+
+      <div className="panel-note warn">
+        <b>Authorisation is enforced. Authentication is not.</b> There is still no login: every
+        request resolves to one configured operator, so this stops a mistake rather than an
+        attacker. Anyone who can set an environment variable can be whoever they like. The
+        fallback role below is where that honesty is concentrated — on the day a login exists,
+        it should be emptied and every real person should carry real roles.
+      </div>
+
+      <div className="cfg-card">
+        <label className="cfg-check">
+          <input
+            type="checkbox"
+            checked={access.enforced}
+            onChange={(e) => onConfig({ k: 'setAccess', patch: { enforced: e.target.checked } })}
+          />
+          <span>
+            <b>Apply these grants.</b> Turn it off and every actor may do everything — which is
+            what this product did until the table existed.
+          </span>
+        </label>
+        <div className="cfg-fld-row" style={{ marginTop: '10px' }}>
+          <label className="cfg-fld">
+            <span>Role for anyone with none of their own</span>
+            <select
+              value={access.defaultRoleIds[0] ?? ''}
+              onChange={(e) =>
+                onConfig({ k: 'setAccess', patch: { defaultRoleIds: e.target.value ? [e.target.value] : [] } })
+              }
+            >
+              <option value="">Nothing — deny everything</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="cfg-inherit">
+          {unassigned} of {Object.values(model.people).length} people in the directory hold no
+          role. That is not an oversight in the data — the imported log records who worked an
+          issue and never records what they are — so until roles are assigned, this fallback is
+          what almost everyone gets.
+        </p>
+      </div>
+
+      <div className="tablewrap">
+        <table className="cfg-table perm-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              {PERMISSIONS.map((perm) => (
+                <th key={perm.key} className="perm-col" title={perm.what}>
+                  {perm.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((role) => (
+              <tr key={role.id}>
+                <td className="cfg-key">
+                  {role.label}
+                  <span className="cfg-inherit"> · {holders[role.id] ?? 0} people</span>
+                </td>
+                {PERMISSIONS.map((perm) => (
+                  <td key={perm.key} className="perm-cell">
+                    <input
+                      type="checkbox"
+                      checked={(access.grants[role.id] ?? []).includes(perm.key)}
+                      aria-label={`${role.label} may ${perm.label}`}
+                      onChange={() => toggle(role.id, perm.key)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="cfg-inherit">
+        A change that would leave nobody able to configure the platform is refused, because it
+        would also leave nobody able to undo it — and this screen is the one it locks.
+      </p>
+      <p className="cfg-inherit">
+        The client-side rows are the ones worth reading closely. They may raise work, say things
+        about it and attach evidence; they may not close it, schedule it or estimate it. A client
+        confirming a resolution is a status <em>the firm</em> moves the record into on their
+        word — letting the client move it themselves would make that closure unfalsifiable.
+      </p>
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Status transitions

@@ -26,7 +26,7 @@ import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
-import { canEditIssue } from '../lib/permissions'
+import { PERMISSION_KEYS } from '../lib/access'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
 
@@ -690,16 +690,134 @@ scenario(
 
 scenario(
   'ST2',
-  'Someone edits an issue they are not allowed to edit',
-  'The edit is refused and the refusal explains itself.',
+  'A consultant, an analyst and a client user each try the same eight operations',
+  'Each is allowed what their role grants and refused the rest, with a refusal that explains itself.',
   () => {
-    const verdict = canEditIssue(BASE.model, A)
+    // Give the directory some roles. The imported log has none, which is the state the
+    // fallback role exists for — see `defaultRoleIds`.
+    const withRoles = (() => {
+      let cur = BASE
+      const assign = (name: string, roleId: string) => {
+        const person = Object.values(cur.model.people).find((p) => p.name === name)
+        cur = ok(cur, {
+          t: 'config',
+          op: { k: 'upsertPerson', id: person?.id ?? null, name, roleIds: [roleId] },
+          now: NOW,
+        } as Action)
+      }
+      assign('Priya', 'ROLE_FUNCTIONAL')
+      assign('Sam', 'ROLE_SUPPORT')
+      assign('Dana', 'ROLE_CLIENT_USER')
+      return cur
+    })()
+
+    const AS = (name: string): Actor => ({ id: name.toLowerCase(), name })
+    const attempt = (who: Actor, action: Action) => !apply(withRoles, action, who).error
+
+    const parentId = withRoles.issues['OAPIL-1'].parentId!
+    const probe = (who: Actor) => ({
+      raise: attempt(who, { t: 'create', parentId, kind: 'issue', draft: { name: 'New request' }, now: NOW } as Action),
+      edit: attempt(who, { t: 'updateIssue', id: 'OAPIL-1', patch: { nextAction: 'Chase' }, now: NOW } as Action),
+      close: attempt(who, {
+        t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - no defect' }, now: NOW,
+        reason: 'Not a defect.',
+      } as Action),
+      schedule: attempt(who, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action),
+      note: attempt(who, { t: 'addNote', issueId: 'OAPIL-1', body: 'Spoke to the client.', noteType: 'General Update', pinned: false, now: NOW } as Action),
+      estimate: attempt(who, { t: 'setEstimate', issueId: 'OAPIL-1', patch: { waitDays: 2 }, now: NOW } as Action),
+      archive: attempt(who, { t: 'softDelete', id: 'OAPIL-1', mode: 'cascade', now: NOW } as Action),
+      configure: attempt(who, { t: 'config', op: { k: 'setSla', patch: { High: 3 } }, now: NOW } as Action),
+    })
+
+    const consultant = probe(AS('Priya'))
+    const analyst = probe(AS('Sam'))
+    const client = probe(AS('Dana'))
+
+    const expected =
+      // A functional consultant delivers: raise, edit, close, schedule, estimate — not archive or configure.
+      consultant.raise && consultant.edit && consultant.close && consultant.schedule &&
+      consultant.estimate && !consultant.archive && !consultant.configure &&
+      // An analyst triages: raise, edit, note — not close, not schedule, not estimate.
+      analyst.raise && analyst.edit && analyst.note &&
+      !analyst.close && !analyst.schedule && !analyst.estimate &&
+      // A client user raises and comments, and touches nothing else.
+      client.raise && client.note &&
+      !client.edit && !client.close && !client.schedule && !client.estimate && !client.configure
+
+    const refusal = apply(withRoles, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - no defect' }, now: NOW, reason: 'x',
+    } as Action, AS('Dana')).error
+
     return {
-      verdict: verdict.allowed ? 'FAIL' : 'PASS',
-      actual: `canEditIssue returned allowed=${verdict.allowed} for an arbitrary actor. The seam is deliberate and documented, but until identity exists every role is administrator.`,
-      stops: 'at identity — there is no user to be',
+      verdict: expected ? 'PASS' : 'FAIL',
+      actual: `Consultant may raise, edit, close, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, schedule or estimate. Client user may raise and note only. The refusal names the role rather than just saying no: "${refusal}"`,
+      stops: '—',
+      severity: '—',
+      impact: 'The rules a firm states about who may do what are now applied, and applied at the reducer rather than in the screens.',
+    }
+  },
+)
+
+scenario(
+  'ST2b',
+  'Somebody claims to be a colleague',
+  'The claim is verified against an identity provider before anything is allowed.',
+  () => {
+    const hasAuth = !absent(/next-auth|@azure\/msal|getServerSession|verifyToken|jwtVerify/)
+    return {
+      verdict: 'NOT IMPLEMENTED',
+      actual: `${hasAuth ? 'An auth library appears in source.' : 'No authentication exists: no session, no token verification, no provider.'} Every request resolves to one operator read from an environment variable, so authorisation is enforced against a claimed identity rather than a proven one. The permission model stops a mistake, not an attacker — the code says so where it is defined.`,
+      stops: 'at proving who somebody is',
       severity: 'P0',
-      impact: 'No permission validation is possible. A client user, if one existed, could close their own issues.',
+      impact: 'Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone.',
+    }
+  },
+)
+
+scenario(
+  'ST2c',
+  "Somebody edits another person's note",
+  "The edit is refused, because a note is that person's account — unless they hold the supervisor grant.",
+  () => {
+    const withNote = ok(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: 'Client says the batch still fails.',
+      noteType: 'Client Communication', pinned: false, now: NOW,
+    } as Action)
+    const noteId = Object.values(withNote.notes)[0].id
+    const other: Actor = { id: 'colleague', name: 'Someone Else' }
+
+    // The colleague has to hold a role of their own. An actor with none falls back to
+    // `defaultRoleIds`, which ships as Administrator — so on a deployment with no login,
+    // an unrecognised actor is a supervisor. That is the authentication gap showing through
+    // the authorisation model, and it is the reason ST2b is still open.
+    const staffed = ok(withNote, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Someone Else', roleIds: ['ROLE_FUNCTIONAL'] },
+      now: NOW,
+    } as Action)
+
+    const refused = apply(staffed, {
+      t: 'updateNote', id: noteId, patch: { body: 'Client says it is fine now.' }, now: NOW,
+    } as Action, other)
+
+    const withOverride = ok(staffed, {
+      t: 'config',
+      op: { k: 'setAccess', patch: { grants: { ROLE_FUNCTIONAL: [...PERMISSION_KEYS] } } },
+      now: NOW,
+    } as Action)
+    const allowed = apply(withOverride, {
+      t: 'updateNote', id: noteId, patch: { body: 'Corrected: the client meant the nightly job.' }, now: NOW,
+    } as Action, other)
+    const keptAuthor = allowed.state.notes[noteId]?.createdBy
+    const recordedEditor = allowed.state.notes[noteId]?.updatedBy
+
+    const good = Boolean(refused.error) && !allowed.error && keptAuthor !== recordedEditor
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused for a different author: "${refused.error}" With the supervisor grant it lands, and the note still says it was written by ${keptAuthor} while recording ${recordedEditor} as the editor. The rule had existed in the panel since notes shipped and was never checked in the reducer — so it held for people using the button and for nothing else that could dispatch.`,
+      stops: '—',
+      severity: '—',
+      impact: "Somebody else's account of what they saw can no longer be rewritten under their name — provided they hold a role of their own. An actor with none still falls back to Administrator, which is ST2b.",
     }
   },
 )

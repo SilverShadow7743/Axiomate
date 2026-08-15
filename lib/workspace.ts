@@ -41,6 +41,8 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
+import { accessProblems, can, permissionForAction, type AccessPolicy, type PermissionKey } from './access'
+import { canEditNote } from './permissions'
 import {
   checkTransition,
   policyProblems,
@@ -58,7 +60,7 @@ import {
 } from './estimation'
 import { blankEngagement, type EngagementDetail } from './engagement'
 import { addWorkingDays } from './dates'
-import { STATUS_PROGRESS } from './schedule'
+import { isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
 import {
   KIND_LABEL_KEY,
@@ -503,6 +505,7 @@ export type ConfigOp =
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
+  | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -645,6 +648,30 @@ export function descendantsOf(state: WorkspaceState, id: string): string[] {
  * ================================================================== */
 
 export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult {
+  /**
+   * May this actor do this at all?
+   *
+   * At the funnel rather than in each arm, because the reducer is the only way state changes:
+   * one check here covers the grid, the forms, the dialogs, the assistant's applied proposals
+   * and the server's replay, and none of them can forget it. A check per arm would be
+   * twenty-odd chances to miss one, and a missed one is invisible — the action keeps working.
+   *
+   * The screens ask the same questions through `./permissions`, so a control is grey for the
+   * same reason the action would be refused. That is a convenience, not the enforcement: a
+   * request that never touched a screen lands here just the same.
+   */
+  {
+    const closing =
+      a.t === 'updateIssue' &&
+      typeof (a as { patch?: { status?: string } }).patch?.status === 'string' &&
+      isTerminal((a as { patch: { status: IssueStatus } }).patch.status)
+    const need = permissionForAction(a.t, { closing })
+    if (need) {
+      const verdict = can(state.model, actor, need)
+      if (!verdict.allowed) return { state, error: verdict.reason ?? 'Not permitted.' }
+    }
+  }
+
   // Who gets recorded against everything this action touches.
   //
   // A parameter, not a module constant and not a field of `Action`. As a constant it made
@@ -1696,6 +1723,14 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const note = state.notes[a.id]
       if (!note) return { state, error: 'Note not found.' }
       if (note.deletedAt) return { state, error: 'That note has been deleted.' }
+      // Checked here as well as in the panel, and this is the one that counts. The panel had
+      // been asking the question and greying the control since notes shipped, while the
+      // reducer accepted the action from anyone — so the rule held for people using the
+      // button and not for anything else that could dispatch.
+      {
+        const mayEdit = canEditNote(state.model, actor, note)
+        if (!mayEdit.allowed) return { state, error: mayEdit.reason ?? 'Not permitted.' }
+      }
       const body = a.patch.body !== undefined ? a.patch.body.trim() : note.body
       if (!body) return { state, error: 'A note needs something in it.' }
 
@@ -1736,6 +1771,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'removeNote': {
       const note = state.notes[a.id]
       if (!note) return { state, error: 'Note not found.' }
+      {
+        const mayEdit = canEditNote(state.model, actor, note)
+        if (!mayEdit.allowed) return { state, error: mayEdit.reason ?? 'Not permitted.' }
+      }
       return {
         state: {
           ...state,
@@ -2094,6 +2133,30 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sizeBands: op.bands },
         { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
         'T-shirt sizing updated.',
+      )
+    }
+
+    case 'setAccess': {
+      const next: AccessPolicy = {
+        ...m.access,
+        ...op.patch,
+        grants: { ...m.access.grants, ...(op.patch.grants ?? {}) },
+      }
+      const roleIdsWithHolders = Object.values(m.people)
+        .flatMap((p) => p.roleIds)
+        .filter((id) => m.roles[id] && !m.roles[id].deletedAt)
+      const problems = accessProblems(next, roleIdsWithHolders)
+      // Refused rather than warned about, and one of the checks is self-preservation: a change
+      // that leaves nobody able to configure the platform would also leave nobody able to undo
+      // it, and the screen that could fix it is the screen it locks.
+      if (problems.length) return { state, error: problems[0] }
+
+      const count = (p: AccessPolicy) =>
+        Object.values(p.grants).reduce((n, k) => n + k.length, 0)
+      return done(
+        { ...m, access: next },
+        { rowId: 'ACCESS', field: 'access', from: `${next.enforced ? '' : 'was '}${count(m.access)} grants`, to: `${count(next)} grants, ${next.enforced ? 'enforced' : 'advisory'}`, at: now, by },
+        next.enforced ? 'Permissions updated.' : 'Permissions are now advisory.',
       )
     }
 

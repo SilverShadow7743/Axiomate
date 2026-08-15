@@ -1799,6 +1799,32 @@
       "subject": "An issue could move from any status to any other in one step",
       "description": "Open to Closed - confirmed, with no investigation, no client involvement, no evidence and no comment, was one click in the grid and the workspace accepted it silently. The product looked as though it had a lifecycle because it had one in two other senses — a plan of activities and a pipeline of agents — and neither governs the status field, so nothing did. The first validation run recorded this as workflow definitions that no code path consults; that was wrong in an interesting way, because those definitions are agent pipelines and were never a state machine. There was no transition model at all. There is now: a graph over the fixed status vocabulary, held in the operating model rather than in code, because the vocabulary is fixed (progress is derived from it) while the route through it is a delivery process that differs between firms. The rule worth arguing about is that Closed - confirmed is reachable only from Awaiting client confirmation: it is the only status whose name asserts something about the client, and reaching it directly means a consultant confirmed on the client’s behalf. Two requirements ride on the same object — a confirmed closure needs evidence on the record, and the two \"we are not doing this\" outcomes need a reason, which lands on the audit entry for the status field alone rather than on every field in the same save. Enforcement is itself configuration and defaults to on, because an unenforced default would reproduce the exact defect: configuration that describes a process and changes nothing. The graph governs changes, not history, so 600 imported records sitting in combinations it would never produce are not made read-only by a rule written afterwards. Every control that offers a status now offers only the reachable ones and says what is missing, because offering a value the reducer will refuse is worse than not offering it.",
       "reference": "lib/statusPolicy.ts, lib/workspace.ts updateIssue, ConfigWorkspace Transitions"
+    },
+    {
+      "id": "AXM-070",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Governance & Security",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "Authentication — AXM-045",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Every permission question returned yes, so no rule about who may do what could be stated",
+      "description": "The permission module was a seam that returned ALLOWED, and the reasoning was sound while it held: a permission model over an unverified principal is theatre, reading as a security boundary in every screen while enforcing nothing. It stops being sound once the rules themselves are the thing being got wrong. A firm could not state that a client user may raise work but not close it, that an analyst may triage but not agree an estimate, or that only an administrator may change the operating model — and validation could not test any of it, because there was nothing to test. Authorisation is now real: eighteen coarse permissions, a role-to-permission map in the operating model, and one check at the top of the reducer rather than twenty-odd scattered through its arms — a check per arm is twenty-odd chances to forget one, and a forgotten check is invisible because the action keeps working. The distinction the map makes that matters most is on the client side: client roles may raise work, comment and attach evidence, and may not close, schedule or estimate. A client confirming a resolution is a status the firm moves the record into on their word; letting the client move it themselves would make Closed - confirmed unfalsifiable. Enforcing this also exposed an older hole: note authorship had been checked in the panel since notes shipped and never in the reducer, so the rule held for people using the button and for nothing else that could dispatch an action. What is deliberately not claimed: authentication. Every request still resolves to one operator from an environment variable, so this stops a mistake rather than an attacker, and the fallback role — which ships as Administrator because a deployment with one operator and no login must still be usable — is where that honesty is concentrated. The screen says so in as many words, and the validation harness carries it as a separate open finding rather than letting the authorisation work absorb it.",
+      "reference": "lib/access.ts, lib/permissions.ts, lib/workspace.ts apply(), ConfigWorkspace Permissions"
     }
   ]
 }

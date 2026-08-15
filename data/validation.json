@@ -233,13 +233,33 @@
     },
     {
       "id": "ST2",
-      "title": "Someone edits an issue they are not allowed to edit",
-      "expected": "The edit is refused and the refusal explains itself.",
-      "verdict": "FAIL",
-      "actual": "canEditIssue returned allowed=true for an arbitrary actor. The seam is deliberate and documented, but until identity exists every role is administrator.",
-      "stops": "at identity — there is no user to be",
+      "title": "A consultant, an analyst and a client user each try the same eight operations",
+      "expected": "Each is allowed what their role grants and refused the rest, with a refusal that explains itself.",
+      "verdict": "PASS",
+      "actual": "Consultant may raise, edit, close, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, schedule or estimate. Client user may raise and note only. The refusal names the role rather than just saying no: \"Close work is not something Client User can do here.\"",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The rules a firm states about who may do what are now applied, and applied at the reducer rather than in the screens."
+    },
+    {
+      "id": "ST2b",
+      "title": "Somebody claims to be a colleague",
+      "expected": "The claim is verified against an identity provider before anything is allowed.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "No authentication exists: no session, no token verification, no provider. Every request resolves to one operator read from an environment variable, so authorisation is enforced against a claimed identity rather than a proven one. The permission model stops a mistake, not an attacker — the code says so where it is defined.",
+      "stops": "at proving who somebody is",
       "severity": "P0",
-      "impact": "No permission validation is possible. A client user, if one existed, could close their own issues."
+      "impact": "Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone."
+    },
+    {
+      "id": "ST2c",
+      "title": "Somebody edits another person's note",
+      "expected": "The edit is refused, because a note is that person's account — unless they hold the supervisor grant.",
+      "verdict": "PASS",
+      "actual": "Refused for a different author: \"Written by Validator. A note is that person's account of what they saw, so it is theirs to correct.\" With the supervisor grant it lands, and the note still says it was written by Validator while recording Someone Else as the editor. The rule had existed in the panel since notes shipped and was never checked in the reducer — so it held for people using the button and for nothing else that could dispatch.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Somebody else's account of what they saw can no longer be rewritten under their name — provided they hold a role of their own. An actor with none still falls back to Administrator, which is ST2b."
     },
     {
       "id": "ST3",
@@ -328,7 +348,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (9 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (11 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
