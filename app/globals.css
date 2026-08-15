@@ -3501,3 +3501,11 @@ select.cell-editor {
   flex-direction: column;
   gap: 6px;
 }
+
+/* A menu item that carries a line of explanation under its label. */
+.menu-item .menu-sub {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}

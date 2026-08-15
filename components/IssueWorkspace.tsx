@@ -45,6 +45,7 @@ import {
   type PanelState,
 } from '@/lib/panel'
 import { buildScale } from '@/lib/timeline'
+import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import GanttChart from './GanttChart'
@@ -125,6 +126,16 @@ export default function IssueWorkspace({
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [exportMenu, setExportMenu] = useState(false)
+  const exportWrap = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!exportMenu) return
+    const away = (e: MouseEvent) => {
+      if (exportWrap.current && !exportWrap.current.contains(e.target as Node)) setExportMenu(false)
+    }
+    window.addEventListener('mousedown', away)
+    return () => window.removeEventListener('mousedown', away)
+  }, [exportMenu])
   /**
    * Set while the detail panel holds an uncommitted Overview edit.
    *
@@ -1144,6 +1155,59 @@ export default function IssueWorkspace({
     [colOrder, visibleCols, labelledColumns],
   )
 
+  /** One place that turns text into a file, so the three exports cannot drift apart. */
+  const download = useCallback((name: string, text: string, mime: string) => {
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
+  /**
+   * What the report covers, in words, taken from the filters actually in force.
+   *
+   * The report prints this at the top. A status report whose scope is implicit is one people
+   * misread once and stop trusting afterwards — and "everything" is itself a scope worth
+   * stating rather than leaving blank.
+   */
+  const scopeLabel = useMemo(() => {
+    const parts: string[] = []
+    if (filters.client !== 'All') parts.push(filters.client)
+    if (filters.module !== 'All') parts.push(filters.module)
+    if (filters.type !== 'All') parts.push(filters.type)
+    if (filters.status !== 'All') parts.push(`status ${filters.status}`)
+    if (filters.severity !== 'All') parts.push(`severity ${filters.severity}`)
+    if (filters.owner !== 'All') parts.push(`owner ${filters.owner}`)
+    if (filters.accountable !== 'All') parts.push(`accountable ${filters.accountable}`)
+    if (filters.health !== 'All') parts.push(filters.health)
+    if (filters.search.trim()) parts.push(`matching “${filters.search.trim()}”`)
+    const base = parts.length ? parts.join(' · ') : `All clients — ${state.model.organization.name}`
+    return filters.showCompleted ? base : `${base} (completed hidden in the view; counted here)`
+  }, [filters, state.model.organization.name])
+
+  /**
+   * Daily IMS.
+   *
+   * Built from the rows currently in view rather than from the whole workspace, so the report
+   * and the screen behind it can never disagree — with one deliberate exception, handled in
+   * the report: completed records are hidden by default in the grid but still counted in the
+   * position figures, because a status report that says "0 done" would be worse than useless.
+   */
+  const exportDailyIms = useCallback(() => {
+    const inScope = sortedRows.filter(
+      (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }),
+    )
+    const report = buildDailyIms(state, inScope, today, scopeLabel)
+    download(`daily-ims-${today}.txt`, renderImsText(report), 'text/plain')
+    download(`daily-ims-${today}.csv`, renderImsCsv(report), 'text/csv')
+    notify(
+      `Daily IMS exported — ${report.position.open} open of ${report.position.total}, ${report.sections.length} section(s) needing attention.`,
+    )
+  }, [state, sortedRows, filters, today, scopeLabel, download, notify])
+
   const exportCsv = useCallback(() => {
     const cell = (r: ScheduleRow, key: string): string => {
       switch (key) {
@@ -1184,15 +1248,9 @@ export default function IssueWorkspace({
     const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
     const lines = [orderedCols.map((c) => esc(c.label)).join(',')]
     for (const r of rows) lines.push(orderedCols.map((c) => esc(cell(r, c.key))).join(','))
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `issue-schedule-${today}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    download(`issue-schedule-${today}.csv`, lines.join('\r\n'), 'text/csv')
     notify(`Exported ${rows.length} rows.`)
-  }, [rows, orderedCols, today, notify])
+  }, [rows, orderedCols, today, notify, download])
 
   return (
     <LabelProvider value={orgLabels}>
@@ -1261,9 +1319,36 @@ export default function IssueWorkspace({
             Assistant
           </button>
         )}
-        <button className="btn" onClick={exportCsv}>
-          Export
-        </button>
+        <div ref={exportWrap} style={{ position: 'relative' }}>
+          <button className="btn" onClick={() => setExportMenu((v) => !v)} aria-expanded={exportMenu}>
+            Export ▾
+          </button>
+          {exportMenu && (
+            <div className="menu" style={{ top: 30, right: 0, left: 'auto', minWidth: 260 }}>
+              <div className="menu-title">Export</div>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
+                  exportDailyIms()
+                }}
+              >
+                Daily IMS — status report
+                <span className="menu-sub">Text to paste, plus a CSV of the open rows</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
+                  exportCsv()
+                }}
+              >
+                Visible rows
+                <span className="menu-sub">The grid as it stands, with your columns</span>
+              </button>
+            </div>
+          )}
+        </div>
         <button
           className={`btn${configOpen ? ' primary' : ''}`}
           onClick={() => setConfigOpen(true)}
