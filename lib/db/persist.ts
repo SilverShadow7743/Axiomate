@@ -13,6 +13,7 @@ import {
   evidenceToRow,
   issueToRow,
   nodeToRow,
+  noteToRow,
   relationshipToRow,
 } from './map'
 
@@ -260,6 +261,33 @@ async function writeAction(
           update: row,
         })
       }
+      return
+    }
+
+    /**
+     * Two records per action, not one: writing a note moves the parent issue's `lastActivity`,
+     * because somebody recording what a client said *is* activity on the issue. Persisting the
+     * note alone would leave a stored issue reporting itself as stale while its own notes say
+     * otherwise — the exact drift the reducer arm exists to prevent.
+     *
+     * `removeNote` does not move the date and shares this arm anyway: both loops write only
+     * what the reducer actually replaced, so the issue upsert simply finds nothing to do.
+     */
+    case 'addNote':
+    case 'updateNote':
+    case 'removeNote': {
+      for (const [id, note] of Object.entries(after.notes)) {
+        if (before.notes[id] === note) continue
+        const row = noteToRow(tenantId, note)
+        await tx.issueNote.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
+      // and `upsertIssue` ignores an id that names anything else.
+      for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
       return
     }
 

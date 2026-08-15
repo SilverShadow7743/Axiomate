@@ -125,6 +125,14 @@ export default function IssueWorkspace({
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
+  /**
+   * Set while the detail panel holds an uncommitted Overview edit.
+   *
+   * Lives here rather than in the panel because this component owns the selection, and the
+   * selection is what would destroy the edit. A panel cannot defend work against a click it
+   * never sees.
+   */
+  const [dirty, setDirty] = useState(false)
 
   // Track the timer so a second message gets its own full duration instead of inheriting
   // the first one's remaining time, and so nothing fires after unmount.
@@ -202,6 +210,7 @@ export default function IssueWorkspace({
     },
     [state, notify, persist, actor],
   )
+
 
   /**
    * The same funnel for a batch that has to land atomically.
@@ -339,6 +348,31 @@ export default function IssueWorkspace({
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  /**
+   * Change the selected row, unless that would silently discard an edit.
+   *
+   * A confirm dialog rather than a blocked click: refusing to move would leave someone stuck
+   * on a row with no obvious way off, and saving for them would commit a change they may have
+   * been in the middle of reconsidering. Asking is the only option that does not decide on
+   * their behalf.
+   *
+   * Re-selecting the row already open is always allowed — that is not leaving anything.
+   */
+  const requestSelect = useCallback(
+    (id: string | null) => {
+      if (dirty && id !== selectedId) {
+        const go = window.confirm(
+          'This issue has unsaved changes. Leaving it will discard them.\n\nLeave anyway?',
+        )
+        if (!go) return
+        setDirty(false)
+      }
+      setSelectedId(id)
+    },
+    [dirty, selectedId],
+  )
+
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
   const [sla] = useState<SlaPolicy>(DEFAULT_SLA)
   const [showProposed, setShowProposed] = useState(false)
@@ -1297,7 +1331,7 @@ export default function IssueWorkspace({
             hasChildren={hasChildren}
             onToggle={toggle}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={requestSelect}
             sort={sort}
             setSort={setSort}
             bodyRef={treeBodyRef}
@@ -1323,7 +1357,7 @@ export default function IssueWorkspace({
             zoom={zoom}
             today={today}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={requestSelect}
             dependencies={state.dependencies}
             criticalIds={criticalIds}
             bodyRef={ganttBodyRef}
@@ -1387,6 +1421,32 @@ export default function IssueWorkspace({
           onUpdateEngagement={(nodeId, patch) =>
             dispatch({ t: 'updateEngagement', nodeId, patch, now: new Date().toISOString() })
           }
+          actor={actor}
+          onDirtyChange={setDirty}
+          /**
+           * One commit, two possible actions.
+           *
+           * Field edits and date changes are different actions on purpose — dates carry
+           * scheduling validation and a reason — but a user pressing Save once expects one
+           * outcome, so they are folded through a single batch that either lands or does not.
+           */
+          onSaveIssue={(id, patch, dates) => {
+            const now = new Date().toISOString()
+            const actions: Action[] = []
+            if (Object.keys(patch).length) actions.push({ t: 'updateIssue', id, patch, now })
+            if (dates) actions.push({ t: 'setDates', id, start: dates.start, end: dates.end, now })
+            if (!actions.length) return true
+            const res = dispatchMany(actions)
+            if (res.ok) setDirty(false)
+            return res.ok
+          }}
+          onAddNote={(issueId, body, noteType, pinned) =>
+            dispatch({ t: 'addNote', issueId, body, noteType, pinned, now: new Date().toISOString() })
+          }
+          onUpdateNote={(id, patch) =>
+            dispatch({ t: 'updateNote', id, patch, now: new Date().toISOString() })
+          }
+          onDeleteNote={(id) => dispatch({ t: 'removeNote', id, now: new Date().toISOString() })}
           onSetAssignment={(issueId, responsibilityId, values) =>
             dispatch({ t: 'setAssignment', issueId, responsibilityId, values, now: new Date().toISOString() })
           }

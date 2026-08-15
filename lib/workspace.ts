@@ -39,6 +39,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
  */
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
+import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { blankEngagement, type EngagementDetail } from './engagement'
 import { addWorkingDays } from './dates'
 import { STATUS_PROGRESS } from './schedule'
@@ -157,6 +158,8 @@ export interface WorkspaceState {
   relationships: IssueRelationship[]
   /** Snapshots, data files, documents and links attached to issues (spec: Evidence). */
   evidence: Record<string, EvidenceItem>
+  /** The working record of how each issue progressed. See `./notes`. */
+  notes: Record<string, IssueNote>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -380,6 +383,7 @@ export function initWorkspace(
     dependencies: [],
     relationships,
     evidence: {},
+    notes: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -441,6 +445,15 @@ export type Action =
       now: string
     }
   | { t: 'updateEvidence'; id: string; patch: Partial<EvidenceItem>; now: string }
+  /* ---- NOTES ---- */
+  | { t: 'addNote'; issueId: string; body: string; noteType: NoteType; pinned: boolean; now: string }
+  | {
+      t: 'updateNote'
+      id: string
+      patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>
+      now: string
+    }
+  | { t: 'removeNote'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -1566,6 +1579,130 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: `Lifecycle plan removed from ${a.issueId}.`,
+      }
+    }
+
+    /* ---------------- NOTES ---------------- */
+
+    /**
+     * Notes are written, not derived, so the reducer's job here is narrow: mint an id, stamp
+     * who and when, and move the issue's last-activity date.
+     *
+     * That last part is the reason this is an action rather than a field edit. Somebody
+     * recording what a client said on the phone *is* activity on the issue, and an issue whose
+     * last-activity date ignores three weeks of investigation notes reports itself as stale
+     * when it is the opposite.
+     */
+    case 'addNote': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'Issue not found.' }
+      const body = a.body.trim()
+      if (!body) return { state, error: 'A note needs something in it.' }
+
+      const seq = state.seq + 1
+      const id = `note-${seq}`
+      const note: IssueNote = {
+        id,
+        issueId: a.issueId,
+        body,
+        noteType: a.noteType ?? DEFAULT_NOTE_TYPE,
+        pinned: a.pinned,
+        createdBy: by,
+        createdAt: a.now,
+        updatedBy: null,
+        updatedAt: null,
+        deletedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          notes: { ...state.notes, [id]: note },
+          issues: { ...state.issues, [a.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } },
+          seq,
+          audit: log(state, {
+            rowId: a.issueId,
+            field: 'note',
+            from: null,
+            to: note.noteType,
+            at: a.now,
+            by,
+            reason: body.length > 120 ? `${body.slice(0, 117)}…` : body,
+          }),
+        },
+        // Deliberately no `createdId`. That field means "a row appeared, select it", and the
+        // workspace acts on it — so returning a note id selected the note as though it were a
+        // row, found nothing in the tree, and emptied the panel the note was just added to.
+        // A note is not a row; there is nothing to reveal.
+        message: 'Note added.',
+      }
+    }
+
+    /**
+     * Editing preserves the original authorship.
+     *
+     * `createdBy` and `createdAt` are never touched: a correction weeks later must not
+     * reassign who first made the observation, or when. The edit is recorded separately.
+     */
+    case 'updateNote': {
+      const note = state.notes[a.id]
+      if (!note) return { state, error: 'Note not found.' }
+      if (note.deletedAt) return { state, error: 'That note has been deleted.' }
+      const body = a.patch.body !== undefined ? a.patch.body.trim() : note.body
+      if (!body) return { state, error: 'A note needs something in it.' }
+
+      const next: IssueNote = {
+        ...note,
+        ...a.patch,
+        body,
+        updatedBy: by,
+        updatedAt: a.now,
+      }
+      const changed = (Object.keys(a.patch) as (keyof IssueNote)[]).filter(
+        (k) => note[k] !== next[k],
+      )
+      if (!changed.length) return { state, message: 'Nothing changed.' }
+
+      const issue = state.issues[note.issueId]
+      return {
+        state: {
+          ...state,
+          notes: { ...state.notes, [a.id]: next },
+          issues: issue
+            ? { ...state.issues, [note.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } }
+            : state.issues,
+          audit: log(state, {
+            rowId: note.issueId,
+            field: 'note',
+            from: String(note[changed[0]] ?? ''),
+            to: String(next[changed[0]] ?? ''),
+            at: a.now,
+            by,
+            reason: `Note edited (${changed.join(', ')}).`,
+          }),
+        },
+        message: 'Note updated.',
+      }
+    }
+
+    case 'removeNote': {
+      const note = state.notes[a.id]
+      if (!note) return { state, error: 'Note not found.' }
+      return {
+        state: {
+          ...state,
+          // Soft, like every other record: a working record that can be silently removed is
+          // not a record of anything.
+          notes: { ...state.notes, [a.id]: { ...note, deletedAt: a.now } },
+          audit: log(state, {
+            rowId: note.issueId,
+            field: 'note',
+            from: note.noteType,
+            to: '(deleted)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Note deleted.',
       }
     }
 

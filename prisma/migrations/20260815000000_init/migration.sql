@@ -161,6 +161,23 @@ CREATE TABLE "Evidence" (
 );
 
 -- CreateTable
+CREATE TABLE "IssueNote" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "issueId" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "noteType" TEXT NOT NULL,
+    "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "createdBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "IssueNote_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "Engagement" (
     "tenantId" TEXT NOT NULL,
     "nodeId" TEXT NOT NULL,
@@ -262,6 +279,12 @@ CREATE INDEX "Evidence_tenantId_issueId_kind_idx" ON "Evidence"("tenantId", "iss
 CREATE INDEX "Evidence_tenantId_deletedAt_idx" ON "Evidence"("tenantId", "deletedAt");
 
 -- CreateIndex
+CREATE INDEX "IssueNote_tenantId_issueId_idx" ON "IssueNote"("tenantId", "issueId");
+
+-- CreateIndex
+CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "deletedAt");
+
+-- CreateIndex
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
@@ -314,6 +337,12 @@ ALTER TABLE "Evidence" ADD CONSTRAINT "Evidence_tenantId_fkey" FOREIGN KEY ("ten
 
 -- AddForeignKey
 ALTER TABLE "Evidence" ADD CONSTRAINT "Evidence_tenantId_issueId_fkey" FOREIGN KEY ("tenantId", "issueId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IssueNote" ADD CONSTRAINT "IssueNote_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IssueNote" ADD CONSTRAINT "IssueNote_tenantId_issueId_fkey" FOREIGN KEY ("tenantId", "issueId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Engagement" ADD CONSTRAINT "Engagement_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

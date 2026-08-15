@@ -174,6 +174,9 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       dependencies: parsed.dependencies ?? [],
       relationships: parsed.relationships ?? [],
       evidence: parsed.evidence ?? {},
+      // Mirror wins, like evidence: notes are written in this browser and exist nowhere else
+      // until a database does. `?? {}` because a mirror predating notes has no such key.
+      notes: parsed.notes ?? {},
       engagements: { ...seed.engagements, ...(parsed.engagements ?? {}) },
       // Merged, not taken whole. The mirror's model predates every operating-model key added
       // since it was written, and adopting it verbatim made those keys `undefined` — which is

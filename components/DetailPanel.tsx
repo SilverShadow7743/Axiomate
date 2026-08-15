@@ -13,6 +13,11 @@ import type { PanelState } from '@/lib/panel'
 import { proposeTargetDate } from '@/lib/schedule'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
+import OverviewTab from './OverviewTab'
+import NotesTab from './NotesTab'
+import type { Actor } from '@/lib/actor'
+import type { IssueNote, NoteType } from '@/lib/notes'
+import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
 import type { EngagementDetail } from '@/lib/engagement'
 import { liveResponsibilities, resolveRequired } from '@/lib/config'
@@ -33,6 +38,7 @@ import {
  */
 type Tab =
   | 'Overview'
+  | 'Notes'
   | 'Schedule'
   | 'Lifecycle'
   | 'Relationships'
@@ -77,6 +83,21 @@ interface Props {
   /** Needed for the configured responsibility types and their current values. */
   state: WorkspaceState
   onSetAssignment: (issueId: string, responsibilityId: string, values: string[]) => void
+  /** Who is acting — for attribution on notes and for the permission checks. */
+  actor: Actor
+  /** Commit an Overview edit. Returns false if the reducer refused it. */
+  onSaveIssue: (id: string, patch: Partial<IssueRecord>, dates: { start: string; end: string } | null) => boolean
+  onAddNote: (issueId: string, body: string, noteType: NoteType, pinned: boolean) => void
+  onUpdateNote: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
+  onDeleteNote: (id: string) => void
+  /**
+   * Raised while an Overview edit has uncommitted changes.
+   *
+   * The workspace owns the consequence rather than this panel: it is the thing that changes
+   * the selection, so it is the only place that can stop a click on another row from
+   * discarding work silently.
+   */
+  onDirtyChange: (dirty: boolean) => void
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
 }
 
@@ -106,6 +127,12 @@ export default function DetailPanel({
   state,
   onSetAssignment,
   onUpdateEngagement,
+  actor,
+  onSaveIssue,
+  onAddNote,
+  onUpdateNote,
+  onDeleteNote,
+  onDirtyChange,
 }: Props) {
   const labels = useLabels()
   const [tab, setTab] = useState<Tab>('Overview')
@@ -140,6 +167,17 @@ export default function DetailPanel({
    * so it is shown — and edited — here, which is what gives cardinality, requiredness and
    * eligibility something to actually govern.
    */
+  /**
+   * Whether Overview is in edit mode.
+   *
+   * Held by the panel rather than the tab so switching to Notes and back does not silently
+   * drop a half-finished edit, and reset on the issue id so it never carries across records.
+   */
+  const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    setEditing(false)
+  }, [issue?.id])
+
   const customResponsibilities = issue
     ? liveResponsibilities(state.model)
         .filter((t) => !t.systemField)
@@ -154,6 +192,7 @@ export default function DetailPanel({
 
   const TABS: Tab[] = [
     'Overview',
+    'Notes',
     'Schedule',
     'Lifecycle',
     'Relationships',
@@ -240,95 +279,27 @@ export default function DetailPanel({
             progress roll up from the rows beneath it. Select an issue for full detail.
           </div>
         ) : tab === 'Overview' ? (
-          <div className="cols-2">
-            <dl className="kv">
-              <dt>Issue</dt>
-              <dd className="mono">{issue.id}</dd>
-              <dt>Subject</dt>
-              <dd>{issue.subject}</dd>
-              <dt>Description</dt>
-              <dd>{issue.description || '—'}</dd>
-              <dt>Client / Module</dt>
-              <dd>
-                {issue.client} · {issue.module}
-              </dd>
-              <dt>Type</dt>
-              <dd>
-                {issue.type}
-                {/* The log classified this differently. Shown rather than hidden: the imported
-                    types were mapped onto the blueprint taxonomy, and that mapping is lossy —
-                    a Query, an Access Request and an Estimate Request are all "Request" now. */}
-                {issue.sourceType && issue.sourceType !== issue.type && (
-                  <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
-                )}
-              </dd>
-              <dt>Severity</dt>
-              <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
-              <dt>{labels.FIELD_STATUS}</dt>
-              <dd>{issue.status}</dd>
-            </dl>
-            <dl className="kv">
-              <dt>{labels.ISSUE_OWNER}</dt>
-              <dd>{issue.owner}</dd>
-              <dt>{labels.ISSUE_RAISED_BY}</dt>
-              <dd>{issue.raisedBy || '—'}</dd>
-              <dt>{labels.ISSUE_ACCOUNTABLE}</dt>
-              <dd>{issue.accountable}</dd>
-              <dt>{labels.FIELD_NEXT_ACTION}</dt>
-              <dd>{issue.nextAction || '—'}</dd>
-              <dt>Raised</dt>
-              <dd className="mono">
-                {formatIso(issue.raised)} <span style={{ color: 'var(--text-faint)' }}>({issue.age}d ago)</span>
-              </dd>
-              <dt>Last activity</dt>
-              <dd className="mono">
-                {formatIso(issue.lastActivity)}{' '}
-                <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
-              </dd>
-              {/* Responsibilities configured beyond the three built-in ones. Rendered here so
-                  that cardinality, requiredness and eligibility have something to govern —
-                  a responsibility type nobody can fill is a rule with nothing to check. */}
-              {customResponsibilities.map((t) => (
-                <Fragment key={t.id}>
-                  <dt>
-                    {t.label}
-                    {t.requiredHere && <span style={{ color: 'var(--h-overdue)' }}> *</span>}
-                  </dt>
-                  <dd>
-                    <input
-                      className="resp-input"
-                      defaultValue={t.values.join(', ')}
-                      placeholder={
-                        t.maxCount === 1 ? 'Not assigned' : `Up to ${t.maxCount ?? 'any number of'}, comma separated`
-                      }
-                      aria-label={t.label}
-                      onBlur={(e) => {
-                        const next = e.target.value.split(',').map((v) => v.trim()).filter(Boolean)
-                        if (next.join(', ') === t.values.join(', ')) return
-                        onSetAssignment?.(issue.id, t.id, next)
-                      }}
-                    />
-                  </dd>
-                </Fragment>
-              ))}
-              <dt>Reference</dt>
-              <dd>{issue.reference || '—'}</dd>
-              <dt>Source</dt>
-              <dd>
-                {issue.source}
-                <span style={{ color: 'var(--text-faint)' }}> · {issue.verification}</span>
-              </dd>
-              {issue.evidence && (
-                <>
-                  <dt>Evidence</dt>
-                  <dd style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    {issue.evidence}
-                    {issue.evidenceDate && ` (${formatIso(issue.evidenceDate)})`}
-                  </dd>
-                </>
-              )}
-            </dl>
-          </div>
+          <OverviewTab
+            row={issueRow!}
+            issue={issue}
+            state={state}
+            actor={actor}
+            customResponsibilities={customResponsibilities}
+            onSetAssignment={(rid, values) => onSetAssignment(issue.id, rid, values)}
+            onSave={(patch, dates) => onSaveIssue(issue.id, patch, dates)}
+            onDirtyChange={onDirtyChange}
+            editing={editing}
+            setEditing={setEditing}
+          />
+        ) : tab === 'Notes' ? (
+          <NotesTab
+            issueId={issue.id}
+            state={state}
+            actor={actor}
+            onAdd={(body, noteType, pinned) => onAddNote(issue.id, body, noteType, pinned)}
+            onUpdate={onUpdateNote}
+            onDelete={onDeleteNote}
+          />
         ) : tab === 'Schedule' ? (
           <div className="cols-2">
             <dl className="kv">

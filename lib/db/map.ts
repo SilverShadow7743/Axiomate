@@ -6,6 +6,7 @@ import type {
   Issue as IssueRow,
   IssueActivity as ActivityRow,
   IssueDependency as DependencyRow,
+  IssueNote as IssueNoteRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
   Prisma,
@@ -13,6 +14,7 @@ import type {
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
+import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
@@ -363,6 +365,53 @@ export function evidenceFromRow(r: EvidenceRow): EvidenceItem {
     addedAt: r.addedAt.toISOString(),
     addedBy: r.addedBy,
     origin: r.origin === 'IMPORTED' ? 'imported' : 'user',
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Notes
+ * ================================================================== */
+
+/**
+ * The one pair that must not use `toDate`/`fromDate`.
+ *
+ * A note carries a full ISO datetime — the hour someone wrote it is the point of it, unlike the
+ * calendar dates everywhere else in this file. `toDate` appends `T00:00:00.000Z` to whatever it
+ * is given, so handing it `2026-08-15T14:22:31.000Z` produces an unparseable string and the
+ * helper returns `null`. That failure is silent and typed: a timestamp would simply vanish on
+ * the way in, and nothing would report it. Constructed directly instead, both ways.
+ */
+export function noteToRow(tenantId: TenantId, n: IssueNote): Prisma.IssueNoteUncheckedCreateInput {
+  return {
+    tenantId,
+    id: n.id,
+    issueId: n.issueId,
+    body: n.body,
+    noteType: n.noteType,
+    pinned: n.pinned,
+    createdBy: n.createdBy,
+    createdAt: new Date(n.createdAt),
+    updatedBy: n.updatedBy,
+    updatedAt: n.updatedAt ? new Date(n.updatedAt) : null,
+    deletedAt: n.deletedAt ? new Date(n.deletedAt) : null,
+  }
+}
+
+export function noteFromRow(r: IssueNoteRow): IssueNote {
+  return {
+    id: r.id,
+    issueId: r.issueId,
+    body: r.body,
+    // Widened rather than asserted against the current list, same as `EngagementDetail.type`:
+    // the column is free text so a note filed under a type this build no longer names still
+    // reads back as what it was written as.
+    noteType: r.noteType as NoteType,
+    pinned: r.pinned,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt.toISOString(),
+    updatedBy: r.updatedBy,
+    updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

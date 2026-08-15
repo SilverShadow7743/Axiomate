@@ -124,6 +124,7 @@ model Tenant {
   dependencies  IssueDependency[]
   relationships IssueRelationship[]
   evidence      Evidence[]
+  notes         IssueNote[]
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
@@ -236,6 +237,7 @@ model Issue {
   relationshipsFrom IssueRelationship[] @relation("RelSource")
   relationshipsTo   IssueRelationship[] @relation("RelTarget")
   evidenceItems     Evidence[]
+  notes             IssueNote[]
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -376,6 +378,52 @@ model Evidence {
 
   @@id([tenantId, id])
   @@index([tenantId, issueId, kind])
+  @@index([tenantId, deletedAt])
+}
+
+/// What a person wrote down about how an issue actually progressed.
+///
+/// Not the audit trail, and deliberately a separate table. An audit row is produced *by* a
+/// change and nobody writes it; a note is written on purpose and describes something the system
+/// cannot observe — what was tried, what the client said, why an approach was abandoned.
+/// Merging them would mean either a trail full of prose that no longer proves what changed, or
+/// notes that vanish when the audit cap trims the oldest rows.
+///
+/// `createdAt`/`updatedAt` here are APPLICATION-SUPPLIED DOMAIN FACTS, which is why this is the
+/// one model in the file without `@default(now())` and `@updatedAt`. A note records when a
+/// person wrote it, not when a row was inserted, and the two are only the same until an import
+/// or a queued write is replayed. The tradeoff is real and worth stating: those names can carry
+/// one meaning each, so buying the domain fact costs the row metadata — this table records
+/// nothing at all about when its rows reached the database.
+model IssueNote {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `note-12`, minted from the workspace counter — unique within the tenant, not globally.
+  id      String @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  body String @db.Text
+  /// String, not an enum. The vocabulary is owned by the app (`NOTE_TYPES`), and an enum here
+  /// would reject a type added in a later build until a migration caught up with it.
+  noteType String
+  /// Pinned notes sort above the rest, whatever their age.
+  pinned   Boolean @default(false)
+
+  /// Authorship of the original observation. Never rewritten by an edit — a correction three
+  /// weeks later must not reassign who first made the remark, or when.
+  createdBy String
+  createdAt DateTime
+  updatedBy String?
+  updatedAt DateTime?
+
+  /// Soft delete, like every other record here: a working record that can be silently removed
+  /// is not a record of anything.
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueId])
   @@index([tenantId, deletedAt])
 }
 

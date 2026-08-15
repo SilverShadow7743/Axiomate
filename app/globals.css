@@ -3345,3 +3345,159 @@ select.cell-editor {
   white-space: nowrap;
   max-width: 46ch;
 }
+
+/* ------------------------------------------------------------------ *
+   Issue workspace — Overview editing and Notes
+ * ------------------------------------------------------------------ */
+
+/* The action row above Overview, in both modes. */
+.ov-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--grid-line);
+  margin-bottom: 10px;
+}
+/* Unsaved changes have to be visible without being read: colour first, words second. */
+.ov-dirty {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ov-dirty.on {
+  color: var(--h-atrisk);
+  font-weight: 600;
+}
+.ov-prose {
+  white-space: pre-wrap;
+}
+.kv dd input,
+.kv dd select,
+.kv dd textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+}
+.kv dd textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* ---- Notes ---- */
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.note-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 3px;
+  padding: 8px;
+}
+.note-input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--text);
+  resize: vertical;
+}
+.note-compose-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.note-compose-row select {
+  height: 25px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+.note-pin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.note {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 7px 9px;
+  background: var(--bg);
+}
+/* Pinned notes are held at the top; the rail says why they are out of chronological order. */
+.note.pinned {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+.note-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.note-type {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+.note-pin {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+.note-by {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.note-at {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+/* Paragraph breaks someone typed are part of what they wrote. */
+.note-body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

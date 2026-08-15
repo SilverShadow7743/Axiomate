@@ -19,6 +19,8 @@ import {
   issueToRow,
   nodeFromRow,
   nodeToRow,
+  noteFromRow,
+  noteToRow,
   relationshipFromRow,
   relationshipToRow,
 } from './map'
@@ -57,6 +59,7 @@ type Reader = Pick<
   | 'issueDependency'
   | 'issueRelationship'
   | 'evidence'
+  | 'issueNote'
   | 'engagement'
   | 'scheduleAudit'
   | 'workspaceMeta'
@@ -86,7 +89,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, engagements, audit, meta, config] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, engagements, audit, meta, config] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -94,6 +97,7 @@ export async function loadWorkspace(
       db.issueDependency.findMany({ where: { tenantId } }),
       db.issueRelationship.findMany({ where: { tenantId } }),
       db.evidence.findMany({ where: { tenantId } }),
+      db.issueNote.findMany({ where: { tenantId } }),
       db.engagement.findMany({ where: { tenantId } }),
       // Newest last, so the History tab's own ordering is applied to a stable list.
       db.scheduleAudit.findMany({ where: { tenantId }, orderBy: { at: 'asc' }, take: 5000 }),
@@ -108,6 +112,9 @@ export async function loadWorkspace(
     dependencies: dependencies.map(dependencyFromRow),
     relationships: relationships.map(relationshipFromRow),
     evidence: Object.fromEntries(evidence.map((e) => [e.id, evidenceFromRow(e)])),
+    // Unordered on purpose: `sortNotes` puts pinned first and then orders by last activity on
+    // the note, which no single column can express.
+    notes: Object.fromEntries(notes.map((n) => [n.id, noteFromRow(n)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     model: readModel(
       config?.model,
@@ -229,6 +236,10 @@ export async function importWorkspace(
     }
     for (const e of Object.values(seed.evidence)) {
       await tx.evidence.create({ data: evidenceToRow(tenantId, e) })
+    }
+    // After the issues, like evidence: a note's foreign key is its issue.
+    for (const n of Object.values(seed.notes)) {
+      await tx.issueNote.create({ data: noteToRow(tenantId, n) })
     }
     // After the nodes: each row is keyed by the engagement node it describes.
     for (const e of Object.values(seed.engagements)) {
