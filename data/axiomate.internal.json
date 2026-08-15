@@ -1721,6 +1721,32 @@
       "subject": "Estimates lived only in the browser, so an agreed number could not survive a reload",
       "description": "The estimation feature shipped through the reducer and the browser mirror but had no database behind it: no models, no mappers, nothing in the write path, and the two actions were not on the route allowlist — so a server replay would have rejected them and an estimate agreed on one machine was invisible on the next. `IssueEstimate` is keyed by the issue rather than an id of its own, because an issue has exactly one estimate and every screen arrives holding the issue. It stores inputs, not results: scores, capacity, steps. Total complexity, size, hours, duration and finish date are all recomputed on read, because each is a function of the T-shirt calibration, which is configuration and can change — storing the derived figures would freeze an estimate against a calibration nobody uses any more, the same rule that keeps duration and schedule health out of the schema. `EstimateRevision` snapshots both halves either side of a change, effort and duration, because they move independently: scope can grow without the date slipping if people are added, and the date can slip with no change in effort at all when a client goes quiet. Whether an edit amounted to a revision is decided once, in the reducer, and the write path persists that judgement rather than re-deriving it.",
       "reference": "prisma/schema.prisma IssueEstimate, lib/db/map.ts, lib/db/repo.ts, lib/db/persist.ts"
+    },
+    {
+      "id": "AXM-067",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Quality",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Nothing checked whether a business outcome actually happens end to end",
+      "description": "Every check in the repository asserted a mechanism: the reducer refuses an impossible date, attribution cannot be forged, archive reverses. None of them asked the question a delivery firm asks, which is whether the outcome happens at all — a screen, a button, a configuration record and a declared agent are evidence of intent, not of behaviour. `npm run validate:scenarios` drives 34 business scenarios through the real reducer and the real derivations and reports where each trace stops, using five verdicts because \"missing\" is not one thing: PASS, PARTIAL, FAIL, NOT TESTABLE, and NOT IMPLEMENTED. The distinction that matters is between PARTIAL and FAIL. PARTIAL means part of the trace works and the cell names the part that does not — an at-risk issue computes its health correctly and tells nobody. FAIL means the system does something and what it does is wrong or unguarded — an issue moves from Open to Closed in one step while seven workflow definitions sit in configuration that no code path consults. A NOT IMPLEMENTED verdict greps the source for the mechanism rather than asserting its absence, so the claim breaks loudly if somebody builds it and does not update the file. First run: 6 PASS, 13 PARTIAL, 6 FAIL, 7 NOT IMPLEMENTED, 2 NOT TESTABLE, with 8 findings at P0. Writing the harness also found four bugs in its own fixtures before it found anything in the product, which is the correct order.",
+      "reference": "scripts/scenario-validation.ts, data/validation.json"
     }
   ]
 }

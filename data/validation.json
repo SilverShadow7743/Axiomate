@@ -1,0 +1,345 @@
+{
+  "asAt": "2026-08-15",
+  "findings": [
+    {
+      "id": "A",
+      "title": "Client sends a new request to the project email address",
+      "expected": "The mail is received, classified, becomes a work item under the right engagement, and someone owns it.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Mailboxes and routing rules are configuration records in 3 files; 0 of those read them at runtime. Nothing receives mail.",
+      "stops": "at the first arrow — there is no inbound channel",
+      "severity": "P0",
+      "impact": "The intake the product is named for cannot start. Every record is typed by hand."
+    },
+    {
+      "id": "B",
+      "title": "Client replies on an existing issue",
+      "expected": "The reply is recorded against the issue, the issue stops looking stale, and the trail shows who said what and when.",
+      "verdict": "PARTIAL",
+      "actual": "Note recorded, authored by \"Validator\", and the issue's last activity moved to 2026-08-15.",
+      "stops": "before the reply arrives on its own — the note is typed by a consultant, not received",
+      "severity": "P2",
+      "impact": "The record is right once someone transcribes it. Nothing guarantees they do."
+    },
+    {
+      "id": "C",
+      "title": "Client sends an ambiguous request",
+      "expected": "The system marks it as needing clarification, asks the client, and does not start an SLA clock on work nobody has defined.",
+      "verdict": "PARTIAL",
+      "actual": "The status exists and the row reports health \"Blocked\" — blocked statuses are excluded from at-risk. But nothing asks the client, and the SLA target is not suspended: due dates are set once and never recomputed.",
+      "stops": "at the clock — waiting on a client still consumes the SLA",
+      "severity": "P1",
+      "impact": "Issues breach on client time. The report calls it our failure."
+    },
+    {
+      "id": "D",
+      "title": "Client sends an attachment",
+      "expected": "The file is stored, attached to the issue, and can be produced later as evidence.",
+      "verdict": "PARTIAL",
+      "actual": "The evidence record is created with kind, size and mime type (url: none). No bytes are stored — there is no upload path anywhere in the source.",
+      "stops": "at the file itself — the record describes an artefact the system does not hold",
+      "severity": "P1",
+      "impact": "Evidence cannot be produced at a governance meeting. The list of it can."
+    },
+    {
+      "id": "E",
+      "title": "The same defect is reported twice",
+      "expected": "The duplicate is detected, linked to the original, and does not become a second stream of work.",
+      "verdict": "PARTIAL",
+      "actual": "The link and the Superseded status both work, and closing sets actualEnd to 2026-08-15. Detection is manual: the duplicate-detection agent is a registry record with no runtime.",
+      "stops": "at detection — a person must notice",
+      "severity": "P2",
+      "impact": "Duplicates are found late, after two people have worked the same fault."
+    },
+    {
+      "id": "F",
+      "title": "An issue needs another consultant to help",
+      "expected": "A contributor can be added without taking ownership, and the trail shows both.",
+      "verdict": "PARTIAL",
+      "actual": "The mechanism works: an unbounded responsibility holds 2 people, the owner is still Priya, and the change is audited. But the shipped operating model has 3 responsibilities — Owner, Accountable Party, Raised By — and 0 of them accept more than one name. Contributor is a type the firm must invent.",
+      "stops": "at the shipped model — helping is possible, but not offered",
+      "severity": "P2",
+      "impact": "Out of the box, the only way to involve a second person is to hand over ownership."
+    },
+    {
+      "id": "G",
+      "title": "Work is assigned to someone who is not available",
+      "expected": "The system refuses, or warns, because that person is on leave or already committed.",
+      "verdict": "FAIL",
+      "actual": "Accepted without comment. The owner is now \"Someone Who Does Not Exist\" — a name that is not in the people directory, let alone free. Owner is a free-text column, not a reference.",
+      "stops": "at the first check — there is none",
+      "severity": "P1",
+      "impact": "Work can be assigned to a leaver, a typo, or someone with no capacity, and nothing notices."
+    },
+    {
+      "id": "L",
+      "title": "A consultant is already overallocated",
+      "expected": "Assigning more work surfaces the conflict before it is committed.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "No allocation, capacity or availability record exists (a type exists). Capacity in the estimator is three numbers typed on one issue.",
+      "stops": "at the entity — there is nothing to be over",
+      "severity": "P0",
+      "impact": "The plan cannot be checked against the people who have to deliver it."
+    },
+    {
+      "id": "M",
+      "title": "New work arrives and there is not enough capacity for it",
+      "expected": "The delivery plan is shown to be impossible before it is agreed.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Requires L. The estimator can say an issue needs 40 hours; nothing knows whether 40 hours exist.",
+      "stops": "at the same missing entity",
+      "severity": "P0",
+      "impact": "Commitments are made against capacity nobody has counted."
+    },
+    {
+      "id": "H",
+      "title": "An issue approaches its SLA target",
+      "expected": "It is flagged at risk before it breaches, and the person who can act is told.",
+      "verdict": "PARTIAL",
+      "actual": "Health computes as \"At Risk\" from dates and progress, and the grid shows it. Nothing is sent: there is no delivery mechanism in the source.",
+      "stops": "at the notification — the risk is visible only to someone already looking",
+      "severity": "P1",
+      "impact": "At-risk work is found by opening the app, not by being told."
+    },
+    {
+      "id": "I",
+      "title": "An issue breaches its SLA",
+      "expected": "It is overdue, it is escalated to the accountable party, and it appears on the report.",
+      "verdict": "PARTIAL",
+      "actual": "Health is \"Overdue\" and the daily IMS lists it under \"Overdue\". No escalation exists: escalation is neither an action nor a record.",
+      "stops": "at escalation — the breach is reported, never routed",
+      "severity": "P1",
+      "impact": "A breach reaches a report, not a person with authority to fix it."
+    },
+    {
+      "id": "Q",
+      "title": "A project milestone becomes at risk",
+      "expected": "The milestone shows the risk, and it rolls up to the project so a governance meeting sees it.",
+      "verdict": "PARTIAL",
+      "actual": "A late issue rolls up: its process area now reports 2026-08-01 → 2026-08-09 with 17% complete. Milestones exist as a row kind, but no milestone record ties to a SOW or a payment.",
+      "stops": "at the milestone as a commercial object",
+      "severity": "P2",
+      "impact": "Delivery risk is visible; contractual consequence is not."
+    },
+    {
+      "id": "J",
+      "title": "A consultant records time against an issue",
+      "expected": "The hours land on the work item and feed cost, utilisation and remaining effort.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "No time entry exists — the words appear but no action writes one. No action in the reducer records hours.",
+      "stops": "at the entity",
+      "severity": "P0",
+      "impact": "Cost, margin, utilisation and estimate accuracy are all unavailable, because all four are functions of this one record."
+    },
+    {
+      "id": "K",
+      "title": "Actual effort overruns the estimate",
+      "expected": "The variance is visible on the issue, and it moves the project and the commercial picture.",
+      "verdict": "PARTIAL",
+      "actual": "The estimate side is complete and agreed (baselined 2026-08-15), and revisions are refused without a reason. The actual side does not exist, so variance is undefined — the tab says so rather than showing a zero.",
+      "stops": "at actuals — see J",
+      "severity": "P1",
+      "impact": "Estimates cannot be calibrated, because nothing ever tells the firm it was wrong."
+    },
+    {
+      "id": "N",
+      "title": "A client asks for something outside the SOW",
+      "expected": "The request is recognised as out of scope and does not quietly become delivered work.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "There is no SOW record (the term appears in source), so there is no boundary for a request to be outside of.",
+      "stops": "at the boundary",
+      "severity": "P0",
+      "impact": "Scope leakage is undetectable by construction. This is the margin risk the product exists to control."
+    },
+    {
+      "id": "O",
+      "title": "A change request is raised",
+      "expected": "It is captured as a CR, valued, and linked to the work it changes.",
+      "verdict": "PARTIAL",
+      "actual": "A CR can be raised as a work item of type \"Change Request\" — the type is configuration and had to be added first, and linked to the issue that prompted it. It carries no value, no approver and no SOW to amend.",
+      "stops": "at valuation and approval",
+      "severity": "P1",
+      "impact": "A CR is a note about money, not a control over it."
+    },
+    {
+      "id": "P",
+      "title": "A change request is approved",
+      "expected": "The approval is recorded by an authorised person, and the SOW value and scope move with it.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Approval is neither an action nor a record (no approve action in the reducer). A CR is closed by setting a status, which anyone can do.",
+      "stops": "at authority",
+      "severity": "P0",
+      "impact": "Nothing distinguishes an approved change from someone marking it approved."
+    },
+    {
+      "id": "R",
+      "title": "An issue is closed with no evidence attached",
+      "expected": "Closure is refused or flagged, because the resolution cannot be produced later.",
+      "verdict": "FAIL",
+      "actual": "Closed with no evidence, no verification note and no comment. actualEnd was set to 2026-08-15. The evidence requirement is configuration nobody enforces at the transition.",
+      "stops": "at the gate — there is no gate",
+      "severity": "P1",
+      "impact": "Closed work cannot be defended to a client who disputes it."
+    },
+    {
+      "id": "S",
+      "title": "An issue is resolved",
+      "expected": "The resolution is recorded, the client is told, and verification is requested.",
+      "verdict": "PARTIAL",
+      "actual": "The status moves, the next action is recorded and 2 audit entries were written with before, after and actor. No message is sent to the client.",
+      "stops": "at telling the client",
+      "severity": "P2",
+      "impact": "Verification waits on somebody remembering to ask for it."
+    },
+    {
+      "id": "T",
+      "title": "An issue is verified and closed",
+      "expected": "Closure is recorded with a date, and it cannot be reopened without a trace.",
+      "verdict": "PASS",
+      "actual": "Closing derived actualEnd = 2026-08-15; reopening cleared it, and both derived writes are in the trail (2 entries). The derivation guards on the status having changed, so an unrelated edit cannot overwrite a closure date.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Closure and reopening are both honest about the date."
+    },
+    {
+      "id": "ST1",
+      "title": "An issue jumps straight from Open to Closed, skipping every intermediate state",
+      "expected": "The transition is refused, because the configured workflow does not allow it.",
+      "verdict": "FAIL",
+      "actual": "Accepted. 2 workflow definitions are configured with named states, and no code path consults them on a status change — no transition check exists anywhere in the source.",
+      "stops": "at the workflow engine — the definitions are documentation",
+      "severity": "P0",
+      "impact": "Every workflow the firm configures is advisory. Work can reach any state from any state."
+    },
+    {
+      "id": "ST2",
+      "title": "Someone edits an issue they are not allowed to edit",
+      "expected": "The edit is refused and the refusal explains itself.",
+      "verdict": "FAIL",
+      "actual": "canEditIssue returned allowed=true for an arbitrary actor. The seam is deliberate and documented, but until identity exists every role is administrator.",
+      "stops": "at identity — there is no user to be",
+      "severity": "P0",
+      "impact": "No permission validation is possible. A client user, if one existed, could close their own issues."
+    },
+    {
+      "id": "ST3",
+      "title": "Two people edit the same issue at once",
+      "expected": "The second write is detected as conflicting rather than silently overwriting the first.",
+      "verdict": "FAIL",
+      "actual": "Both writes apply. Replaying the first against the second's state succeeds silently — owner ends as \"Priya\". There is no version, no row hash and no If-Match: the reducer rejects impossible states, not stale ones. Result: last writer wins, and only the audit trail shows the loss.",
+      "stops": "at concurrency control",
+      "severity": "P1",
+      "impact": "Two consultants working the same issue overwrite each other. The trail records it; neither is told."
+    },
+    {
+      "id": "ST4",
+      "title": "A record is archived and later restored",
+      "expected": "Nothing is orphaned, and anything moved out during the archive comes back.",
+      "verdict": "PASS",
+      "actual": "Restoring a child under an archived parent is refused (\"“Inventory” is archived, so this would be restored somewhere nothing can see it. Restore that first.\"), and restoring the parent brings all 3 records back. Deletion is soft throughout; nothing is destroyed.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The data lifecycle is reversible and cannot produce an unreachable record."
+    },
+    {
+      "id": "CF1",
+      "title": "The firm shortens its High-severity SLA from 5 days to 2",
+      "expected": "The next issue raised gets a 2-day target, and everything downstream follows.",
+      "verdict": "PASS",
+      "actual": "Default High = 5d proposed 2026-08-10; after the change the same issue proposes 2026-08-05. The policy is read from the model at every derivation, not captured at startup, and the change is audited with before and after.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Configuration reaches runtime for the SLA. Dates already committed are deliberately left alone, and the screen says so."
+    },
+    {
+      "id": "CF2",
+      "title": "The firm adds a work type and retires another",
+      "expected": "New records can use the new type, and records already filed under the retired one stay readable.",
+      "verdict": "PASS",
+      "actual": "A new type is usable immediately (true), and retiring one in use is refused: \"3 records are classified as \"Defect\". Reclassify them first.\".",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The discriminator behaves as configuration, which is what keeps one work-item table honest."
+    },
+    {
+      "id": "CF3",
+      "title": "A project is created from a template",
+      "expected": "Work items, workflow, SLA, notifications, agents and checklists all arrive with it.",
+      "verdict": "PARTIAL",
+      "actual": "Adopting \"Axiocloud standard delivery\" at a scope works and carries 6 agents, 2 workflows, an approval default. It creates no work items, applies no SLA of its own and configures no notifications — a template is a set of defaults, not a project setup.",
+      "stops": "at everything the template does not carry",
+      "severity": "P2",
+      "impact": "Mobilising a project is still manual; only the operating-model defaults are inherited."
+    },
+    {
+      "id": "RP1",
+      "title": "The daily IMS report is checked against the records it counts",
+      "expected": "Every figure on the report can be reproduced from the underlying rows.",
+      "verdict": "PASS",
+      "actual": "Report says open=2 and overdue=1; recounting the rows gives 2 and 1. Section \"Overdue\" lists 1. The report derives from the same rows the grid shows, counts rather than estimates, and prints its own section cap rather than truncating silently.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The one report that exists reconciles to its source."
+    },
+    {
+      "id": "RP2",
+      "title": "Weekly client and monthly governance reporting",
+      "expected": "A client-safe weekly pack and a monthly governance pack can be produced.",
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Only the daily IMS is built (1 report module(s) in source). The weekly pack needs a client-visible boundary that does not exist — no field marks a record or a note as client-safe.",
+      "stops": "at the visibility boundary",
+      "severity": "P1",
+      "impact": "Anything sent to a client is assembled by hand, and internal notes are one copy-paste from the client."
+    },
+    {
+      "id": "AU1",
+      "title": "Every meaningful change answers who, what, when, before, after and why",
+      "expected": "The trail is complete enough to defend a decision months later.",
+      "verdict": "PASS",
+      "actual": "2 entries, all carrying actor, time, field, before and after; 1 carry a reason. Attribution is a parameter of the reducer, so no action can forge it — proven separately by audit:attribution. Why is captured where the product asks for it (date changes, estimate revisions) and absent elsewhere.",
+      "stops": "at \"why\" for ordinary field edits",
+      "severity": "P3",
+      "impact": "The trail is strong on what changed, thinner on the reasoning behind routine edits."
+    },
+    {
+      "id": "AI1",
+      "title": "The assistant proposes a change with low confidence",
+      "expected": "It recommends rather than acts, and a person decides.",
+      "verdict": "NOT TESTABLE",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (9 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "stops": "at the autonomy fields — declared, unread",
+      "severity": "P1",
+      "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
+    },
+    {
+      "id": "FL1",
+      "title": "The database is unreachable while someone is working",
+      "expected": "The user keeps working, nothing is lost, and the queue recovers when it comes back.",
+      "verdict": "FAIL",
+      "actual": "The queue retries with backoff four times, then halts and tells the user — and never resumes: nothing ever clears the halt for the life of the session. Editing continues into the local mirror, so work is visible but unsaved. Separately, the unload flush sends the first 50 queued actions and then clears the whole queue, dropping the remainder.",
+      "stops": "at recovery",
+      "severity": "P1",
+      "impact": "A ten-second outage silently ends persistence for the rest of the session."
+    },
+    {
+      "id": "FL2",
+      "title": "A malformed or hostile write reaches the API",
+      "expected": "It is rejected before it touches stored state.",
+      "verdict": "PARTIAL",
+      "actual": "The endpoint validates the batch shape and the action kind against an allowlist, resolves tenant and actor server-side, and refuses anything else. It does not validate the payload: an action's fields are spread into the record, and TypeScript is erased at runtime. The reducer catches impossible values it knows about; it does not police unknown keys.",
+      "stops": "at field-level validation",
+      "severity": "P1",
+      "impact": "Today the endpoint is unauthenticated anyway, so this is latent. It becomes the sharp edge the moment identity lands."
+    },
+    {
+      "id": "FL3",
+      "title": "The persistence layer is exercised at all",
+      "expected": "Writes reach Postgres and reload correctly.",
+      "verdict": "NOT TESTABLE",
+      "actual": "DATABASE_URL is not set, and there is no .env.example. The repository, mappers, write path and baseline migration exist across 1 module(s) and typecheck, but no test in this repository has ever run them against a database. Every proof here is reducer-level.",
+      "stops": "at the database — it has never been connected in this environment",
+      "severity": "P1",
+      "impact": "The most reversible-looking layer is the least verified. A mapper mistake would surface as data loss on first deployment."
+    }
+  ]
+}
