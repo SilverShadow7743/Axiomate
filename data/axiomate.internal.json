@@ -1903,6 +1903,32 @@
       "subject": "Routing rules were records with no engine, so every configured rule was inert",
       "description": "Nothing evaluated them and nothing could fail, which is not the same as working — and the configuration screen implied otherwise. There is now an engine, and the decision that makes it safe to switch on is that a rule acts by dispatching ordinary actions. It does not write to state: it produces the same Action values a person’s click produces, and those go through the same reducer, the same permission check, the same transition graph and the same audit trail. So a rule cannot do anything a person could not — it cannot close work with no evidence or move a record along a route the graph forbids, because the same code refuses it — everything it does is attributed with the rule that caused it, and a failure is partial and visible rather than silent and total, because each action is whole on its own. Events are derived by comparing the state before an action with the state after, rather than emitted by each reducer arm: an arm that forgets to emit is invisible, because the action still works. A comparison cannot forget, and an event is true by construction. Notifications are records with a delivery outcome rather than calls to a mail server, because the interesting question is not whether a message was composed but whether it arrived and whether anybody knows it did not. In-app is delivered because the inbox is the delivery; every other channel is recorded as pending, and the count of undelivered messages is shown to everybody rather than hidden behind a setting. What is deliberately absent is a schedule: every rule reacts to something that happened, so an issue going at-risk — which is time passing against a date nobody moved — has no event to subscribe to. That is now the honest reason the SLA watch stays declared, and it is a clock that is missing rather than a channel.",
       "reference": "lib/events.ts, lib/automation.ts, lib/notifications.ts, applyWithRules, components/Inbox.tsx"
+    },
+    {
+      "id": "AXM-074",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Commercial",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "Rate, so consumption can be read in money as well as hours",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Scope leakage was undetectable by construction, because nothing was contracted",
+      "description": "The statement of work was a text field on the engagement — a string naming a document nothing could be computed against — so there was no boundary for a request to be outside of, and the product could not do the thing a delivery firm most needs it for. A SOW is now a record under an engagement carrying a baseline: agreed effort and agreed value, both, because they answer different questions and move independently. A fixed-price piece of work can be on budget and badly over on effort, which is the case a firm needs to see before pricing the next one the same way. Against that baseline two figures are real rather than notional, because both of their sources now exist: planned consumption from the estimates on the work, and actual consumption from the recorded hours. The difference is scope position, and it is arithmetic. Attribution is by project rather than per record, following the domain model — a SOW sits between the engagement and the project, and work inherits it by where it lives. Per-record attribution would let two issues in one project belong to different contracts, which does not happen, and would make consumption a question with no reliable answer. Three refusals fell out of it: a draft SOW cannot have work delivered under it, a SOW cannot be archived while projects still point at it, and a project cannot be attributed to a SOW from another engagement. What the screen deliberately does not do is read a scope statement and pronounce on whether a request is inside it. That is a commercial judgement, and a machine answer would be wrong occasionally and confidently. It shows the consequence instead — agreed, planned, spent, left — and names the work its forecast could not see, because a forecast that treats unestimated records as zero is why a project looks fine until the week it does not.",
+      "reference": "lib/sow.ts, components/CommercialPanel.tsx, prisma Sow, HierarchyNode.sowId"
     }
   ]
 }

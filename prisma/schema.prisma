@@ -128,6 +128,7 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  sows          Sow[]
   notifications Notification[]
   approvals     Approval[]
   timeEntries   TimeEntry[]
@@ -166,6 +167,15 @@ model HierarchyNode {
 
   /// Soft delete. Records are archived, never destroyed, so history stays intact.
   deletedAt DateTime?
+  /// The statement of work this project is delivered under. Projects only, and nullable —
+  /// a project attached to nothing is exactly the unattributed state the scope screen reports.
+  sowId String?
+  /// Restrict rather than SetNull: the reducer already refuses to archive a statement of work
+  /// with live projects under it, so a delete reaching this constraint means something has
+  /// gone round the reducer — which should fail loudly rather than quietly orphan the work.
+  sow   Sow?    @relation("SowDelivery", fields: [tenantId, sowId], references: [tenantId, id], onDelete: Restrict)
+  /// SOWs filed against this node, when it is an engagement.
+  sowsHere Sow[] @relation("SowEngagement")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -517,6 +527,50 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// What has been contracted, under one engagement.
+///
+/// `effortHours` and `value` are the baseline, and both are kept because they answer different
+/// questions and move independently: a fixed-price SOW can be on budget and badly over on
+/// effort, which is the case a firm needs to see before pricing the next one the same way.
+///
+/// `value` is Decimal for the same reason time is: it is money, and it will be summed.
+model Sow {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id           String         @default(cuid())
+  engagementId String
+  engagement   HierarchyNode  @relation("SowEngagement", fields: [tenantId, engagementId], references: [tenantId, id], onDelete: Cascade)
+
+  reference String
+  title     String
+  status    String
+  signedOn  DateTime?
+  startDate DateTime?
+  endDate   DateTime?
+
+  effortHours Int     @default(0)
+  value       Decimal @default(0) @db.Decimal(14, 2)
+  currency    String  @default("GBP")
+
+  scope              String @db.Text
+  exclusions         String @db.Text
+  acceptanceCriteria String @db.Text
+
+  createdBy String
+  createdAt DateTime
+  updatedBy String?
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  /// Projects delivered under it.
+  projects HierarchyNode[] @relation("SowDelivery")
+
+  @@id([tenantId, id])
+  @@index([tenantId, engagementId])
+  @@unique([tenantId, engagementId, reference])
 }
 
 /// A message raised for somebody, and whether it got anywhere.

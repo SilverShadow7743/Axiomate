@@ -30,6 +30,7 @@ import {
   type WorkspaceState,
 } from '../lib/workspace'
 import { undelivered } from '../lib/notifications'
+import { describePosition, sowPosition } from '../lib/sow'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -536,14 +537,78 @@ scenario(
 scenario(
   'N',
   'A client asks for something outside the SOW',
-  'The request is recognised as out of scope and does not quietly become delivered work.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `There is no SOW record (${absent(/\bSOW\b|StatementOfWork/) ? 'the term appears nowhere in source' : 'the term appears in source'}), so there is no boundary for a request to be outside of.`,
-    stops: 'at the boundary',
-    severity: 'P0',
-    impact: 'Scope leakage is undetectable by construction. This is the margin risk the product exists to control.',
-  }),
+  'The system can tell that it is outside — and if it cannot judge that, it can at least show what the request costs against what was agreed.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    // The imported log has no project tier — a client's spreadsheet knows engagements and
+    // process areas and nothing between them — so one is created and the process area moved
+    // under it. Attribution is by project, which is where the domain model puts a SOW.
+    const withProject = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project',
+      draft: { name: 'Inventory remediation' }, now: NOW,
+    } as Action)
+    const projectId = Object.values(withProject.nodes).find(
+      (n) => n.kind === 'project' && n.name === 'Inventory remediation',
+    )!.id
+    const structured = ok(withProject, { t: 'move', id: moduleId, newParentId: projectId, now: NOW } as Action)
+
+    /* A signed statement of work, and the project delivered under it. */
+    const withSow = ok(structured, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-2026-014', title: 'Phase 2 — inventory remediation', effortHours: 40, value: 32_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sow = Object.values(withSow.sows)[0]
+    const attributed = ok(withSow, { t: 'attributeToSow', nodeId: projectId, sowId: sow.id, now: NOW } as Action)
+
+    /* Estimate the work, and spend against it. */
+    let live = attributed
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) {
+      live = ok(live, {
+        t: 'setEstimate', issueId: id,
+        patch: { approvedEffortHours: 18, scores: { business: 3, technical: 3, integration: 3, testing: 3, data: 3 } },
+        now: NOW,
+      } as Action)
+      live = ok(live, {
+        t: 'addTime', issueId: id, person: A.name, date: '2026-08-12',
+        hours: 6, activity: 'Resolution', billable: true, note: '', now: NOW,
+      } as Action)
+    }
+
+    const issueIds = Object.values(live.issues).filter((i) => !i.deletedAt).map((i) => i.id)
+    const position = sowPosition(live.sows[sow.id], issueIds, live.estimates, live.timeEntries, live.model.sizeBands)
+
+    /* Detaching is visible too: a project attributed to nothing is invisible to every figure. */
+    const detached = ok(live, { t: 'attributeToSow', nodeId: projectId, sowId: null, now: NOW } as Action)
+    const orphanCount = Object.values(detached.nodes).filter((n) => n.kind === 'project' && !n.sowId && !n.deletedAt).length
+
+    /* A draft SOW cannot have work delivered under it. */
+    const draft = ok(live, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-2026-015', title: 'Phase 3', effortHours: 10, value: 8_000, status: 'Draft' },
+      now: NOW,
+    } as Action)
+    const draftSow = Object.values(draft.sows).find((x) => x.reference === 'SOW-2026-015')!
+    const tooEarly = act(draft, { t: 'attributeToSow', nodeId: projectId, sowId: draftSow.id, now: NOW } as Action)
+
+    const good =
+      position.baselineHours === 40 &&
+      position.plannedHours === 54 &&
+      position.forecastOverrun &&
+      position.actualHours === 18 &&
+      orphanCount === 1 &&
+      Boolean(tooEarly.error)
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `${describePosition(position)} The overrun is arithmetic rather than opinion: agreed effort is on the SOW, planned comes from the estimates, spent comes from the recorded hours. A project attributed to nothing is counted as such (${orphanCount} here), and a draft SOW refuses work: "${tooEarly.error}"`,
+      stops: 'at the judgement — nothing reads the scope statement and decides whether a particular request is inside it',
+      severity: 'P2',
+      impact: 'Scope leakage is now measurable where it shows up as effort. Whether a request is in scope remains a commercial call, and the product makes its consequence visible rather than pretending to make the call.',
+    }
+  },
 )
 
 scenario(
@@ -567,8 +632,8 @@ scenario(
     const made = Object.values(s.issues).find((i) => i.subject === 'Add a second approval step')!
     return {
       verdict: 'PARTIAL',
-      actual: `A CR can be raised as a work item of type "${made.type}"${existing ? '' : ' — the type is configuration and had to be added first'}, and linked to the issue that prompted it. It carries no value, no approver and no SOW to amend.`,
-      stops: 'at valuation and approval',
+      actual: `A CR can be raised as a work item of type "${made.type}"${existing ? '' : ' — the type is configuration and had to be added first'}, linked to the issue that prompted it, and it cannot start until somebody with the authority approves it (scenario P). What it still carries is no value of its own: approving it does not move the agreed effort or value on the statement of work, so a firm sees the overrun rather than the amendment.`,
+      stops: 'at valuation — approval is built, and an approved change still does not amend the SOW it changes',
       severity: 'P1',
       impact: 'A CR is a note about money, not a control over it.',
     }

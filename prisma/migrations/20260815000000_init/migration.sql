@@ -42,6 +42,7 @@ CREATE TABLE "HierarchyNode" (
     "owner" TEXT,
     "parentId" TEXT,
     "deletedAt" TIMESTAMP(3),
+    "sowId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -219,6 +220,32 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "Sow" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "engagementId" TEXT NOT NULL,
+    "reference" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "signedOn" TIMESTAMP(3),
+    "startDate" TIMESTAMP(3),
+    "endDate" TIMESTAMP(3),
+    "effortHours" INTEGER NOT NULL DEFAULT 0,
+    "value" DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "currency" TEXT NOT NULL DEFAULT 'GBP',
+    "scope" TEXT NOT NULL,
+    "exclusions" TEXT NOT NULL,
+    "acceptanceCriteria" TEXT NOT NULL,
+    "createdBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Sow_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "Notification" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -387,6 +414,12 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "Sow_tenantId_engagementId_idx" ON "Sow"("tenantId", "engagementId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Sow_tenantId_engagementId_reference_key" ON "Sow"("tenantId", "engagementId", "reference");
+
+-- CreateIndex
 CREATE INDEX "Notification_tenantId_to_readAt_idx" ON "Notification"("tenantId", "to", "readAt");
 
 -- CreateIndex
@@ -424,6 +457,9 @@ ALTER TABLE "HierarchyNode" ADD CONSTRAINT "HierarchyNode_tenantId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "HierarchyNode" ADD CONSTRAINT "HierarchyNode_tenantId_parentId_fkey" FOREIGN KEY ("tenantId", "parentId") REFERENCES "HierarchyNode"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HierarchyNode" ADD CONSTRAINT "HierarchyNode_tenantId_sowId_fkey" FOREIGN KEY ("tenantId", "sowId") REFERENCES "Sow"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Issue" ADD CONSTRAINT "Issue_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -481,6 +517,12 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sow" ADD CONSTRAINT "Sow_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sow" ADD CONSTRAINT "Sow_tenantId_engagementId_fkey" FOREIGN KEY ("tenantId", "engagementId") REFERENCES "HierarchyNode"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

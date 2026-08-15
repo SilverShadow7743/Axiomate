@@ -19,6 +19,7 @@ import {
   timeToRow,
   approvalToRow,
   notificationToRow,
+  sowToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -306,6 +307,37 @@ async function writeAction(
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    /**
+     * The statement of work, and — for an attribution — the node that now points at it.
+     *
+     * `attributeToSow` writes no SOW row at all: it changes which project is delivered under
+     * one, which is a column on the node. Sharing the arm keeps the two halves of the same
+     * commercial thought together, and each loop writes only what its own action moved.
+     */
+    case 'upsertSow':
+    case 'archiveSow':
+    case 'attributeToSow': {
+      for (const [id, sow] of Object.entries(after.sows)) {
+        if (before.sows[id] === sow) continue
+        const row = sowToRow(tenantId, sow)
+        await tx.sow.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      for (const [id, node] of Object.entries(after.nodes)) {
+        if (before.nodes[id] === node) continue
+        const row = nodeToRow(tenantId, node)
+        await tx.hierarchyNode.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       return
     }
 

@@ -17,6 +17,8 @@ import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
+import CommercialPanel from './CommercialPanel'
+import type { Sow } from '@/lib/sow'
 import type { TimeActivity } from '@/lib/time'
 import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/estimation'
@@ -121,6 +123,8 @@ interface Props {
   onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
   onBaselineEstimate: (issueId: string) => void
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
+  onUpsertSow: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
+  onAttributeToSow: (nodeId: string, sowId: string | null) => void
 }
 
 export default function DetailPanel({
@@ -149,6 +153,8 @@ export default function DetailPanel({
   state,
   onSetAssignment,
   onUpdateEngagement,
+  onUpsertSow,
+  onAttributeToSow,
   actor,
   onSaveIssue,
   onAddNote,
@@ -297,11 +303,21 @@ export default function DetailPanel({
           // broken rather than as not-applicable.
           <History audit={audit} />
         ) : !issue && (row.kind === 'engagement' || row.kind === 'client') ? (
-          <ScopePanel
-            row={row}
-            state={state}
-            onUpdateEngagement={onUpdateEngagement}
-          />
+          <>
+            <ScopePanel row={row} state={state} onUpdateEngagement={onUpdateEngagement} />
+            {/* Commercial detail belongs on the engagement, under the scope it is about,
+                rather than on a tab an issue would also show and never use. */}
+            {row.kind === 'engagement' && (
+              <CommercialPanel
+                row={row}
+                state={state}
+                actor={actor}
+                allRows={allRows}
+                onUpsert={onUpsertSow}
+                onAttribute={onAttributeToSow}
+              />
+            )}
+          </>
         ) : !issue ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
             <b>{row.name}</b> is a {row.kind} summary row covering{' '}

@@ -1612,6 +1612,12 @@ export default function IssueWorkspace({
             if (res.ok) setDirty(false)
             return res.ok
           }}
+          onUpsertSow={(id, engagementId, patch) =>
+            dispatch({ t: 'upsertSow', id, engagementId, patch, now: new Date().toISOString() })
+          }
+          onAttributeToSow={(nodeId, sowId) =>
+            dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
+          }
           onRequestApproval={(subjectId, ruleId, note) =>
             dispatch({ t: 'requestApproval', subjectId, ruleId, note, now: new Date().toISOString() })
           }

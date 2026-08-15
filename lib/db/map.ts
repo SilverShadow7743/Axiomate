@@ -11,6 +11,7 @@ import type {
   TimeEntry as TimeRow,
   Approval as ApprovalRow,
   Notification as NotificationRow,
+  Sow as SowRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
@@ -25,6 +26,7 @@ import type { EstimateRevision, IssueEstimate } from '../estimation'
 import type { TimeActivity, TimeEntry } from '../time'
 import type { Approval, ApprovalDecision } from '../approval'
 import type { Channel, Delivery, Notification } from '../notifications'
+import type { Sow, SowStatus } from '../sow'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -114,6 +116,7 @@ const EVIDENCE_KIND_FROM_DB: Record<EvidenceRow['kind'], EvidenceKind> = {
 
 export function nodeToRow(tenantId: TenantId, n: HierarchyNode): Prisma.HierarchyNodeUncheckedCreateInput {
   return {
+    sowId: n.sowId ?? null,
     tenantId,
     id: n.id,
     kind: NODE_KIND_TO_DB[n.kind],
@@ -126,6 +129,7 @@ export function nodeToRow(tenantId: TenantId, n: HierarchyNode): Prisma.Hierarch
 
 export function nodeFromRow(r: NodeRow): HierarchyNode {
   return {
+    sowId: r.sowId,
     id: r.id,
     kind: NODE_KIND_FROM_DB[r.kind],
     name: r.name,
@@ -727,5 +731,58 @@ export function notificationFromRow(r: NotificationRow): Notification {
     delivery: r.delivery as Delivery,
     deliveryNote: r.deliveryNote,
     readAt: r.readAt ? r.readAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Statements of work
+ * ================================================================== */
+
+export function sowToRow(tenantId: TenantId, s: Sow): Prisma.SowUncheckedCreateInput {
+  return {
+    tenantId,
+    id: s.id,
+    engagementId: s.engagementId,
+    reference: s.reference,
+    title: s.title,
+    status: s.status,
+    signedOn: toDate(s.signedOn),
+    startDate: toDate(s.startDate),
+    endDate: toDate(s.endDate),
+    effortHours: s.effortHours,
+    value: s.value,
+    currency: s.currency,
+    scope: s.scope,
+    exclusions: s.exclusions,
+    acceptanceCriteria: s.acceptanceCriteria,
+    createdBy: s.createdBy,
+    createdAt: new Date(s.createdAt),
+    updatedBy: s.updatedBy,
+    updatedAt: s.updatedAt ? new Date(s.updatedAt) : null,
+    deletedAt: s.deletedAt ? new Date(s.deletedAt) : null,
+  }
+}
+
+export function sowFromRow(r: SowRow): Sow {
+  return {
+    id: r.id,
+    engagementId: r.engagementId,
+    reference: r.reference,
+    title: r.title,
+    status: r.status as SowStatus,
+    signedOn: fromDate(r.signedOn),
+    startDate: fromDate(r.startDate),
+    endDate: fromDate(r.endDate),
+    effortHours: r.effortHours,
+    value: Number(r.value),
+    currency: r.currency,
+    scope: r.scope,
+    exclusions: r.exclusions,
+    acceptanceCriteria: r.acceptanceCriteria,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt.toISOString(),
+    updatedBy: r.updatedBy,
+    updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

@@ -67,6 +67,8 @@ export const PERMISSIONS = [
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
   { key: 'estimate.agree', label: 'Agree an estimate', what: 'Baseline it, after which changes need a reason.' },
   { key: 'lifecycle.build', label: 'Plan a lifecycle', what: 'Generate or clear the activity plan under an issue.' },
+  { key: 'sow.edit', label: 'Record a statement of work', what: 'Create or change a SOW and its agreed effort and value.' },
+  { key: 'sow.attribute', label: 'Attribute work to a SOW', what: 'Say which statement of work a project is delivered under.' },
   { key: 'engagement.edit', label: 'Edit engagement detail', what: 'Commercial and governance detail on an engagement.' },
   { key: 'config.manage', label: 'Configure the platform', what: 'Terminology, roles, work types, service levels, transitions, agents, templates and routing.' },
 ] as const
@@ -124,9 +126,9 @@ const DELIVERY_CORE: PermissionKey[] = [
  */
 export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   [ADMIN_ROLE_ID]: ALL,
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'note.editAny', 'evidence.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'time.recordForOthers'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record'],
@@ -246,6 +248,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   baselineEstimate: 'estimate.agree',
   buildLifecycle: 'lifecycle.build',
   clearLifecycle: 'lifecycle.build',
+  upsertSow: 'sow.edit',
+  archiveSow: 'sow.edit',
+  attributeToSow: 'sow.attribute',
   updateEngagement: 'engagement.edit',
   config: 'config.manage',
 }

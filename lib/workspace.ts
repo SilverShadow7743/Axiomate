@@ -49,6 +49,7 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents } from './events'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, type Channel, type Notification } from './notifications'
@@ -105,6 +106,16 @@ export interface HierarchyNode {
   name: string
   parentId: string | null
   owner: string | null
+  /**
+   * The statement of work this is delivered under. Projects only, and nullable.
+   *
+   * On the node rather than on each record, following the domain model: a SOW sits between the
+   * engagement and the project, and work inherits it by where it lives. Per-record attribution
+   * would let two issues in one project belong to different contracts, which is not a thing
+   * that happens — and would make "what has this SOW consumed" a question with no reliable
+   * answer.
+   */
+  sowId?: string | null
   /** Soft delete — records are archived, never destroyed. */
   deletedAt: string | null
 }
@@ -200,6 +211,8 @@ export interface WorkspaceState {
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
   notifications: Record<string, Notification>
+  /** What has been contracted, per engagement. See `./sow`. */
+  sows: Record<string, Sow>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -429,6 +442,7 @@ export function initWorkspace(
     timeEntries: {},
     approvals: {},
     notifications: {},
+    sows: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -536,6 +550,11 @@ export type Action =
       now: string
     }
   | { t: 'markNotificationRead'; id: string; now: string }
+  /* ---- COMMERCIAL ---- */
+  | { t: 'upsertSow'; id: string | null; engagementId: string; patch: Partial<Sow>; now: string }
+  | { t: 'archiveSow'; id: string; now: string }
+  /** Which SOW a project is delivered under. `sowId: null` detaches it. */
+  | { t: 'attributeToSow'; nodeId: string; sowId: string | null; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -2309,6 +2328,161 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           notifications: { ...state.notifications, [a.id]: { ...n, readAt: a.now } },
         },
+      }
+    }
+
+    /* ---------------- COMMERCIAL ---------------- */
+
+    case 'upsertSow': {
+      const engagement = state.nodes[a.engagementId]
+      if (!engagement || engagement.kind !== 'engagement') {
+        return { state, error: 'A statement of work belongs to an engagement.' }
+      }
+      const existing = a.id ? state.sows[a.id] : null
+      if (a.id && !existing) return { state, error: 'That statement of work no longer exists.' }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `sow-${seq}`
+      const blank: Sow = {
+        id,
+        engagementId: a.engagementId,
+        reference: '',
+        title: '',
+        status: 'Draft',
+        signedOn: null,
+        startDate: null,
+        endDate: null,
+        effortHours: 0,
+        value: 0,
+        currency: 'GBP',
+        scope: '',
+        exclusions: '',
+        acceptanceCriteria: '',
+        createdBy: existing?.createdBy ?? by,
+        createdAt: existing?.createdAt ?? a.now,
+        updatedBy: existing ? by : null,
+        updatedAt: existing ? a.now : null,
+        deletedAt: null,
+      }
+      // Built in three layers so the last word is unambiguous: defaults, then whatever is
+      // stored, then the patch — and finally the identity fields again, because a patch is a
+      // set of edits and must never be able to move a record onto another engagement.
+      const next: Sow = {
+        ...blank,
+        ...existing,
+        ...a.patch,
+        id,
+        engagementId: a.engagementId,
+      }
+      const problem = checkSow(next)
+      if (problem) return { state, error: problem.message }
+
+      /**
+       * A baseline that moves is a variation, and it is recorded as one.
+       *
+       * Changing agreed effort or value on a signed SOW is exactly the event a firm argues
+       * about six months later, so the audit entry carries both figures either side rather
+       * than the generic "updated".
+       */
+      let audit = state.audit
+      if (existing) {
+        for (const key of ['effortHours', 'value', 'status'] as const) {
+          if (existing[key] !== next[key]) {
+            audit = log(
+              { ...state, audit },
+              {
+                rowId: a.engagementId,
+                field: `sow.${key}`,
+                from: String(existing[key]),
+                to: String(next[key]),
+                at: a.now,
+                by,
+                reason: `${next.reference} — ${next.title}`,
+              },
+            )
+          }
+        }
+      } else {
+        audit = log(
+          { ...state, audit },
+          {
+            rowId: a.engagementId,
+            field: 'sow',
+            from: '',
+            to: `${next.reference} — ${next.effortHours}h, ${next.currency} ${next.value}`,
+            at: a.now,
+            by,
+          },
+        )
+      }
+
+      return {
+        state: { ...state, sows: { ...state.sows, [id]: next }, seq, audit },
+        message: existing ? 'Statement of work saved.' : `${next.reference} recorded.`,
+      }
+    }
+
+    case 'archiveSow': {
+      const sow = state.sows[a.id]
+      if (!sow) return { state, error: 'That statement of work no longer exists.' }
+      const attached = Object.values(state.nodes).filter((n) => n.sowId === a.id && !n.deletedAt)
+      if (attached.length) {
+        return {
+          state,
+          error: `${attached.length} project(s) are delivered under this. Detach them first — an archived contract with live work under it is a record nobody can reconcile.`,
+        }
+      }
+      return {
+        state: {
+          ...state,
+          sows: { ...state.sows, [a.id]: { ...sow, deletedAt: a.now } },
+          audit: log(state, {
+            rowId: sow.engagementId,
+            field: 'sow',
+            from: sow.reference,
+            to: '(archived)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Statement of work archived.',
+      }
+    }
+
+    case 'attributeToSow': {
+      const node = state.nodes[a.nodeId]
+      if (!node) return { state, error: 'That record no longer exists.' }
+      if (node.kind !== 'project') {
+        return { state, error: 'Work is attributed by project, so the statement of work goes on the project.' }
+      }
+      if (a.sowId) {
+        const sow = state.sows[a.sowId]
+        if (!sow || sow.deletedAt) return { state, error: 'That statement of work no longer exists.' }
+        // The engagement has to match, or consumption would count work the contract never covered.
+        const chain = scopeChainOf(state, a.nodeId)
+        if (!chain.includes(sow.engagementId)) {
+          return { state, error: `${sow.reference} belongs to a different engagement.` }
+        }
+        if (!LIVE_SOW_STATUSES.includes(sow.status)) {
+          return { state, error: `${sow.reference} is ${sow.status.toLowerCase()}. Work cannot be delivered under it yet.` }
+        }
+      }
+      const was = node.sowId ? state.sows[node.sowId]?.reference ?? node.sowId : ''
+      const now = a.sowId ? state.sows[a.sowId]!.reference : ''
+      return {
+        state: {
+          ...state,
+          nodes: { ...state.nodes, [a.nodeId]: { ...node, sowId: a.sowId } },
+          audit: log(state, {
+            rowId: a.nodeId,
+            field: 'sow',
+            from: was,
+            to: now,
+            at: a.now,
+            by,
+          }),
+        },
+        message: a.sowId ? 'Attributed.' : 'Detached from the statement of work.',
       }
     }
 

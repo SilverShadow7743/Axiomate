@@ -154,20 +154,20 @@
     {
       "id": "N",
       "title": "A client asks for something outside the SOW",
-      "expected": "The request is recognised as out of scope and does not quietly become delivered work.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "There is no SOW record (the term appears in source), so there is no boundary for a request to be outside of.",
-      "stops": "at the boundary",
-      "severity": "P0",
-      "impact": "Scope leakage is undetectable by construction. This is the margin risk the product exists to control."
+      "expected": "The system can tell that it is outside — and if it cannot judge that, it can at least show what the request costs against what was agreed.",
+      "verdict": "PARTIAL",
+      "actual": "18h of 40h used (45%), and the current plan needs 54h — 14h more than was agreed. The overrun is arithmetic rather than opinion: agreed effort is on the SOW, planned comes from the estimates, spent comes from the recorded hours. A project attributed to nothing is counted as such (1 here), and a draft SOW refuses work: \"SOW-2026-015 is draft. Work cannot be delivered under it yet.\"",
+      "stops": "at the judgement — nothing reads the scope statement and decides whether a particular request is inside it",
+      "severity": "P2",
+      "impact": "Scope leakage is now measurable where it shows up as effort. Whether a request is in scope remains a commercial call, and the product makes its consequence visible rather than pretending to make the call."
     },
     {
       "id": "O",
       "title": "A change request is raised",
       "expected": "It is captured as a CR, valued, and linked to the work it changes.",
       "verdict": "PARTIAL",
-      "actual": "A CR can be raised as a work item of type \"Change Request\" — the type is configuration and had to be added first, and linked to the issue that prompted it. It carries no value, no approver and no SOW to amend.",
-      "stops": "at valuation and approval",
+      "actual": "A CR can be raised as a work item of type \"Change Request\" — the type is configuration and had to be added first, linked to the issue that prompted it, and it cannot start until somebody with the authority approves it (scenario P). What it still carries is no value of its own: approving it does not move the agreed effort or value on the statement of work, so a firm sees the overrun rather than the amendment.",
+      "stops": "at valuation — approval is built, and an approved change still does not amend the SOW it changes",
       "severity": "P1",
       "impact": "A CR is a note about money, not a control over it."
     },
