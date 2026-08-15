@@ -24,12 +24,24 @@ export interface Actor {
   name: string
 }
 
-/**
- * Work this application did on its own behalf.
+/*
+ * There is deliberately no `SYSTEM_ACTOR` constant.
  *
- * Matches the convention already set by the lifecycle builder, which stamps
- * `createdBy: 'lifecycle-generator'` on the activities it synthesises: machine-originated
- * records say so in the same place a person's name would appear, rather than borrowing
- * whichever human happened to trigger them.
+ * One was written here and then removed, because nothing legitimately needed it and an
+ * exported value with no call sites is the "declared, with no runtime" pattern this codebase
+ * keeps finding and deleting.
+ *
+ * The two candidates both turned out to be already handled, and better:
+ *
+ *  - **The assistant.** It only ever *proposes*; a person applies. The change belongs to the
+ *    person who approved it, and that is who the reducer records — attributing it to the
+ *    machine would hide a human decision behind a system name.
+ *
+ *  - **The lifecycle builder.** It stamps `createdBy: 'lifecycle-generator'` on the activities
+ *    it synthesises. That is more specific than a single system identity: it says *which*
+ *    process produced the row. A shared constant would have made every machine-written record
+ *    indistinguishable, which is a loss, not a tidy-up.
+ *
+ * So the convention for machine-originated records is a descriptive name at the point of
+ * origin. If a second such process appears, it gets its own name for the same reason.
  */
-export const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Axiomate' }

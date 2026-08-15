@@ -47,7 +47,13 @@ export function currentActor(): Actor {
  * The operator when nothing says otherwise.
  *
  * A real name rather than "Unknown" or "System", because this deployment does have one
- * operator and the log it has been accumulating is genuinely theirs. Recording an anonymous
- * placeholder would make the existing trail less true, not more careful.
+ * operator and the trail it has been accumulating is genuinely theirs. Recording an anonymous
+ * placeholder would make the existing history less true, not more careful.
+ *
+ * The cost of that choice, stated because it is not obvious: a *second* deployment that
+ * forgets to set `AXIOMATE_OPERATOR` will attribute its entire trail to a person who has
+ * never touched it. That is the wrong default the moment this runs anywhere but here, and it
+ * is the first thing to revisit when it does — before authentication, not after, because a
+ * misattributed trail is worse than an unattributed one.
  */
 export const DEFAULT_OPERATOR: Actor = { id: 'nishant.sekhar', name: 'Nishant Sekhar' }
