@@ -197,7 +197,15 @@ export function clearWorkspaceLocally(tenantId: string): void {
   }
 }
 
-/** Whether a mirror exists, without paying to parse it. */
+/**
+ * Whether a mirror exists, without paying to parse it.
+ *
+ * Only ever called when a database *is* configured, to warn that offline work is sitting
+ * unused — so "exists" here means "abandoned", while the same legacy key means "adopt this"
+ * to `loadWorkspaceLocally`, which only runs when there is no database. The two readings
+ * cannot both apply in one session, and stating that is what stops the next edit from making
+ * them contradict: this function must never adopt, and that one must never warn.
+ */
 export function hasLocalWorkspace(tenantId: string): boolean {
   if (typeof window === 'undefined') return false
   try {

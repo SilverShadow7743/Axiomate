@@ -477,7 +477,7 @@ immutable throughout — an untouched record is the same object in both states, 
 is always a fresh copy.
 
 **The UI is not blocked on the database.** `dispatch` stays synchronous and the write is
-fire-and-forget, because its callers depend on the synchronous return: `applyProposal` reads
+queued rather than awaited, because its callers depend on the synchronous return: `applyProposal` reads
 the folded state back in the same tick to reveal the row it just created. Making the write
 awaitable would mean rewriting every call site to handle a promise, for a confirmation the UI
 has no reason to wait on. The consequence is stated rather than hidden — the database is
@@ -751,18 +751,25 @@ dense grid does not light up on every press.
   client generates, the mapper's conversion was exercised in both directions in-process, and
   the no-database path was verified in the browser — but every actual database read and write
   is typecheck-only, the same standing as the assistant's Claude branch below.
-- There is no authentication and no multi-user concurrency control. Last write wins: there is
-  no row locking and no version column. The load inside `persistAction` means each action is
-  applied to the effect of the one before it, which is a weaker guarantee than serialisability
-  and should not be read as one.
+- There is no authentication. Concurrency between writers *is* handled — `persistActions` runs
+  the load and the fold inside one `Serializable` transaction and retries up to three times on
+  a serialization failure, so a batch that would have interleaved replays against what the
+  winner produced rather than overwriting it. What is missing is anything above that: no user,
+  no session, and therefore no per-user conflict reporting — two people editing the same field
+  produce two valid, audited writes and the later one stands.
 - Tenant isolation is not enforced. Every table is tenant-scoped and every query names a
   tenant, but nothing establishes which tenant a request belongs to, because that needs
   identity — and row-level security, the layer that would enforce it, needs identity too. See
   *Multi-tenancy*.
-- Writes are fire-and-forget, so a failed write is reported after the fact and the user is
-  asked to reload. There is no automatic resync and no retry queue.
-- The schema is applied with `prisma db push`, not versioned migrations. There is no migration
-  history, so a schema change is pushed against whatever state the database is already in.
+- Writes are queued, not fire-and-forget: `useAutosave` drains a serial FIFO queue one request
+  at a time with exponential backoff, batches what accumulates, and flushes on page hide via
+  `sendBeacon`. The gap that remains is recovery, not delivery — after the retries are
+  exhausted the queue halts and the user is asked to reload. There is still no automatic
+  resync, because reconciling a diverged client against stored state needs a conflict model
+  this does not have.
+- The schema has a baseline migration (`prisma/migrations/20260815000000_init`) and
+  `db:migrate` scripts, but it has never been applied: no `DATABASE_URL` has been available.
+  `db:push` remains for throwaway databases. Treat the migration as reviewed, not as run.
 - The Critical Resolution Path uses a forward pass over binding constraints rather than a full
   forward/backward float calculation, so an activity with calendar slack (e.g. a weekend gap
   before its successor) is correctly excluded from the chain but no explicit float figure is

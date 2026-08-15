@@ -11,7 +11,8 @@
     "transform": "node scripts/transform-issues.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
-    "db:migrate:dev": "prisma migrate dev"
+    "db:migrate:dev": "prisma migrate dev",
+    "audit:tenancy": "node scripts/tenant-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
