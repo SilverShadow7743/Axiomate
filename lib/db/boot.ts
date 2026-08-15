@@ -4,7 +4,7 @@ import { loadSeed, type SeedFile } from '../data'
 import { databaseConfigured, describeDbError } from './client'
 import { importWorkspace, loadWorkspace } from './repo'
 import { currentTenantId } from '../tenant'
-import { getSession, identityEstablished } from '../principal'
+import { getSessionFromCookies, identityEstablished } from '../principal'
 import type { Actor } from '../actor'
 
 /**
@@ -60,7 +60,7 @@ export async function boot(): Promise<Boot> {
    * reads cookies through Next's own API — so this is the unverified answer on a deployment
    * with a provider, and the client uses `signInRequired` to say so rather than acting.
    */
-  const session = getSession()
+  const session = await getSessionFromCookies()
   const actor = session.actor
 
   if (!databaseConfigured()) {

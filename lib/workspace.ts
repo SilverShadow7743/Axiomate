@@ -2441,6 +2441,25 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       if (problem) return { state, error: problem.message }
 
       /**
+       * One reference per engagement, checked here because the database checks it too.
+       *
+       * A constraint the schema enforces and the reducer does not is the worst kind: the
+       * browser accepts the record, the mirror keeps it, and the write fails on a machine
+       * nobody is looking at. Every rule the database holds should be refused here first, in
+       * words, while there is still somebody to read them.
+       */
+      const clash = Object.values(state.sows).find(
+        (s) =>
+          s.id !== id &&
+          !s.deletedAt &&
+          s.engagementId === a.engagementId &&
+          s.reference.trim().toLowerCase() === next.reference.trim().toLowerCase(),
+      )
+      if (clash) {
+        return { state, error: `${clash.reference} is already recorded against this engagement.` }
+      }
+
+      /**
        * A baseline that moves is a variation, and it is recorded as one.
        *
        * Changing agreed effort or value on a signed SOW is exactly the event a firm argues

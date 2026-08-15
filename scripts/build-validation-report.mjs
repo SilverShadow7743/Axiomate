@@ -422,6 +422,10 @@ footer {
     <p>Four failed attempts halt the queue permanently while editing continues into the browser mirror and looks saved. Separately, no request carries an identity, so a batch delivered twice creates two of everything in it — the intake endpoint dedupes on the sender's message id, and the workspace endpoint has no equivalent.</p>
   </div>
   <div class="risk">
+    <h4>Twenty tables, and none of them has ever run</h4>
+    <p>The repository, mappers, write path and migration exist, typecheck, and are exercised nowhere: this environment has no <code>DATABASE_URL</code>, so every proof on this page is reducer-level. That was a footnote when there were nine tables. It is now the largest untested surface in the product, and the failure it hides is the quiet kind — a mapper that drops a field, or a constraint the schema holds and the reducer does not, which the browser accepts and the database refuses on a machine nobody is watching.</p>
+  </div>
+  <div class="risk">
     <h4>Hours are recorded and money is not</h4>
     <p>Time, estimates and a contracted baseline all exist, so effort consumption is arithmetic. Cost and margin are not, because there is no rate anywhere — not on a person, a role or an engagement. Every commercial figure stops at hours.</p>
   </div>

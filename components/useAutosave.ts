@@ -98,6 +98,23 @@ export function useAutosave(enabled: boolean): Autosave {
 
             // A reducer rejection is a disagreement about state, not a hiccup. Replaying it
             // would fail identically every time, so the queue stops and the user is told.
+            // 401 is terminal for the same reason: retrying an unauthenticated request four
+            // times produces four failures and one unhelpful message. It differs in the answer
+            // — this one is fixable by the person reading it.
+            if (res.status === 401) {
+              halted.current = true
+              if (alive.current) {
+                setState((s) => ({
+                  ...s,
+                  status: 'error',
+                  pending: queue.current.length,
+                  error: 'Sign in to save. Your work is still here — signing in and reloading will send it.',
+                }))
+              }
+              done = true
+              break
+            }
+
             if (res.status === 409 || res.status === 400) {
               halted.current = true
               if (alive.current) {

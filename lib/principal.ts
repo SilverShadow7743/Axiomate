@@ -3,6 +3,7 @@ import type { Actor } from './actor'
 import { currentActor } from './identity'
 import { SESSION_COOKIE, verify } from './auth/cookie'
 import { configured as entraConfigured } from './auth/entra'
+import { cookies } from 'next/headers'
 
 /**
  * Who is making this request.
@@ -38,7 +39,16 @@ export interface Session {
   reason?: string
 }
 
-export function getSession(req?: Request): Session {
+/**
+ * The session, from a value already in hand.
+ *
+ * Split from `getSession` because the two callers get the cookie in different ways and only one
+ * of them can await: a route handler has the `Request`, and a server component has to ask
+ * Next for the cookie store, which is asynchronous. Sharing this keeps the *decisions* — what
+ * counts as verified, what happens when a provider is configured and nobody signed in — in one
+ * place, which is the part that must not diverge.
+ */
+function sessionFrom(cookie: string | undefined): Session {
   if (!entraConfigured()) {
     return {
       actor: currentActor(),
@@ -48,7 +58,7 @@ export function getSession(req?: Request): Session {
     }
   }
 
-  const result = verify(cookieValue(req, SESSION_COOKIE))
+  const result = verify(cookie)
   if ('claims' in result) {
     const { oid, name, email } = result.claims
     return {
@@ -78,6 +88,23 @@ export function getSession(req?: Request): Session {
 /** Whether this deployment can tell two people apart at all. */
 export function identityEstablished(): boolean {
   return entraConfigured()
+}
+
+/** For a route handler, which has the request. */
+export function getSession(req?: Request): Session {
+  return sessionFrom(cookieValue(req, SESSION_COOKIE))
+}
+
+/**
+ * For a server component, which does not.
+ *
+ * `boot()` is already asynchronous, so this costs nothing there — and skipping it was why an
+ * Entra deployment rendered every page as "Not signed in" immediately after a successful
+ * sign-in: the cookie was in the browser and the server never looked at it.
+ */
+export async function getSessionFromCookies(): Promise<Session> {
+  const store = await cookies()
+  return sessionFrom(store.get(SESSION_COOKIE)?.value)
 }
 
 function cookieValue(req: Request | undefined, name: string): string | undefined {

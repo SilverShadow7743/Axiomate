@@ -219,7 +219,11 @@ export default function IssueWorkspace({
   /** Single funnel for every mutation, so validation and audit are never bypassed. */
   const dispatch = useCallback(
     (action: Action): boolean => {
-      const res = apply(state, action, actor)
+      // Through the same runner as a batch. Almost everything dispatched singly — a note, a
+      // time entry, an approval, an allocation — is exactly what the rules react to, and
+      // running them only on batches meant the server planned follow-ups the browser had not:
+      // the ids diverged and the notification did not appear until a reload.
+      const res = applyWithRules(state, action, actor)
       if (res.error) {
         notify(res.error, true)
         return false

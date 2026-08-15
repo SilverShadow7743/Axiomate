@@ -773,17 +773,25 @@ scenario(
     const draftSow = Object.values(draft.sows).find((x) => x.reference === 'SOW-2026-015')!
     const tooEarly = act(draft, { t: 'attributeToSow', nodeId: projectId, sowId: draftSow.id, now: NOW } as Action)
 
+    /* And a reference the database would refuse is refused here, in words, first. */
+    const duplicate = act(live, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-2026-014', title: 'Typed twice', effortHours: 5, value: 0, status: 'Draft' },
+      now: NOW,
+    } as Action)
+
     const good =
       position.baselineHours === 40 &&
       position.plannedHours === 54 &&
       position.forecastOverrun &&
       position.actualHours === 18 &&
       orphanCount === 1 &&
-      Boolean(tooEarly.error)
+      Boolean(tooEarly.error) &&
+      Boolean(duplicate.error)
 
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `${describePosition(position)} The overrun is arithmetic rather than opinion: agreed effort is on the SOW, planned comes from the estimates, spent comes from the recorded hours. A project attributed to nothing is counted as such (${orphanCount} here), and a draft SOW refuses work: "${tooEarly.error}"`,
+      actual: `${describePosition(position)} The overrun is arithmetic rather than opinion: agreed effort is on the SOW, planned comes from the estimates, spent comes from the recorded hours. A project attributed to nothing is counted as such (${orphanCount} here), a draft SOW refuses work ("${tooEarly.error}"), and a reference the database would reject is refused here first: "${duplicate.error}"`,
       stops: 'at the judgement — nothing reads the scope statement and decides whether a particular request is inside it',
       severity: 'P2',
       impact: 'Scope leakage is now measurable where it shows up as effort. Whether a request is in scope remains a commercial call, and the product makes its consequence visible rather than pretending to make the call.',
