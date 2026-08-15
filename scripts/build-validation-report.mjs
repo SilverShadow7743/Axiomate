@@ -321,11 +321,11 @@ footer {
 
 <section class="blk">
   <span class="num">§ 01 — Executive summary</span>
-  <h2>It keeps a record, holds a line, and now acts. What it cannot yet do is prove who you are.</h2>
-  <p class="lede">${by('PASS').length} scenarios pass end to end and ${by('PARTIAL').length} get part of the way, and the shape of the result has changed twice. The first run's passes were all about <em>keeping a record straight</em>. The second run added <em>holding a line</em> — an issue cannot jump from Open to Closed, a confirmed closure needs evidence, an analyst who may triage may not close. This run adds the third thing: the system <strong>acts</strong>. Rules fire on events and raise notifications; a message posted to the intake endpoint becomes a work item under the right scope; an overallocation is refused with the arithmetic behind it.</p>
-  <p>The rule that makes the acting safe is worth stating on its own: <strong>automation dispatches ordinary actions</strong>. A rule goes through the same reducer, permission check, transition graph and audit trail a person's click does — so it cannot do anything a person could not, everything it does is attributed to the rule that caused it, and a failure is partial and recorded rather than silent and total.</p>
-  <p>One P0 remains, and it is the one that should not be closed by writing code without being asked. Authorisation is real and enforced; the identity it is enforced against is still read from an environment variable. The boundary a provider plugs into is built and every server path already asks it — what is missing is the decision about <em>which provider</em>, which belongs to whoever operates this rather than to whoever last had the editor open.</p>
-  <div class="note"><b>On severity.</b> P0 means the intended business outcome cannot be produced correctly. Of the nine P0s in the first run, eight are closed: the ungoverned status field, the absent permission model, the missing time record, the inert automation engine, the uncontracted scope boundary, the uncounted capacity, the unapproved change, and the intake that read nothing. The ninth is <code>ST2b</code>, above.</div>
+  <h2>Every P0 is closed. What is left is a system that acts but does not wake up.</h2>
+  <p class="lede">${by('PASS').length} scenarios pass end to end and ${by('PARTIAL').length} get part of the way. The passing set has changed character three times: first <em>keeping a record straight</em>, then <em>holding a line</em> — an issue cannot jump from Open to Closed, a confirmed closure needs evidence, an analyst who may triage may not close — and now <em>acting</em>. Rules fire on events, a message posted to the intake endpoint becomes a work item under the right scope, an overallocation is refused with the arithmetic behind it, and a signed-in person is a person the directory proved.</p>
+  <p>The rule that makes the acting safe is worth stating alone: <strong>automation dispatches ordinary actions</strong>. A rule passes through the same reducer, permission check, transition graph and audit trail a person's click does — so it cannot do anything a person could not, everything it does is attributed to the rule that caused it, and a failure is partial and recorded rather than silent and total.</p>
+  <p>What remains is one shape repeated. Almost every P1 below is something the product can <em>calculate</em> and cannot <em>raise</em>: an issue going at-risk, an SLA about to breach, a plan that needs more hours than have been committed. None of them are events — they are the passage of time against a date nobody moved — so there is nothing for a rule to subscribe to. <strong>A scheduled pass is the single highest-value thing left</strong>, and it is a clock rather than a channel.</p>
+  <div class="note"><b>On severity.</b> P0 means the intended business outcome cannot be produced correctly. All nine from the first run are closed: the ungoverned status field, the absent permission model, the missing time record, the inert automation engine, the uncontracted scope boundary, the uncounted capacity, the unapproved change, the intake that read nothing, and the unproven identity. Each was closed by building the mechanism the outcome needed, and each has a scenario that drives it rather than a claim that it works.</div>
 </section>
 
 <section class="blk">
@@ -402,8 +402,8 @@ footer {
   <h2>What would still hurt a real engagement</h2>
 
   <div class="risk">
-    <h4>Authorisation rests on a claimed identity</h4>
-    <p>The permission model is real, enforced in the reducer, and configurable. The actor behind it comes from an environment variable, so it stops a mistake rather than an attacker — and the fallback role, which ships as Administrator so a single-operator deployment is usable, is effectively everyone until a login exists.</p>
+    <h4>Identity is built and not yet switched on here</h4>
+    <p>Entra sign-in exists and the write endpoint refuses an unverified request once a provider is configured. This deployment has no tenant id set, so it still runs as a single operator on trust — and the fallback role, which ships as Administrator so that deployment is usable, is effectively everyone until the four environment values are filled in.</p>
   </div>
   <div class="risk">
     <h4>Nothing wakes up</h4>
@@ -436,7 +436,7 @@ footer {
     <div>
       <span class="step">First — close the active failures</span>
       <ol>
-        <li><b>Choose an identity provider.</b> The seam is built and every server path asks it; what is missing is the decision. Entra ID is what the firm already runs. <code>ST2b</code></li>
+        <li><b>Register the app in Entra and set the four values.</b> The flow is built; what is left is a registration and a secret. <code>ST2b</code></li>
         <li><b>Make owner a reference to a person.</b> The directory exists; the column is still free text. <code>G</code></li>
         <li><b>Clear the autosave halt on the next successful action, and stop the beacon clearing unsent work.</b> Two small changes in <code>useAutosave.ts</code>. <code>FL1</code></li>
         <li><b>Give each dispatched action a client-minted id.</b> The intake endpoint already dedupes on the sender's id; the workspace endpoint has no equivalent. <code>FL4</code></li>
