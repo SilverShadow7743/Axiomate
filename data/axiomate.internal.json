@@ -1981,6 +1981,32 @@
       "subject": "Mailboxes and routing rules were configuration nothing read",
       "description": "A firm could describe its intake in detail — which address, which scope, which rule routes what to whom — and every word of it was inert. That is worse than an empty screen, because the screen implied a pipeline existed. The pipeline exists now, minus its first mile: a message goes in, the configured mailboxes and rules are applied in their configured order, and a work item comes out under the right scope, created through the same reducer as a person’s, so the transition graph, permissions, automation and audit all apply to it unchanged. Three decisions worth keeping. The classifier reports its guesses as guesses: severity inferred from words like \"blocking\" and \"production\" comes back marked guessed rather than stated, and the provenance note on the record says which fields to distrust — an intake that silently decides a client’s problem is High severity is one wrong guess away from an SLA nobody agreed to. A machine may file work and may not decide it is being worked on, so records arrive Open whatever the wording suggested. And the endpoint refuses everything unless a shared secret is configured, because an open endpoint that creates records from the internet is exactly the thing that ships with \"we will add auth later\". What it deliberately is not is a mail server: nothing connects to a mailbox, holds credentials or polls anything. Something has to receive the mail and POST it, and that last mile is a connector — a forwarding rule, a Graph subscription, a webhook from whatever already handles the firm’s mail — kept outside the application because a half-built poller with no credentials would be the same inert configuration this replaces.",
       "reference": "lib/intake.ts, app/api/intake/route.ts"
+    },
+    {
+      "id": "AXM-077",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "AI Platform & Agents",
+      "type": "Change Request",
+      "severity": "Medium",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "A voice agent, built as a modality rather than a second assistant",
+      "description": "Speech becomes text, the text goes to the same chat route, and the reply comes back as the same proposal cards a person accepts or rejects. There is deliberately no path from a spoken sentence to a changed record that skips somebody reading what is about to happen — recognition is wrong often enough that it must not exist. \"Close OAPIL-14\" and \"close OAPIL-40\" differ by one syllable, and a delivery tool that acted on the difference would be closing the wrong client’s work on a bad line. The transcript is therefore editable before it is sent, which turns a recognition error from a wrong action into a typo; the rejected alternative, sending on silence, is faster and produces exactly the failure this cannot afford. Push-to-talk rather than always-listening, because a microphone that stays open in a room where consultants discuss client matters is a liability and a wake word would make it a permanent one. Reading replies aloud is off until asked for, and remembered for the session rather than stored, because it is a fact about the room somebody is sitting in today. One honesty the interface carries rather than burying: this application never stores or uploads audio, and on Chrome and Edge the browser itself sends it to its own speech service, which the application can neither see nor prevent. Firefox does not implement the API at all, and says so instead of failing silently. Proposals are announced aloud as a count rather than read field by field — a spoken list of changed fields is unlistenable, and the person has to look at the cards to accept them anyway.",
+      "reference": "lib/voice.ts, components/VoiceInput.tsx, ChatPanel"
     }
   ]
 }

@@ -4147,3 +4147,79 @@ select.cell-editor {
 .cap-panel .comm-head .fld {
   min-width: 130px;
 }
+
+/* ---------- voice ----------
+   The listening state has to be unmistakable — an indicator somebody can miss is how a
+   microphone stays open in a room where client matters are discussed. */
+.voice-bar {
+  border-top: 1px solid var(--border);
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.voice-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.voice-talk .voice-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.voice-talk.listening {
+  border-color: var(--h-overdue);
+  color: var(--h-overdue);
+}
+.voice-talk.listening .voice-dot {
+  background: var(--h-overdue);
+  animation: voice-pulse 1.1s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-talk.listening .voice-dot {
+    animation: none;
+  }
+}
+.voice-speak {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.voice-privacy,
+.voice-unsupported {
+  flex: 1 1 220px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+.voice-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.voice-draft textarea {
+  width: 100%;
+  resize: vertical;
+}
+.voice-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.voice-error {
+  margin: 0;
+}

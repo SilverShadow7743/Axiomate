@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatConfig, ChatMessage, ChatReply, IssueIndexEntry, Proposal } from '@/lib/chat'
 import { canPropose, validateCreate, validateUpdate } from '@/lib/chat'
+import { speakableReply } from '@/lib/voice'
+import VoiceInput from './VoiceInput'
 
 /**
  * The assistant dock.
@@ -99,6 +101,14 @@ function diffLines(p: Proposal, index: IssueIndexEntry[]): { label: string; from
 export default function ChatPanel({ index, today, config, onReveal, onApply, onClose }: Props) {
   const [turns, setTurns] = useState<Turn[]>(() => [greeting(config)])
   const [draft, setDraft] = useState('')
+  /**
+   * Whether to read replies aloud.
+   *
+   * Held here rather than in the voice control because the reply arrives here — and it is
+   * session state rather than a stored preference, since it is a fact about the room somebody
+   * is sitting in today.
+   */
+  const [speakReplies, setSpeakReplies] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cards, setCards] = useState<Record<string, CardState>>({})
 
@@ -219,13 +229,27 @@ export default function ChatPanel({ index, today, config, onReveal, onApply, onC
             engine: data.engine,
           },
         ])
+
+        /**
+         * Read it back, if asked to.
+         *
+         * Proposals are announced as a count rather than read out field by field: a spoken list
+         * of changed fields is unlistenable, and the person has to look at the cards to accept
+         * them anyway. Saying how many there are tells them to look.
+         */
+        if (speakReplies && typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+          window.speechSynthesis.speak(
+            new SpeechSynthesisUtterance(speakableReply(data.text, safe.length)),
+          )
+        }
       } catch {
         if (alive.current) fail('Could not reach the assistant. Check that the app server is running.')
       } finally {
         if (alive.current) setBusy(false)
       }
     },
-    [busy, turns, index, today, config],
+    [busy, turns, index, today, config, speakReplies],
   )
 
   /**
@@ -395,6 +419,18 @@ export default function ChatPanel({ index, today, config, onReveal, onApply, onC
           Send
         </button>
       </form>
+
+      {/* Voice sits under the composer, not in place of it: it produces text for the same
+          route, and every proposal it leads to is still a card somebody accepts. */}
+      <VoiceInput
+        disabled={busy}
+        onSpeakChange={setSpeakReplies}
+        onTranscript={(text) => {
+          setDraft(text)
+          void send(text)
+        }}
+      />
+    
     </aside>
   )
 }
