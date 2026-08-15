@@ -158,6 +158,7 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     // Same reason as the browser mirror: a stored model predating this key would spread
     // `undefined` over the seeded registry.
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
+    sla: { ...seed.sla, ...(stored.sla ?? {}) },
     // `runtime` and `maxAutonomy` always come from the seed: they describe what this build
     // implements, and a stored record must never claim a capability the code does not have.
     agents: Object.fromEntries(

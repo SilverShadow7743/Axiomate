@@ -29,6 +29,7 @@ import type {
   NodeKind,
   RowKind,
   Severity,
+  SlaPolicy,
 } from './types'
 import { ACTIVITY_PHASES, isNodeKind } from './types'
 
@@ -475,6 +476,7 @@ export type ConfigOp =
   | { k: 'deleteRole'; id: string }
   | { k: 'upsertWorkType'; id: string | null; label: string; description: string }
   | { k: 'deleteWorkType'; id: string }
+  | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -1916,6 +1918,32 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, roles: { ...m.roles, [op.id]: { ...role, deletedAt: now } } },
         { rowId: op.id, field: 'role', from: role.label, to: '(archived)', at: now, by },
         `Role “${role.label}” archived.`,
+      )
+    }
+
+    case 'setSla': {
+      const next = { ...m.sla, ...op.patch }
+      /**
+       * Validated rather than trusted, because these numbers now decide what a status report
+       * calls overdue. A zero would make every issue overdue on the day it was raised; a
+       * fractional or negative value would move targets backwards through `addWorkingDays`
+       * and produce due dates before the raise date.
+       */
+      for (const [sev, days] of Object.entries(next)) {
+        if (!Number.isInteger(days) || days < 1 || days > 365) {
+          return {
+            state,
+            error: `${sev} must be a whole number of working days between 1 and 365.`,
+          }
+        }
+      }
+      const before = `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low}`
+      const after = `High ${next.High} / Medium ${next.Medium} / Low ${next.Low}`
+      if (before === after) return { state, message: 'Nothing changed.' }
+      return done(
+        { ...m, sla: next },
+        { rowId: 'SLA', field: 'sla', from: before, to: after, at: now, by },
+        `Service levels updated — ${after}.`,
       )
     }
 

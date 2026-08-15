@@ -25,6 +25,8 @@ import {
 } from '@/lib/config'
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { NODE_KINDS, type NodeKind } from '@/lib/types'
+import { isTerminal } from '@/lib/schedule'
+import { useLabels } from './labels'
 
 /**
  * The operating-model editor.
@@ -46,6 +48,7 @@ import { NODE_KINDS, type NodeKind } from '@/lib/types'
  */
 
 type Tab =
+  | 'index'
   | 'terminology'
   | 'roles'
   | 'responsibilities'
@@ -53,12 +56,15 @@ type Tab =
   | 'workflows'
   | 'routing'
   | 'workTypes'
+  | 'serviceLevels'
   | 'scopes'
 
 const TABS: { id: Tab; label: string; group: string }[] = [
+  { id: 'index', label: 'All settings', group: 'Operating model' },
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
+  { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
@@ -73,7 +79,7 @@ interface Props {
 }
 
 export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>('terminology')
+  const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -160,6 +166,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
         </nav>
 
         <div className="cfg-panel">
+          {tab === 'index' && <SettingsIndex state={state} go={setTab} />}
           {tab === 'terminology' && (
             <Terminology
               key={scopeId}
@@ -175,6 +182,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
+          {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'scopes' && (
@@ -702,6 +710,214 @@ function WorkTypes({
           Add work type
         </button>
       </div>
+    </section>
+  )
+}
+
+
+
+/* ================================================================== *
+ * Landing
+ * ================================================================== */
+
+/**
+ * What is maintainable here, and what it currently says.
+ *
+ * The rail alone answers "where do I click" but not "what is there" — somebody opening this
+ * screen to correct a work type or a service level had to visit nine sections to find out
+ * which one owned it. Each card carries a live summary as well as a name, so the screen
+ * doubles as a statement of the operating model rather than only a way into it: "Service
+ * levels · High 5 / Medium 10 / Low 20" answers the question without a click.
+ *
+ * The counts are read from the model on every render rather than stored. A maintenance screen
+ * reporting a stale figure is worse than one reporting none.
+ */
+function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => void }) {
+  const m = state.model
+  const labels = useLabels()
+
+  const cards: { id: Tab; title: string; what: string; now: string }[] = [
+    {
+      id: 'terminology',
+      title: 'Terminology',
+      what: 'What every tier, record and field is called on screen.',
+      now: (() => {
+        const n = Object.values(m.overrides).reduce(
+          (acc, o) => acc + Object.keys(o.labels ?? {}).length,
+          0,
+        )
+        return n ? `${n} term${n === 1 ? '' : 's'} renamed` : 'Shipped defaults'
+      })(),
+    },
+    {
+      id: 'roles',
+      title: 'Roles & people',
+      what: 'Who this firm is, the roles it recognises, and the directory of people.',
+      now: `${liveRoles(m).length} roles · ${Object.values(m.people).length} people`,
+    },
+    {
+      id: 'workTypes',
+      title: 'Work types',
+      what: 'What kind of work a record is. Adding one is configuration, not a schema change.',
+      now: `${liveWorkTypes(m).length} types`,
+    },
+    {
+      id: 'serviceLevels',
+      title: 'Service levels',
+      what: 'Working days allowed per severity. Drives targets, at-risk and overdue.',
+      now: `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low}`,
+    },
+    {
+      id: 'responsibilities',
+      title: 'Responsibilities',
+      what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
+      now: `${liveResponsibilities(m).length} types`,
+    },
+    {
+      id: 'agents',
+      title: 'Agent registry',
+      what: 'What each agent is for, how far it may act, and whether a person signs off.',
+      now: (() => {
+        const all = Object.values(m.agents)
+        const live = all.filter((a) => a.runtime === 'live').length
+        return `${live} of ${all.length} implemented`
+      })(),
+    },
+    {
+      id: 'workflows',
+      title: 'Workflows & templates',
+      what: 'How work is meant to move, and the bundles that set a project up.',
+      now: `${Object.values(m.workflows).length} workflows · ${Object.values(m.templates).length} templates`,
+    },
+    {
+      id: 'routing',
+      title: 'Routing & intake',
+      what: 'Mailboxes work can arrive at, and the rules that classify it.',
+      now: `${m.routingRules.length} rules · ${m.intake.length} mailboxes`,
+    },
+    {
+      id: 'scopes',
+      title: 'Scope overrides',
+      what: 'Where a client, engagement or process area does things differently.',
+      now: (() => {
+        const n = Object.entries(m.overrides).filter(
+          ([id, o]) =>
+            id !== ROOT_SCOPE &&
+            (Object.keys(o.labels ?? {}).length ||
+              Object.keys(o.agentEnabled ?? {}).length ||
+              Object.keys(o.responsibilityRequired ?? {}).length ||
+              o.templateId),
+        ).length
+        return n ? `${n} scope${n === 1 ? '' : 's'} differ` : 'Everywhere the same'
+      })(),
+    },
+  ]
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">All settings</h3>
+      <p className="cfg-note">
+        Everything the application reads instead of hardcoding. Each card says what it is for
+        and what it currently says, so this screen answers most maintenance questions before
+        anything is opened.
+      </p>
+      <div className="cfg-index">
+        {cards.map((c) => (
+          <button className="cfg-index-card" key={c.id} onClick={() => go(c.id)}>
+            <span className="cfg-index-title">{c.title}</span>
+            <span className="cfg-index-now">{c.now}</span>
+            <span className="cfg-index-what">{c.what}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ================================================================== *
+ * Service levels
+ * ================================================================== */
+
+function ServiceLevels({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const sla = state.model.sla
+  const labels = useLabels()
+
+  /** Open records already carrying a due date — the ones a change here will not move. */
+  const alreadyDated = useMemo(
+    () =>
+      Object.values(state.issues).filter(
+        (i) => !i.deletedAt && i.plannedEnd && !isTerminal(i.status),
+      ).length,
+    [state.issues],
+  )
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Service levels</h3>
+      <p className="cfg-note">
+        How long each {labels.FIELD_SEVERITY.toLowerCase()} is allowed, in working days counted
+        from the date a record was raised. These are commercial terms rather than a property of
+        the software — they are negotiated, and they differ between firms — which is why they
+        are configuration and not a constant.
+      </p>
+      <p className="cfg-note">
+        They drive three things: the dashed target the timeline can preview, the window that
+        makes a record read <em>At Risk</em> before it is late, and the dates that
+        <em> Set due dates from this policy</em> writes.
+      </p>
+
+      <div className="cfg-card">
+        <div className="cfg-fld-row">
+          {(['High', 'Medium', 'Low'] as const).map((sev) => (
+            <label className="cfg-fld" key={sev}>
+              <span>{sev}</span>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                defaultValue={sla[sev]}
+                aria-label={`Working days allowed for ${sev}`}
+                onBlur={(e) => {
+                  const days = Number(e.target.value)
+                  if (days === sla[sev]) return
+                  // The reducer validates too; this stops an obviously bad value from
+                  // becoming an error toast when the field can simply refuse it.
+                  if (!Number.isInteger(days) || days < 1 || days > 365) {
+                    e.target.value = String(sla[sev])
+                    return
+                  }
+                  if (!onConfig({ k: 'setSla', patch: { [sev]: days } })) {
+                    e.target.value = String(sla[sev])
+                  }
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        <p className="cfg-inherit">
+          Working days, so weekends are skipped when a target is calculated.
+        </p>
+      </div>
+
+      {/* The thing somebody will otherwise discover by being surprised. */}
+      <p className="cfg-note">
+        <b>Changing these does not move dates that have already been set.</b> A due date on a
+        record is a commitment somebody made, not a live calculation, so it stays where it is
+        and keeps the reason that produced it.
+        {alreadyDated > 0 && (
+          <>
+            {' '}
+            {alreadyDated} open record{alreadyDated === 1 ? ' has' : 's have'} a due date today.
+            New targets use the numbers above; those do not change unless you edit them.
+          </>
+        )}
+      </p>
     </section>
   )
 }

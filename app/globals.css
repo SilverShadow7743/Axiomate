@@ -3530,3 +3530,42 @@ select.cell-editor {
   padding: 3px 8px 3px 0;
   font-size: 12px;
 }
+
+/* The configuration landing grid: what is maintainable, and what it currently says. */
+.cfg-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.cfg-index-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  padding: 9px 11px;
+  cursor: pointer;
+}
+.cfg-index-card:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.cfg-index-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+/* The current value, which is the part that answers a maintenance question without a click. */
+.cfg-index-now {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+.cfg-index-what {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}

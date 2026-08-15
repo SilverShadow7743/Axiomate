@@ -388,7 +388,14 @@ export default function IssueWorkspace({
   )
 
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
-  const [sla] = useState<SlaPolicy>(DEFAULT_SLA)
+  /**
+   * The configured service levels.
+   *
+   * Read from the operating model rather than held here, so editing them in Configuration
+   * moves every proposal, every at-risk window and the daily report at once — and so the
+   * change is audited like any other configuration edit.
+   */
+  const sla = state.model.sla
   const [showProposed, setShowProposed] = useState(false)
 
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_VISIBLE)

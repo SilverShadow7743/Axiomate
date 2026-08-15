@@ -28,7 +28,7 @@
  * settings screen that quietly corrupts the schedule.
  */
 
-import type { NodeKind, RowKind, ScheduleHealth } from './types'
+import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 
 /* ================================================================== *
  * Scope
@@ -404,6 +404,16 @@ export interface OperatingModel {
   responsibilities: Record<string, ResponsibilityType>
   /** What kind of work an item is — the discriminator that keeps this one table. */
   workTypes: Record<string, WorkType>
+  /**
+   * How long each severity is allowed, in working days from the raised date.
+   *
+   * Configuration rather than a constant because it is a commercial term, not a property of
+   * the software: it is negotiated per engagement and differs between firms. It was a frozen
+   * constant while it only drew a dashed suggestion; once it started setting real due dates —
+   * and therefore deciding what the daily report calls overdue — leaving it uneditable meant
+   * shipping one firm's numbers as everyone's.
+   */
+  sla: SlaPolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -714,6 +724,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     people,
     responsibilities,
     workTypes,
+    sla: { ...DEFAULT_SLA },
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -942,6 +953,10 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     people: { ...seed.people, ...(stored.people ?? {}) },
     responsibilities: { ...seed.responsibilities, ...(stored.responsibilities ?? {}) },
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
+    // Explicit, like every other key: a model stored before this existed has no `sla`, and the
+    // spread above would set it to undefined — which is not a missing policy, it is a crash
+    // the next time anything reads a severity from it.
+    sla: { ...seed.sla, ...(stored.sla ?? {}) },
     agents: mergeAgents(seed.agents, stored.agents),
     workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
     templates: { ...seed.templates, ...(stored.templates ?? {}) },
