@@ -3275,3 +3275,11 @@ select.cell-editor {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* A recorded value that a mapping has since replaced — shown beside the current one so a
+   reclassification is visible rather than silent. Muted: it is context, not the value. */
+.prov {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-style: italic;
+}

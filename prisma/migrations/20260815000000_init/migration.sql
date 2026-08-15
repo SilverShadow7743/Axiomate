@@ -59,6 +59,7 @@ CREATE TABLE "Issue" (
     "client" TEXT NOT NULL,
     "module" TEXT NOT NULL,
     "type" TEXT NOT NULL,
+    "sourceType" TEXT NOT NULL DEFAULT '',
     "severity" "Severity" NOT NULL,
     "status" TEXT NOT NULL,
     "owner" TEXT NOT NULL,

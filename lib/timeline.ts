@@ -46,10 +46,32 @@ export function buildScale(
   domainStart: string,
   domainEnd: string,
   zoom: ZoomLevel,
+  /**
+   * Width the timeline has to fill, in pixels. Optional so callers that only need the tick
+   * maths — and tests — can leave it out.
+   */
+  availableWidth = 0,
 ): Scale {
-  const dayPx = DAY_PX[zoom]
   const t0 = toUtc(domainStart)
   const totalDays = Math.round((toUtc(domainEnd) - t0) / DAY_MS) + 1
+
+  /**
+   * Pixels per day, never less than what it takes to fill the pane.
+   *
+   * `DAY_PX` is a fixed rate per zoom level, which is right while the domain is wider than the
+   * pane: Day and Week overflow and the timeline scrolls, as they should. It is wrong the
+   * moment the whole domain fits. This log spans about 118 days, so Quarter produced
+   * 118 × 1.5 = 177px of timeline inside a 667px pane — more than half of it blank, with every
+   * bar crushed into the left third and the grid lines stopping in mid-air. Month did the same
+   * thing less severely.
+   *
+   * Clamping up rather than switching to a fit-always rate keeps the zoom levels meaningful
+   * where they differ: with a long enough domain each still resolves to its own scale. Where
+   * the domain is short they converge, which is the honest outcome — once everything fits,
+   * zooming out further has nothing left to reveal, and the header still changes granularity.
+   */
+  const fitPx = availableWidth > 0 ? availableWidth / totalDays : 0
+  const dayPx = Math.max(DAY_PX[zoom], fitPx)
   const totalWidth = totalDays * dayPx
 
   const x = (iso: string) => ((toUtc(iso) - t0) / DAY_MS) * dayPx

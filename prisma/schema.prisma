@@ -188,6 +188,9 @@ model Issue {
   client String
   module String
   type   String
+  /// What the source log called this, when `type` was mapped onto another taxonomy. Empty for
+  /// records created here — they were never classified as anything else.
+  sourceType String @default("")
 
   severity    Severity
   /// Free text rather than an enum: the seven statuses come from the source log, and the

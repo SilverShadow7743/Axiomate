@@ -35,6 +35,42 @@ const STATUS_PROGRESS = {
   Superseded: 100,
 }
 
+/**
+ * The log's own classification, mapped onto the blueprint's Work Item taxonomy.
+ *
+ * Requested deliberately, and it is a lossy translation, so both sides are written down: the
+ * blueprint type goes to `type`, the recorded one to `sourceType`, and `issues.raw.json` keeps
+ * the original untouched. Re-running this script reproduces the mapping from that source, so
+ * nothing here is a one-way edit.
+ *
+ * Two collapses are worth knowing about, because they lose a distinction the firm was making:
+ *
+ *   Query, Access Request, Estimate Request  → Request   (37 records)
+ *   Data Issue, Escalation                   → Issue     (35 records)
+ *
+ * After this, nothing in `type` can tell an access request from a request for an estimate.
+ * That is why `sourceType` exists rather than being optional tidiness — the Data Source tab
+ * is where a record says what it originally was, and this is exactly such a case.
+ *
+ * Throwing on an unmapped type follows the rule already set for status below: a classification
+ * this script does not recognise is a decision for a person, not something to guess at.
+ */
+const BLUEPRINT_TYPE = {
+  Defect: 'Defect',
+  'Change Request': 'Change Request',
+  // Requests: someone is asking the delivery team for something.
+  Query: 'Request',
+  'Access Request': 'Request',
+  'Estimate Request': 'Request',
+  // Problems requiring resolution — the blueprint's own words for Issue.
+  'Data Issue': 'Issue',
+  Escalation: 'Issue',
+  // Work to be carried out rather than a problem to be resolved.
+  'Environment/Build': 'Task',
+  // A follow-up someone has to perform; the blueprint's Action.
+  'Status Chase': 'Action',
+}
+
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 const issues = []
@@ -53,7 +89,15 @@ for (const r of raw) {
     module: r.module || 'Unclassified',
     subject: r.subject || '(no subject recorded)',
     description: r.desc || '',
-    type: r.type,
+    type: (() => {
+      const mapped = BLUEPRINT_TYPE[r.type]
+      if (!mapped) {
+        throw new Error(`Unmapped work type "${r.type}" on ${r.id} — refusing to guess its class.`)
+      }
+      return mapped
+    })(),
+    /** What the log actually called it, kept because the mapping above is lossy. */
+    sourceType: r.type,
     severity: r.sev,
     status,
     owner: r.owner || 'Unassigned',

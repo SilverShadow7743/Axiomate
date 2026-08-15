@@ -87,6 +87,11 @@ export interface IssueRecord {
   subject: string
   description: string
   type: string
+  /**
+   * The classification the source log recorded, when `type` has been mapped onto a different
+   * taxonomy. Empty for records this workspace created — they were never anything else.
+   */
+  sourceType: string
   severity: Severity
   status: IssueStatus
   owner: string
@@ -254,6 +259,8 @@ export interface SeedIssueInput {
   subject: string
   description: string
   type: string
+  /** What the source log called this, when the imported type was mapped onto another taxonomy. */
+  sourceType?: string
   severity: Severity
   status: IssueStatus
   owner: string
@@ -352,6 +359,7 @@ export function initWorkspace(
     issues[i.id] = {
       ...i,
       parentId: mId,
+      sourceType: i.sourceType ?? '',
       plannedStart: null,
       plannedEnd: null,
       percentOverride: null,
@@ -665,6 +673,8 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // hardcoded here, so a workspace that had archived Defect — or never had one —
           // would still mint records classified as it, and no filter would show them.
           type: a.draft.type || liveWorkTypes(state.model)[0]?.label || '',
+          // Created here, so there is no earlier classification to preserve.
+          sourceType: '',
           severity: (a.draft.severity as Severity) || 'Medium',
           status,
           owner: a.draft.owner || 'Unassigned',

@@ -165,6 +165,24 @@ export default function IssueWorkspace({
     ? autosave.state
     : { status: 'local' as const, pending: 0, savedAt: null }
 
+/**
+   * How wide the timeline pane actually is.
+   *
+   * The scale needs it: at coarse zoom the whole domain can be narrower than the pane, and
+   * without this the timeline stopped short and left the rest of the pane blank. Observed
+   * rather than assumed, because the split is draggable and the window resizes.
+   */
+  const ganttPaneRef = useRef<HTMLDivElement>(null)
+  const [ganttWidth, setGanttWidth] = useState(0)
+  useEffect(() => {
+    const el = ganttPaneRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setGanttWidth(entry.contentRect.width))
+    ro.observe(el)
+    setGanttWidth(el.getBoundingClientRect().width)
+    return () => ro.disconnect()
+  }, [])
+
   /** Single funnel for every mutation, so validation and audit are never bypassed. */
   const dispatch = useCallback(
     (action: Action): boolean => {
@@ -385,8 +403,8 @@ export default function IssueWorkspace({
     const lo = minIso(dates) ?? today
     const hi = maxIso(dates) ?? today
     const pad = DOMAIN_PAD_DAYS[zoom]
-    return buildScale(addDays(lo, -pad), addDays(hi, pad), zoom)
-  }, [sortedRows, today, zoom, showProposed, state.issues, sla])
+    return buildScale(addDays(lo, -pad), addDays(hi, pad), zoom, ganttWidth)
+  }, [sortedRows, today, zoom, showProposed, state.issues, sla, ganttWidth])
 
   const selected = useMemo(
     () => sortedRows.find((r) => r.id === selectedId) ?? null,
@@ -1267,7 +1285,7 @@ export default function IssueWorkspace({
           aria-orientation="vertical"
         />
 
-        <div className="pane-gantt">
+        <div className="pane-gantt" ref={ganttPaneRef}>
           <GanttChart
             rows={rows}
             scale={scale}

@@ -176,6 +176,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
       subject: issue.subject,
       description: issue.description,
       type: issue.type,
+      sourceType: issue.sourceType,
       severity: issue.severity,
       status: issue.status,
       owner: issue.owner,

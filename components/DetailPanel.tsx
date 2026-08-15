@@ -253,7 +253,15 @@ export default function DetailPanel({
                 {issue.client} · {issue.module}
               </dd>
               <dt>Type</dt>
-              <dd>{issue.type}</dd>
+              <dd>
+                {issue.type}
+                {/* The log classified this differently. Shown rather than hidden: the imported
+                    types were mapped onto the blueprint taxonomy, and that mapping is lossy —
+                    a Query, an Access Request and an Estimate Request are all "Request" now. */}
+                {issue.sourceType && issue.sourceType !== issue.type && (
+                  <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
+                )}
+              </dd>
               <dt>Severity</dt>
               <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
               <dt>{labels.FIELD_STATUS}</dt>

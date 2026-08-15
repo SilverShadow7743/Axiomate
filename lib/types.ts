@@ -253,6 +253,8 @@ export interface IssueDetail {
   subject: string
   description: string
   type: string
+  /** What the source log called this, when `type` was mapped onto another taxonomy. */
+  sourceType: string
   severity: Severity
   status: IssueStatus
   owner: string
