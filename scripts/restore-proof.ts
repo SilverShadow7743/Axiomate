@@ -64,6 +64,48 @@ check(
 const noop = apply(seed, { t: 'restore', id: 'OAPIL-1', now: NOW } as Action, A)
 check('restoring an active record is a no-op message', !noop.error && Boolean(noop.message), noop.message ?? noop.error ?? '')
 
+/* 5. The other archive mode moves children up a level. Each move must be audited... */
+const reparented = apply(seed, { t: 'softDelete', id: moduleId, mode: 'reparent', now: NOW } as Action, A)
+const moveEntries = reparented.state.audit.filter((e) => e.field === 'parent' && e.at === NOW)
+check(
+  'reparent-archive audits every record it moves',
+  moveEntries.length === 2,
+  `${moveEntries.length} move entries for 2 children`,
+)
+check(
+  'each move entry names where the record came from',
+  moveEntries.every((e) => e.from === moduleId),
+  moveEntries.map((e) => `${e.rowId}: ${e.from} -> ${e.to}`).join(', '),
+)
+check(
+  'the children were not archived, only moved',
+  Object.values(reparented.state.issues).every((i) => !i.deletedAt),
+)
+
+/* ...and restoring must put them back. */
+const putBack = apply(reparented.state, { t: 'restore', id: moduleId, now: NOW } as Action, A)
+check(
+  'restore moves them back into the record',
+  Object.values(putBack.state.issues).filter((i) => i.parentId === moduleId).length === 2,
+  putBack.message ?? putBack.error ?? '',
+)
+
+/* A record moved again since the archive is left alone — that was somebody's own decision. */
+// Somewhere genuinely different from where the archive put it — the client tier, not the
+// engagement the children were already moved to.
+const clientId = Object.values(seed.nodes).find((n) => n.kind === 'client')!.id
+const movedOn = apply(
+  reparented.state,
+  { t: 'move', id: 'OAPIL-1', newParentId: clientId, now: NOW } as Action,
+  A,
+)
+const partial = apply(movedOn.state, { t: 'restore', id: moduleId, now: NOW } as Action, A)
+check(
+  'a record moved again since the archive is not dragged back',
+  partial.state.issues['OAPIL-1'].parentId !== moduleId && partial.state.issues['OAPIL-2'].parentId === moduleId,
+  `OAPIL-1 under ${partial.state.issues['OAPIL-1'].parentId}, OAPIL-2 under ${partial.state.issues['OAPIL-2'].parentId}`,
+)
+
 console.log('')
 if (fail.length) { console.log('FAIL: ' + fail.join(', ')); process.exit(1) }
-console.log('Restore: archive is no longer a one-way door.')
+console.log('Restore: archive is no longer a one-way door, in either mode.')

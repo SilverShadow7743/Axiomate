@@ -114,15 +114,14 @@ export default function ArchivePanel({
           ) : (
             <>
               <div className="panel-note">
-                Archived records are kept, not deleted. Restoring one brings back everything
-                archived in the same action; anything archived separately stays where it is.
-                {/* Said plainly because the alternative is a user expecting a full undo and
-                    getting an empty record back. Archiving with "move its children up one
-                    level" *moves* them — a separate change to the tree, which restoring the
-                    record does not reverse, because nothing recorded where they came from. */}
+                Archived records are kept, not deleted. Restoring one undoes the whole action
+                it belonged to: records archived alongside it come back, and records moved up a
+                level to get out of its way move back into it.
+                {/* Both halves are conditional, and saying so matters more than brevity: a
+                    user who has since reorganised should not have that quietly reversed. */}
                 <br />
-                Records archived on their own, with their children moved up a level, come back
-                empty: the move was a separate change and is not undone here.
+                Anything archived separately, or moved somewhere else since, is left where it
+                is — those were decisions of their own.
               </div>
               {groups.map(([at, rows]) => (
                 <section className="archive-group" key={at}>

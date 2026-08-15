@@ -499,6 +499,27 @@ function log(
 }
 
 /**
+ * Several entries from one action.
+ *
+ * `log` reads `state.audit` and returns a new array, so calling it twice against the same
+ * state drops the first entry. One action that changes several records needs this instead —
+ * archiving a record and moving its children up a level changes every one of them, and each
+ * deserves its own line in its own history.
+ */
+function logAll(
+  state: WorkspaceState,
+  entries: Omit<AuditEntry, 'id'>[],
+): AuditEntry[] {
+  return [
+    ...state.audit,
+    ...entries.map((e) => {
+      auditSeq += 1
+      return { ...e, id: `aud-${auditSeq}-${e.rowId}` }
+    }),
+  ]
+}
+
+/**
  * Next free issue id for a client, e.g. OAPIL-180.
  *
  * Derived from the highest existing number for that prefix rather than from the workspace
@@ -883,6 +904,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const nodes = { ...state.nodes }
       const issues = { ...state.issues }
       const activities = { ...state.activities }
+      /** Records this archive reparents, so each can be audited and later put back. */
+      const moves: { id: string; from: string | null }[] = []
+      /** Where they were moved to — needed by the audit entries built after the branch. */
+      let newParentForAudit: string | null = null
 
       const markDeleted = (id: string) => {
         if (nodes[id]) nodes[id] = { ...nodes[id], deletedAt: a.now }
@@ -898,16 +923,34 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       } else {
         // Re-attach children to the deleted record's parent rather than destroying them.
         const newParent = parentOf(state, a.id)
+        newParentForAudit = newParent
         if (!newParent && kids.length) {
           return {
             state,
             error: 'This is a root record — its children have nowhere to move to. Archive the whole branch instead.',
           }
         }
+        /**
+         * Each move is a change to that record, and gets its own audit entry.
+         *
+         * It used to write one line against the record being archived — "3 child record(s)
+         * moved up one level" — and nothing at all against the three records whose parent
+         * actually changed. Their History showed no reason for having moved, which in an
+         * application whose whole claim is that every change goes through one audited reducer
+         * is the wrong kind of quiet. A move a user performs has always been audited; a move
+         * an archive performs is the same change and now reads the same way.
+         *
+         * These entries share `a.now` with the archive that caused them, which is also what
+         * lets restore find and reverse them.
+         */
         for (const k of kids) {
-          if (nodes[k]) nodes[k] = { ...nodes[k], parentId: newParent }
-          else if (issues[k]) issues[k] = { ...issues[k], parentId: newParent! }
-          else if (activities[k]) {
+          if (nodes[k]) {
+            moves.push({ id: k, from: nodes[k].parentId })
+            nodes[k] = { ...nodes[k], parentId: newParent }
+          } else if (issues[k]) {
+            moves.push({ id: k, from: issues[k].parentId })
+            issues[k] = { ...issues[k], parentId: newParent! }
+          } else if (activities[k]) {
             // An activity cannot be reparented out of its issue; archive it with the issue.
             activities[k] = { ...activities[k], deletedAt: a.now }
           }
@@ -922,15 +965,26 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           nodes,
           issues,
           activities,
-          audit: log(state, {
-            rowId: a.id,
-            field: 'archived',
-            from: 'active',
-            to: detail,
-            at: a.now,
-            by,
-            reason: 'Soft delete — the record is retained in history and can be restored.',
-          }),
+          audit: logAll(state, [
+            {
+              rowId: a.id,
+              field: 'archived',
+              from: 'active',
+              to: detail,
+              at: a.now,
+              by,
+              reason: 'Soft delete — the record is retained in history and can be restored.',
+            },
+            ...moves.map((m) => ({
+              rowId: m.id,
+              field: 'parent',
+              from: m.from,
+              to: newParentForAudit,
+              at: a.now,
+              by,
+              reason: `Moved up one level when “${nameOf(state, a.id)}” was archived.`,
+            })),
+          ]),
         },
         message: `"${nameOf(state, a.id)}" ${detail}.`,
       }
@@ -1011,8 +1065,40 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         stack.push(...childIdsOf(id))
       }
 
+      /**
+       * Put back the records this archive moved rather than archived.
+       *
+       * The other archive mode moves children up a level instead of taking them with it. That
+       * is a change to the tree as well as an archive, and restoring the record used to leave
+       * it — the record came back empty while its former children stayed where they had been
+       * put, with nothing on screen explaining why.
+       *
+       * The moves are audited now, sharing the archive's timestamp, so the trail says exactly
+       * which records went where and as part of what. Same identifying rule as the cascade.
+       *
+       * A record is only moved back if it is *still* where the archive put it: anyone who has
+       * since moved it made a decision of their own, and undoing that silently would be the
+       * same fault in the opposite direction. Entries aged out of the capped trail simply do
+       * not match, so the worst case is the old behaviour rather than a wrong one.
+       */
+      let movedBack = 0
+      for (const entry of state.audit) {
+        if (entry.at !== stamp || entry.field !== 'parent') continue
+        const rec = nodes[entry.rowId] ?? issues[entry.rowId]
+        if (!rec || rec.parentId !== entry.to) continue
+        if (nodes[entry.rowId]) nodes[entry.rowId] = { ...nodes[entry.rowId], parentId: entry.from }
+        else if (issues[entry.rowId] && entry.from) {
+          issues[entry.rowId] = { ...issues[entry.rowId], parentId: entry.from }
+        } else continue
+        movedBack += 1
+      }
+
       const detail =
-        restored > 1 ? `restored with ${restored - 1} child record(s)` : 'restored'
+        restored > 1
+          ? `restored with ${restored - 1} child record(s)`
+          : movedBack > 0
+            ? `restored; ${movedBack} record(s) moved back into it`
+            : 'restored'
       return {
         state: {
           ...state,
@@ -1031,7 +1117,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         message:
           restored > 1
             ? `Restored “${nameOf(state, a.id)}” and ${restored - 1} record(s) archived with it.`
-            : `Restored “${nameOf(state, a.id)}”.`,
+            : movedBack > 0
+              ? `Restored “${nameOf(state, a.id)}” and moved ${movedBack} record(s) back into it.`
+              : `Restored “${nameOf(state, a.id)}”.`,
       }
     }
 
