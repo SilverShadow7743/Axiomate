@@ -219,6 +219,24 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "Notification" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "to" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "subject" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "aboutId" TEXT NOT NULL,
+    "ruleId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "delivery" TEXT NOT NULL,
+    "deliveryNote" TEXT NOT NULL,
+    "readAt" TIMESTAMP(3),
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "Approval" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -369,6 +387,12 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "Notification_tenantId_to_readAt_idx" ON "Notification"("tenantId", "to", "readAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_tenantId_delivery_idx" ON "Notification"("tenantId", "delivery");
+
+-- CreateIndex
 CREATE INDEX "Approval_tenantId_subjectId_idx" ON "Approval"("tenantId", "subjectId");
 
 -- CreateIndex
@@ -457,6 +481,12 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_tenantId_aboutId_fkey" FOREIGN KEY ("tenantId", "aboutId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Approval" ADD CONSTRAINT "Approval_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

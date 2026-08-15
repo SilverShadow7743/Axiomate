@@ -17,6 +17,7 @@ import {
 import { LabelProvider } from './labels'
 import {
   apply,
+  applyWithRules,
   clientNodeId,
   initWorkspace,
   kindOf,
@@ -52,6 +53,7 @@ import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import GanttChart from './GanttChart'
 import DetailPanel from './DetailPanel'
+import Inbox from './Inbox'
 import SelectionToolbar from './SelectionToolbar'
 import Dialogs, { type DialogState } from './Dialogs'
 import IssueFocus from './IssueFocus'
@@ -240,8 +242,16 @@ export default function IssueWorkspace({
       let cur = state
       let createdId: string | undefined
       let message: string | undefined
+      const missed: string[] = []
       for (const action of actions) {
-        const res = apply(cur, action, actor)
+        /**
+         * Rules run here as well as on the server, and that is deliberate rather than
+         * duplicated work: both funnels plan from the same state with the same clock, so both
+         * reach the same follow-up actions and mint the same ids. It is what lets a
+         * notification appear the moment somebody reassigns an issue while the queue still
+         * sends nothing but the reassignment.
+         */
+        const res = applyWithRules(cur, action, actor)
         if (res.error) {
           notify(res.error, true)
           return { ok: false }
@@ -249,7 +259,13 @@ export default function IssueWorkspace({
         cur = res.state
         if (res.createdId) createdId = res.createdId
         if (res.message) message = res.message
+        // A rule that reached nobody, or asked for something the reducer refused, is surfaced
+        // rather than swallowed — an automation that silently does nothing is indistinguishable
+        // from one that worked.
+        for (const miss of res.automation.misses) missed.push(`${miss.label}: ${miss.why}`)
+        for (const r of res.automation.refusals) missed.push(`${r.action.t}: ${r.error}`)
       }
+      if (missed.length) notify(missed[0], true)
       setState(cur)
       if (createdId) setSelectedId(createdId)
       if (message) notify(message)
@@ -1334,6 +1350,13 @@ export default function IssueWorkspace({
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           />
         </div>
+
+        <Inbox
+          state={state}
+          actor={actor}
+          onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
+          onOpen={(issueId) => setSelectedId(issueId)}
+        />
 
         <span className="sep" />
 

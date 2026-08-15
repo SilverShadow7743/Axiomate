@@ -1,6 +1,7 @@
 import 'server-only'
 import type { Prisma } from '@prisma/client'
-import { apply, type Action, type WorkspaceState } from '../workspace'
+import { apply,
+  applyWithRules, type Action, type WorkspaceState } from '../workspace'
 import { prisma } from './client'
 import { loadWorkspace } from './repo'
 import type { TenantId } from '../tenant'
@@ -17,6 +18,7 @@ import {
   estimateToRow,
   timeToRow,
   approvalToRow,
+  notificationToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -109,12 +111,24 @@ async function runBatch(
       for (const [index, action] of actions.entries()) {
         // The server's actor, never the client's: the action carries no attribution to
         // forge, so what is written down is whoever this request resolved to.
-        const result = apply(current, action, actor)
+        const result = applyWithRules(current, action, actor)
         if (result.error) {
           failure = { error: result.error, index }
           break
         }
-        applied.push({ action, before: current, after: result.state })
+        /**
+         * Every step the run produced — the action, then whatever the rules did about it —
+         * each paired with the state either side of *itself*.
+         *
+         * Persisting a follow-up against the whole run's before-and-after would make
+         * `writeAction` guess which rows moved for which reason, and re-applying them here to
+         * recover the pairs would mint a second set of ids. The runner already knows, so it
+         * says.
+         *
+         * They are not fed back to the client: the browser planned the same rules from the same
+         * state and already holds them.
+         */
+        applied.push(...result.steps)
         current = result.state
         if (result.message) message = result.message
         if (result.createdId) createdId = result.createdId
@@ -292,6 +306,27 @@ async function writeAction(
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    /**
+     * A notification, and the read mark on one.
+     *
+     * `notify` never arrives over the wire — the endpoint refuses it — but it reaches this
+     * function all the same, because the server plans the same rules the browser does and
+     * applies what they ask for inside the same transaction.
+     */
+    case 'notify':
+    case 'markNotificationRead': {
+      for (const [id, n] of Object.entries(after.notifications)) {
+        if (before.notifications[id] === n) continue
+        const row = notificationToRow(tenantId, n)
+        await tx.notification.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       return
     }
 

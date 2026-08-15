@@ -33,6 +33,7 @@ import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { ADMIN_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
+import { defaultAutomationRules, type AutomationRule } from './automation'
 
 /* ================================================================== *
  * Scope
@@ -441,6 +442,8 @@ export interface OperatingModel {
   access: AccessPolicy
   /** Which moves need somebody's approval, and who may give it. See `./approval`. */
   approvalRules: ApprovalRule[]
+  /** Event → condition → action. See `./automation`. */
+  automationRules: AutomationRule[]
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -759,6 +762,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     statusPolicy: defaultStatusPolicy(),
     access: defaultAccessPolicy(),
     approvalRules: defaultApprovalRules(),
+    automationRules: defaultAutomationRules(),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1006,6 +1010,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     },
     // A list, replaced wholesale when present: a firm that deleted a rule means it.
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
+    automationRules: Array.isArray(stored.automationRules) ? stored.automationRules : seed.automationRules,
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

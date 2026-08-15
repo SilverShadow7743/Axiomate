@@ -10,6 +10,7 @@ import type {
   IssueEstimate as EstimateRow,
   TimeEntry as TimeRow,
   Approval as ApprovalRow,
+  Notification as NotificationRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
@@ -23,6 +24,7 @@ import type { EngagementDetail } from '../engagement'
 import type { EstimateRevision, IssueEstimate } from '../estimation'
 import type { TimeActivity, TimeEntry } from '../time'
 import type { Approval, ApprovalDecision } from '../approval'
+import type { Channel, Delivery, Notification } from '../notifications'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -685,5 +687,45 @@ export function approvalFromRow(r: ApprovalRow): Approval {
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
     decisionNote: r.decisionNote,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Notifications
+ * ================================================================== */
+
+export function notificationToRow(
+  tenantId: TenantId,
+  n: Notification,
+): Prisma.NotificationUncheckedCreateInput {
+  return {
+    tenantId,
+    id: n.id,
+    to: n.to,
+    channel: n.channel,
+    subject: n.subject,
+    body: n.body,
+    aboutId: n.aboutId,
+    ruleId: n.ruleId,
+    createdAt: new Date(n.createdAt),
+    delivery: n.delivery,
+    deliveryNote: n.deliveryNote,
+    readAt: n.readAt ? new Date(n.readAt) : null,
+  }
+}
+
+export function notificationFromRow(r: NotificationRow): Notification {
+  return {
+    id: r.id,
+    to: r.to,
+    channel: r.channel as Channel,
+    subject: r.subject,
+    body: r.body,
+    aboutId: r.aboutId,
+    ruleId: r.ruleId,
+    createdAt: r.createdAt.toISOString(),
+    delivery: r.delivery as Delivery,
+    deliveryNote: r.deliveryNote,
+    readAt: r.readAt ? r.readAt.toISOString() : null,
   }
 }

@@ -21,7 +21,15 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
+import {
+  apply,
+  applyWithRules,
+  initWorkspace,
+  type Action,
+  type SeedIssueInput,
+  type WorkspaceState,
+} from '../lib/workspace'
+import { undelivered } from '../lib/notifications'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -343,10 +351,10 @@ scenario(
     const health = computeHealth(row, '2026-08-15')
     return {
       verdict: health === 'At Risk' ? 'PARTIAL' : 'FAIL',
-      actual: `Health computes as "${health}" from dates and progress, and the grid shows it. Nothing is sent: ${absent(/sendMail|nodemailer|notif(y|ication)Send|webhook/i) ? 'there is no delivery mechanism in the source' : 'a delivery mechanism exists'}.`,
-      stops: 'at the notification — the risk is visible only to someone already looking',
+      actual: `Health computes as "${health}" from dates and progress, and the grid shows it. Nobody is told, and the reason is now sharper than "no notifications exist": notifications and rules both exist, and every rule reacts to something that *changed*. Becoming at risk is not a change — it is the passage of time against a date that has not moved — so there is no event for a rule to subscribe to.`,
+      stops: 'at the clock — automation is event-driven, and going at-risk is something that happens by time passing rather than by anybody doing anything',
       severity: 'P1',
-      impact: 'At-risk work is found by opening the app, not by being told.',
+      impact: 'At-risk work is still found by opening the app. A scheduled pass is the missing piece, not a channel.',
     }
   },
 )
@@ -364,8 +372,8 @@ scenario(
     const listed = Boolean(overdueSection?.lines.some((l) => l.id === 'OAPIL-2' || l.subject.includes('OAPIL-2')))
     return {
       verdict: health === 'Overdue' && listed ? 'PARTIAL' : 'FAIL',
-      actual: `Health is "${health}" and the daily IMS lists it under "${overdueSection?.title ?? 'no overdue section'}". No escalation exists: escalation is neither an action nor a record.`,
-      stops: 'at escalation — the breach is reported, never routed',
+      actual: `Health is "${health}" and the daily IMS lists it under "${overdueSection?.title ?? 'no overdue section'}". Escalation could now be expressed as a rule — telling a role is one action away — but nothing fires it, because a breach is a date passing rather than a change anybody made.`,
+      stops: 'at the same clock as H — the machinery to route a breach exists, and nothing wakes up to notice one',
       severity: 'P1',
       impact: 'A breach reaches a report, not a person with authority to fix it.',
     }
@@ -1345,14 +1353,45 @@ scenario(
 scenario(
   'W',
   'A notification fails to deliver',
-  'The failure is visible, retried, and audited — a silent non-delivery is the dangerous case.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `There is no delivery mechanism to fail: ${absent(/sendMail|nodemailer|smtp|graph\.microsoft|webhook/i) ? 'no mail, Teams or webhook client appears anywhere in the source' : 'a delivery client exists'}. Communication today is a note somebody types on an issue.`,
-    stops: 'at the channel',
-    severity: 'P1',
-    impact: 'Nobody is ever told anything by the system, so nothing can fail to tell them — which is not the same as working.',
-  }),
+  'The failure is visible and recorded — a silent non-delivery is the dangerous case.',
+  () => {
+    const lead = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: lead.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+
+    const byEmail = ok(staffed, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_EMAIL', label: 'Email the lead', on: 'issue.owner', when: [], enabled: true,
+            then: [{ kind: 'notify', audience: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'email', text: '{id} is now {to}\u2019s' },
+            ],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+
+    const run = applyWithRules(
+      byEmail,
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
+      A,
+    )
+    const message = Object.values(run.state.notifications)[0]
+    const stuck = undelivered(run.state.notifications)
+
+    const good = Boolean(message) && message.delivery === 'pending' && stuck.length === 1
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `The message is recorded with an outcome rather than attempted and lost: delivery is "${message?.delivery}" because "${message?.deliveryNote}" The count of undelivered messages is shown in the inbox and on the automation screen to everybody, rather than hidden behind a setting — a firm that configured email escalation and has never sent one should not discover it from a client asking why nobody called.`,
+      stops: 'at the transport — in-app is delivered because the inbox is the delivery; email and Teams have nowhere to go',
+      severity: 'P1',
+      impact: 'Non-delivery is visible and counted. It is still non-delivery: nothing leaves the building.',
+    }
+  },
 )
 
 scenario(
@@ -1374,14 +1413,75 @@ scenario(
 scenario(
   'Z',
   'An automation fails part-way through',
-  'The run stops safely, the partial effect is visible, and someone is told.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `There is no automation runtime (${absent(/runRule|evaluateRules|automationEngine|dispatchEvent/) ? 'no rule engine, event dispatcher or scheduler in source' : 'an engine exists'}). Routing rules are records; nothing evaluates them.`,
-    stops: 'at the engine',
-    severity: 'P0',
-    impact: 'Every rule the firm configures is inert. The screen implies otherwise.',
-  }),
+  'The run stops safely, what did happen is visible, and the failure is recorded rather than swallowed.',
+  () => {
+    /* Somebody who will receive things, and a rule that will fail. */
+    const lead = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: lead.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+
+    /* A rule with two steps: one that works, one the reducer will refuse. */
+    const twoStep = ok(staffed, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST', label: 'Two steps, one impossible', on: 'issue.owner',
+            when: [], enabled: true,
+            then: [
+              { kind: 'notify', audience: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'in-app', text: '{id} moved to {to}' },
+              // Refused: the transition graph does not allow Open → Closed - confirmed, and a
+              // rule is bound by it exactly as a person is.
+              { kind: 'requestApproval', ruleId: 'NO_SUCH_RULE', text: '' },
+            ],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+
+    const run = applyWithRules(
+      twoStep,
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
+      A,
+    )
+
+    const raised = Object.values(run.state.notifications).length
+    const refused = run.automation.refusals.length
+    const stateIsWhole = run.state.issues['OAPIL-1'].owner === 'Sam'
+
+    /* And a rule that reaches nobody reports it rather than looking like it worked. */
+    const orphanAudience = ok(staffed, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_ORPHAN', label: 'Tell a role nobody holds', on: 'issue.owner',
+            when: [], enabled: true,
+            then: [{ kind: 'notify', audience: 'role:ROLE_CLIENT_SPONSOR', channel: 'in-app', text: 'x' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const missed = applyWithRules(
+      orphanAudience,
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
+      A,
+    )
+
+    const good = raised === 1 && refused === 1 && stateIsWhole && missed.automation.misses.length === 1
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `The working step ran and the impossible one did not: ${raised} notification raised, ${refused} step refused ("${run.automation.refusals[0]?.error}"), and the original change stands. A rule addressed to a role nobody holds reports it — "${missed.automation.misses[0]?.why}" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.`,
+      stops: 'at the schedule — every rule reacts to something that happened, so "every morning, escalate what is about to breach" cannot be expressed',
+      severity: 'P2',
+      impact: 'Event-driven automation works and fails safely. Time-driven automation needs a clock and a process to run it, and this application has neither.',
+    }
+  },
 )
 
 scenario(

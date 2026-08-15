@@ -48,6 +48,10 @@ const KINDS = new Set([
   'removeTime',
   'requestApproval',
   'decideApproval',
+  'markNotificationRead',
+  // `notify` is deliberately absent. Notifications are raised by rules, and the server plans
+  // the same rules the browser does — so a notify action arriving over the wire could only be
+  // one the client invented.
   'buildLifecycle',
   'clearLifecycle',
   'config',

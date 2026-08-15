@@ -3931,3 +3931,115 @@ select.cell-editor {
 .cfg-fld-wide {
   flex: 1 1 100%;
 }
+
+/* ---------- inbox ----------
+   The undelivered count is shown to everybody rather than hidden behind a setting: "the firm
+   configured email escalation and nothing has ever been sent" is otherwise discovered by a
+   client asking why nobody called. */
+.inbox-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.inbox-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.inbox-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.inbox-btn.has-unread {
+  color: var(--accent);
+}
+.inbox-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 7px;
+}
+.inbox-menu {
+  top: 40px;
+  right: 16px;
+  left: auto;
+  width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+.menu-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  cursor: pointer;
+}
+.menu-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.inbox-empty {
+  margin: 4px 0;
+}
+.inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inbox-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.inbox-item:hover {
+  background: var(--surface-2);
+}
+.inbox-list li.unread .inbox-body {
+  color: var(--text);
+  font-weight: 500;
+}
+.inbox-stuck {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.inbox-stuck b {
+  color: var(--h-atrisk);
+}

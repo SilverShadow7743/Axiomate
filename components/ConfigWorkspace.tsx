@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import {
@@ -27,6 +27,9 @@ import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import { isTerminal } from '@/lib/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
+import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
+import { EVENT_TYPES, type EventType } from '@/lib/events'
+import { CHANNELS, type Channel } from '@/lib/notifications'
 import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
 
@@ -62,6 +65,7 @@ type Tab =
   | 'transitions'
   | 'permissions'
   | 'approvals'
+  | 'automation'
   | 'sizing'
   | 'scopes'
 
@@ -74,6 +78,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
   { id: 'approvals', label: 'Approvals', group: 'Operating model' },
+  { id: 'automation', label: 'Automation', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -196,6 +201,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
+          {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -817,6 +823,15 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       })(),
     },
     {
+      id: 'automation',
+      title: 'Automation',
+      what: 'What happens on its own when something changes.',
+      now: (() => {
+        const on = m.automationRules.filter((r) => r.enabled).length
+        return on ? `${on} firing` : 'Nothing fires'
+      })(),
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -983,6 +998,245 @@ function Sizing({
 
 
 
+
+
+/* ================================================================== *
+ * Automation
+ * ================================================================== */
+
+function Automation({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const rules = state.model.automationRules
+  const roles = liveRoles(state.model)
+
+  const put = (id: string, patch: Partial<(typeof rules)[number]>) =>
+    onConfig({ k: 'setAutomationRules', rules: rules.map((r) => (r.id === id ? { ...r, ...patch } : r)) })
+
+  /** What each rule has actually raised, so a rule nobody hears from is visible as such. */
+  const fired = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const notification of Object.values(state.notifications)) {
+      n[notification.ruleId] = (n[notification.ruleId] ?? 0) + 1
+    }
+    return n
+  }, [state.notifications])
+
+  const stuck = useMemo(
+    () => Object.values(state.notifications).filter((n) => n.delivery !== 'delivered').length,
+    [state.notifications],
+  )
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Automation</h3>
+      <p className="cfg-note">
+        What happens on its own when something changes. A rule reacts to an event, checks a
+        condition, and does something — and the something is dispatched as an ordinary action,
+        through the same reducer a person&rsquo;s click goes through.
+      </p>
+      <p className="cfg-note">
+        That is what makes it safe to switch on: <b>a rule cannot do anything a person could
+        not.</b> It cannot close work with no evidence or move a record along a route the
+        transition graph forbids, because the same code refuses it. Everything it does is in
+        the audit trail with the rule that caused it.
+      </p>
+
+      {stuck > 0 && (
+        <div className="panel-note warn">
+          <b>{stuck} messages have not been sent.</b> Only the in-app inbox has a transport here
+          — email and Teams are recorded and go nowhere. They are counted rather than hidden,
+          because a rule that reaches nobody looks exactly like one that worked.
+        </div>
+      )}
+
+      {rules.map((rule) => (
+        <div className="cfg-card" key={rule.id}>
+          <div className="cfg-fld-row">
+            <label className="cfg-fld cfg-fld-wide">
+              <span>Name</span>
+              <input
+                defaultValue={rule.label}
+                onBlur={(e) => {
+                  if (e.target.value.trim() && e.target.value !== rule.label) {
+                    put(rule.id, { label: e.target.value.trim() })
+                  }
+                }}
+              />
+            </label>
+            <label className="cfg-check">
+              <input
+                type="checkbox"
+                checked={rule.enabled}
+                onChange={(e) => put(rule.id, { enabled: e.target.checked })}
+              />
+              <span>Firing</span>
+            </label>
+          </div>
+
+          <div className="cfg-fld-row">
+            <label className="cfg-fld">
+              <span>When</span>
+              <select value={rule.on} onChange={(e) => put(rule.id, { on: e.target.value as EventType })}>
+                {EVENT_TYPES.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {rule.when.map((cond, i) => (
+              <Fragment key={i}>
+                <label className="cfg-fld">
+                  <span>And</span>
+                  <select
+                    value={cond.field}
+                    onChange={(e) =>
+                      put(rule.id, {
+                        when: rule.when.map((c, j) =>
+                          j === i ? { ...c, field: e.target.value as ConditionField } : c,
+                        ),
+                      })
+                    }
+                  >
+                    {CONDITION_FIELDS.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cfg-fld">
+                  <span>&nbsp;</span>
+                  <select
+                    value={cond.op}
+                    onChange={(e) =>
+                      put(rule.id, {
+                        when: rule.when.map((c, j) =>
+                          j === i ? { ...c, op: e.target.value as ConditionOp } : c,
+                        ),
+                      })
+                    }
+                  >
+                    {(['is', 'is not', 'is one of', 'is empty', 'is not empty'] as const).map((op) => (
+                      <option key={op}>{op}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="cfg-fld">
+                  <span>&nbsp;</span>
+                  <input
+                    defaultValue={cond.value}
+                    placeholder="value"
+                    onBlur={(e) =>
+                      put(rule.id, {
+                        when: rule.when.map((c, j) => (j === i ? { ...c, value: e.target.value } : c)),
+                      })
+                    }
+                  />
+                </label>
+              </Fragment>
+            ))}
+          </div>
+
+          {rule.then.map((step, i) => (
+            <div className="cfg-fld-row" key={i}>
+              <label className="cfg-fld">
+                <span>Then</span>
+                <select
+                  value={step.kind}
+                  onChange={(e) =>
+                    put(rule.id, {
+                      then: rule.then.map((a, j) =>
+                        j === i ? { ...a, kind: e.target.value as RuleActionKind } : a,
+                      ),
+                    })
+                  }
+                >
+                  <option value="notify">Tell somebody</option>
+                  <option value="setNextAction">Set the next action</option>
+                  <option value="addNote">Add a note</option>
+                  <option value="requestApproval">Ask for an approval</option>
+                </select>
+              </label>
+              {step.kind === 'notify' && (
+                <>
+                  <label className="cfg-fld">
+                    <span>Who</span>
+                    <select
+                      value={step.audience ?? 'owner'}
+                      onChange={(e) =>
+                        put(rule.id, {
+                          then: rule.then.map((a, j) => (j === i ? { ...a, audience: e.target.value } : a)),
+                        })
+                      }
+                    >
+                      <option value="owner">The owner</option>
+                      <option value="raisedBy">Whoever raised it</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={`role:${r.id}`}>
+                          Everyone who is {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="cfg-fld">
+                    <span>How</span>
+                    <select
+                      value={step.channel ?? 'in-app'}
+                      onChange={(e) =>
+                        put(rule.id, {
+                          then: rule.then.map((a, j) =>
+                            j === i ? { ...a, channel: e.target.value as Channel } : a,
+                          ),
+                        })
+                      }
+                    >
+                      {CHANNELS.map((ch) => (
+                        <option key={ch} value={ch}>
+                          {ch === 'in-app' ? 'In the app' : `${ch} — no transport`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              <label className="cfg-fld cfg-fld-wide">
+                <span>Saying</span>
+                <input
+                  defaultValue={step.text ?? ''}
+                  placeholder="{id}, {subject}, {from}, {to} and {by} are filled in"
+                  onBlur={(e) =>
+                    put(rule.id, {
+                      then: rule.then.map((a, j) => (j === i ? { ...a, text: e.target.value } : a)),
+                    })
+                  }
+                />
+              </label>
+            </div>
+          ))}
+
+          <p className="cfg-inherit">
+            {fired[rule.id]
+              ? `Has raised ${fired[rule.id]} message${fired[rule.id] === 1 ? '' : 's'}.`
+              : 'Has never fired here.'}
+          </p>
+        </div>
+      ))}
+
+      <p className="cfg-inherit">
+        There is no schedule. Every rule reacts to something that happened, so &ldquo;every
+        morning, escalate what is about to breach&rdquo; cannot be expressed — that needs a clock
+        and a process to run it, and this application has neither. The SLA watch in the agent
+        registry is exactly that shape, which is why it stays declared.
+      </p>
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Approvals

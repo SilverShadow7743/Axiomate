@@ -1877,6 +1877,32 @@
       "subject": "A change request was closed by setting a status, which anyone could do",
       "description": "Nothing distinguished an approved change from somebody marking it approved. Approval now exists as a mechanism with the three properties that separate it from a checkbox. It gates something: a rule names a transition, and the record cannot make that move until an approval exists and says yes — riding on the same transition graph the status field already goes through, so there is one answer to \"may this record move\" rather than two that can disagree. Not everybody can give it: a rule names the roles that may decide, and holding the general grant is not enough, so a project manager cannot approve a change the client sponsor is meant to. And not the person who asked: requesting and deciding are different acts by different people, and this is the one rule with no configuration switch, because a self-approval is not a weaker control but the absence of one. A firm wanting a shorter path widens the roles instead. Two further decisions. The question is copied from the rule onto the approval rather than referenced, so editing a rule later cannot rewrite what a person was actually asked — the same reasoning that makes an estimate revision keep its own before-and-after. And a rejection blocks exactly as a missing decision does and does not clear itself: somebody has to ask again, and the refusal stays where a reader can see the change was declined rather than never considered. The shipped rule gates a change request starting rather than finishing, because a change approved after delivery is a record of what was already done. Where it stops: approving a change does not move a commercial value, because there is no SOW to move.",
       "reference": "lib/approval.ts, lib/workspace.ts transition gate, components/ApprovalsBlock.tsx"
+    },
+    {
+      "id": "AXM-073",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Automation",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "A scheduled pass, for anything time-driven",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Routing rules were records with no engine, so every configured rule was inert",
+      "description": "Nothing evaluated them and nothing could fail, which is not the same as working — and the configuration screen implied otherwise. There is now an engine, and the decision that makes it safe to switch on is that a rule acts by dispatching ordinary actions. It does not write to state: it produces the same Action values a person’s click produces, and those go through the same reducer, the same permission check, the same transition graph and the same audit trail. So a rule cannot do anything a person could not — it cannot close work with no evidence or move a record along a route the graph forbids, because the same code refuses it — everything it does is attributed with the rule that caused it, and a failure is partial and visible rather than silent and total, because each action is whole on its own. Events are derived by comparing the state before an action with the state after, rather than emitted by each reducer arm: an arm that forgets to emit is invisible, because the action still works. A comparison cannot forget, and an event is true by construction. Notifications are records with a delivery outcome rather than calls to a mail server, because the interesting question is not whether a message was composed but whether it arrived and whether anybody knows it did not. In-app is delivered because the inbox is the delivery; every other channel is recorded as pending, and the count of undelivered messages is shown to everybody rather than hidden behind a setting. What is deliberately absent is a schedule: every rule reacts to something that happened, so an issue going at-risk — which is time passing against a date nobody moved — has no event to subscribe to. That is now the honest reason the SLA watch stays declared, and it is a clock that is missing rather than a channel.",
+      "reference": "lib/events.ts, lib/automation.ts, lib/notifications.ts, applyWithRules, components/Inbox.tsx"
     }
   ]
 }

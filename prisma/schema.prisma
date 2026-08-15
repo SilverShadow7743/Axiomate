@@ -128,6 +128,7 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  notifications Notification[]
   approvals     Approval[]
   timeEntries   TimeEntry[]
   estimates     IssueEstimate[]
@@ -244,6 +245,7 @@ model Issue {
   estimate          IssueEstimate?
   timeEntries       TimeEntry[]
   approvals         Approval[]
+  notifications     Notification[]
   notes             IssueNote[]
 
   deletedAt DateTime?
@@ -515,6 +517,42 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// A message raised for somebody, and whether it got anywhere.
+///
+/// `delivery` is the point of the table. A `sendMail` call with a try/catch answers neither
+/// "did it arrive" nor "does anybody know it did not"; a record with an outcome answers both.
+/// In-app is delivered the moment it is written, because the inbox is the delivery. Every other
+/// channel stays `pending`, because no transport is configured — and a pending count in the
+/// interface is a true statement about this deployment.
+model Notification {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id      String @default(cuid())
+  /// Who it is for, by name — the same join used everywhere until people have keys.
+  to      String
+  channel String
+
+  subject String @db.Text
+  body    String @db.Text
+
+  /// The record it is about.
+  aboutId String
+  issue   Issue  @relation(fields: [tenantId, aboutId], references: [tenantId, id], onDelete: Cascade)
+  /// Which rule raised it, so a noisy rule can be found and switched off.
+  ruleId  String
+
+  createdAt    DateTime
+  delivery     String
+  deliveryNote String   @db.Text
+  readAt       DateTime?
+
+  @@id([tenantId, id])
+  /// "What is waiting for me" and "what never left the building" are the two queries.
+  @@index([tenantId, to, readAt])
+  @@index([tenantId, delivery])
 }
 
 /// A decision somebody with authority was asked for, and gave or refused.

@@ -49,6 +49,9 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import { deriveEvents } from './events'
+import { planActions, type AutomationRule, type RuleMiss } from './automation'
+import { deliveryFor, type Channel, type Notification } from './notifications'
 import {
   approvalsFor,
   blockingRule,
@@ -195,6 +198,8 @@ export interface WorkspaceState {
   timeEntries: Record<string, TimeEntry>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
+  /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
+  notifications: Record<string, Notification>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -423,6 +428,7 @@ export function initWorkspace(
     estimateRevisions: {},
     timeEntries: {},
     approvals: {},
+    notifications: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -513,6 +519,23 @@ export type Action =
   /* ---- APPROVAL ---- */
   | { t: 'requestApproval'; subjectId: string; ruleId: string; note: string; now: string }
   | { t: 'decideApproval'; id: string; decision: ApprovalDecision; note: string; now: string }
+  /* ---- NOTIFICATION ---- */
+  /**
+   * Raised by a rule, never by a person — which is why it is not on the write endpoint's
+   * allowlist. The browser plans the same rules the server does, so it has no reason to send
+   * one, and no way to send one it invented.
+   */
+  | {
+      t: 'notify'
+      to: string
+      channel: Channel
+      subject: string
+      body: string
+      aboutId: string
+      ruleId: string
+      now: string
+    }
+  | { t: 'markNotificationRead'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -539,6 +562,7 @@ export type ConfigOp =
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
+  | { k: 'setAutomationRules'; rules: AutomationRule[] }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -2237,6 +2261,57 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /* ---------------- NOTIFICATION ---------------- */
+
+    case 'notify': {
+      const seq = state.seq + 1
+      const id = `notif-${seq}`
+      const { delivery, deliveryNote } = deliveryFor(a.channel)
+      const notification: Notification = {
+        id,
+        to: a.to,
+        channel: a.channel,
+        subject: a.subject,
+        body: a.body,
+        aboutId: a.aboutId,
+        ruleId: a.ruleId,
+        createdAt: a.now,
+        delivery,
+        deliveryNote,
+        readAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          notifications: { ...state.notifications, [id]: notification },
+          seq,
+          // Audited against the record it is about, and carrying the rule that caused it, so
+          // "why did I get this" and "why did this record change" have the same answer.
+          audit: log(state, {
+            rowId: a.aboutId,
+            field: 'notification',
+            from: '',
+            to: `${a.channel} → ${a.to}${delivery === 'delivered' ? '' : ` (${delivery})`}`,
+            at: a.now,
+            by,
+            reason: a.ruleId,
+          }),
+        },
+      }
+    }
+
+    case 'markNotificationRead': {
+      const n = state.notifications[a.id]
+      if (!n) return { state, error: 'That notification no longer exists.' }
+      if (n.readAt) return { state }
+      return {
+        state: {
+          ...state,
+          notifications: { ...state.notifications, [a.id]: { ...n, readAt: a.now } },
+        },
+      }
+    }
+
     /* ---------------- CONFIGURATION ---------------- */
     case 'config':
       return applyConfig(state, a.op, a.now, actor)
@@ -2464,6 +2539,25 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sizeBands: op.bands },
         { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
         'T-shirt sizing updated.',
+      )
+    }
+
+    case 'setAutomationRules': {
+      for (const r of op.rules) {
+        if (!r.label.trim()) return { state, error: 'A rule needs a name.' }
+        if (!r.then.length) return { state, error: `“${r.label}” does nothing.` }
+      }
+      return done(
+        { ...m, automationRules: op.rules },
+        {
+          rowId: 'AUTOMATION_RULES',
+          field: 'automationRules',
+          from: `${m.automationRules.filter((r) => r.enabled).length} firing`,
+          to: `${op.rules.filter((r) => r.enabled).length} firing`,
+          at: now,
+          by,
+        },
+        'Automation updated.',
       )
     }
 
@@ -3014,4 +3108,84 @@ function describeResponsibility(m: OperatingModel, t: ResponsibilityType): strin
     ? t.eligibleRoleIds.map((r) => m.roles[r]?.label ?? r).join('/')
     : 'any role'
   return `${t.label} · ${t.valueKind} · ${bounds} · ${t.required ? 'required' : 'optional'} · ${roles}`
+}
+
+/* ================================================================== *
+ * Automation
+ * ================================================================== */
+
+export interface RunOutcome {
+  state: WorkspaceState
+  error?: string
+  message?: string
+  createdId?: string
+  /**
+   * Every action this run applied, in order, each with the state either side of it.
+   *
+   * The first is always the action that was asked for; the rest are what the rules did about
+   * it. Pairs rather than a bare list, because the write path persists one action at a time
+   * against the change *that action* made — handing it a before and after spanning the whole
+   * run would make it guess which rows moved for which reason.
+   */
+  steps: { action: Action; before: WorkspaceState; after: WorkspaceState }[]
+  /** What the rules did, and what they could not. Empty when nothing fired. */
+  automation: {
+    applied: Action[]
+    misses: RuleMiss[]
+    /** Actions the rules asked for and the reducer refused, with its reason. */
+    refusals: { action: Action; error: string }[]
+  }
+}
+
+/**
+ * Apply an action, then let the rules react to what it changed.
+ *
+ * This is the funnel both callers use — the browser for the optimistic result and the server
+ * for the durable one — and it is deterministic on purpose: the only inputs are the state, the
+ * action and the actor, so both arrive at the same follow-up actions and the same minted ids.
+ * That is what allows the browser to show a notification immediately while sending the server
+ * nothing but the original action.
+ *
+ * A refused follow-up does not roll back what preceded it. Each action is whole on its own, so
+ * a partial run leaves a consistent workspace and a recorded reason — which is a better outcome
+ * than an all-or-nothing rule engine that discards a correct notification because a later step
+ * was not permitted.
+ */
+export function applyWithRules(state: WorkspaceState, action: Action, actor: Actor): RunOutcome {
+  const first = apply(state, action, actor)
+  if (first.error) {
+    return { ...first, steps: [], automation: { applied: [], misses: [], refusals: [] } }
+  }
+
+  const steps = [{ action, before: state, after: first.state }]
+  const events = deriveEvents(state, first.state, action.now, actor.name)
+  if (!events.length) {
+    return { ...first, steps, automation: { applied: [], misses: [], refusals: [] } }
+  }
+
+  const { actions, misses } = planActions(first.state, events, action.now)
+  let current = first.state
+  const applied: Action[] = []
+  const refusals: { action: Action; error: string }[] = []
+
+  for (const step of actions) {
+    const result = apply(current, step, actor)
+    if (result.error) {
+      // Recorded rather than thrown. A rule asking for something the reducer refuses is a
+      // configuration problem, and the person who caused the original change is not the person
+      // who should be stopped by it.
+      refusals.push({ action: step, error: result.error })
+      continue
+    }
+    steps.push({ action: step, before: current, after: result.state })
+    current = result.state
+    applied.push(step)
+  }
+
+  return {
+    ...first,
+    state: current,
+    steps,
+    automation: { applied, misses, refusals },
+  }
 }
