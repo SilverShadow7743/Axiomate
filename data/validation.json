@@ -243,10 +243,10 @@
     },
     {
       "id": "ST2",
-      "title": "A consultant, an analyst and a client user each try the same eight operations",
+      "title": "A consultant, an analyst and a client user each try the same nine operations",
       "expected": "Each is allowed what their role grants and refused the rest, with a refusal that explains itself.",
       "verdict": "PASS",
-      "actual": "Consultant may raise, edit, close, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, schedule or estimate. Client user may raise and note only. The refusal names the role rather than just saying no: \"Close work is not something Client User can do here.\"",
+      "actual": "Consultant may raise, edit, close, reopen, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, reopen, schedule or estimate — reopening counts as a closure decision, because it moves a record back out of the done set. Client user may raise and note only. The refusal names the role rather than just saying no: \"Close work is not something Client User can do here.\"",
       "stops": "—",
       "severity": "—",
       "impact": "The rules a firm states about who may do what are now applied, and applied at the reducer rather than in the screens."

@@ -679,10 +679,23 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
    * request that never touched a screen lands here just the same.
    */
   {
+    /**
+     * Closing *and* reopening both count as `work.close`.
+     *
+     * Reopening is not an ordinary edit: it moves a record back out of the done set, which
+     * changes what the daily report counts, what a client has been told is finished, and
+     * whether an actualEnd exists. A firm that trusts an analyst to triage but not to close
+     * would not expect that analyst to be able to un-close a client-confirmed resolution —
+     * and without this, they could, because "In Progress" is not a terminal status and the
+     * action would resolve to `work.edit`.
+     *
+     * Disagreeing with a closure without the grant is still possible, and is a note.
+     */
     const closing =
       a.t === 'updateIssue' &&
       typeof (a as { patch?: { status?: string } }).patch?.status === 'string' &&
-      isTerminal((a as { patch: { status: IssueStatus } }).patch.status)
+      (isTerminal((a as { patch: { status: IssueStatus } }).patch.status) ||
+        isTerminal(state.issues[(a as { id: string }).id]?.status ?? null))
     const need = permissionForAction(a.t, { closing })
     if (need) {
       const verdict = can(state.model, actor, need)

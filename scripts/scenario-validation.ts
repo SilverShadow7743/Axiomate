@@ -786,7 +786,7 @@ scenario(
 
 scenario(
   'ST2',
-  'A consultant, an analyst and a client user each try the same eight operations',
+  'A consultant, an analyst and a client user each try the same nine operations',
   'Each is allowed what their role grants and refused the rest, with a refusal that explains itself.',
   () => {
     // Give the directory some roles. The imported log has none, which is the state the
@@ -821,6 +821,16 @@ scenario(
       schedule: attempt(who, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action),
       note: attempt(who, { t: 'addNote', issueId: 'OAPIL-1', body: 'Spoke to the client.', noteType: 'General Update', pinned: false, now: NOW } as Action),
       estimate: attempt(who, { t: 'setEstimate', issueId: 'OAPIL-1', patch: { waitDays: 2 }, now: NOW } as Action),
+      // Reopening a closed record, which is a closure decision in the other direction.
+      reopen: (() => {
+        const closed = ok(withRoles, {
+          t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Closed - no defect' }, now: NOW,
+          reason: 'Not a defect.',
+        } as Action)
+        return !apply(closed, {
+          t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'In Progress' }, now: NOW,
+        } as Action, who).error
+      })(),
       archive: attempt(who, { t: 'softDelete', id: 'OAPIL-1', mode: 'cascade', now: NOW } as Action),
       configure: attempt(who, { t: 'config', op: { k: 'setSla', patch: { High: 3 } }, now: NOW } as Action),
     })
@@ -832,10 +842,10 @@ scenario(
     const expected =
       // A functional consultant delivers: raise, edit, close, schedule, estimate — not archive or configure.
       consultant.raise && consultant.edit && consultant.close && consultant.schedule &&
-      consultant.estimate && !consultant.archive && !consultant.configure &&
+      consultant.estimate && consultant.reopen && !consultant.archive && !consultant.configure &&
       // An analyst triages: raise, edit, note — not close, not schedule, not estimate.
       analyst.raise && analyst.edit && analyst.note &&
-      !analyst.close && !analyst.schedule && !analyst.estimate &&
+      !analyst.close && !analyst.reopen && !analyst.schedule && !analyst.estimate &&
       // A client user raises and comments, and touches nothing else.
       client.raise && client.note &&
       !client.edit && !client.close && !client.schedule && !client.estimate && !client.configure
@@ -846,7 +856,7 @@ scenario(
 
     return {
       verdict: expected ? 'PASS' : 'FAIL',
-      actual: `Consultant may raise, edit, close, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, schedule or estimate. Client user may raise and note only. The refusal names the role rather than just saying no: "${refusal}"`,
+      actual: `Consultant may raise, edit, close, reopen, schedule and estimate but not archive or configure. Analyst may raise, edit and note but not close, reopen, schedule or estimate — reopening counts as a closure decision, because it moves a record back out of the done set. Client user may raise and note only. The refusal names the role rather than just saying no: "${refusal}"`,
       stops: '—',
       severity: '—',
       impact: 'The rules a firm states about who may do what are now applied, and applied at the reducer rather than in the screens.',
