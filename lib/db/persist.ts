@@ -16,6 +16,7 @@ import {
   noteToRow,
   estimateToRow,
   timeToRow,
+  approvalToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -291,6 +292,27 @@ async function writeAction(
       // `changedIds` covers nodes, issues and activities; only the issue can have moved here,
       // and `upsertIssue` ignores an id that names anything else.
       for (const id of changedIds(before, after)) await upsertIssue(tx, tenantId, after, id)
+      return
+    }
+
+    /**
+     * The approval, and nothing else.
+     *
+     * Unlike a note or a time entry, asking for a decision does not touch the issue: the
+     * record has not moved, and saying it had activity because somebody is waiting on somebody
+     * else would make "stale" mean two different things.
+     */
+    case 'requestApproval':
+    case 'decideApproval': {
+      for (const [id, approval] of Object.entries(after.approvals)) {
+        if (before.approvals[id] === approval) continue
+        const row = approvalToRow(tenantId, approval)
+        await tx.approval.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       return
     }
 

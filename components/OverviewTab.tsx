@@ -5,6 +5,9 @@ import type { Actor } from '@/lib/actor'
 import { canEditIssue } from '@/lib/permissions'
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow, type Severity } from '@/lib/types'
 import { allowedNext } from '@/lib/statusPolicy'
+import { blockingRule } from '@/lib/approval'
+import type { ApprovalDecision } from '@/lib/approval'
+import ApprovalsBlock from './ApprovalsBlock'
 import { liveWorkTypes } from '@/lib/config'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
@@ -65,6 +68,8 @@ export default function OverviewTab({
   onSetAssignment,
   onSave,
   onDirtyChange,
+  onRequestApproval,
+  onDecideApproval,
   editing,
   setEditing,
 }: {
@@ -80,6 +85,8 @@ export default function OverviewTab({
     reason?: string,
   ) => boolean
   onDirtyChange: (dirty: boolean) => void
+  onRequestApproval: (ruleId: string, note: string) => void
+  onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
   editing: boolean
   setEditing: (v: boolean) => void
 }) {
@@ -157,6 +164,7 @@ export default function OverviewTab({
   }
 
   /* ---------------- view ---------------- */
+
 
   if (!editing) {
     return (
@@ -245,6 +253,18 @@ export default function OverviewTab({
             ))}
           </dl>
         </div>
+
+        {/* Under the record rather than on a tab of its own: an approval here is never an
+            abstract fact, it is the reason a particular move is blocked. */}
+        {record && (
+          <ApprovalsBlock
+            issue={record}
+            state={state}
+            actor={actor}
+            onRequest={onRequestApproval}
+            onDecide={onDecideApproval}
+          />
+        )}
       </>
     )
   }
@@ -328,6 +348,21 @@ export default function OverviewTab({
                 Not reachable from “{current}”: {blocked.join(', ')}.
               </p>
             )}
+            {movingTo && record && (() => {
+              const blocked = blockingRule(
+                state.model.approvalRules,
+                state.approvals,
+                issue.id,
+                record.type,
+                movingTo,
+              )
+              return blocked ? (
+                <p className="ov-gate">
+                  {blocked.label} is needed before this can move to “{movingTo}”. Ask for it
+                  below, and somebody other than you has to answer.
+                </p>
+              ) : null
+            })()}
             {needsEvidence && (
               <p className="ov-gate">
                 “{movingTo}” needs at least one piece of evidence on the record first — that is

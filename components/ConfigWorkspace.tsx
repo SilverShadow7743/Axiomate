@@ -61,6 +61,7 @@ type Tab =
   | 'serviceLevels'
   | 'transitions'
   | 'permissions'
+  | 'approvals'
   | 'sizing'
   | 'scopes'
 
@@ -72,6 +73,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
+  { id: 'approvals', label: 'Approvals', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -193,6 +195,7 @@ export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
+          {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -805,6 +808,15 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       })(),
     },
     {
+      id: 'approvals',
+      title: 'Approvals',
+      what: 'Which moves need somebody to agree first, and who may agree.',
+      now: (() => {
+        const on = m.approvalRules.filter((r) => r.enabled).length
+        return on ? `${on} in force` : 'None — nothing needs approval'
+      })(),
+    },
+    {
       id: 'responsibilities',
       title: 'Responsibilities',
       what: `Who must be named on a record — ${labels.ISSUE_OWNER}, ${labels.ISSUE_ACCOUNTABLE} and any you add.`,
@@ -970,6 +982,169 @@ function Sizing({
 }
 
 
+
+
+/* ================================================================== *
+ * Approvals
+ * ================================================================== */
+
+function Approvals({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const rules = state.model.approvalRules
+  const roles = liveRoles(state.model)
+  const types = liveWorkTypes(state.model)
+
+  const put = (id: string, patch: Partial<(typeof rules)[number]>) =>
+    onConfig({ k: 'setApprovalRules', rules: rules.map((r) => (r.id === id ? { ...r, ...patch } : r)) })
+
+  /** How many live records each rule currently applies to — a rule about nothing is worth knowing. */
+  const reach = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const rule of rules) {
+      n[rule.id] = Object.values(state.issues).filter(
+        (i) => !i.deletedAt && (!rule.workTypes.length || rule.workTypes.includes(i.type)),
+      ).length
+    }
+    return n
+  }, [rules, state.issues])
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Approvals</h3>
+      <p className="cfg-note">
+        A rule names a move and the roles that may allow it. Until somebody with one of those
+        roles says yes, a record of the matching kind cannot make that move — the check rides on
+        the same transition the status field already goes through, so there is one answer to
+        &ldquo;may this record move&rdquo; rather than two that can disagree.
+      </p>
+      <p className="cfg-note">
+        One rule has no switch here and never will: <b>the person who asks can never be the
+        person who answers.</b> A self-approval is not a weaker control, it is the absence of
+        one. A firm that wants a shorter path widens the roles instead.
+      </p>
+
+      {rules.map((rule) => (
+        <div className="cfg-card" key={rule.id}>
+          <div className="cfg-fld-row">
+            <label className="cfg-fld cfg-fld-wide">
+              <span>Name</span>
+              <input
+                defaultValue={rule.label}
+                onBlur={(e) => {
+                  if (e.target.value.trim() && e.target.value !== rule.label) put(rule.id, { label: e.target.value.trim() })
+                }}
+              />
+            </label>
+            <label className="cfg-fld">
+              <span>Gates the move to</span>
+              <select value={rule.status} onChange={(e) => put(rule.id, { status: e.target.value as IssueStatus })}>
+                {ISSUE_STATUSES.map((st) => (
+                  <option key={st}>{st}</option>
+                ))}
+              </select>
+            </label>
+            <label className="cfg-check">
+              <input
+                type="checkbox"
+                checked={rule.enabled}
+                onChange={(e) => put(rule.id, { enabled: e.target.checked })}
+              />
+              <span>In force</span>
+            </label>
+          </div>
+
+          <label className="cfg-fld cfg-fld-wide">
+            <span>The question somebody is answering</span>
+            <input
+              defaultValue={rule.question}
+              onBlur={(e) => {
+                if (e.target.value !== rule.question) put(rule.id, { question: e.target.value })
+              }}
+            />
+          </label>
+
+          <div className="cfg-fld-row">
+            <div className="cfg-fld cfg-fld-wide">
+              <span>Applies to</span>
+              <div className="cfg-chiprow">
+                {types.map((t) => {
+                  const on = rule.workTypes.includes(t.label)
+                  return (
+                    <label className="cfg-chip" key={t.id}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          put(rule.id, {
+                            workTypes: on
+                              ? rule.workTypes.filter((x) => x !== t.label)
+                              : [...rule.workTypes, t.label],
+                          })
+                        }
+                      />
+                      <span>{t.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="cfg-inherit">
+                {rule.workTypes.length
+                  ? `${reach[rule.id] ?? 0} live records match.`
+                  : `Every work type — all ${reach[rule.id] ?? 0} live records.`}
+              </p>
+            </div>
+
+            <div className="cfg-fld cfg-fld-wide">
+              <span>Decided by</span>
+              <div className="cfg-chiprow">
+                {roles.map((role) => {
+                  const on = rule.deciderRoleIds.includes(role.id)
+                  return (
+                    <label className="cfg-chip" key={role.id}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          put(rule.id, {
+                            deciderRoleIds: on
+                              ? rule.deciderRoleIds.filter((x) => x !== role.id)
+                              : [...rule.deciderRoleIds, role.id],
+                          })
+                        }
+                      />
+                      <span>{role.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="cfg-inherit">
+                Holding the general grant is not enough on its own — a rule that names the client
+                sponsor is not satisfied by a project manager who happens to be able to approve
+                other things.
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <p className="cfg-inherit">
+        A rule with nobody able to decide it is refused rather than stored: it would be a wall,
+        not a control, and the work it gates would never move again.
+      </p>
+      <p className="cfg-inherit">
+        The shipped rule gates a change request <em>starting</em> rather than finishing. A change
+        approved after delivery is a record of what was already done, which is the failure this
+        exists to prevent. If no work type here is called Change Request, the rule matches
+        nothing and blocks nothing.
+      </p>
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Permissions

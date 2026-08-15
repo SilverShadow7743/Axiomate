@@ -570,14 +570,135 @@ scenario(
 scenario(
   'P',
   'A change request is approved',
-  'The approval is recorded by an authorised person, and the SOW value and scope move with it.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `Approval is neither an action nor a record (${absent(/t: 'approve|interface Approval\b/) ? 'no approve action in the reducer' : 'an approve action exists'}). A CR is closed by setting a status, which anyone can do.`,
-    stops: 'at authority',
-    severity: 'P0',
-    impact: 'Nothing distinguishes an approved change from someone marking it approved.',
-  }),
+  'The approval is given by somebody with the authority for it, and the work cannot start without it.',
+  () => {
+    /* A CR, raised. The work type is configuration, so it is added first. */
+    const typed = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertWorkType', id: null, label: 'Change Request', description: 'Chargeable change to agreed scope' },
+      now: NOW,
+    } as Action)
+    const withCr = ok(typed, {
+      t: 'create', parentId: typed.issues['OAPIL-1'].parentId!, kind: 'issue',
+      draft: { name: 'Add a second approval step', type: 'Change Request', severity: 'Medium' }, now: NOW,
+    } as Action)
+    const crId = Object.values(withCr.issues).find((i) => i.subject === 'Add a second approval step')!.id
+
+    /* Roles, so the two sides of the decision are different people with different authority. */
+    const named = (name: string, roleId: string, base = withCr) => {
+      const person = Object.values(base.model.people).find((p) => p.name === name)
+      return ok(base, {
+        t: 'config', op: { k: 'upsertPerson', id: person?.id ?? null, name, roleIds: [roleId] }, now: NOW,
+      } as Action)
+    }
+    let staffed = named('Priya', 'ROLE_FUNCTIONAL')
+    staffed = named('Dana', 'ROLE_CLIENT_SPONSOR', staffed)
+    const consultant: Actor = { id: 'priya', name: 'Priya' }
+    const sponsor: Actor = { id: 'dana', name: 'Dana' }
+
+    /* 1. Work cannot start on it. */
+    const unapproved = apply(staffed, {
+      t: 'updateIssue', id: crId, patch: { status: 'In Progress' }, now: NOW,
+    } as Action, consultant)
+
+    /* 2. Ask. */
+    const asked = (() => {
+      const r = apply(staffed, {
+        t: 'requestApproval', subjectId: crId, ruleId: 'APPR_CR_START',
+        note: 'Two extra days of configuration and a retest.', now: NOW,
+      } as Action, consultant)
+      if (r.error) throw new Error(`request refused: ${r.error}`)
+      return r.state
+    })()
+    const approvalId = Object.values(asked.approvals)[0].id
+
+    /* 3. The asker cannot answer their own question. */
+    const selfApproved = apply(asked, {
+      t: 'decideApproval', id: approvalId, decision: 'approved', note: 'Fine by me.', now: NOW,
+    } as Action, consultant)
+
+    /* 4. Nor can somebody without the role the rule names. */
+    const analyst = named('Sam', 'ROLE_SUPPORT', asked)
+    const wrongRole = apply(analyst, {
+      t: 'decideApproval', id: approvalId, decision: 'approved', note: '', now: NOW,
+    } as Action, { id: 'sam', name: 'Sam' })
+
+    /* 5. The sponsor can, and then the work may start. */
+    const decided = (() => {
+      const r = apply(asked, {
+        t: 'decideApproval', id: approvalId, decision: 'approved',
+        note: 'Agreed at the Thursday governance call.', now: NOW,
+      } as Action, sponsor)
+      if (r.error) throw new Error(`decision refused: ${r.error}`)
+      return r.state
+    })()
+    const started = apply(decided, {
+      t: 'updateIssue', id: crId, patch: { status: 'In Progress' }, now: NOW,
+    } as Action, consultant)
+
+    /* 6. A rejection blocks exactly as a missing decision does, and stays on the record. */
+    const rejected = apply(asked, {
+      t: 'decideApproval', id: approvalId, decision: 'rejected',
+      note: 'Not within this phase — raise it for the next release.', now: NOW,
+    } as Action, sponsor)
+    const blockedAfterRejection = apply(rejected.state, {
+      t: 'updateIssue', id: crId, patch: { status: 'In Progress' }, now: NOW,
+    } as Action, consultant)
+
+    const good =
+      Boolean(unapproved.error) && Boolean(selfApproved.error) && Boolean(wrongRole.error) &&
+      !started.error && Boolean(blockedAfterRejection.error) &&
+      decided.approvals[approvalId].decidedBy === 'Dana'
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `Unapproved, the CR cannot start: "${unapproved.error}" The consultant who asked cannot answer — "${selfApproved.error}" — and neither can an analyst, because the rule names the sponsor: "${wrongRole.error}" Once the sponsor approves, the work starts. A rejection blocks the same move and stays on the record: "${blockedAfterRejection.error}"`,
+      stops: 'at the commercial consequence — approving a change does not move a SOW value, because there is no SOW',
+      severity: 'P1',
+      impact: 'A change can no longer be delivered without somebody with authority agreeing to it. What it is worth is still not recorded anywhere.',
+    }
+  },
+)
+
+scenario(
+  'P2',
+  'A firm writes an approval rule that nobody can satisfy',
+  'The rule is refused, rather than becoming a wall the work never gets past.',
+  () => {
+    const orphan = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'setApprovalRules',
+        rules: [
+          {
+            id: 'APPR_TEST', label: 'Impossible', workTypes: [], status: 'In Progress',
+            deciderRoleIds: [], question: 'Well?', enabled: true,
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const silent = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'setApprovalRules',
+        rules: [
+          {
+            id: 'APPR_TEST', label: 'Unasked', workTypes: [], status: 'In Progress',
+            deciderRoleIds: ['ROLE_ENGAGEMENT_LEAD'], question: '  ', enabled: true,
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    return {
+      verdict: orphan.error && silent.error ? 'PASS' : 'FAIL',
+      actual: `A rule with no decider is refused — "${orphan.error}" — and so is one that asks nothing: "${silent.error}" Both would produce work that reaches a status never, and whoever wrote the rule would hear about it weeks later from somebody who could not proceed.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A control that cannot be satisfied is a wall, and the configuration screen refuses to build one.',
+    }
+  },
 )
 
 /* ================================================================== *
@@ -1201,8 +1322,8 @@ scenario(
   'The week is presented for approval, and approval freezes exactly what was approved.',
   () => ({
     verdict: 'NOT IMPLEMENTED',
-    actual: `Entries exist and are the record; there is no period, no submission and no approval — ${absent(/submitPeriod|TimePeriod|interface Timesheet/) ? 'no such type in source' : 'a type exists'}. The entry-as-record decision is the half that had to come first: attaching approval to a container is what lets an edited entry silently change an approved total.`,
-    stops: 'at approval, which is the same missing mechanism as scenario P',
+    actual: `Entries exist and are the record, and approvals exist and gate transitions — but nothing gathers entries into a period to be approved ${absent(/submitPeriod|TimePeriod|interface Timesheet/) ? '(no such type in source)' : '(a type exists)'}. The two halves are built; the join is not. The entry-as-record decision is what makes that join non-trivial: an approval will have to name the entries it covered, or an edit afterwards silently changes an approved total.`,
+    stops: 'at the period — approval itself now exists and gates transitions; nothing gathers a week of entries to put in front of it',
     severity: 'P1',
     impact: 'Time is recorded and cannot yet be signed off, so it cannot be billed.',
   }),

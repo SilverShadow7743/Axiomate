@@ -9,6 +9,7 @@ import type {
   IssueNote as IssueNoteRow,
   IssueEstimate as EstimateRow,
   TimeEntry as TimeRow,
+  Approval as ApprovalRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
@@ -21,6 +22,7 @@ import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
 import type { EstimateRevision, IssueEstimate } from '../estimation'
 import type { TimeActivity, TimeEntry } from '../time'
+import type { Approval, ApprovalDecision } from '../approval'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -641,6 +643,47 @@ export function timeFromRow(r: TimeRow): TimeEntry {
     createdAt: r.createdAt.toISOString(),
     updatedBy: r.updatedBy,
     updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Approvals
+ * ================================================================== */
+
+export function approvalToRow(tenantId: TenantId, a: Approval): Prisma.ApprovalUncheckedCreateInput {
+  return {
+    tenantId,
+    id: a.id,
+    subjectId: a.subjectId,
+    ruleId: a.ruleId,
+    question: a.question,
+    note: a.note,
+    requestedBy: a.requestedBy,
+    requestedAt: new Date(a.requestedAt),
+    decision: a.decision,
+    decidedBy: a.decidedBy,
+    decidedAt: a.decidedAt ? new Date(a.decidedAt) : null,
+    decisionNote: a.decisionNote,
+    deletedAt: a.deletedAt ? new Date(a.deletedAt) : null,
+  }
+}
+
+export function approvalFromRow(r: ApprovalRow): Approval {
+  return {
+    id: r.id,
+    subjectId: r.subjectId,
+    ruleId: r.ruleId,
+    question: r.question,
+    note: r.note,
+    requestedBy: r.requestedBy,
+    requestedAt: r.requestedAt.toISOString(),
+    // Widened rather than asserted, like every other free-text column read back into a union:
+    // a decision written by an older version still reads.
+    decision: (r.decision as ApprovalDecision | null) ?? null,
+    decidedBy: r.decidedBy,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    decisionNote: r.decisionNote,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

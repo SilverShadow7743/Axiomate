@@ -1851,6 +1851,32 @@
       "subject": "Nothing recorded hours, so five different figures could not be computed at all",
       "description": "Actual effort, effort variance, cost, utilisation and how much of a fixed-price engagement had been consumed are all functions of one record that did not exist. The Estimation tab said so in as many words rather than showing a zero, which was the right answer while it held. Time entries exist now, and the entry is the record rather than the timesheet: a timesheet is a week of entries presented for approval, and treating the container as the record is exactly how an entry edited after approval silently changes an approved total. Hours are Decimal(5,2) in the schema, not Float — quarter hours summed across a month feed an invoice, and binary floating point cannot hold 0.25 three times over accurately enough to argue about with a client. Four things are refused: a day that has not happened, more than twelve hours in one entry, precision finer than a quarter hour, and logging in somebody else’s name without the grant for it. That last one is the same rule notes follow — hours are a person’s account of their own day — and a project manager who holds the grant may log on their behalf, with the entry keeping their name and the trail recording who typed it. Recording time also moves the issue’s activity date, because somebody spending four hours on an issue is activity on it. What this does not reach is money: cost needs a rate, and there is no rate anywhere in this application — not on a person, not on a role, not on an engagement. The tab says that too, rather than inventing a default hourly figure.",
       "reference": "lib/time.ts, components/TimeTab.tsx, prisma TimeEntry, EstimationTab effort variance"
+    },
+    {
+      "id": "AXM-072",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Work Management",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "SOW, so an approved change can move a value",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "A change request was closed by setting a status, which anyone could do",
+      "description": "Nothing distinguished an approved change from somebody marking it approved. Approval now exists as a mechanism with the three properties that separate it from a checkbox. It gates something: a rule names a transition, and the record cannot make that move until an approval exists and says yes — riding on the same transition graph the status field already goes through, so there is one answer to \"may this record move\" rather than two that can disagree. Not everybody can give it: a rule names the roles that may decide, and holding the general grant is not enough, so a project manager cannot approve a change the client sponsor is meant to. And not the person who asked: requesting and deciding are different acts by different people, and this is the one rule with no configuration switch, because a self-approval is not a weaker control but the absence of one. A firm wanting a shorter path widens the roles instead. Two further decisions. The question is copied from the rule onto the approval rather than referenced, so editing a rule later cannot rewrite what a person was actually asked — the same reasoning that makes an estimate revision keep its own before-and-after. And a rejection blocks exactly as a missing decision does and does not clear itself: somebody has to ask again, and the refusal stays where a reader can see the change was declined rather than never considered. The shipped rule gates a change request starting rather than finishing, because a change approved after delivery is a record of what was already done. Where it stops: approving a change does not move a commercial value, because there is no SOW to move.",
+      "reference": "lib/approval.ts, lib/workspace.ts transition gate, components/ApprovalsBlock.tsx"
     }
   ]
 }

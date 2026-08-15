@@ -128,6 +128,7 @@ model Tenant {
   engagements   Engagement[]
   operatingModel OperatingModel?
   meta          WorkspaceMeta?
+  approvals     Approval[]
   timeEntries   TimeEntry[]
   estimates     IssueEstimate[]
   revisions     EstimateRevision[]
@@ -242,6 +243,7 @@ model Issue {
   evidenceItems     Evidence[]
   estimate          IssueEstimate?
   timeEntries       TimeEntry[]
+  approvals         Approval[]
   notes             IssueNote[]
 
   deletedAt DateTime?
@@ -513,6 +515,44 @@ model WorkspaceMeta {
   /// and would do it silently.
   seededAt     DateTime?
   updatedAt    DateTime @updatedAt
+}
+
+/// A decision somebody with authority was asked for, and gave or refused.
+///
+/// `question` is copied from the rule rather than referenced, so editing a rule later cannot
+/// rewrite what a person was actually asked — the same reason an estimate revision keeps its
+/// own before-and-after instead of pointing at a calibration that moves.
+///
+/// A rejected decision is kept, not cleared. The refusal is the record that a change was
+/// declined rather than never considered.
+model Approval {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String @default(cuid())
+  /// The record it is about. Issues today; nothing here assumes that stays true.
+  subjectId String
+  issue     Issue  @relation(fields: [tenantId, subjectId], references: [tenantId, id], onDelete: Cascade)
+
+  /// The rule as it stood when this was asked. Rules live in the operating model, not here.
+  ruleId   String
+  question String @db.Text
+  note     String @db.Text
+
+  requestedBy String
+  requestedAt DateTime
+
+  decision     String?
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String    @db.Text
+
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  /// "What is waiting on me" and "what has this record been through" are the two questions.
+  @@index([tenantId, subjectId])
+  @@index([tenantId, decision, requestedAt])
 }
 
 /// Hours spent, against the work they were spent on.

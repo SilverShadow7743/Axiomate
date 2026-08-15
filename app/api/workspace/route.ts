@@ -46,6 +46,8 @@ const KINDS = new Set([
   'addTime',
   'updateTime',
   'removeTime',
+  'requestApproval',
+  'decideApproval',
   'buildLifecycle',
   'clearLifecycle',
   'config',

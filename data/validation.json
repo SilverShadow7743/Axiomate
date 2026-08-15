@@ -174,12 +174,22 @@
     {
       "id": "P",
       "title": "A change request is approved",
-      "expected": "The approval is recorded by an authorised person, and the SOW value and scope move with it.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "Approval is neither an action nor a record (no approve action in the reducer). A CR is closed by setting a status, which anyone can do.",
-      "stops": "at authority",
-      "severity": "P0",
-      "impact": "Nothing distinguishes an approved change from someone marking it approved."
+      "expected": "The approval is given by somebody with the authority for it, and the work cannot start without it.",
+      "verdict": "PARTIAL",
+      "actual": "Unapproved, the CR cannot start: \"Change request approval is needed before this can move to “In Progress”.\" The consultant who asked cannot answer — \"Decide an approval is not something Functional Consultant can do here.\" — and neither can an analyst, because the rule names the sponsor: \"Decide an approval is not something Support Analyst can do here.\" Once the sponsor approves, the work starts. A rejection blocks the same move and stays on the record: \"Change request approval: this was rejected by Dana. Not within this phase — raise it for the next release.\"",
+      "stops": "at the commercial consequence — approving a change does not move a SOW value, because there is no SOW",
+      "severity": "P1",
+      "impact": "A change can no longer be delivered without somebody with authority agreeing to it. What it is worth is still not recorded anywhere."
+    },
+    {
+      "id": "P2",
+      "title": "A firm writes an approval rule that nobody can satisfy",
+      "expected": "The rule is refused, rather than becoming a wall the work never gets past.",
+      "verdict": "PASS",
+      "actual": "A rule with no decider is refused — \"“Impossible” names no role that can decide it, so nothing it gates could ever proceed.\" — and so is one that asks nothing: \"“Unasked” asks no question. Somebody has to be told what they are approving.\" Both would produce work that reaches a status never, and whoever wrote the rule would hear about it weeks later from somebody who could not proceed.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A control that cannot be satisfied is a wall, and the configuration screen refuses to build one."
     },
     {
       "id": "R",
@@ -398,8 +408,8 @@
       "title": "A consultant submits a timesheet",
       "expected": "The week is presented for approval, and approval freezes exactly what was approved.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "Entries exist and are the record; there is no period, no submission and no approval — no such type in source. The entry-as-record decision is the half that had to come first: attaching approval to a container is what lets an edited entry silently change an approved total.",
-      "stops": "at approval, which is the same missing mechanism as scenario P",
+      "actual": "Entries exist and are the record, and approvals exist and gate transitions — but nothing gathers entries into a period to be approved (no such type in source). The two halves are built; the join is not. The entry-as-record decision is what makes that join non-trivial: an approval will have to name the entries it covered, or an edit afterwards silently changes an approved total.",
+      "stops": "at the period — approval itself now exists and gates transitions; nothing gathers a week of entries to put in front of it",
       "severity": "P1",
       "impact": "Time is recorded and cannot yet be signed off, so it cannot be billed."
     },

@@ -219,6 +219,25 @@ CREATE TABLE "WorkspaceMeta" (
 );
 
 -- CreateTable
+CREATE TABLE "Approval" (
+    "tenantId" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "subjectId" TEXT NOT NULL,
+    "ruleId" TEXT NOT NULL,
+    "question" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+    "requestedBy" TEXT NOT NULL,
+    "requestedAt" TIMESTAMP(3) NOT NULL,
+    "decision" TEXT,
+    "decidedBy" TEXT,
+    "decidedAt" TIMESTAMP(3),
+    "decisionNote" TEXT NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Approval_pkey" PRIMARY KEY ("tenantId","id")
+);
+
+-- CreateTable
 CREATE TABLE "TimeEntry" (
     "tenantId" TEXT NOT NULL,
     "id" TEXT NOT NULL,
@@ -350,6 +369,12 @@ CREATE INDEX "IssueNote_tenantId_deletedAt_idx" ON "IssueNote"("tenantId", "dele
 CREATE INDEX "Engagement_tenantId_client_idx" ON "Engagement"("tenantId", "client");
 
 -- CreateIndex
+CREATE INDEX "Approval_tenantId_subjectId_idx" ON "Approval"("tenantId", "subjectId");
+
+-- CreateIndex
+CREATE INDEX "Approval_tenantId_decision_requestedAt_idx" ON "Approval"("tenantId", "decision", "requestedAt");
+
+-- CreateIndex
 CREATE INDEX "TimeEntry_tenantId_issueId_idx" ON "TimeEntry"("tenantId", "issueId");
 
 -- CreateIndex
@@ -432,6 +457,12 @@ ALTER TABLE "OperatingModel" ADD CONSTRAINT "OperatingModel_tenantId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceMeta" ADD CONSTRAINT "WorkspaceMeta_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Approval" ADD CONSTRAINT "Approval_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Approval" ADD CONSTRAINT "Approval_tenantId_subjectId_fkey" FOREIGN KEY ("tenantId", "subjectId") REFERENCES "Issue"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "TimeEntry" ADD CONSTRAINT "TimeEntry_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

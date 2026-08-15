@@ -1589,6 +1589,12 @@ export default function IssueWorkspace({
             if (res.ok) setDirty(false)
             return res.ok
           }}
+          onRequestApproval={(subjectId, ruleId, note) =>
+            dispatch({ t: 'requestApproval', subjectId, ruleId, note, now: new Date().toISOString() })
+          }
+          onDecideApproval={(id, decision, note) =>
+            dispatch({ t: 'decideApproval', id, decision, note, now: new Date().toISOString() })
+          }
           onAddTime={(issueId, entry) =>
             dispatch({ t: 'addTime', issueId, ...entry, now: new Date().toISOString() })
           }

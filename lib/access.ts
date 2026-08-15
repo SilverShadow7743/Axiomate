@@ -62,6 +62,8 @@ export const PERMISSIONS = [
   { key: 'evidence.remove', label: 'Remove evidence', what: 'Withdraw an attachment. Imported evidence can never be removed.' },
   { key: 'time.record', label: 'Record time', what: 'Log hours against work. Your own time — see the next one for anybody else\u2019s.' },
   { key: 'time.recordForOthers', label: "Record others' time", what: "Log or correct hours on somebody else's behalf." },
+  { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
+  { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
   { key: 'estimate.agree', label: 'Agree an estimate', what: 'Baseline it, after which changes need a reason.' },
   { key: 'lifecycle.build', label: 'Plan a lifecycle', what: 'Generate or clear the activity plan under an issue.' },
@@ -105,7 +107,7 @@ const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 
 const DELIVERY_CORE: PermissionKey[] = [
   'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link',
-  'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record',
+  'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request',
 ]
 
 /**
@@ -122,13 +124,15 @@ const DELIVERY_CORE: PermissionKey[] = [
  */
 export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   [ADMIN_ROLE_ID]: ALL,
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'note.editAny', 'evidence.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'time.recordForOthers'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'time.recordForOthers'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record'],
-  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add'],
+  // The one client role that decides anything: a sponsor is the person a change order is
+  // actually put to, and a rule that names them is worthless if the grant does not.
+  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide'],
   ROLE_CLIENT_LEAD: ['work.create', 'note.add', 'evidence.add'],
   ROLE_CLIENT_USER: ['work.create', 'note.add'],
 }
@@ -233,6 +237,8 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeNote: null,
   // Recording time for somebody else is a second question, asked in the arm where the
   // person on the entry is known.
+  requestApproval: 'approval.request',
+  decideApproval: 'approval.decide',
   addTime: 'time.record',
   updateTime: 'time.record',
   removeTime: 'time.record',

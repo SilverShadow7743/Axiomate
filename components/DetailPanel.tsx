@@ -18,6 +18,7 @@ import NotesTab from './NotesTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
 import type { TimeActivity } from '@/lib/time'
+import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
 import type { IssueNote, NoteType } from '@/lib/notes'
@@ -116,6 +117,8 @@ interface Props {
     entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string },
   ) => boolean
   onRemoveTime: (id: string) => void
+  onRequestApproval: (subjectId: string, ruleId: string, note: string) => void
+  onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
   onBaselineEstimate: (issueId: string) => void
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
 }
@@ -155,6 +158,8 @@ export default function DetailPanel({
   onSaveEstimate,
   onAddTime,
   onRemoveTime,
+  onRequestApproval,
+  onDecideApproval,
   onBaselineEstimate,
 }: Props) {
   const labels = useLabels()
@@ -313,6 +318,8 @@ export default function DetailPanel({
             onSetAssignment={(rid, values) => onSetAssignment(issue.id, rid, values)}
             onSave={(patch, dates, reason) => onSaveIssue(issue.id, patch, dates, reason)}
             onDirtyChange={onDirtyChange}
+            onRequestApproval={(ruleId, note) => onRequestApproval(issue.id, ruleId, note)}
+            onDecideApproval={onDecideApproval}
             editing={editing}
             setEditing={setEditing}
           />

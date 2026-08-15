@@ -41,7 +41,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { accessProblems, can, permissionForAction, type AccessPolicy, type PermissionKey } from './access'
+import { accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { canEditNote } from './permissions'
 import {
   checkTransition,
@@ -49,6 +49,14 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import {
+  approvalsFor,
+  blockingRule,
+  ruleProblems,
+  type Approval,
+  type ApprovalDecision,
+  type ApprovalRule,
+} from './approval'
 import {
   bandProblems,
   emptyEstimate,
@@ -185,6 +193,8 @@ export interface WorkspaceState {
   estimateRevisions: Record<string, EstimateRevision>
   /** Hours spent, against the work they were spent on. See `./time`. */
   timeEntries: Record<string, TimeEntry>
+  /** Decisions asked for and given. See `./approval`. */
+  approvals: Record<string, Approval>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -412,6 +422,7 @@ export function initWorkspace(
     estimates: {},
     estimateRevisions: {},
     timeEntries: {},
+    approvals: {},
     engagements,
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
@@ -499,6 +510,9 @@ export type Action =
     }
   | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
   | { t: 'removeTime'; id: string; now: string }
+  /* ---- APPROVAL ---- */
+  | { t: 'requestApproval'; subjectId: string; ruleId: string; note: string; now: string }
+  | { t: 'decideApproval'; id: string; decision: ApprovalDecision; note: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -524,6 +538,7 @@ export type ConfigOp =
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
+  | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -932,6 +947,34 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           reason: a.reason,
         })
         if (problem) return { state, error: problem.message }
+
+        /**
+         * And whether anybody with authority has agreed to it.
+         *
+         * The approval gate rides on the transition rather than sitting beside it, so there is
+         * one answer to "may this record move" instead of two that can disagree. A rejected
+         * decision blocks exactly as a missing one does and does not clear itself: somebody has
+         * to ask again, and the refusal stays where a reader can see the change was declined
+         * rather than never considered.
+         */
+        const blocked = blockingRule(
+          state.model.approvalRules,
+          state.approvals,
+          a.id,
+          i.type,
+          a.patch.status,
+        )
+        if (blocked) {
+          const asked = approvalsFor(state.approvals, a.id).find((x) => x.ruleId === blocked.id)
+          return {
+            state,
+            error: asked
+              ? asked.decision === 'rejected'
+                ? `${blocked.label}: this was rejected by ${asked.decidedBy}. ${asked.decisionNote || 'Ask again if something has changed.'}`
+                : `${blocked.label}: asked for, and nobody has decided yet.`
+              : `${blocked.label} is needed before this can move to “${a.patch.status}”.`,
+          }
+        }
       }
       const changed = Object.entries(a.patch).filter(
         ([k, v]) => (i as unknown as Record<string, unknown>)[k] !== v,
@@ -2082,6 +2125,118 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /* ---------------- APPROVAL ---------------- */
+
+    /**
+     * Ask somebody to decide.
+     *
+     * The question is copied from the rule onto the approval rather than referenced, so editing
+     * the rule later cannot rewrite what a person was actually asked. That is the same reason a
+     * revision keeps its own before-and-after instead of pointing at a calibration that moves.
+     */
+    case 'requestApproval': {
+      const issue = state.issues[a.subjectId]
+      if (!issue) return { state, error: 'That record no longer exists.' }
+      const rule = state.model.approvalRules.find((r) => r.id === a.ruleId)
+      if (!rule) return { state, error: 'That approval rule no longer exists.' }
+      if (!rule.enabled) return { state, error: `${rule.label} is switched off.` }
+
+      const open = approvalsFor(state.approvals, a.subjectId).find(
+        (x) => x.ruleId === rule.id && !x.decision,
+      )
+      if (open) return { state, error: `${rule.label} has already been asked for and is waiting on a decision.` }
+
+      const seq = state.seq + 1
+      const id = `appr-${seq}`
+      const approval: Approval = {
+        id,
+        subjectId: a.subjectId,
+        ruleId: rule.id,
+        question: rule.question,
+        note: a.note.trim(),
+        requestedBy: by,
+        requestedAt: a.now,
+        decision: null,
+        decidedBy: null,
+        decidedAt: null,
+        decisionNote: '',
+        deletedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          approvals: { ...state.approvals, [id]: approval },
+          seq,
+          audit: log(state, {
+            rowId: a.subjectId,
+            field: 'approval',
+            from: '',
+            to: `${rule.label} — requested`,
+            at: a.now,
+            by,
+            reason: a.note.trim() || undefined,
+          }),
+        },
+        message: `${rule.label} requested.`,
+      }
+    }
+
+    /**
+     * Decide it.
+     *
+     * Two checks beyond the permission, and both are the point of the mechanism. The rule names
+     * the roles that may decide, so holding the general grant is not enough — a project manager
+     * with `approval.decide` still cannot approve a change the client sponsor is meant to.
+     * And the person who asked may never be the person who answers: a self-approval is not a
+     * weaker control, it is the absence of one, which is why this has no configuration switch.
+     */
+    case 'decideApproval': {
+      const approval = state.approvals[a.id]
+      if (!approval) return { state, error: 'That approval no longer exists.' }
+      if (approval.decision) {
+        return { state, error: `Already ${approval.decision} by ${approval.decidedBy}.` }
+      }
+      const rule = state.model.approvalRules.find((r) => r.id === approval.ruleId)
+      if (!rule) return { state, error: 'The rule behind this approval no longer exists.' }
+
+      if (approval.requestedBy.toLowerCase() === by.toLowerCase()) {
+        return {
+          state,
+          error: 'You asked for this approval, so you cannot be the one who gives it.',
+        }
+      }
+
+      const held = rolesFor(state.model, actor)
+      if (rule.deciderRoleIds.length && !rule.deciderRoleIds.some((r) => held.includes(r))) {
+        const names = rule.deciderRoleIds.map((r) => state.model.roles[r]?.label ?? r).join(' or ')
+        return { state, error: `${rule.label} is decided by ${names}.` }
+      }
+
+      const next: Approval = {
+        ...approval,
+        decision: a.decision,
+        decidedBy: by,
+        decidedAt: a.now,
+        decisionNote: a.note.trim(),
+      }
+      return {
+        state: {
+          ...state,
+          approvals: { ...state.approvals, [a.id]: next },
+          audit: log(state, {
+            rowId: approval.subjectId,
+            field: 'approval',
+            from: `${rule.label} — requested by ${approval.requestedBy}`,
+            to: `${a.decision}`,
+            at: a.now,
+            by,
+            reason: a.note.trim() || undefined,
+          }),
+        },
+        message: a.decision === 'approved' ? `${rule.label} approved.` : `${rule.label} rejected.`,
+      }
+    }
+
     /* ---------------- CONFIGURATION ---------------- */
     case 'config':
       return applyConfig(state, a.op, a.now, actor)
@@ -2309,6 +2464,23 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sizeBands: op.bands },
         { rowId: 'SIZE_BANDS', field: 'sizeBands', from: `${m.sizeBands.length} sizes`, to: `${op.bands.length} sizes`, at: now, by },
         'T-shirt sizing updated.',
+      )
+    }
+
+    case 'setApprovalRules': {
+      const problems = ruleProblems(op.rules)
+      if (problems.length) return { state, error: problems[0] }
+      return done(
+        { ...m, approvalRules: op.rules },
+        {
+          rowId: 'APPROVAL_RULES',
+          field: 'approvalRules',
+          from: `${m.approvalRules.filter((r) => r.enabled).length} in force`,
+          to: `${op.rules.filter((r) => r.enabled).length} in force`,
+          at: now,
+          by,
+        },
+        'Approval rules updated.',
       )
     }
 

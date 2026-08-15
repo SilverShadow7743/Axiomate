@@ -32,6 +32,7 @@ import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type Sla
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { ADMIN_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
+import { defaultApprovalRules, type ApprovalRule } from './approval'
 
 /* ================================================================== *
  * Scope
@@ -438,6 +439,8 @@ export interface OperatingModel {
    * and the difference is stated there rather than implied here.
    */
   access: AccessPolicy
+  /** Which moves need somebody's approval, and who may give it. See `./approval`. */
+  approvalRules: ApprovalRule[]
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -755,6 +758,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
     access: defaultAccessPolicy(),
+    approvalRules: defaultApprovalRules(),
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1000,6 +1004,8 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
       requireEvidence: stored.statusPolicy?.requireEvidence ?? seed.statusPolicy.requireEvidence,
       requireReason: stored.statusPolicy?.requireReason ?? seed.statusPolicy.requireReason,
     },
+    // A list, replaced wholesale when present: a firm that deleted a rule means it.
+    approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,
     access: {
       ...seed.access,
       ...(stored.access ?? {}),
