@@ -290,6 +290,16 @@ export const DEFAULT_SLA: SlaPolicy = { High: 5, Medium: 10, Low: 20 }
 
 export interface FilterState {
   search: string
+  /**
+   * Whether finished work is listed.
+   *
+   * Off by default, which is a deliberate change to what the app opens on: of the records
+   * loaded here the large majority are closed, so the resting view was mostly history and the
+   * open work — the reason anyone opens a delivery tool — was scattered through it. Closed
+   * records are hidden, never dropped: the toggle is in the bar, the counts strip keeps
+   * reporting the full total beside the shown one, and every rollup still counts them.
+   */
+  showCompleted: boolean
   client: string
   /** Work type — the discriminator that keeps issues and change requests in one table. */
   type: string
@@ -303,6 +313,7 @@ export interface FilterState {
 
 export const EMPTY_FILTERS: FilterState = {
   search: '',
+  showCompleted: false,
   client: 'All',
   type: 'All',
   module: 'All',

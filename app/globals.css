@@ -259,7 +259,9 @@ button {
 .filterbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* Tightened along with the self-labelling selects: eight facets plus the view controls have
+     to sit on one row, and every gap is paid eleven times. */
+  gap: 6px;
   padding: 7px 14px;
   flex: 0 0 auto;
   background: var(--surface);
@@ -288,6 +290,15 @@ button {
   padding: 0 6px;
   font-size: 12px;
   max-width: 160px;
+}
+/* A select sizes itself to its widest option, and owner names are long. Capped so one verbose
+   value cannot push the row over on its own; the full text stays in the popup and the title. */
+.filterbar .field select {
+  /* Wide enough that the longest configured facet name — "Accountable Party" — reads in full
+     when nothing is selected, since the control now labels itself. A long *value* still
+     ellipsises; the full text is in the popup and in the title. */
+  max-width: 152px;
+  text-overflow: ellipsis;
 }
 .field select.on {
   border-color: var(--accent);
@@ -3282,4 +3293,26 @@ select.cell-editor {
   color: var(--text-faint);
   font-size: 11px;
   font-style: italic;
+}
+
+/* Secondary filters, stacked in a popover so the bar keeps to one row. Wider than the column
+   menu because each row holds a full-width select rather than a checkbox. */
+.menu-filters {
+  min-width: 232px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-filters .field {
+  width: 100%;
+}
+.menu-filters .field select {
+  width: 100%;
+  max-width: none;
+}
+/* A control that is holding a filter, so an active facet is visible while collapsed. */
+.btn.ghost.on {
+  border-color: var(--accent);
+  color: var(--accent);
 }

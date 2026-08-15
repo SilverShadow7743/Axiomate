@@ -377,13 +377,24 @@ export default function IssueWorkspace({
     const issueRows = sortedRows.filter((r) => r.kind === 'issue')
     const shown = issueRows.filter((r) => matchesFilters(r, filters))
     const tally = (h: string) => shown.filter((r) => r.scheduleHealth === h).length
+    /**
+     * "Done" is counted against the facets but not against the completed toggle.
+     *
+     * Every other figure here describes what is on screen, and should. This one cannot: with
+     * completed work hidden — the default — counting only visible rows reported "0 done" in a
+     * workspace where seventy-three were finished. A summary that reads as *nothing has been
+     * completed* because completed things are hidden is worse than not showing the figure.
+     */
+    const completed = issueRows.filter(
+      (r) => matchesFilters(r, { ...filters, showCompleted: true }) && r.scheduleHealth === 'Completed',
+    ).length
     return {
       total: issueRows.length,
       shown: shown.length,
       overdue: tally('Overdue'),
       atRisk: tally('At Risk'),
       blocked: tally('Blocked'),
-      completed: tally('Completed'),
+      completed,
       unscheduled: tally('Unscheduled'),
     }
   }, [sortedRows, filters])

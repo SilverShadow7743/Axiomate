@@ -338,6 +338,9 @@ export function facetsOf(state: WorkspaceState) {
 export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   const i = row.issue
   if (!i) return false
+  // Finished work is hidden unless asked for. Checked first because it is the broadest cut
+  // and the cheapest — no point testing six facets against a record already excluded.
+  if (!f.showCompleted && isTerminal(i.status)) return false
   if (f.client !== 'All' && i.client !== f.client) return false
   if (f.type !== 'All' && i.type !== f.type) return false
   if (f.module !== 'All' && i.module !== f.module) return false

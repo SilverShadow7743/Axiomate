@@ -30,16 +30,30 @@ function FilterDropdown({
   value: string
   onChange: (k: keyof FilterState, v: string) => void
 }) {
+  /**
+   * The control labels itself, rather than carrying a caption beside it.
+   *
+   * Eight facets each with an uppercase caption — "ACCOUNTABLE PARTY", "SCHEDULE HEALTH" —
+   * cost more horizontal space in captions than in controls, and pushed the bar onto a second
+   * row. The unset option carries the name instead, so the resting state still reads
+   * "Client: All" and nothing is hidden.
+   *
+   * When a filter *is* set the control shows the value alone, which is the one thing this
+   * loses: "OAPIL" no longer says which dimension it belongs to. Three things carry that —
+   * the accent border the value already gets, a stable position in the row, and the tooltip
+   * and accessible name below, which stay the plain dimension name whatever is selected.
+   */
   return (
     <div className="field">
-      <label htmlFor={`f-${name}`}>{label}</label>
       <select
         id={`f-${name}`}
+        aria-label={label}
+        title={label}
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
         className={value !== 'All' ? 'on' : ''}
       >
-        <option value="All">All</option>
+        <option value="All">{label}: All</option>
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -112,6 +126,8 @@ export default function FilterBar({
   const labels = useLabels()
   const [colMenu, setColMenu] = useState(false)
   const menuWrap = useRef<HTMLDivElement>(null)
+  const [moreMenu, setMoreMenu] = useState(false)
+  const moreWrap = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!colMenu) return
@@ -122,24 +138,86 @@ export default function FilterBar({
     return () => window.removeEventListener('mousedown', away)
   }, [colMenu])
 
+  useEffect(() => {
+    if (!moreMenu) return
+    const away = (e: MouseEvent) => {
+      if (moreWrap.current && !moreWrap.current.contains(e.target as Node)) setMoreMenu(false)
+    }
+    window.addEventListener('mousedown', away)
+    return () => window.removeEventListener('mousedown', away)
+  }, [moreMenu])
+
   const set = (k: keyof FilterState, v: string) => setFilters({ ...filters, [k]: v })
-  const active = Object.entries(filters).some(
-    ([k, v]) => (k === 'search' ? v !== '' : v !== 'All'),
+  /** Set filters that live behind the More button, so it can report them. */
+  const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter(
+    (k) => filters[k] !== 'All',
+  ).length
+
+  /**
+   * Whether anything deviates from the resting view.
+   *
+   * Each key needs its own test now: the facets rest at 'All', search rests at empty, and
+   * `showCompleted` rests at false. Comparing a boolean against 'All' would have made Clear
+   * look permanently armed.
+   */
+  const active = Object.entries(filters).some(([k, v]) =>
+    k === 'search' ? v !== '' : k === 'showCompleted' ? v === true : v !== 'All',
   )
 
   return (
     <div className="filterbar">
+      {/* Four inline, four behind the button.
+          Eight facets, the view controls and the counts need about 2150px on one row; a wide
+          desktop offers 1900. Something had to leave the line, and the alternative — letting
+          it wrap — put the split in a different place at every window size and buried
+          Schedule Health under the zoom buttons.
+          The four kept inline are the small, stable, headline dimensions. The four moved are
+          the long ones (23 process areas, 37 owners) and the two least reached for. None are
+          hidden: the button counts how many of them are set, so a filter can never be active
+          somewhere the user cannot see. */}
       <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
       <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
-      <FilterDropdown label={labels.TIER_MODULE} name="module" options={facets.modules} value={filters.module} onChange={set} />
       <FilterDropdown label={labels.FIELD_STATUS} name="status" options={facets.statuses} value={filters.status} onChange={set} />
-      <FilterDropdown label={labels.FIELD_SEVERITY} name="severity" options={facets.severities} value={filters.severity} onChange={set} />
-      <FilterDropdown label={labels.ISSUE_OWNER} name="owner" options={facets.owners} value={filters.owner} onChange={set} />
-      <FilterDropdown label={labels.ISSUE_ACCOUNTABLE} name="accountable" options={facets.accountables} value={filters.accountable} onChange={set} />
       <FilterDropdown label={labels.FIELD_SCHEDULE_HEALTH} name="health" options={facets.healths} value={filters.health} onChange={set} />
 
+      <div ref={moreWrap} style={{ position: 'relative' }}>
+        <button
+          className={`btn ghost${moreActive ? ' on' : ''}`}
+          onClick={() => setMoreMenu((v) => !v)}
+          aria-expanded={moreMenu}
+          title="Process area, severity, owner and accountable party"
+        >
+          More{moreActive > 0 ? ` · ${moreActive}` : ''} ▾
+        </button>
+        {moreMenu && (
+          <div className="menu menu-filters" style={{ top: 30, left: 0 }}>
+            <div className="menu-title">More filters</div>
+            <FilterDropdown label={labels.TIER_MODULE} name="module" options={facets.modules} value={filters.module} onChange={set} />
+            <FilterDropdown label={labels.FIELD_SEVERITY} name="severity" options={facets.severities} value={filters.severity} onChange={set} />
+            <FilterDropdown label={labels.ISSUE_OWNER} name="owner" options={facets.owners} value={filters.owner} onChange={set} />
+            <FilterDropdown label={labels.ISSUE_ACCOUNTABLE} name="accountable" options={facets.accountables} value={filters.accountable} onChange={set} />
+          </div>
+        )}
+      </div>
+
+      <button
+        className={`btn ghost${filters.showCompleted ? ' on' : ''}`}
+        onClick={() => setFilters({ ...filters, showCompleted: !filters.showCompleted })}
+        aria-pressed={filters.showCompleted}
+        title={
+          filters.showCompleted
+            ? 'Hide closed and superseded records'
+            : 'Closed and superseded records are hidden. Rollups and counts still include them.'
+        }
+      >
+        {/* Names the action, not the state. The accent border and aria-pressed carry the
+            state; a button captioned with its own condition leaves the reader working out
+            whether it describes what is happening or what will happen. */}
+        {filters.showCompleted ? 'Hide completed' : 'Show completed'}
+      </button>
+
       {active && (
-        <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)} title="Clear all filters">
+        <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)} title="Reset filters to the default view">
           Clear
         </button>
       )}
