@@ -3,7 +3,7 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { loadWorkspace } from '@/lib/db/repo'
 import { runScheduledPass } from '@/lib/db/schedule'
 import { currentTenantId } from '@/lib/tenant'
-import { getSession } from '@/lib/principal'
+import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
 import { SCHEDULE_ACTOR } from '@/lib/actor'
 
@@ -48,13 +48,25 @@ export async function POST(req: Request) {
   const byToken = Boolean(TOKEN) && (req.headers.get('authorization') ?? '') === `Bearer ${TOKEN}`
   const session = getSession(req)
 
-  if (!byToken && !session.verified) {
+  /**
+   * Who may run it, and the one case that would otherwise be locked out of its own product.
+   *
+   * A deployment with no identity provider has one operator and no way for them to prove it —
+   * so requiring a verified session would mean the *only* person who could run the pass by hand
+   * is one who cannot exist. That is the same reasoning that ships the fallback role as
+   * Administrator, and it is the same posture the write endpoint already takes: without a
+   * provider, this deployment trusts whoever reaches it, and every screen says so.
+   *
+   * The moment a provider is configured that stops being true here as everywhere else.
+   */
+  const openDeployment = !identityEstablished()
+  if (!byToken && !openDeployment && !session.verified) {
     return NextResponse.json(
       {
         ok: false,
         error: TOKEN
           ? 'Send the schedule token, or sign in as somebody who may configure the platform.'
-          : 'Set AXIOMATE_SCHEDULE_TOKEN, or sign in as somebody who may configure the platform.',
+          : 'Sign in as somebody who may configure the platform, or send the schedule token.',
       },
       { status: 401 },
     )
@@ -63,7 +75,7 @@ export async function POST(req: Request) {
   try {
     const tenantId = currentTenantId()
 
-    if (!byToken) {
+    if (!byToken && !openDeployment) {
       /**
        * The grant is checked against the loaded model, not guessed at before it exists.
        *

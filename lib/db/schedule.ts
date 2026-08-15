@@ -6,7 +6,7 @@ import { auditToRow } from './map'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
 import { runWatch } from '../workspace'
-import { describeRun, type Observation, type WatchDiff } from '../watch'
+import { EMPTY_OBSERVATION, describeRun, type Observation, type WatchDiff } from '../watch'
 
 /**
  * One run of the scheduled pass, from reading the clock to writing what it decided.
@@ -43,7 +43,17 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
     async (tx) => {
       const { state } = await loadWorkspace(tenantId, tx)
       const stored = await tx.scheduleWatch.findUnique({ where: { tenantId } })
-      const previous = (stored?.observation as Observation | null) ?? {}
+      /**
+       * Read defensively: this is JSON from a column, and a row written before the shape
+       * gained `watching` would otherwise arrive as an object with neither field and fail on
+       * first use. A missing observation and an unreadable one are the same thing — no memory —
+       * and both mean the next run is a first run.
+       */
+      const raw = stored?.observation as Partial<Observation> | null
+      const previous: Observation =
+        raw && Array.isArray(raw.watching) && raw.subjects
+          ? { watching: raw.watching, subjects: raw.subjects }
+          : EMPTY_OBSERVATION
 
       const run = runWatch(state, previous, today, now, actor)
       const raised = run.steps.filter((s) => s.action.t === 'notify').length

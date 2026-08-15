@@ -209,7 +209,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onCl
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
           {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
-          {tab === 'watch' && <Watch state={state} onConfig={onConfig} />}
+          {tab === 'watch' && <Watch state={state} signedIn={signedIn} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
@@ -1043,9 +1043,11 @@ function Sizing({
 
 function Watch({
   state,
+  signedIn,
   onConfig,
 }: {
   state: WorkspaceState
+  signedIn: boolean
   onConfig: (op: ConfigOp) => boolean
 }) {
   const policy = state.model.watch
@@ -1178,9 +1180,12 @@ function Watch({
         </tbody>
       </table>
       <p className="cfg-inherit">
-        The right-hand column is what is true today, not what would be raised — a first run
-        against a workspace with history would raise all of it at once, and every run after that
-        only what is new. Run it once by hand before pointing a scheduler at it.
+        The right-hand column is what is true today, not what would be raised. A first run
+        against a workspace with history raises all of it at once, and every run after that only
+        what is new — so run it once by hand before pointing a scheduler at it. Switching a
+        single condition on later does <em>not</em> do that: its findings are recorded on the
+        next run and raised from the one after, because announcing six months of accumulated
+        staleness the moment somebody ticks a box is how a firm turns the whole thing off again.
       </p>
 
       <h4 className="cfg-sub">Running it</h4>
@@ -1202,6 +1207,11 @@ function Watch({
           A run by hand is attributed to the pass rather than to you: asking what the clock would
           say is not the same as deciding it, and your name on a week of overdue notices would
           say you had.
+        </p>
+        <p className="cfg-inherit">
+          {signedIn
+            ? 'You are signed in, so this button runs as you asking — the endpoint checks that you may configure the platform.'
+            : 'This deployment has no identity provider, so the button runs without one — the same posture every other write takes here. Configure Entra and it starts requiring a signed-in operator or the token.'}
         </p>
       </div>
     </section>

@@ -35,6 +35,7 @@ import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
 import { rolesFor } from '../lib/access'
 import { SCHEDULE_ACTOR } from '../lib/actor'
+import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { buildTree } from '../lib/tree'
@@ -541,7 +542,7 @@ scenario(
     const health = computeHealth(row, TODAY)
 
     /* The pass with no memory, as a scheduler would run it the first time. */
-    const first = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const first = runWatch(dated, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
     const atRisk = first.diff.onset.find((f) => f.subjectId === 'OAPIL-1' && f.condition === 'atRisk')
 
     const good = health === 'At Risk' && Boolean(atRisk)
@@ -571,7 +572,7 @@ scenario(
     const ims = buildDailyIms(dated, rowsOf(dated), TODAY, 'OAPIL')
     const overdueSection = ims.sections.find((x) => /overdue/i.test(x.title))
 
-    const run = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const run = runWatch(dated, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
     const toOwner = Object.values(run.state.notifications).find(
       (n) => n.to === 'Sam' && n.aboutId === 'OAPIL-2',
     )
@@ -599,7 +600,7 @@ scenario(
     const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
 
     /* Monday. */
-    const monday = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const monday = runWatch(dated, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
     const firstCount = Object.values(monday.state.notifications).length
 
     /* Every morning after, each run given the memory the last one stored. */
@@ -620,10 +621,19 @@ scenario(
     const slipped = runWatch(cleared.state, cleared.observation, '2026-08-26', NOW, SCHEDULE_ACTOR)
     const reRaised = slipped.diff.onset.some((f) => f.subjectId === 'OAPIL-2' && f.condition === 'overdue')
 
-    const good = firstCount > 0 && afterFortnight === firstCount && laterOnsets === 0 && reRaised
+    /**
+     * The assertion that distinguishes "suppressed correctly" from "no longer detected".
+     *
+     * Without it the loop would pass just as well if the condition had stopped being found at
+     * all — which is the failure that would make the quiet reassuring and wrong.
+     */
+    const stillObserved = (observation.subjects['OAPIL-2'] ?? []).includes('overdue')
+
+    const good =
+      firstCount > 0 && afterFortnight === firstCount && laterOnsets === 0 && reRaised && stillObserved
     return {
       verdict: good ? 'PASS' : 'FAIL',
-      actual: `${firstCount} message on the first run and ${afterFortnight - firstCount} across the next thirteen: the condition is counted, not repeated. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.`,
+      actual: `${firstCount} message on the first run and ${afterFortnight - firstCount} across the next thirteen: the condition is counted, not repeated — and the memory still records it as true, so the quiet is suppression rather than the condition having stopped being detected. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.`,
       stops: '—',
       severity: '—',
       impact: 'This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to.',
@@ -641,7 +651,7 @@ scenario(
       t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
     } as Action)
     const dated = ok(staffed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
-    const run = runWatch(dated, {}, TODAY, NOW, SCHEDULE_ACTOR)
+    const run = runWatch(dated, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
 
     const entry = run.state.audit.find((e) => e.field === 'notification')
     const roles = rolesFor(dated.model, SCHEDULE_ACTOR)

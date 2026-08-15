@@ -3737,7 +3737,7 @@ export function runWatch(
   const policy = state.model.watch
   const empty: WatchRun = {
     state,
-    diff: { onset: [], cleared: [], continuing: 0 },
+    diff: { onset: [], cleared: [], continuing: 0, seeded: 0 },
     observation: previous,
     steps: [],
     misses: [],

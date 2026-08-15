@@ -126,7 +126,7 @@
       "title": "The pass runs every morning for a fortnight and nothing changes",
       "expected": "The same condition is reported once, not fourteen times.",
       "verdict": "PASS",
-      "actual": "1 message on the first run and 0 across the next thirteen: the condition is counted, not repeated. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.",
+      "actual": "1 message on the first run and 0 across the next thirteen: the condition is counted, not repeated — and the memory still records it as true, so the quiet is suppression rather than the condition having stopped being detected. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.",
       "stops": "—",
       "severity": "—",
       "impact": "This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to."

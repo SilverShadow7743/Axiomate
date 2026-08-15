@@ -81,7 +81,22 @@ export function defaultWatchPolicy(): WatchPolicy {
  * workspace — because it is compared, not read: anything else in it would be a second copy of
  * data that has a home already, free to disagree with it.
  */
-export type Observation = Record<string, ConditionKey[]>
+export interface Observation {
+  /**
+   * Which conditions were being looked for.
+   *
+   * Stored alongside the findings because otherwise switching a condition on has the same
+   * effect as a first run — it raises every instance at once, including ones that have been
+   * true for months. Knowing what the last pass was watching lets a newly watched condition be
+   * seeded rather than announced, which is what the `enabled` switch already does for all of
+   * them and what a reader would expect the per-condition switches to do too.
+   */
+  watching: ConditionKey[]
+  /** The conditions true at that moment, keyed by the record they were true of. */
+  subjects: Record<string, ConditionKey[]>
+}
+
+export const EMPTY_OBSERVATION: Observation = { watching: [], subjects: {} }
 
 export interface WatchFinding {
   subjectId: string
@@ -99,13 +114,13 @@ export function observe(
   today: string,
   policy: WatchPolicy,
 ): { observation: Observation; findings: WatchFinding[] } {
-  const observation: Observation = {}
+  const observation: Observation = { watching: [...policy.conditions], subjects: {} }
   const findings: WatchFinding[] = []
   const wanted = new Set(policy.conditions)
 
   const add = (subjectId: string, condition: ConditionKey, detail: string) => {
     if (!wanted.has(condition)) return
-    observation[subjectId] = [...(observation[subjectId] ?? []), condition]
+    observation.subjects[subjectId] = [...(observation.subjects[subjectId] ?? []), condition]
     findings.push({ subjectId, condition, detail })
   }
 
@@ -234,27 +249,54 @@ export interface WatchDiff {
   cleared: { subjectId: string; condition: ConditionKey }[]
   /** True in both observations. Counted, never repeated — this is the fatigue this avoids. */
   continuing: number
+  /**
+   * Findings for a condition that was not being watched last time.
+   *
+   * Recorded so they will be compared against next time, and not raised: the alternative is
+   * that ticking a box announces every instance that has quietly been true for months.
+   */
+  seeded: number
 }
 
-export function diffObservations(previous: Observation, current: Observation, findings: WatchFinding[]): WatchDiff {
+export function diffObservations(
+  previous: Observation,
+  current: Observation,
+  findings: WatchFinding[],
+): WatchDiff {
   const onset: WatchFinding[] = []
   const cleared: { subjectId: string; condition: ConditionKey }[] = []
   let continuing = 0
+  let seeded = 0
+
+  /**
+   * A condition nobody was watching last time has no history to compare against.
+   *
+   * Its findings are recorded and not raised — the same treatment the first run gets, and for
+   * the same reason: announcing six months of accumulated staleness the moment somebody ticks
+   * a box is how a firm turns the whole mechanism off again.
+   */
+  const wasWatching = new Set(previous.watching)
+  const isFirstEver = previous.watching.length === 0 && Object.keys(previous.subjects).length === 0
 
   for (const finding of findings) {
-    const before = previous[finding.subjectId] ?? []
-    if (before.includes(finding.condition)) continuing += 1
-    else onset.push(finding)
+    const before = previous.subjects[finding.subjectId] ?? []
+    if (before.includes(finding.condition)) {
+      continuing += 1
+    } else if (!isFirstEver && !wasWatching.has(finding.condition)) {
+      seeded += 1
+    } else {
+      onset.push(finding)
+    }
   }
 
-  for (const [subjectId, conditions] of Object.entries(previous)) {
-    const now = current[subjectId] ?? []
+  for (const [subjectId, conditions] of Object.entries(previous.subjects)) {
+    const now = current.subjects[subjectId] ?? []
     for (const condition of conditions) {
       if (!now.includes(condition)) cleared.push({ subjectId, condition })
     }
   }
 
-  return { onset, cleared, continuing }
+  return { onset, cleared, continuing, seeded }
 }
 
 /** The event an onset condition becomes, so the rules can subscribe to it. */
@@ -268,6 +310,7 @@ export function describeRun(diff: WatchDiff, raised: number): string {
     `${diff.onset.length} new`,
     `${diff.continuing} continuing`,
     `${diff.cleared.length} cleared`,
+    ...(diff.seeded ? [`${diff.seeded} newly watched, recorded not raised`] : []),
     `${raised} message${raised === 1 ? '' : 's'} raised`,
   ]
   return parts.join(' · ')
