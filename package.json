@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "audit:tenancy": "node scripts/tenant-audit.mjs",
-    "audit:attribution": "npx tsx scripts/attribution-proof.ts"
+    "audit:attribution": "npx tsx scripts/attribution-proof.ts",
+    "audit:restore": "npx tsx scripts/restore-proof.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

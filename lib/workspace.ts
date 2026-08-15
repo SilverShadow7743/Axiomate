@@ -936,14 +936,83 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /**
+     * Undo an archive.
+     *
+     * This used to clear `deletedAt` on one record and stop, which was wrong in both
+     * directions and unreachable besides — nothing in the UI dispatched it, so archiving was
+     * a one-way door while the audit entry promised the opposite.
+     *
+     * Archiving a branch stamps *one* timestamp across the whole subtree. Restoring only the
+     * top of it therefore brought back an empty shell: the record reappeared and everything it
+     * contained stayed archived. Restoring a child while its parent was still archived was the
+     * mirror image — a record that exists and renders nowhere, because the tree never reaches
+     * it, so it reads as though the restore silently failed.
+     */
     case 'restore': {
+      const target = state.nodes[a.id] ?? state.issues[a.id] ?? state.activities[a.id]
+      if (!target) return { state, error: 'Record not found.' }
+      if (!target.deletedAt) return { state, message: 'That record is already active.' }
+
+      // Reachability first: a restored record whose ancestor is archived is invisible.
+      let cursor = parentOf(state, a.id)
+      while (cursor) {
+        const ancestor = state.nodes[cursor] ?? state.issues[cursor] ?? state.activities[cursor]
+        if (ancestor?.deletedAt) {
+          return {
+            state,
+            error: `“${nameOf(state, cursor)}” is archived, so this would be restored somewhere nothing can see it. Restore that first.`,
+          }
+        }
+        cursor = parentOf(state, cursor)
+      }
+
+      /**
+       * Everything archived by the same action, and nothing else.
+       *
+       * The cascade's shared timestamp is what identifies it. A child archived separately
+       * carries its own timestamp and stays archived — restoring a branch must not silently
+       * undo a decision somebody made about one record inside it.
+       *
+       * Walks the subtree ignoring `deletedAt`, because `childrenOf` filters archived records
+       * out and every record in question is archived.
+       */
+      const stamp = target.deletedAt
+      const childIdsOf = (id: string): string[] => {
+        const out: string[] = []
+        for (const n of Object.values(state.nodes)) if (n.parentId === id) out.push(n.id)
+        for (const i of Object.values(state.issues)) if (i.parentId === id) out.push(i.id)
+        for (const ac of Object.values(state.activities)) if (ac.issueId === id) out.push(ac.id)
+        return out
+      }
+
       const nodes = { ...state.nodes }
       const issues = { ...state.issues }
       const activities = { ...state.activities }
-      if (nodes[a.id]) nodes[a.id] = { ...nodes[a.id], deletedAt: null }
-      else if (issues[a.id]) issues[a.id] = { ...issues[a.id], deletedAt: null }
-      else if (activities[a.id]) activities[a.id] = { ...activities[a.id], deletedAt: null }
-      else return { state, error: 'Record not found.' }
+      const revive = (id: string) => {
+        if (nodes[id]) nodes[id] = { ...nodes[id], deletedAt: null }
+        else if (issues[id]) issues[id] = { ...issues[id], deletedAt: null }
+        else if (activities[id]) activities[id] = { ...activities[id], deletedAt: null }
+      }
+
+      revive(a.id)
+      let restored = 1
+      const stack = [...childIdsOf(a.id)]
+      const seen = new Set<string>([a.id])
+      while (stack.length) {
+        const id = stack.pop()!
+        if (seen.has(id)) continue
+        seen.add(id)
+        const rec = state.nodes[id] ?? state.issues[id] ?? state.activities[id]
+        if (rec?.deletedAt === stamp) {
+          revive(id)
+          restored += 1
+        }
+        stack.push(...childIdsOf(id))
+      }
+
+      const detail =
+        restored > 1 ? `restored with ${restored - 1} child record(s)` : 'restored'
       return {
         state: {
           ...state,
@@ -954,12 +1023,15 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             rowId: a.id,
             field: 'restored',
             from: 'archived',
-            to: 'active',
+            to: detail,
             at: a.now,
             by,
           }),
         },
-        message: 'Record restored.',
+        message:
+          restored > 1
+            ? `Restored “${nameOf(state, a.id)}” and ${restored - 1} record(s) archived with it.`
+            : `Restored “${nameOf(state, a.id)}”.`,
       }
     }
 

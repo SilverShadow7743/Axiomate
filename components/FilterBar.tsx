@@ -101,6 +101,9 @@ interface Props {
   showProposed: boolean
   setShowProposed: (v: boolean) => void
   sla: SlaPolicy
+  /** How many records are archived. The control hides itself when there are none. */
+  archivedCount: number
+  onOpenArchive: () => void
 }
 
 export default function FilterBar({
@@ -122,6 +125,8 @@ export default function FilterBar({
   showProposed,
   setShowProposed,
   sla,
+  archivedCount,
+  onOpenArchive,
 }: Props) {
   const labels = useLabels()
   const [colMenu, setColMenu] = useState(false)
@@ -233,6 +238,18 @@ export default function FilterBar({
       <button className="btn ghost" onClick={onToday}>
         Today
       </button>
+
+      {/* Only when there is something to go back to. A permanent control over an empty
+          archive is a button that does nothing; this one appears the moment it can help. */}
+      {archivedCount > 0 && (
+        <button
+          className="btn ghost"
+          onClick={onOpenArchive}
+          title="Archived records, and the way to restore them"
+        >
+          Archive · {archivedCount}
+        </button>
+      )}
 
       <div className="segmented" role="group" aria-label="Timeline zoom">
         {ZOOMS.map((z) => (

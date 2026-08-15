@@ -3316,3 +3316,32 @@ select.cell-editor {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Archived records, and the way back. Wider than a form dialog because each row is a record
+   with a kind, a name and an action rather than a labelled field. */
+.archive-modal {
+  width: min(720px, 92vw);
+}
+.archive-group {
+  border-top: 1px solid var(--grid-line);
+  padding: 8px 0 2px;
+}
+.archive-when {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+.archive-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.archive-name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46ch;
+}

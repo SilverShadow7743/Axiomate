@@ -55,6 +55,7 @@ import IssueFocus from './IssueFocus'
 import EvidencePanel, { type AddEvidenceInput } from './EvidencePanel'
 import ChatPanel, { type ApplyOutcome } from './ChatPanel'
 import ConfigWorkspace from './ConfigWorkspace'
+import ArchivePanel from './ArchivePanel'
 import { useAutosave } from './useAutosave'
 import {
   describeSave,
@@ -122,6 +123,8 @@ export default function IssueWorkspace({
   const [dialog, setDialog] = useState<DialogState>(null)
   /** Issue whose evidence manager is open, if any. */
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
+  /** Whether the archive drawer is open. */
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
   // Track the timer so a second message gets its own full duration instead of inheriting
   // the first one's remaining time, and so nothing fires after unmount.
@@ -398,6 +401,21 @@ export default function IssueWorkspace({
       unscheduled: tally('Unscheduled'),
     }
   }, [sortedRows, filters])
+
+  /**
+   * Archived records, counted so the entry point can hide itself.
+   *
+   * A permanent Archive button on a workspace with an empty archive is a control that does
+   * nothing; one that appears the moment something is archived is a route back that is
+   * discoverable exactly when it matters.
+   */
+  const archivedCount = useMemo(
+    () =>
+      Object.values(state.nodes).filter((n) => n.deletedAt).length +
+      Object.values(state.issues).filter((i) => i.deletedAt).length +
+      Object.values(state.activities).filter((a) => a.deletedAt).length,
+    [state.nodes, state.issues, state.activities],
+  )
 
   /* ---------------- timeline domain ---------------- */
   const scale = useMemo(() => {
@@ -1261,6 +1279,8 @@ export default function IssueWorkspace({
         showProposed={showProposed}
         setShowProposed={setShowProposed}
         sla={sla}
+        archivedCount={archivedCount}
+        onOpenArchive={() => setArchiveOpen(true)}
       />
 
       <div className="split">
@@ -1432,6 +1452,14 @@ export default function IssueWorkspace({
           onReveal={revealIssue}
           onApply={applyProposal}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+
+      {archiveOpen && (
+        <ArchivePanel
+          state={state}
+          onRestore={(id) => dispatch({ t: 'restore', id, now: new Date().toISOString() })}
+          onClose={() => setArchiveOpen(false)}
         />
       )}
 
