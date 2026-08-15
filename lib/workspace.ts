@@ -632,7 +632,7 @@ export type ConfigOp =
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
   | { k: 'setResourceProfile'; personId: string; patch: Partial<ResourceProfile> }
-  | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[] }
+  | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[]; email?: string }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
   | { k: 'deleteResponsibility'; id: string }
@@ -3148,11 +3148,22 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const existing = m.people[id]
       const clash = Object.values(m.people).find((p) => p.id !== id && p.name === name)
       if (clash) return { state, error: `“${name}” is already in the directory.` }
+      const email = op.email?.trim().toLowerCase()
+      // Two people cannot share an address, and the check is worth having precisely because
+      // this is the field a signed-in person is matched on.
+      const sameEmail = email
+        ? Object.values(m.people).find((p) => p.id !== id && p.email?.toLowerCase() === email)
+        : undefined
+      if (sameEmail) return { state, error: `${sameEmail.name} already has that address.` }
+
       const person: Person = {
         id,
         name,
         roleIds: op.roleIds.filter((r) => m.roles[r] && !m.roles[r].deletedAt),
         fromSource: existing?.fromSource ?? false,
+        // Undefined when cleared rather than an empty string, so "no address recorded" is one
+        // state rather than two that compare unequal.
+        ...(email ? { email } : existing?.email && op.email === undefined ? { email: existing.email } : {}),
       }
       const roleNames = person.roleIds.map((r) => m.roles[r].label).join(', ') || 'no role'
       return done(

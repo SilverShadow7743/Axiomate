@@ -25,6 +25,7 @@ import {
 } from '@/lib/config'
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
+import type { Actor } from '@/lib/actor'
 import { isTerminal } from '@/lib/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
@@ -89,11 +90,14 @@ const TABS: { id: Tab; label: string; group: string }[] = [
 
 interface Props {
   state: WorkspaceState
+  actor: Actor
+  /** Whether this deployment verifies who somebody is, rather than taking their word. */
+  signedIn: boolean
   onConfig: (op: ConfigOp) => boolean
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, onConfig, onClose }: Props) {
+export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -566,6 +570,7 @@ function RolesAndPeople({
           <thead>
             <tr>
               <th>Name</th>
+              <th>Work address</th>
               <th>Roles</th>
               <th>Source</th>
             </tr>
@@ -574,6 +579,25 @@ function RolesAndPeople({
             {people.map((p) => (
               <tr key={p.id}>
                 <td>{p.name}</td>
+                <td>
+                  {/* The field a signed-in person is matched on. Recorded here rather than
+                      derived from a name, because two people can share a display name and one
+                      person can change theirs. */}
+                  <input
+                    className="resp-input"
+                    type="email"
+                    defaultValue={p.email ?? ''}
+                    placeholder="none recorded"
+                    aria-label={`Work address for ${p.name}`}
+                    onBlur={(e) => {
+                      const next = e.target.value.trim()
+                      if (next.toLowerCase() === (p.email ?? '').toLowerCase()) return
+                      if (!onConfig({ k: 'upsertPerson', id: p.id, name: p.name, roleIds: p.roleIds, email: next })) {
+                        e.target.value = p.email ?? ''
+                      }
+                    }}
+                  />
+                </td>
                 <td>
                   <select
                     value=""

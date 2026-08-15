@@ -97,6 +97,10 @@ interface Props {
    * its own and that is what is stored.
    */
   actor: Actor
+  /** True when a provider is configured and nobody has signed in. */
+  signInRequired?: boolean
+  /** True only when an identity provider verified the actor. */
+  verified?: boolean
   meta: {
     source: string
     issueCount: number
@@ -117,6 +121,8 @@ export default function IssueWorkspace({
   persistence,
   tenantId,
   actor,
+  signInRequired,
+  verified,
   meta,
   today,
 }: Props) {
@@ -1351,6 +1357,12 @@ export default function IssueWorkspace({
           />
         </div>
 
+        {signInRequired && (
+          <a className="btn primary signin-btn" href="/api/auth/signin">
+            Sign in
+          </a>
+        )}
+
         <Inbox
           state={state}
           actor={actor}
@@ -1727,7 +1739,13 @@ export default function IssueWorkspace({
       )}
 
       {configOpen && (
-        <ConfigWorkspace state={state} onConfig={applyConfigOp} onClose={() => setConfigOpen(false)} />
+        <ConfigWorkspace
+          state={state}
+          actor={actor}
+          signedIn={Boolean(verified)}
+          onConfig={applyConfigOp}
+          onClose={() => setConfigOpen(false)}
+        />
       )}
 
       {toast && <div className={`toast${toast.error ? ' error' : ''}`}>{toast.msg}</div>}

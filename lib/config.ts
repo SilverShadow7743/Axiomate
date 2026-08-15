@@ -182,6 +182,14 @@ export interface Person {
   id: string
   name: string
   roleIds: string[]
+  /**
+   * The work address, when it is known.
+   *
+   * Added for one reason: it is what an identity provider returns, and matching a signed-in
+   * person to this directory by display name is a join on a field two people can share and one
+   * person can change. Optional, because the imported log carries names and no addresses.
+   */
+  email?: string
   /** People discovered in the imported log rather than entered here. */
   fromSource: boolean
 }

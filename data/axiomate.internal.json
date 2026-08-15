@@ -2007,6 +2007,32 @@
       "subject": "A voice agent, built as a modality rather than a second assistant",
       "description": "Speech becomes text, the text goes to the same chat route, and the reply comes back as the same proposal cards a person accepts or rejects. There is deliberately no path from a spoken sentence to a changed record that skips somebody reading what is about to happen — recognition is wrong often enough that it must not exist. \"Close OAPIL-14\" and \"close OAPIL-40\" differ by one syllable, and a delivery tool that acted on the difference would be closing the wrong client’s work on a bad line. The transcript is therefore editable before it is sent, which turns a recognition error from a wrong action into a typo; the rejected alternative, sending on silence, is faster and produces exactly the failure this cannot afford. Push-to-talk rather than always-listening, because a microphone that stays open in a room where consultants discuss client matters is a liability and a wake word would make it a permanent one. Reading replies aloud is off until asked for, and remembered for the session rather than stored, because it is a fact about the room somebody is sitting in today. One honesty the interface carries rather than burying: this application never stores or uploads audio, and on Chrome and Edge the browser itself sends it to its own speech service, which the application can neither see nor prevent. Firefox does not implement the API at all, and says so instead of failing silently. Proposals are announced aloud as a count rather than read field by field — a spoken list of changed fields is unlistenable, and the person has to look at the cards to accept them anyway.",
       "reference": "lib/voice.ts, components/VoiceInput.tsx, ChatPanel"
+    },
+    {
+      "id": "AXM-078",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Governance & Security",
+      "type": "Change Request",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "Register the app in Entra and set the four values",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Authorisation rested on a claimed identity; it now rests on a proven one",
+      "description": "The permission model was real and enforced, and the actor behind it came from an environment variable — so it stopped a mistake rather than an attacker, and the fallback role was effectively everyone. Sign-in is Microsoft Entra ID, chosen because it is the directory the firm already runs and because it already knows who has left, which is the fact a delivery tool most needs and is worst at being told. A username and password kept here would have meant owning hashing, session expiry, lockout and recovery — a security subsystem built to be replaced the moment somebody pointed at the real directory. The flow is authorisation-code with PKCE; the id token is verified against Entra’s published keys for issuer, audience and expiry, and the nonce is checked against the one this server generated, so a token replayed from another sign-in is refused. Verifying the signature on a token that arrived over a direct TLS channel is belt and braces, and is done anyway because the cost is one library call. Three decisions worth keeping. It activates only when configured: with no tenant and client id the application runs as the single operator exactly as before, because a deployment without credentials should work rather than show a login it cannot satisfy. When a provider is configured, an unverified request is refused rather than falling back to the operator — falling back would mean every unauthenticated request quietly acting as whoever that operator is, which is the hole switching Entra on was meant to close. And the actor id becomes the directory’s object id rather than a name, because it is the only identifier that survives somebody changing their name or their address, and attribution has to outlive both. The people directory gained an optional work address for the same reason: matching a signed-in person by display name is a join on a field two people can share and one person can change. The cookie’s arithmetic was split from the secret that keys it, so signing and expiry are driven by the validation harness rather than asserted — a valid cookie round-trips, a tampered one and one signed with another key are refused, and an expired one says so.",
+      "reference": "lib/auth/entra.ts, lib/auth/seal.ts, lib/principal.ts, app/api/auth/*"
     }
   ]
 }

@@ -274,12 +274,12 @@
     {
       "id": "ST2b",
       "title": "Somebody claims to be a colleague",
-      "expected": "The claim is verified against an identity provider before anything is allowed.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "No authentication exists: no login, no token verification, no provider. Every request resolves to one operator read from an environment variable, so authorisation — real and enforced since ST2 — rests on a claimed identity rather than a proven one. The boundary a provider plugs into is built: every server path asks one function that already takes the request and returns a session reporting verified: false, so nothing downstream moves on the day a provider is chosen. The permission model stops a mistake, not an attacker, and the code says so where it is defined.",
-      "stops": "at choosing a provider — a decision for whoever operates this, not something to settle by building a credential store that an identity provider would then replace",
-      "severity": "P0",
-      "impact": "Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone."
+      "expected": "The claim is checked against an identity provider before anything is allowed.",
+      "verdict": "PARTIAL",
+      "actual": "Entra ID sign-in is built: authorisation-code flow with PKCE, the id token verified against the published keys for issuer, audience and expiry, and the nonce checked against the one this server generated. The session cookie is signed and driven here rather than read — a valid one round-trips, a tampered one and one signed with another key are both refused, and an expired one reports \"expired\" rather than being quietly accepted. With a provider configured the write endpoint refuses an unverified request; with none configured the application runs as the single operator exactly as before, because a deployment without credentials should work rather than show a login it cannot satisfy.",
+      "stops": "at a tenant — the flow cannot be driven end to end without a real Entra registration, so the redirect and callback are verified by construction rather than by running them",
+      "severity": "P1",
+      "impact": "Grants now rest on a proven identity wherever a firm supplies one. Until the four environment values are set, this deployment is still one operator on trust."
     },
     {
       "id": "ST2c",

@@ -165,8 +165,12 @@ export function defaultAccessPolicy(): AccessPolicy {
  */
 export function rolesFor(model: OperatingModel, actor: Actor): string[] {
   const people = Object.values(model.people ?? {})
+  // Directory key first, then the address a provider supplied, then the display name. The
+  // order is strongest-join-first: an object id is stable, an address is unique but changeable,
+  // and a name is neither.
   const person =
     people.find((p) => p.id === actor.id) ??
+    people.find((p) => p.email && p.email.toLowerCase() === actor.id.toLowerCase()) ??
     people.find((p) => p.name.toLowerCase() === actor.name.toLowerCase())
   const own = (person?.roleIds ?? []).filter((r) => model.roles?.[r] && !model.roles[r].deletedAt)
   return own.length ? own : model.access.defaultRoleIds

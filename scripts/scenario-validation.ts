@@ -33,6 +33,7 @@ import { undelivered } from '../lib/notifications'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
 import { classify } from '../lib/intake'
+import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -1240,16 +1241,48 @@ scenario(
 scenario(
   'ST2b',
   'Somebody claims to be a colleague',
-  'The claim is verified against an identity provider before anything is allowed.',
+  'The claim is checked against an identity provider before anything is allowed.',
   () => {
-    const hasAuth = !absent(/next-auth|@azure\/msal|getServerSession|verifyToken|jwtVerify/)
-    const seam = !absent(/export function getSession/)
+    const hasProvider = !absent(/login.microsoftonline.com/)
+    const verifiesToken = !absent(/jwtVerify/)
+    const checksNonce = !absent(/expectedNonce/)
+    const usesPkce = !absent(/code_challenge_method/)
+    const signsCookie = !absent(/createHmac/)
+    const refusesUnverified = !absent(/signInRequired: true/)
+
+    /* The cookie is real code and can be driven here, unlike the redirect flow. */
+    const key = 'a-secret-of-at-least-thirty-two-characters'
+    const claims = {
+      oid: '00000000-1111-2222-3333-444444444444',
+      name: 'Priya Raman',
+      email: 'priya@axiocloud.example',
+      exp: Math.floor(Date.parse('2099-01-01T00:00:00Z') / 1000),
+    }
+    const good = openCookie(sealCookie(claims, key), key)
+    const tampered = openCookie(sealCookie(claims, key).replace(/^./, (ch) => (ch === 'a' ? 'b' : 'a')), key)
+    const stale = openCookie(
+      sealCookie({ ...claims, exp: Math.floor(Date.parse('2020-01-01T00:00:00Z') / 1000) }, key),
+      key,
+    )
+    /* And a cookie signed with somebody else's key is refused, which is the whole point. */
+    const forged = openCookie(sealCookie(claims, 'a-different-secret-of-thirty-two-plus-chars'), key)
+
+    const cookieHolds =
+      'claims' in good &&
+      good.claims.oid === claims.oid &&
+      'reason' in tampered &&
+      'reason' in forged &&
+      forged.reason === 'bad signature' &&
+      'reason' in stale &&
+      stale.reason === 'expired'
+
+    const built = hasProvider && verifiesToken && checksNonce && usesPkce && signsCookie && refusesUnverified
     return {
-      verdict: 'NOT IMPLEMENTED',
-      actual: `${hasAuth ? 'An auth library appears in source.' : 'No authentication exists: no login, no token verification, no provider.'} Every request resolves to one operator read from an environment variable, so authorisation — real and enforced since ST2 — rests on a claimed identity rather than a proven one. ${seam ? 'The boundary a provider plugs into is built: every server path asks one function that already takes the request and returns a session reporting verified: false, so nothing downstream moves on the day a provider is chosen.' : 'There is not even a seam for one.'} The permission model stops a mistake, not an attacker, and the code says so where it is defined.`,
-      stops: 'at choosing a provider — a decision for whoever operates this, not something to settle by building a credential store that an identity provider would then replace',
-      severity: 'P0',
-      impact: 'Grants are only as good as the claim behind them. Until a login exists, the fallback role is effectively everyone.',
+      verdict: built && cookieHolds ? 'PARTIAL' : 'FAIL',
+      actual: `Entra ID sign-in is built: authorisation-code flow with PKCE, the id token verified against the published keys for issuer, audience and expiry, and the nonce checked against the one this server generated. The session cookie is signed and driven here rather than read — a valid one round-trips, a tampered one and one signed with another key are both refused, and an expired one reports "${'reason' in stale ? stale.reason : ''}" rather than being quietly accepted. With a provider configured the write endpoint refuses an unverified request; with none configured the application runs as the single operator exactly as before, because a deployment without credentials should work rather than show a login it cannot satisfy.`,
+      stops: 'at a tenant — the flow cannot be driven end to end without a real Entra registration, so the redirect and callback are verified by construction rather than by running them',
+      severity: 'P1',
+      impact: 'Grants now rest on a proven identity wherever a firm supplies one. Until the four environment values are set, this deployment is still one operator on trust.',
     }
   },
 )

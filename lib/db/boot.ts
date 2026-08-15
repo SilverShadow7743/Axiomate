@@ -4,7 +4,7 @@ import { loadSeed, type SeedFile } from '../data'
 import { databaseConfigured, describeDbError } from './client'
 import { importWorkspace, loadWorkspace } from './repo'
 import { currentTenantId } from '../tenant'
-import { currentActor } from '../identity'
+import { getSession, identityEstablished } from '../principal'
 import type { Actor } from '../actor'
 
 /**
@@ -36,6 +36,11 @@ export interface Boot {
    * field to override it with.
    */
   actor: Actor
+  /** A provider is configured and nobody has signed in. */
+  signInRequired: boolean
+  /** The actor proved who they are. False on a deployment with no provider — which is a
+   * different thing from being signed out, and the two must not be collapsed. */
+  verified: boolean
   persistence: {
     enabled: boolean
     /** One sentence, shown in the app, explaining exactly where changes go. */
@@ -49,7 +54,14 @@ export async function boot(): Promise<Boot> {
   const seed = await loadSeed()
   // Resolved once, here, and passed down. Nothing further in the request re-derives it.
   const tenantId = currentTenantId()
-  const actor = currentActor()
+  /**
+   * Resolved through the boundary rather than the resolver, so a page render and a write
+   * request agree about who is here. The page has no `Request` to hand — a server component
+   * reads cookies through Next's own API — so this is the unverified answer on a deployment
+   * with a provider, and the client uses `signInRequired` to say so rather than acting.
+   */
+  const session = getSession()
+  const actor = session.actor
 
   if (!databaseConfigured()) {
     return {
@@ -57,6 +69,8 @@ export async function boot(): Promise<Boot> {
       state: null,
       tenantId,
       actor,
+      signInRequired: identityEstablished() && !session.verified,
+      verified: session.verified,
       persistence: {
         enabled: false,
         note: 'In-memory session. Set DATABASE_URL and run `npm run db:push` to save changes.',
@@ -80,6 +94,8 @@ export async function boot(): Promise<Boot> {
       state,
       tenantId,
       actor,
+      signInRequired: identityEstablished() && !session.verified,
+      verified: session.verified,
       persistence: {
         enabled: true,
         note: orphans.length
@@ -95,6 +111,8 @@ export async function boot(): Promise<Boot> {
       state: null,
       tenantId,
       actor,
+      signInRequired: identityEstablished() && !session.verified,
+      verified: session.verified,
       persistence: {
         enabled: false,
         note: 'Running from the issue log. Changes are not being saved.',

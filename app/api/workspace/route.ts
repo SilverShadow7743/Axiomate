@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server'
 import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
-import { getSession } from '@/lib/principal'
+import { getSession, identityEstablished } from '@/lib/principal'
 import type { Action } from '@/lib/workspace'
 
 export const runtime = 'nodejs'
@@ -114,7 +114,23 @@ export async function POST(req: Request) {
      * browser has nothing to forge. When authentication arrives, both calls learn to read the
      * session; the request body still never gets a say.
      */
-    const result = await persistActions(currentTenantId(), getSession(req).actor, list as Action[])
+    /**
+     * With an identity provider configured, an unverified request is refused.
+     *
+     * Without one, this deployment has a single operator and refusing them would refuse
+     * everything — so the check is on the provider being present rather than on a flag that
+     * would always be false. That distinction is the whole reason `identityEstablished` exists
+     * separately from `verified`.
+     */
+    const session = getSession(req)
+    if (identityEstablished() && !session.verified) {
+      return NextResponse.json(
+        { ok: false, error: 'Sign in to make changes.', signInRequired: true },
+        { status: 401 },
+      )
+    }
+
+    const result = await persistActions(currentTenantId(), session.actor, list as Action[])
     return NextResponse.json(result, { status: result.ok ? 200 : 409 })
   } catch (err) {
     return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })
