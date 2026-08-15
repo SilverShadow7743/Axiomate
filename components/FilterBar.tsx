@@ -104,6 +104,9 @@ interface Props {
   /** How many records are archived. The control hides itself when there are none. */
   archivedCount: number
   onOpenArchive: () => void
+  /** How many open records would get a due date. The action hides itself at zero. */
+  slaCandidates: number
+  onPlanSla: () => void
 }
 
 export default function FilterBar({
@@ -127,6 +130,8 @@ export default function FilterBar({
   sla,
   archivedCount,
   onOpenArchive,
+  slaCandidates,
+  onPlanSla,
 }: Props) {
   const labels = useLabels()
   const [colMenu, setColMenu] = useState(false)
@@ -311,6 +316,21 @@ export default function FilterBar({
               />
               Show proposed SLA targets
             </label>
+            {/* The commit lives beside the preview it commits, and only appears when there is
+                something to set — the toggle's own tooltip promises nothing is saved until
+                you accept, so this is where accepting belongs. */}
+            {slaCandidates > 0 && (
+              <button
+                className="menu-item"
+                onClick={onPlanSla}
+                title="Review and apply the policy to open records that have no due date"
+              >
+                Set due dates from this policy…
+                <span className="menu-sub">
+                  {slaCandidates} open record{slaCandidates === 1 ? '' : 's'} in scope have none
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>

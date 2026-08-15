@@ -46,6 +46,8 @@ import {
 } from '@/lib/panel'
 import { buildScale } from '@/lib/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
+import { planSlaDates, slaReason } from '@/lib/sla'
+import SlaPlanPanel from './SlaPlanPanel'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import GanttChart from './GanttChart'
@@ -127,6 +129,7 @@ export default function IssueWorkspace({
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
+  const [slaOpen, setSlaOpen] = useState(false)
   const exportWrap = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!exportMenu) return
@@ -1208,6 +1211,51 @@ export default function IssueWorkspace({
     )
   }, [state, sortedRows, filters, today, scopeLabel, download, notify])
 
+  /**
+   * What applying the SLA policy would do. Computed on demand; nothing is written here.
+   *
+   * Scoped to the rows in view, like the IMS, so a bulk write can never reach further than
+   * the screen implies. Completed records are excluded by the planner itself rather than by
+   * the filter, so the result does not change depending on whether they happen to be shown.
+   */
+  const slaPlan = useMemo(
+    () =>
+      planSlaDates(
+        sortedRows.filter((r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true })),
+        sla,
+        today,
+      ),
+    [sortedRows, filters, sla, today],
+  )
+
+  /**
+   * Commit the plan.
+   *
+   * One batch through the same funnel as everything else, so each date is validated and
+   * audited individually — and each audit entry carries the arithmetic that produced it. If
+   * any single date is refused the whole batch aborts rather than leaving the workspace half
+   * scheduled, which is what `dispatchMany` already guarantees.
+   */
+  const applySlaDates = useCallback(() => {
+    const now = new Date().toISOString()
+    const actions: Action[] = slaPlan.rows.map((r) => ({
+      t: 'setDates',
+      id: r.id,
+      start: r.raised,
+      end: r.target,
+      now,
+      reason: slaReason(r),
+    }))
+    if (!actions.length) return
+    const res = dispatchMany(actions)
+    if (res.ok) {
+      setSlaOpen(false)
+      notify(
+        `Set ${actions.length} due date${actions.length === 1 ? '' : 's'} from the SLA policy${slaPlan.past ? `; ${slaPlan.past} are already past and now report as overdue` : ''}.`,
+      )
+    }
+  }, [slaPlan, dispatchMany, notify])
+
   const exportCsv = useCallback(() => {
     const cell = (r: ScheduleRow, key: string): string => {
       switch (key) {
@@ -1399,6 +1447,8 @@ export default function IssueWorkspace({
         setShowProposed={setShowProposed}
         sla={sla}
         archivedCount={archivedCount}
+        slaCandidates={slaPlan.rows.length}
+        onPlanSla={() => setSlaOpen(true)}
         onOpenArchive={() => setArchiveOpen(true)}
       />
 
@@ -1597,6 +1647,16 @@ export default function IssueWorkspace({
           onReveal={revealIssue}
           onApply={applyProposal}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+
+      {slaOpen && (
+        <SlaPlanPanel
+          plan={slaPlan}
+          scope={scopeLabel}
+          today={today}
+          onApply={applySlaDates}
+          onClose={() => setSlaOpen(false)}
         />
       )}
 

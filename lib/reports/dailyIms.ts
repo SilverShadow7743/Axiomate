@@ -145,7 +145,11 @@ export function buildDailyIms(
   if (overdue.length) {
     sections.push({
       title: 'Overdue',
-      note: 'Past a due date somebody set here. The imported log carries no due dates, so nothing from it can appear.',
+      // Worded to survive the change that made this section possible. It once read "the log
+      // carries no due dates, so nothing can appear here", which was true until the SLA policy
+      // was applied and then quietly wrong — a report explaining why it is empty while listing
+      // sixty-nine rows is worse than one that says nothing.
+      note: 'Past a due date recorded in this workspace. The imported log carries none, so every date here was either set by hand or applied from the SLA policy.',
       lines: overdue.map(lineOf),
     })
   }

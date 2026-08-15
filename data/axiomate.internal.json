@@ -1591,6 +1591,32 @@
       "source": "Axiomate build log",
       "reference": "",
       "clientImpact": ""
+    },
+    {
+      "id": "AXM-062",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Data Provenance",
+      "subject": "Due dates can be set from the SLA policy, in bulk and on the record",
+      "description": "The policy could suggest but never commit: a dashed bar on the timeline and a one-issue accept button. So the imported log had no due dates at all and every schedule-derived signal was inert — nothing was ever Overdue or At Risk, 115 open records read Unscheduled, and the daily IMS had a section that was structurally always empty. A derived value becoming a recorded one is the sharpest thing this codebase does, so it is deliberate at every step: the planner writes nothing, the preview leads with the consequence rather than the count, records that already carry a due date are never touched because a date somebody set is a commitment, and each date is written with the arithmetic that produced it — severity, working days allowed, and the raised date counted from — so a policy-derived due date can always be told apart from one set by hand. Applied to the workspace: 158 dates set (High 48, Medium 99, Low 11), 82 closed records skipped, none overwritten. 107 targets landed in the past, which is the correct answer rather than a fault — an issue raised in May with a five-day target and still open in August is overdue, and the only reason it did not say so was that nobody had written the target down. The counts went from 0 overdue / 0 at risk / 115 unscheduled to 69 overdue / 9 at risk / 0 unscheduled; the difference between 107 past targets and 69 overdue is the 44 blocked records, which report Blocked because that is the more actionable state.",
+      "type": "Change Request",
+      "severity": "Medium",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-15",
+      "lastActivity": "2026-08-15",
+      "actualEnd": "2026-08-15",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "reference": "lib/sla.ts, components/SlaPlanPanel.tsx",
+      "clientImpact": ""
     }
   ]
 }

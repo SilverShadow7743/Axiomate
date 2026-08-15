@@ -3509,3 +3509,24 @@ select.cell-editor {
   color: var(--text-faint);
   margin-top: 1px;
 }
+
+/* The SLA plan preview. Wider than a form dialog because it shows a table of what it will do. */
+.sla-modal {
+  width: min(680px, 92vw);
+}
+.sla-summary dd {
+  font-size: 12.5px;
+}
+.sla-list-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 10px 0 4px;
+}
+.sla-table td,
+.sla-table th {
+  padding: 3px 8px 3px 0;
+  font-size: 12px;
+}
