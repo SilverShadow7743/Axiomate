@@ -334,12 +334,12 @@
     {
       "id": "ST3",
       "title": "Two people edit the same issue at once",
-      "expected": "The second write is detected as conflicting rather than silently overwriting the first.",
-      "verdict": "FAIL",
-      "actual": "Both writes apply. Replaying the first against the second's state succeeds silently — owner ends as \"Priya\". There is no version, no row hash and no If-Match: the reducer rejects impossible states, not stale ones. Result: last writer wins, and only the audit trail shows the loss.",
-      "stops": "at concurrency control",
-      "severity": "P1",
-      "impact": "Two consultants working the same issue overwrite each other. The trail records it; neither is told."
+      "expected": "The second write is refused as stale rather than silently overwriting the first.",
+      "verdict": "PASS",
+      "actual": "The second write is refused and names both values: \"OAPIL-1 has changed since you opened it: owner is now “Dev”, not “Priya”. Your change was not saved. Reload to see theirs, then decide.\" The record still reads Dev, so nothing was overwritten. Changing a different field on the same record is allowed — comparing only the fields being written is what stops a due date conflicting with an owner, which is the false conflict that makes people switch optimistic locking off. Once the loser has read the new value their write goes through.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Two consultants working one record are stopped when they genuinely disagree and left alone when they do not, and neither loses work without being told."
     },
     {
       "id": "ST4",

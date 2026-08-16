@@ -1561,17 +1561,62 @@ scenario(
 scenario(
   'ST3',
   'Two people edit the same issue at once',
-  'The second write is detected as conflicting rather than silently overwriting the first.',
+  'The second write is refused as stale rather than silently overwriting the first.',
   () => {
-    const mine = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Priya' }, now: NOW } as Action)
-    const theirs = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action)
-    const replayed = act(theirs, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Priya' }, now: NOW } as Action)
+    /*
+     * Both browsers read the same record, so both stamp the same expectation. What follows is
+     * the server replaying them in the order they arrive, against stored state that moves under
+     * the second one.
+     */
+    const seen = BASE.issues['OAPIL-1']
+    const priyaSaw = { owner: seen.owner }
+    const samSaw = { owner: seen.owner }
+
+    // A value that is actually different from what both of them read — the seed already owns
+    // this issue to Priya, and a write that changes nothing leaves nothing to be stale against.
+    const priyaWins = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Dev' }, expected: priyaSaw, now: NOW,
+    } as Action)
+
+    const samLoses = act(priyaWins, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, expected: samSaw, now: NOW,
+    } as Action)
+
+    /*
+     * Editing a different field is not a conflict, and this is the case row-level versioning
+     * gets wrong: a due date and an owner are not in dispute just because one record holds
+     * both.
+     */
+    const different = act(priyaWins, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { nextAction: 'Chase the client' },
+      expected: { nextAction: seen.nextAction }, now: NOW,
+    } as Action)
+
+    /* And the loser can proceed once they have seen what happened. */
+    const afterReading = act(priyaWins, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' },
+      expected: { owner: priyaWins.issues['OAPIL-1'].owner }, now: NOW,
+    } as Action)
+
+    /* An action with no expectation is unchecked, which is what automation relies on. */
+    const unstamped = act(priyaWins, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Nobody' }, now: NOW,
+    } as Action)
+
+    const good =
+      Boolean(samLoses.error) &&
+      priyaWins.issues['OAPIL-1'].owner === 'Dev' &&
+      samLoses.state.issues['OAPIL-1'].owner === 'Dev' &&
+      !different.error &&
+      !afterReading.error &&
+      !unstamped.error
+
     return {
-      verdict: replayed.error ? 'PASS' : 'FAIL',
-      actual: `Both writes apply. Replaying the first against the second's state succeeds silently — owner ends as "${replayed.state.issues['OAPIL-1'].owner}". There is no version, no row hash and no If-Match: the reducer rejects impossible states, not stale ones. Result: last writer wins, and only the audit trail shows the loss.`,
-      stops: 'at concurrency control',
-      severity: 'P1',
-      impact: 'Two consultants working the same issue overwrite each other. The trail records it; neither is told.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The second write is refused and names both values: "${samLoses.error}" The record still reads ${samLoses.state.issues['OAPIL-1'].owner}, so nothing was overwritten. Changing a different field on the same record is allowed — comparing only the fields being written is what stops a due date conflicting with an owner, which is the false conflict that makes people switch optimistic locking off. Once the loser has read the new value their write goes through.`,
+      stops: '—',
+      severity: '—',
+      impact: 'Two consultants working one record are stopped when they genuinely disagree and left alone when they do not, and neither loses work without being told.',
     }
   },
 )

@@ -2189,6 +2189,32 @@
       "subject": "A failed sign-in wrote the provider’s diagnostic text into a URL",
       "description": "The callback put Entra’s own error description into a query parameter so the page could show something useful. App Service logs the full request line, so every failed sign-in wrote text that can name the tenant, the application and the account into a log with a wider audience than the person who saw the page. The detail now goes to the server log, where whoever is debugging still has it, and the redirect carries a short code instead.",
       "reference": "app/api/auth/callback/route.ts"
+    },
+    {
+      "id": "AXM-085",
+      "client": "Axiocloud",
+      "engagement": "Axiomate",
+      "module": "Work Management",
+      "type": "Defect",
+      "severity": "High",
+      "status": "Closed - confirmed",
+      "owner": "Nishant Sekhar",
+      "raisedBy": "Nishant Sekhar",
+      "accountable": "Axiocloud",
+      "raised": "2026-08-16",
+      "lastActivity": "2026-08-16",
+      "actualEnd": "2026-08-16",
+      "age": 0,
+      "daysSinceActivity": 0,
+      "nextAction": "",
+      "evidence": "",
+      "evidenceDate": "",
+      "verification": "Verified in build",
+      "source": "Axiomate build log",
+      "clientImpact": "",
+      "subject": "Two people editing one record overwrote each other in silence",
+      "description": "Both writes were valid, both were audited, and the later one stood. The reducer rejected impossible states and had nothing to say about stale ones, so the only evidence that somebody’s work had been replaced was an audit entry nobody had reason to read. An action now carries what the person could see when they decided — the previous values of exactly the fields they are changing — and the reducer refuses it if any of them has moved since. Field by field rather than a version on the row, and the difference is the whole point: a row version refuses a due-date change because a colleague set the owner, which is a conflict that is not one and is the reason people switch optimistic locking off. Comparing only the fields being written stops two people when they genuinely disagree and leaves them alone when they do not. The check runs before the transition graph, because a stale status change should be reported as stale rather than as an illegal move — telling somebody their transition is not allowed, when the real answer is that the record already moved, sends them to argue with the wrong rule. The expectation is stamped by the client’s single dispatch funnel rather than at each call site: there are a dozen of those, and the one that forgets is the one that silently overwrites a colleague. An absent expectation is unchecked, which is correct for the two callers with nothing to be stale against — an automation rule acting on what it observed a moment earlier, and the intake endpoint creating a record nobody has seen.",
+      "reference": "lib/workspace.ts updateIssue, components/IssueWorkspace.tsx withExpectation"
     }
   ]
 }

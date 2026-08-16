@@ -216,6 +216,32 @@ export default function IssueWorkspace({
     return () => ro.disconnect()
   }, [])
 
+  /**
+   * Record what the person could see, so a stale write can be told from a fresh one.
+   *
+   * Done here rather than at each call site, because there are a dozen of them — the grid's
+   * inline editors, the detail panel, the focus form, the assistant's applied proposals — and
+   * the one that forgets is the one that silently overwrites a colleague. The values come from
+   * the state the browser is rendering, which is precisely what the person was looking at when
+   * they decided.
+   *
+   * Only for `updateIssue`, and only when nothing has stamped it already: an automation rule
+   * has nothing to be stale against, having acted on what it observed a moment earlier.
+   */
+  const withExpectation = useCallback(
+    (action: Action, from: WorkspaceState): Action => {
+      if (action.t !== 'updateIssue' || action.expected) return action
+      const current = from.issues[action.id]
+      if (!current) return action
+      const expected: Record<string, unknown> = {}
+      for (const key of Object.keys(action.patch)) {
+        expected[key] = (current as unknown as Record<string, unknown>)[key]
+      }
+      return { ...action, expected: expected as Partial<IssueRecord> }
+    },
+    [],
+  )
+
   /** Single funnel for every mutation, so validation and audit are never bypassed. */
   const dispatch = useCallback(
     (action: Action): boolean => {
@@ -223,7 +249,8 @@ export default function IssueWorkspace({
       // time entry, an approval, an allocation — is exactly what the rules react to, and
       // running them only on batches meant the server planned follow-ups the browser had not:
       // the ids diverged and the notification did not appear until a reload.
-      const res = applyWithRules(state, action, actor)
+      const stamped = withExpectation(action, state)
+      const res = applyWithRules(state, stamped, actor)
       if (res.error) {
         notify(res.error, true)
         return false
@@ -231,10 +258,10 @@ export default function IssueWorkspace({
       setState(res.state)
       if (res.createdId) setSelectedId(res.createdId)
       if (res.message) notify(res.message)
-      persist(action)
+      persist(stamped)
       return true
     },
-    [state, notify, persist, actor],
+    [state, notify, persist, actor, withExpectation],
   )
 
 
@@ -253,6 +280,8 @@ export default function IssueWorkspace({
       let createdId: string | undefined
       let message: string | undefined
       const missed: string[] = []
+      /** What is actually sent: the stamped actions, not the ones handed in. */
+      const sent: Action[] = []
       for (const action of actions) {
         /**
          * Rules run here as well as on the server, and that is deliberate rather than
@@ -261,7 +290,12 @@ export default function IssueWorkspace({
          * notification appear the moment somebody reassigns an issue while the queue still
          * sends nothing but the reassignment.
          */
-        const res = applyWithRules(cur, action, actor)
+        // Stamped against `cur` rather than the batch's starting state: within one batch the
+        // earlier actions are this person's own, and treating their effects as somebody else's
+        // change would make a two-action save conflict with itself.
+        const stamped = withExpectation(action, cur)
+        sent.push(stamped)
+        const res = applyWithRules(cur, stamped, actor)
         if (res.error) {
           notify(res.error, true)
           return { ok: false }
@@ -282,7 +316,7 @@ export default function IssueWorkspace({
       // Queued as one batch, in the order they were folded, so the server replays them the
       // way the client did. Each is validated again there; a batch that only half-applies
       // reports which action failed rather than being papered over.
-      autosave.enqueueAll(actions)
+      autosave.enqueueAll(sent)
       // The folded state is returned as well as committed: `setState` is batched, so a caller
       // that needs to reason about the *result* of the batch in the same tick cannot read it
       // back off `state`.

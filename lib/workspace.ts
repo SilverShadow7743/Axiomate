@@ -501,7 +501,26 @@ export type Action =
   /* ---- CRUD ---- */
   | { t: 'create'; parentId: string; kind: CreatableKind; draft: Record<string, string>; now: string }
   | { t: 'updateNode'; id: string; patch: Partial<HierarchyNode>; now: string }
-  | { t: 'updateIssue'; id: string; patch: Partial<IssueRecord>; now: string; reason?: string }
+  | {
+      t: 'updateIssue'
+      id: string
+      patch: Partial<IssueRecord>
+      now: string
+      reason?: string
+      /**
+       * What the person could see when they decided to make this change.
+       *
+       * Only the fields being changed, and only their previous values. The reducer refuses the
+       * action if any of them has moved since — which is what turns two people editing one
+       * record from a silent overwrite into a question somebody answers.
+       *
+       * Stamped by `dispatch` from the state the browser was showing, so no call site has to
+       * remember it. Absent means unchecked, which is right for the two callers that have
+       * nothing to be stale against: an automation rule acting on what it observed a moment
+       * ago, and the intake endpoint creating a record nobody else has seen.
+       */
+      expected?: Partial<IssueRecord>
+    }
   | { t: 'updateActivity'; id: string; patch: Partial<ActivityRec>; now: string }
   | { t: 'softDelete'; id: string; mode: 'cascade' | 'reparent'; now: string }
   | { t: 'restore'; id: string; now: string }
@@ -1045,6 +1064,32 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'updateIssue': {
       const i = state.issues[a.id]
       if (!i) return { state, error: 'Issue not found.' }
+
+      /**
+       * Has somebody else changed this since it was read?
+       *
+       * Field by field, rather than by a version on the row, and the difference matters. A row
+       * version refuses a due-date change because a colleague set the owner — a conflict that
+       * is not one, and the reason people switch optimistic locking off. Comparing only the
+       * fields being written means two people working the same record at once are stopped when
+       * they genuinely disagree and left alone when they do not.
+       *
+       * Checked before the transition graph, because a stale status change should be reported
+       * as stale rather than as an illegal move: telling somebody their transition is not
+       * allowed, when the real answer is that the record already moved, sends them to argue
+       * with the wrong rule.
+       */
+      if (a.expected) {
+        for (const [key, was] of Object.entries(a.expected)) {
+          const now = (i as unknown as Record<string, unknown>)[key]
+          if (now === was) continue
+          const field = String(key)
+          return {
+            state,
+            error: `${a.id} has changed since you opened it: ${field} is now “${String(now ?? '—')}”, not “${String(was ?? '—')}”. Your change was not saved. Reload to see theirs, then decide.`,
+          }
+        }
+      }
 
       /**
        * A status change is a transition, and the graph decides whether it is allowed.
