@@ -132,7 +132,16 @@ export function useAutosave(enabled: boolean): Autosave {
             throw new Error(data.error ?? `Server returned ${res.status}.`)
           } catch (err) {
             attempt += 1
-            if (attempt >= MAX_ATTEMPTS) {
+            /**
+             * `>` rather than `>=`, because the last tier never ran.
+             *
+             * With four attempts and the check ahead of the sleep, the sequence was 0.5s, 1s,
+             * 2s and then a halt — a budget of three and a half seconds, not the seven and a
+             * half the constant above describes. A cold start on a small App Service plan takes
+             * longer than either, so the retry gave up before the thing it was waiting for had
+             * finished happening.
+             */
+            if (attempt > MAX_ATTEMPTS) {
               halted.current = true
               if (alive.current) {
                 setState((s) => ({
@@ -157,7 +166,18 @@ export function useAutosave(enabled: boolean): Autosave {
 
   const enqueueAll = useCallback(
     (actions: Action[]) => {
-      if (!enabled || halted.current || !actions.length) return
+      if (!enabled || !actions.length) return
+      /**
+       * Queued even when the drain has halted, and this is the whole point.
+       *
+       * It used to return here, so after a halt the person kept editing, the reducer kept
+       * accepting, and nothing was recorded anywhere — with a database configured the browser
+       * mirror is deliberately off, so the queue in this ref was the only copy. An afternoon of
+       * work could exist solely as React state, and the message on screen advised a reload.
+       *
+       * Holding the actions instead costs nothing and keeps two ways out: the unload beacon can
+       * still deliver them, and a resumed drain sends them in order.
+       */
       queue.current.push(...actions)
       setState((s) => ({ ...s, status: 'saving', pending: queue.current.length }))
       void drain()

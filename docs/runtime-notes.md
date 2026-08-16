@@ -513,7 +513,7 @@ What remains:
   bites: with a provider, the eight-hour expiry makes the permanent halt a daily event; without
   one, it needs a genuine server failure or a deployment to trigger. The parameter file reads
   those values from the environment, so the answer is not in the repository.
-- **Cold-start duration on B1.** Finding 1's retry budget is 7.5 seconds and the question is
+- **Cold-start duration on B1.** Finding 1's retry budget is 3.5 seconds and the question is
   whether a restart fits inside it. Deploy and measure; that is the only way to know, and it is a
   single stopwatch reading against `/api/health`.
 
@@ -528,13 +528,23 @@ server-side, with the read inside the write transaction. That is the hard part a
 and the surrounding infrastructure work is unusually clear-eyed about its own limits. What has
 not been done is the pass where laptop assumptions are repriced at cloud rates, and one finding
 would cost a client real work rather than merely inconveniencing them: an autosave queue that
-halts permanently, with nothing behind it, on every deployment and on every eight-hour session
-expiry. On a Basic plan with no slots, that is not a tail risk — it is the deployment procedure.
+halts permanently, with nothing behind it, after three and a half seconds. It fires on any
+deployment that catches somebody with work in flight — and on a Basic plan with no slots, every
+deployment is a hard restart of the only instance — and again whenever an eight-hour session
+expires under an editor's hands.
 
-The short list before this goes in front of a client on Azure: give the autosave queue a
-`localStorage` outbox and a way back from `halted`, particularly on 401; cap the pools in
-`client.ts` and give them a connection timeout, and correct `infra/app.bicep:230`, which
-documents a mechanism that does nothing; flip the audit `orderBy` to `desc`; add jittered backoff
-to the serialisation retry; guard the first-boot import with an advisory lock; and fix the
-`isFirstEver` inversion in `diffObservations`. None of those is a redesign, and the first two are
-the ones I would not ship without. Findings 5, 7 and 8 can follow without holding anything up.
+The short list before this goes in front of a client on Azure:
+
+1. Give the autosave queue a `localStorage` outbox and a way back from `halted`, particularly on
+   401. This is the one I would not ship without.
+2. Correct `infra/app.bicep:230`. Not because the pool is over its limit today — one instance is
+   20 of 35 and fits — but because the file states a protection that does nothing, and a false
+   belief about a limit is exactly what makes raising `instanceCount` look safe. Capping `max` in
+   `client.ts` at the same time is cheap insurance that makes the eventual scale-out a
+   configuration change rather than an incident.
+3. Flip the audit `orderBy` to `desc`, which silently fixes the daily IMS report.
+4. Add jittered backoff to the serialisation retry.
+5. Guard the first-boot import with an advisory lock.
+6. Fix the `isFirstEver` inversion in `diffObservations`.
+
+None of these is a redesign. Findings 5, 7 and 8 can follow without holding anything up.
