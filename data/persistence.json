@@ -1,9 +1,14 @@
 {
-  "at": "2026-08-16T15:48:20.493Z",
+  "at": "2026-08-16T16:00:05.552Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 24,
+  "passed": 25,
   "failed": 0,
   "checks": [
+    {
+      "what": "two boots racing to seed an empty workspace produce one seed, not a collision",
+      "ok": true,
+      "detail": "one imported 2 issues, the other stood down: \"Another request seeded this workspace first.\""
+    },
     {
       "what": "the seed imports",
       "ok": true,

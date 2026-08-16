@@ -329,14 +329,41 @@ export async function importWorkspace(
   const nodes = Object.values(seed.nodes)
   const issues = Object.values(seed.issues)
 
+  try {
   await prisma.$transaction(async (tx) => {
-    // The tenant row before anything that references it. Created rather than assumed: this is
-    // also the path that provisions a tenant, and every other table restricts deletion of it.
-    await tx.tenant.upsert({
-      where: { id: tenantId },
-      create: { id: tenantId, name: provisioningName(tenantId) },
-      update: {},
-    })
+    /**
+     * The tenant row before anything that references it. Created rather than assumed: this is
+     * also the path that provisions a tenant, and every other table restricts deletion of it.
+     *
+     * Raw, because `upsert` is not atomic here. Prisma compiles it to a read followed by a
+     * create, so two boots racing on a new deployment both read nothing and both insert, and
+     * the loser fails on the primary key before reaching anything this function could catch.
+     * `ON CONFLICT DO NOTHING` is one statement and settles it in the database, where the
+     * contention actually is.
+     */
+    await tx.$executeRaw`
+      INSERT INTO "Tenant" (id, name, "createdAt", "updatedAt")
+      VALUES (${tenantId}, ${provisioningName(tenantId)}, now(), now())
+      ON CONFLICT (id) DO NOTHING
+    `
+
+    /**
+     * Claim the seed before writing any of it.
+     *
+     * The check above this transaction is a read, and a read cannot stop a second caller
+     * doing the same thing. On a fresh deployment that is not a rare interleaving — it is the
+     * normal case: the first page load fires several requests at once, each one boots, each
+     * one finds no `seededAt`, and each one starts importing the same two hundred and
+     * sixty-four issues. The first to reach a unique key wins and the rest fail partway
+     * through, which is how the very first request to a new deployment ends in
+     * `Unique constraint failed on the fields: ("tenantId", id)`.
+     *
+     * Creating the row here makes the claim itself the contended write. `workspaceMeta` is
+     * keyed by tenant alone, so the second transaction blocks on that index until the first
+     * commits and then loses — before it has written a single node — and the caller reports
+     * "already seeded" rather than a constraint error from the middle of a half-built tree.
+     */
+    await tx.workspaceMeta.create({ data: { tenantId, seq: seed.seq, seededAt: new Date() } })
     // Parents before children, or the self-referencing foreign key rejects the insert.
     const byDepth = [...nodes].sort((a, b) => depthOf(seed, a.id) - depthOf(seed, b.id))
     for (const n of byDepth) await tx.hierarchyNode.create({ data: nodeToRow(tenantId, n) })
@@ -421,6 +448,29 @@ export async function importWorkspace(
       update: { seq: seed.seq, seededAt: new Date() },
     })
   }, { timeout: 120_000 })
+  } catch (err) {
+    /**
+     * Losing the claim is a normal outcome, not a failure.
+     *
+     * Another request got there first and is seeding, or has finished. Either way this caller
+     * has written nothing — the claim is the first write in the transaction, so a loss rolls
+     * back an empty transaction — and the right answer is the same one the fast path above
+     * gives: somebody else did it.
+     *
+     * Narrow on purpose. Only a duplicate on `workspaceMeta` means "lost the race"; a unique
+     * violation anywhere else means the seed itself is inconsistent, and swallowing that would
+     * turn a broken seed file into a workspace that silently half-exists.
+     */
+    const e = err as { code?: string; meta?: { modelName?: string } }
+    if (e?.code === 'P2002' && e.meta?.modelName === 'WorkspaceMeta') {
+      return {
+        imported: false,
+        reason: 'Another request seeded this workspace first.',
+        counts: { nodes: 0, issues: 0, relationships: 0 },
+      }
+    }
+    throw err
+  }
 
   return {
     imported: true,

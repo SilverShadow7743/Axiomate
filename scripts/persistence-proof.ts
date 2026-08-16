@@ -174,7 +174,26 @@ async function main() {
     [seedIssue('PROOF-1'), seedIssue('PROOF-2', { severity: 'Medium', owner: 'Sam' })],
     [],
   )
-  const imported = await importWorkspace(TENANT, seed)
+  /**
+   * Two at once, because that is what a new deployment actually does.
+   *
+   * The first page load of a fresh instance fires several requests before any of them
+   * finishes, and every one of them boots, finds an unseeded workspace and starts importing
+   * the same two hundred and sixty-four issues. This was found by running the built server
+   * against an empty Azure database and watching the first request answer 200 while the log
+   * filled with `Unique constraint failed on the fields: ("tenantId", id)` — a half-written
+   * tree, on the very first request anyone makes.
+   *
+   * Sequential calls cannot show it. Only the concurrent pair does.
+   */
+  const [a1, a2] = await Promise.all([importWorkspace(TENANT, seed), importWorkspace(TENANT, seed)])
+  const imported = a1.imported ? a1 : a2
+  const loser = a1.imported ? a2 : a1
+  check(
+    'two boots racing to seed an empty workspace produce one seed, not a collision',
+    a1.imported !== a2.imported,
+    `one imported ${imported.counts.issues} issues, the other stood down: "${loser.reason}"`,
+  )
   check('the seed imports', imported.imported, `${imported.counts.issues} issues, ${imported.counts.nodes} nodes`)
 
   const afterImport = await loadWorkspace(TENANT)
