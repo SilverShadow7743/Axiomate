@@ -642,6 +642,62 @@ scenario(
 )
 
 scenario(
+  'SC3',
+  'The pass is switched on, and later a condition is added to what it watches',
+  'The first run says what is wrong now; a condition ticked later arrives quietly.',
+  () => {
+    const person = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: person.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+
+    /* Watch one thing to begin with, and give it something to find. */
+    const narrowed = ok(staffed, {
+      t: 'config', op: { k: 'setWatch', patch: { conditions: ['overdue'] } }, now: NOW,
+    } as Action)
+    const dated = ok(narrowed, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+
+    /* The first run ever. It raises what it finds rather than swallowing it. */
+    const first = runWatch(dated, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const raisedOnFirstRun = first.diff.onset.length > 0 && first.diff.seeded === 0
+
+    /*
+     * Now switch staleness on, at a threshold this fixture actually crosses — the seeded issues
+     * have had no activity since 3 August, which is nine working days rather than the fourteen
+     * the shipped default asks for. Tuning the threshold alongside is what a firm does anyway,
+     * and it gives the new condition something to find. Finding it is exactly what must not
+     * become a message.
+     */
+    const widened = ok(first.state, {
+      t: 'config',
+      op: { k: 'setWatch', patch: { conditions: ['overdue', 'stale'], staleAfterDays: 5 } },
+      now: NOW,
+    } as Action)
+    const second = runWatch(widened, first.observation, TODAY, NOW, SCHEDULE_ACTOR)
+    const staleFound = Object.values(second.observation.subjects).some((c) => c.includes('stale'))
+    const staleRaised = second.diff.onset.some((f) => f.condition === 'stale')
+
+    /* And on the run after that, it is ordinary: known, counted, still not repeated. */
+    const third = runWatch(second.state, second.observation, TODAY, NOW, SCHEDULE_ACTOR)
+
+    const good =
+      raisedOnFirstRun &&
+      staleFound &&
+      !staleRaised &&
+      second.diff.seeded > 0 &&
+      third.diff.onset.length === 0
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The first run raised ${first.diff.onset.length} and seeded nothing — a firm switching the pass on is told what is wrong now, and a condition true at that moment would otherwise never be announced at all. Ticking staleness on later found ${second.diff.seeded} instances and raised none of them, because that one fires at seven the next morning into a stream people already trust. The run after that raised ${third.diff.onset.length}.`,
+      stops: '—',
+      severity: '—',
+      impact: 'The two cases with no history are treated differently on purpose, and the difference is now pinned rather than described.',
+    }
+  },
+)
+
+scenario(
   'SC2',
   'The pass acts as a machine',
   'What it does is attributed to the clock, and limited to what a machine may do.',

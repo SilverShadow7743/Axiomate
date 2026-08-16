@@ -132,6 +132,16 @@
       "impact": "This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to."
     },
     {
+      "id": "SC3",
+      "title": "The pass is switched on, and later a condition is added to what it watches",
+      "expected": "The first run says what is wrong now; a condition ticked later arrives quietly.",
+      "verdict": "PASS",
+      "actual": "The first run raised 1 and seeded nothing — a firm switching the pass on is told what is wrong now, and a condition true at that moment would otherwise never be announced at all. Ticking staleness on later found 3 instances and raised none of them, because that one fires at seven the next morning into a stream people already trust. The run after that raised 0.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The two cases with no history are treated differently on purpose, and the difference is now pinned rather than described."
+    },
+    {
       "id": "SC2",
       "title": "The pass acts as a machine",
       "expected": "What it does is attributed to the clock, and limited to what a machine may do.",

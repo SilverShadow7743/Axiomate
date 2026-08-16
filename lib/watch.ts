@@ -253,7 +253,11 @@ export interface WatchDiff {
    * Findings for a condition that was not being watched last time.
    *
    * Recorded so they will be compared against next time, and not raised: the alternative is
-   * that ticking a box announces every instance that has quietly been true for months.
+   * that ticking a box announces every instance that has quietly been true for months, into a
+   * stream people have learned to trust, at seven in the morning, with nobody watching.
+   *
+   * Always zero on the first run ever, which raises instead — see `diffObservations` for why
+   * those two cases differ.
    */
   seeded: number
 }
@@ -269,11 +273,25 @@ export function diffObservations(
   let seeded = 0
 
   /**
-   * A condition nobody was watching last time has no history to compare against.
+   * Two cases with no history to compare against, and they are deliberately treated
+   * differently. The comment here used to claim they were the same, which was the opposite of
+   * what the code does and of what the configuration screen tells the operator.
    *
-   * Its findings are recorded and not raised — the same treatment the first run gets, and for
-   * the same reason: announcing six months of accumulated staleness the moment somebody ticks
-   * a box is how a firm turns the whole mechanism off again.
+   * **The first run ever raises everything it finds.** A firm switching the pass on wants to
+   * know what is currently wrong, and the alternative is worse than noisy: a condition true at
+   * the moment of seeding would never be announced at all, so an issue three weeks overdue when
+   * the pass arrives stays silent for as long as it remains overdue. That is a permanent blind
+   * spot traded for a one-off flood.
+   *
+   * **A condition switched on later is seeded, not raised.** Announcing six months of
+   * accumulated staleness the moment somebody ticks a box is how a firm turns the whole
+   * mechanism off again.
+   *
+   * The distinction is not about the conditions. It is about who is watching when it fires. The
+   * first run is taken by hand, by a person, because the screen says to run it once before
+   * pointing a scheduler at it — so the flood arrives in front of the operator who caused it.
+   * A condition ticked later fires at seven the next morning into an established stream that
+   * people have learned to trust, with nobody watching.
    */
   const wasWatching = new Set(previous.watching)
   const isFirstEver = previous.watching.length === 0 && Object.keys(previous.subjects).length === 0
