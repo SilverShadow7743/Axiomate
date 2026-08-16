@@ -53,6 +53,27 @@ import {
  * Load
  * ================================================================== */
 
+/**
+ * How much of the trail the application carries.
+ *
+ * It is loaded whole, into memory, on every page render and inside every write transaction, so
+ * this is not a display limit — it is the size of the thing the reducer folds over. Five
+ * thousand entries is roughly two thirds of a megabyte of the workspace's payload, which is
+ * tolerable and would not be at fifty thousand.
+ *
+ * What the number costs is history: the History tab and the daily report can only see what is
+ * loaded, so a tenant busier than this keeps a complete trail in the database and a recent one
+ * in the application. That is the right way round — the record is complete where it is
+ * evidence, and bounded where it is working memory — but it is a limit rather than an absence,
+ * and worth stating where somebody choosing the number can see it.
+ *
+ * Settable, for two reasons. A firm with a much busier or much quieter workspace has a
+ * different right answer, and — less obviously but more usefully — a defect in *which* rows are
+ * selected only appears once there are more of them than the window. Making it small is how the
+ * persistence proof reproduces that in five rows instead of five thousand.
+ */
+const AUDIT_WINDOW = Number(process.env.AXIOMATE_AUDIT_WINDOW) || 5000
+
 export interface LoadedWorkspace {
   state: WorkspaceState
   /** Issues whose parent column pointed nowhere. Reported rather than silently rehomed. */
@@ -131,8 +152,32 @@ export async function loadWorkspace(
       db.issueEstimate.findMany({ where: { tenantId } }),
       db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
       db.engagement.findMany({ where: { tenantId } }),
-      // Newest last, so the History tab's own ordering is applied to a stable list.
-      db.scheduleAudit.findMany({ where: { tenantId }, orderBy: { at: 'asc' }, take: 5000 }),
+      /**
+       * The newest entries, returned oldest-first.
+       *
+       * Those are two separate requirements and the query used to satisfy only the second.
+       * `orderBy: 'asc'` with a `take` keeps the *oldest* five thousand rows, so once a tenant
+       * passed that many, the trail the application loaded stopped moving: every new entry was
+       * written to the database and none of them were ever read back.
+       *
+       * Nothing failed. Two things quietly stopped working. The daily client report derives
+       * movement by filtering the trail to the last twenty-four hours, so it began reporting a
+       * quiet day, every day, in a workspace that was busy. And restoring an archived branch
+       * reads recent move entries to put children back where they came from — precisely the
+       * entries this dropped — so a restore would silently leave them where the archive had
+       * moved them.
+       *
+       * Ordering descending selects the right rows; reversing restores the ascending order the
+       * rest of the application depends on, since `persistActions` appends new entries at the
+       * end and the browser mirror keeps the tail. `id` breaks ties so a batch written in one
+       * transaction, sharing a timestamp to the millisecond, cannot be split arbitrarily
+       * between one load and the next.
+       */
+      db.scheduleAudit.findMany({
+        where: { tenantId },
+        orderBy: [{ at: 'desc' }, { id: 'desc' }],
+        take: AUDIT_WINDOW,
+      }),
       db.workspaceMeta.findUnique({ where: { tenantId } }),
       db.operatingModel.findUnique({ where: { tenantId } }),
     ])
@@ -163,7 +208,9 @@ export async function loadWorkspace(
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
       issues.map((i) => i.type),
     ),
-    audit: audit.map((r) => ({
+    // Reversed here rather than in the query, because the query had to sort the other way to
+    // choose the right rows. Ascending is what everything downstream assumes.
+    audit: [...audit].reverse().map((r) => ({
       id: r.id,
       rowId: r.rowId,
       field: r.field,

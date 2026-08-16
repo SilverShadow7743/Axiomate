@@ -207,6 +207,43 @@ async function main() {
     `High = ${state.model.sla.High} working days`,
   )
 
+  /* ---------------- the trail keeps the newest entries, oldest-first ---------------- */
+
+  /**
+   * Reproduced in five rows rather than five thousand.
+   *
+   * The defect was `orderBy: 'asc'` with a `take`, which keeps the *oldest* rows — so once a
+   * tenant passed the window, every new entry was written and none was read back. Shrinking the
+   * window is what makes that visible without generating a workspace nobody would sit through.
+   *
+   * Two properties, and both matter. The newest entries must be the ones present, or the daily
+   * report sees a quiet day in a busy workspace and a restore cannot find the moves it needs to
+   * reverse. And they must arrive oldest-first, because the write path appends to this array
+   * and the browser mirror keeps its tail.
+   */
+  {
+    for (const marker of ['first', 'second', 'third', 'fourth', 'fifth']) {
+      await persistActions(TENANT, A, [
+        { t: 'updateIssue', id: 'PROOF-2', patch: { nextAction: `trail-${marker}` }, now: NOW },
+      ])
+    }
+
+    process.env.AXIOMATE_AUDIT_WINDOW = '3'
+    const narrowed = await loadWorkspace(TENANT)
+    delete process.env.AXIOMATE_AUDIT_WINDOW
+
+    const trail = narrowed.state.audit
+    const ascending = trail.every((e, i) => i === 0 || trail[i - 1].at <= e.at)
+    const text = trail.map((e) => e.to).join(' ')
+
+    check(
+      'a capped trail keeps the newest entries, not the oldest',
+      trail.length === 3 && text.includes('trail-fifth') && !text.includes('trail-first'),
+      `${trail.length} entries, ending "${trail[trail.length - 1]?.to}"`,
+    )
+    check('and returns them oldest-first, which is what the write path appends to', ascending)
+  }
+
   /* ---------------- ids do not collide after a restart ---------------- */
   const meta = await prisma.workspaceMeta.findUnique({ where: { tenantId: TENANT } })
   check(
