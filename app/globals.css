@@ -4223,3 +4223,36 @@ select.cell-editor {
 .voice-error {
   margin: 0;
 }
+
+/* ---------- summary blocks ----------
+   Used by the Time, Commercial and Capacity panels. These class names were written in three
+   components and never given a rule, so label, value and note rendered as one run of inline
+   text — "Recorded0h0h billable". Neither the typecheck nor the build can see that; it took
+   opening the page.
+
+   The Estimation tab reaches the same effect through a definition list, which is the better
+   markup where the content really is term-and-definition pairs. Here the blocks are figures
+   with captions, so they stay as stacked spans. */
+.est-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.est-block-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.est-block-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.est-block-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
