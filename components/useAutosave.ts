@@ -36,6 +36,26 @@ function mintKey(): string {
   return `k-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 }
 
+/**
+ * Remove the actions a request carried, identified by key rather than by position.
+ *
+ * By position is what this did, in both the drain and the unload flush, and the two race
+ * against each other. A drain captures twenty actions and waits; the user types five more;
+ * the tab is switched away — `visibilitychange`, so the page is still running — and the flush
+ * sends the first twenty and drops twenty from the front, leaving five. The fetch then returns
+ * and drops twenty *again*, from a queue that now holds five. The five are gone, and the
+ * indicator says "Saved".
+ *
+ * Identity is what makes both removals idempotent and order-preserving, and it is available
+ * only because every queued action now carries a key. An action with no key is kept: nothing
+ * queues one today — `enqueueAll` stamps every action it accepts — and if some later path
+ * does, holding an unacknowledged change is the safe way to be wrong.
+ */
+function withoutKeys(queued: SubmittedAction[], sent: SubmittedAction[]): SubmittedAction[] {
+  const keys = new Set(sent.map((a) => a.key).filter(Boolean))
+  return queued.filter((a) => !a.key || !keys.has(a.key))
+}
+
 const MAX_ATTEMPTS = 4
 /** 0.5s, 1s, 2s, 4s. Long enough to ride out a restart, short enough to feel responsive. */
 const BACKOFF_MS = (attempt: number) => 500 * 2 ** attempt
@@ -99,7 +119,7 @@ export function useAutosave(enabled: boolean): Autosave {
             }
 
             if (data.ok) {
-              queue.current = queue.current.slice(batch.length)
+              queue.current = withoutKeys(queue.current, batch)
               if (alive.current) {
                 setState({
                   status: queue.current.length ? 'saving' : 'saved',
@@ -239,7 +259,7 @@ export function useAutosave(enabled: boolean): Autosave {
       // Only what the beacon actually carried. Clearing the whole queue discarded everything
       // past the batch limit — on a queue of sixty, ten changes were dropped on the floor with
       // nothing said, which is the failure the beacon was added to prevent.
-      if (sent) queue.current = queue.current.slice(batch.length)
+      if (sent) queue.current = withoutKeys(queue.current, batch)
     }
     const onHide = () => {
       if (document.visibilityState === 'hidden') flush()

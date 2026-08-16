@@ -115,7 +115,12 @@ function isDuplicateKey(err: unknown): boolean {
   if (e?.code !== 'P2002') return false
   const target = e.meta?.target
   const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')]
-  return fields.some((f) => /applied_?action|AppliedAction/i.test(f)) || fields.includes('key')
+  // Prisma reports the target either as the constraint name or as the field list, depending on
+  // the driver — so both forms are recognised. Matching a bare `key` would be wider than
+  // intended: no other model has such a column today, and one added later would start being
+  // retried instead of reported. The composite is the whole primary key or it is not this one.
+  if (fields.some((f) => /applied_?action/i.test(f))) return true
+  return fields.length === 2 && fields.includes('tenantId') && fields.includes('key')
 }
 
 const MAX_SERIALIZATION_RETRIES = 3
