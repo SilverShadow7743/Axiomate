@@ -19,7 +19,20 @@ import { mergeModel } from './config'
  * one the user did not look at.
  */
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'retrying' | 'error' | 'local'
+/**
+ * `retrying` and `paused` are both "not saved yet", and the difference matters to the person
+ * reading it: `retrying` is a request in flight right now, `paused` is a queue waiting out an
+ * outage that will try again on its own. Collapsing them into `error` is what made a ten-second
+ * outage look identical to a change the server refused.
+ */
+export type SaveStatus =
+  | 'idle'
+  | 'saving'
+  | 'saved'
+  | 'retrying'
+  | 'paused'
+  | 'error'
+  | 'local'
 
 export interface SaveState {
   status: SaveStatus
@@ -247,8 +260,12 @@ export function describeSave(s: SaveState): string {
       return s.pending > 1 ? `Saving ${s.pending} changes…` : 'Saving…'
     case 'retrying':
       return 'Retrying…'
+    // "Not saved yet" rather than "Not saved": the work is held and will be sent. The two are
+    // one word apart because the difference between them is whether the person needs to act.
+    case 'paused':
+      return s.pending > 1 ? `Not saved yet · ${s.pending} changes` : 'Not saved yet'
     case 'error':
-      return 'Not saved'
+      return s.pending > 1 ? `Not saved · ${s.pending} changes` : 'Not saved'
     case 'local':
       return 'Saved in this browser'
     case 'saved':
@@ -260,7 +277,21 @@ export function describeSave(s: SaveState): string {
 
 export function describeSaveDetail(s: SaveState, dbEnabled: boolean): string {
   if (s.status === 'error') {
-    return `${s.error ?? 'The last change could not be saved.'} Reload to resync with the server.`
+    /**
+     * The count is stated, and so is what reloading costs.
+     *
+     * A stopped queue keeps holding everything queued after the refusal, and it used to say
+     * only "Reload to resync" — which is the right advice and, on a queue holding forty
+     * changes, an instruction to discard them without saying so.
+     */
+    const held =
+      s.pending > 0
+        ? ` ${s.pending} change${s.pending === 1 ? '' : 's'} ${s.pending === 1 ? 'is' : 'are'} still held here and reloading will discard ${s.pending === 1 ? 'it' : 'them'}.`
+        : ''
+    return `${s.error ?? 'The last change could not be saved.'} Reload to resync with the server.${held}`
+  }
+  if (s.status === 'paused') {
+    return `${s.error ?? 'The server is unreachable.'} ${s.pending} change${s.pending === 1 ? '' : 's'} held here and waiting — this will keep trying, and reconnecting sends them.`
   }
   if (s.status === 'retrying') return 'The server did not respond. Trying again.'
   if (s.status === 'saving') return `${s.pending} change${s.pending === 1 ? '' : 's'} in flight.`

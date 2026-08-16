@@ -39,6 +39,8 @@ import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
+import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
+import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
@@ -1817,16 +1819,76 @@ scenario(
   'The database is unreachable while someone is working',
   'The user keeps working, nothing is lost, and the queue recovers when it comes back.',
   () => {
-    const src = fs.readFileSync(path.join(ROOT, 'components/useAutosave.ts'), 'utf8')
-    const halts = /halted\.current = true/.test(src)
-    const recovers = /halted\.current = false/.test(src)
-    const beaconClearsAll = /queue\.current = \[\]/.test(src) && /slice\(0, MAX_BATCH\)/.test(src)
+    /*
+     * The outage. Four attempts are spent inline with backoff; the fifth failure is where the
+     * queue used to end its own session.
+     */
+    const during = [1, 2, 3, 4].map((attempts) => verdictFor({ kind: 'network', attempts }))
+    const exhausted = verdictFor({ kind: 'network', attempts: 5 })
+
+    /* Ten seconds later the network is back, and the browser says so. */
+    const onReconnect = shouldResume({
+      halt: exhausted.halt, trigger: 'online', pausedForMs: 10_000, pauses: 0,
+      online: true, visible: false,
+    })
+
+    /* A laptop that slept, reopened on the same tab. */
+    const onReturn = shouldResume({
+      halt: 'paused', trigger: 'visible', pausedForMs: 600_000, pauses: 2,
+      online: true, visible: true,
+    })
+
+    /* And a tab nobody touches: the timer waits out the ladder rather than hammering. */
+    const tooSoon = shouldResume({
+      halt: 'paused', trigger: 'timer', pausedForMs: 15_000, pauses: 0,
+      online: true, visible: false,
+    })
+    const eventually = shouldResume({
+      halt: 'paused', trigger: 'timer', pausedForMs: 31_000, pauses: 0,
+      online: true, visible: false,
+    })
+
+    /* Nothing is attempted while the machine knows it is offline. */
+    const whileOffline = shouldResume({
+      halt: 'paused', trigger: 'timer', pausedForMs: 600_000, pauses: 3,
+      online: false, visible: true,
+    })
+
+    /*
+     * The failures that must NOT resume, because trying again cannot change the answer. A
+     * refusal is a disagreement about a record and every action queued behind it was computed
+     * from the version that lost; a deployment with no database has nothing to write to.
+     */
+    const refused = verdictFor({ kind: 'response', status: 409, serverError: 'Owner has moved on.', attempts: 1 })
+    const malformed = verdictFor({ kind: 'response', status: 400, attempts: 1 })
+    const oversized = verdictFor({ kind: 'response', status: 413, attempts: 1 })
+    const noDatabase = verdictFor({ kind: 'response', disabled: true, status: 200, attempts: 1 })
+    const stoppedStay = [refused, malformed, oversized, noDatabase].every(
+      (v) => !shouldResume({ halt: v.halt, trigger: 'online', pausedForMs: 1e9, pauses: 0, online: true, visible: true }),
+    )
+
+    /* The ladder escalates and is capped, so an hour-long outage is not asked about constantly. */
+    const ladder = [0, 1, 2, 3, 9].map((n) => resumeDelayMs(n))
+    const escalates = ladder[0] < ladder[1] && ladder[1] < ladder[2] && ladder[3] === ladder[4]
+
+    const good =
+      during.every((v) => v.halt === 'running') &&
+      exhausted.halt === 'paused' && exhausted.keepQueue &&
+      onReconnect && onReturn && eventually &&
+      !tooSoon && !whileOffline &&
+      refused.halt === 'stopped' && refused.keepQueue &&
+      malformed.halt === 'stopped' &&
+      oversized.halt === 'stopped' &&
+      noDatabase.halt === 'stopped' && !noDatabase.keepQueue &&
+      stoppedStay && escalates
+
     return {
-      verdict: halts && !recovers ? 'FAIL' : 'PARTIAL',
-      actual: `The queue retries with backoff four times, then halts and tells the user — and ${recovers ? 'can resume' : 'never resumes: nothing ever clears the halt for the life of the session'}. Editing continues into the local mirror, so work is visible but unsaved.${beaconClearsAll ? ' Separately, the unload flush sends the first 50 queued actions and then clears the whole queue, dropping the remainder.' : ''}`,
-      stops: 'at recovery',
-      severity: 'P1',
-      impact: 'A ten-second outage silently ends persistence for the rest of the session.',
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `An outage is retried ${during.length} times inline and then the queue pauses rather than ending the session — holding its work and saying "${describeSave({ status: exhausted.status, pending: 3, savedAt: null })}". It starts again the moment connectivity returns, when the tab is looked at again, or after ${resumeDelayMs(0) / 1000}s on its own, escalating to ${resumeDelayMs(9) / 1000}s and never while the machine reports itself offline. The failures that cannot improve stay stopped through every trigger: a refused change, a malformed request, an oversized batch, and a deployment with no database — the last clearing its queue because there is nothing to deliver to, the others keeping theirs so the unload beacon can still try. What is proven is the policy: \`verdictFor\` and \`shouldResume\` are pure and driven directly. A queue actually resuming has never run in a browser, because without a database the endpoint answers \`disabled\` and stops before the paused path is reachable at all.`,
+      stops: 'at a resume observed in a browser',
+      severity: 'P2',
+      impact:
+        'A ten-second outage no longer ends persistence for the rest of the session. The rule is proven; the recovery it describes has not been watched happen.',
     }
   },
 )

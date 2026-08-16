@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 import type { SaveState } from '@/lib/autosave'
+import { shouldResume, verdictFor, type Halt, type ResumeTrigger, type Verdict } from '@/lib/queue'
 
 /**
  * The autosave queue.
@@ -15,11 +16,21 @@ import type { SaveState } from '@/lib/autosave'
  * faster than a round trip completes — inline cell edits, a drag, an assistant proposal — so
  * this is the normal case, not a race that needs contriving.
  *
- * Failures are separated by kind, because they need different answers:
+ * Failures are separated by whether trying again could ever produce a different answer, which
+ * `lib/queue.ts` decides and this hook obeys:
  *
- *   Network / 5xx    transient. Retried with backoff, queue intact, user told nothing yet.
- *   Rejected (409)   the server's reducer disagreed. Not retryable — retrying replays the
- *                    same rejected action forever — so the queue stops and says so.
+ *   Network / 5xx    Retried inline with backoff. Once those run out the queue *pauses* —
+ *                    holding its work, saying so, and starting itself again when connectivity
+ *                    returns, when the tab is looked at, or on an escalating timer.
+ *   Rejected (409)   The server's reducer disagreed, so the browser and the server no longer
+ *                    agree about a record. Retrying replays the same refusal forever and every
+ *                    action queued behind it was computed from the version that lost, so the
+ *                    queue stops until a reload.
+ *   No database      An answer rather than a failure. The queue is redundant and cleared.
+ *
+ * The distinction is the whole point. There was one `halted` flag, set in four places and
+ * cleared in none, so a ten-second outage was indistinguishable from a permanent refusal and
+ * ended persistence for the rest of the session.
  */
 
 /**
@@ -56,7 +67,6 @@ function withoutKeys(queued: SubmittedAction[], sent: SubmittedAction[]): Submit
   return queued.filter((a) => !a.key || !keys.has(a.key))
 }
 
-const MAX_ATTEMPTS = 4
 /** 0.5s, 1s, 2s, 4s. Long enough to ride out a restart, short enough to feel responsive. */
 const BACKOFF_MS = (attempt: number) => 500 * 2 ** attempt
 /** Beyond this the queue is drained in chunks, so one request never carries a whole session. */
@@ -75,8 +85,17 @@ export function useAutosave(enabled: boolean): Autosave {
 
   const queue = useRef<SubmittedAction[]>([])
   const draining = useRef(false)
-  /** Set when the server rejects: the queue is stopped and nothing further is attempted. */
-  const halted = useRef(false)
+  /**
+   * Running, paused or stopped — never a single boolean again.
+   *
+   * `lib/queue.ts` decides which, and the whole point of the split is that a paused queue is
+   * one the resume triggers below can start again. It used to be one flag, set in four places
+   * and cleared in none.
+   */
+  const halt = useRef<Halt>('running')
+  /** When it paused, and how many times, for the retry ladder. */
+  const pausedAt = useRef(0)
+  const pauses = useRef(0)
   const alive = useRef(true)
 
   useEffect(() => {
@@ -86,12 +105,36 @@ export function useAutosave(enabled: boolean): Autosave {
     }
   }, [])
 
+  /**
+   * Put the queue into the state the policy asked for.
+   *
+   * One place, so a halt can never again be set without its bookkeeping: the pause clock and
+   * the ladder counter are what the resume triggers read, and setting `halt` without them
+   * would produce a queue that is paused and never eligible to resume — which is the bug this
+   * whole change exists to remove.
+   */
+  const settle = useCallback((verdict: Verdict) => {
+    halt.current = verdict.halt
+    if (!verdict.keepQueue) queue.current = []
+    if (verdict.halt === 'paused') {
+      pausedAt.current = Date.now()
+      pauses.current += 1
+    }
+    if (!alive.current) return
+    setState((s) => ({
+      ...s,
+      status: verdict.status,
+      pending: queue.current.length,
+      error: verdict.message,
+    }))
+  }, [])
+
   const drain = useCallback(async () => {
-    if (draining.current || halted.current || !enabled) return
+    if (draining.current || halt.current !== 'running' || !enabled) return
     draining.current = true
 
     try {
-      while (queue.current.length && !halted.current) {
+      while (queue.current.length && halt.current === 'running') {
         const batch = queue.current.slice(0, MAX_BATCH)
         if (alive.current) {
           setState((s) => ({ ...s, status: 'saving', pending: queue.current.length }))
@@ -109,17 +152,11 @@ export function useAutosave(enabled: boolean): Autosave {
             })
             const data = (await res.json()) as { ok: boolean; error?: string; disabled?: boolean }
 
-            if (data.disabled) {
-              // The server has no database. Nothing to retry and nothing to warn about — the
-              // local mirror is already carrying this session.
-              queue.current = []
-              halted.current = true
-              done = true
-              break
-            }
-
             if (data.ok) {
               queue.current = withoutKeys(queue.current, batch)
+              // A batch that got through means whatever was wrong is over. The ladder resets
+              // so the next outage waits thirty seconds rather than four minutes.
+              pauses.current = 0
               if (alive.current) {
                 setState({
                   status: queue.current.length ? 'saving' : 'saved',
@@ -131,40 +168,28 @@ export function useAutosave(enabled: boolean): Autosave {
               break
             }
 
-            // A reducer rejection is a disagreement about state, not a hiccup. Replaying it
-            // would fail identically every time, so the queue stops and the user is told.
-            // 401 is terminal for the same reason: retrying an unauthenticated request four
-            // times produces four failures and one unhelpful message. It differs in the answer
-            // — this one is fixable by the person reading it.
-            if (res.status === 401) {
-              halted.current = true
-              if (alive.current) {
-                setState((s) => ({
-                  ...s,
-                  status: 'error',
-                  pending: queue.current.length,
-                  error: 'Sign in to save. Your work is still here — signing in and reloading will send it.',
-                }))
-              }
-              done = true
-              break
+            /**
+             * Every non-success goes through the same policy, including the ones that are not
+             * failures — a deployment with no database answers `disabled`, which is an answer.
+             *
+             * A 5xx returns `halt: 'running'`, which falls through to the retry below rather
+             * than settling anything.
+             */
+            const verdict = verdictFor({
+              kind: 'response',
+              status: res.status,
+              disabled: data.disabled,
+              serverError: data.error,
+              attempts: attempt + 1,
+            })
+
+            if (verdict.halt === 'running') {
+              throw new Error(data.error ?? `Server returned ${res.status}.`)
             }
 
-            if (res.status === 409 || res.status === 400) {
-              halted.current = true
-              if (alive.current) {
-                setState((s) => ({
-                  ...s,
-                  status: 'error',
-                  pending: queue.current.length,
-                  error: data.error ?? 'The server rejected a change.',
-                }))
-              }
-              done = true
-              break
-            }
-
-            throw new Error(data.error ?? `Server returned ${res.status}.`)
+            settle(verdict)
+            done = true
+            break
           } catch (err) {
             attempt += 1
             /**
@@ -176,16 +201,13 @@ export function useAutosave(enabled: boolean): Autosave {
              * longer than either, so the retry gave up before the thing it was waiting for had
              * finished happening.
              */
-            if (attempt > MAX_ATTEMPTS) {
-              halted.current = true
-              if (alive.current) {
-                setState((s) => ({
-                  ...s,
-                  status: 'error',
-                  pending: queue.current.length,
-                  error: err instanceof Error ? err.message : 'The server is unreachable.',
-                }))
-              }
+            const verdict = verdictFor({
+              kind: 'network',
+              serverError: err instanceof Error ? err.message : undefined,
+              attempts: attempt,
+            })
+            if (verdict.halt !== 'running') {
+              settle(verdict)
               done = true
               break
             }
@@ -198,6 +220,61 @@ export function useAutosave(enabled: boolean): Autosave {
       draining.current = false
     }
   }, [enabled])
+
+  /**
+   * Start a paused queue again, if the policy agrees this is the moment.
+   *
+   * Deliberately not called from `enqueueAll`. Making a keystroke consult the clock and
+   * possibly fire a request would put retry policy in the typing path, and the three triggers
+   * below are both better signals and none of them are driven by the user's hands.
+   */
+  const tryResume = useCallback(
+    (trigger: ResumeTrigger) => {
+      if (
+        !shouldResume({
+          halt: halt.current,
+          trigger,
+          pausedForMs: Date.now() - pausedAt.current,
+          pauses: pauses.current - 1,
+          online: navigator.onLine !== false,
+          visible: document.visibilityState === 'visible',
+        })
+      ) {
+        return
+      }
+      halt.current = 'running'
+      if (alive.current) {
+        setState((s) => ({ ...s, status: 'saving', pending: queue.current.length }))
+      }
+      void drain()
+    },
+    [drain],
+  )
+
+  /**
+   * The three ways a paused queue starts again.
+   *
+   * `online` is the event this is actually waiting for — connectivity returning. A tab
+   * regaining focus is the next best thing, and covers the laptop that slept. The interval is
+   * the fallback for a tab left open and untouched, escalating so an outage that has lasted an
+   * hour is not asked about every thirty seconds.
+   *
+   * The timer is cleared on unmount rather than merely checked, because a callback that fires
+   * after the hook is gone would drain a queue nothing is watching.
+   */
+  useEffect(() => {
+    if (!enabled) return
+    const onOnline = () => tryResume('online')
+    const onVisible = () => tryResume('visible')
+    const timer = window.setInterval(() => tryResume('timer'), 15_000)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [enabled, tryResume])
 
   const enqueueAll = useCallback(
     (actions: Action[]) => {
@@ -249,7 +326,16 @@ export function useAutosave(enabled: boolean): Autosave {
      * server applies it once — the double send is safe, and it is the reason the key exists.
      */
     const flush = () => {
-      if (!queue.current.length || halted.current) return
+      /**
+       * Sent whatever the halt state is, provided there is something to send.
+       *
+       * It used to skip a halted queue, which meant the case where the beacon matters most —
+       * a paused queue holding an outage's worth of work, on a tab about to close — was the
+       * one case it declined to try. The outage may well be over by now, and this is the last
+       * opportunity to find out. A stopped queue sends too: the head will be refused again and
+       * nothing is lost by asking.
+       */
+      if (!queue.current.length) return
       const batch = queue.current.slice(0, MAX_BATCH)
       const payload = JSON.stringify({ actions: batch })
       const sent = navigator.sendBeacon?.(
@@ -276,7 +362,7 @@ export function useAutosave(enabled: boolean): Autosave {
   useEffect(() => {
     if (!enabled) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!queue.current.length && state.status !== 'error') return
+      if (!queue.current.length && state.status !== 'error' && state.status !== 'paused') return
       e.preventDefault()
       e.returnValue = ''
     }
