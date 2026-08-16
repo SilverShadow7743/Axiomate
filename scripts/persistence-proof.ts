@@ -78,17 +78,24 @@ const seedIssue = (id: string, over: Partial<SeedIssueInput> = {}): SeedIssueInp
  * fatal for a cleanup routine — the one-line scrub could only ever have worked on a tenant
  * that owned nothing, which is the state it is in before the proof runs and never after.
  *
- * So the rows go explicitly, leaves first. The order below is not arbitrary and is worth
- * keeping in this shape:
+ * So the rows go explicitly, leaves first — but ordering alone is not enough, because four
+ * foreign keys here are `RESTRICT`, which Postgres enforces immediately, per row, rather than
+ * at the end of the statement. Three of them cannot be satisfied by any ordering at all:
  *
- *   The node/statement-of-work cycle first. A node points at the SOW it is delivered under
- *   with `Restrict`, and a SOW points back at its engagement node with `Cascade`. Neither can
- *   go first, so the reference is cleared before either is deleted.
+ *   A node points at the statement of work it is delivered under, and the SOW points back at
+ *   its engagement node. Whichever goes first, the other still references it.
  *
- *   Then everything that hangs off an issue or a node, then issues, then nodes, then the
- *   tenant. Self-references — an issue's parent issue, a node's parent node — need no ordering
- *   because each table is emptied in a single statement, and Postgres checks those constraints
- *   once the statement has finished rather than row by row.
+ *   A node points at its parent node, and an issue at its parent issue. A single
+ *   `DELETE ... WHERE tenantId = …` removes parents and children together in no defined order,
+ *   so a parent removed before its child trips the constraint on the spot.
+ *
+ * Clearing those three references first is what makes the deletes possible. The fourth —
+ * an issue pointing at its node — needs only that issues go before nodes, which they do.
+ *
+ * Read out of the generated SQL rather than inferred from the schema. These four came out
+ * `RESTRICT` where the relations are optional and an optional relation is widely assumed to
+ * null itself out on delete; assuming that here produced an order that reads correctly and
+ * would have failed on the first tenant that had a hierarchy in it.
  *
  * This asserts nothing about the schema. The previous comment claimed it did, which is how a
  * routine that could not work read as one that proved something.
@@ -96,7 +103,9 @@ const seedIssue = (id: string, over: Partial<SeedIssueInput> = {}): SeedIssueInp
 async function scrub() {
   const where = { tenantId: TENANT }
 
-  await prisma.hierarchyNode.updateMany({ where, data: { sowId: null } })
+  // The three references no deletion order can satisfy. See above.
+  await prisma.hierarchyNode.updateMany({ where, data: { sowId: null, parentId: null } })
+  await prisma.issue.updateMany({ where, data: { parentIssueId: null } })
 
   await prisma.estimateRevision.deleteMany({ where })
   await prisma.issueEstimate.deleteMany({ where })
@@ -369,7 +378,12 @@ main()
   .catch(async (err) => {
     console.log('')
     console.log('The proof could not complete:', err instanceof Error ? err.message : err)
-    await scrub().catch(() => {})
+    // Swallowed so the original failure is what surfaces, but not silently: a scrub that could
+    // not finish leaves rows behind, and the next run collides with them and reports something
+    // confusing far from the cause.
+    await scrub().catch((e) => {
+      console.log('The cleanup also failed:', e instanceof Error ? e.message : e)
+    })
     process.exit(1)
   })
   .finally(async () => {
