@@ -15,13 +15,60 @@ import { PrismaClient } from '@prisma/client'
  */
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
+/**
+ * How many connections one instantiation of this module may hold.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is set here, and not in the connection string
+ *
+ * Because the connection string cannot do it. `?connection_limit=` configures Prisma's own
+ * Rust engine pool, which a driver adapter replaces, and `?max=` is not a parameter
+ * node-postgres reads at all — both are silently ignored and the pool stays at its default of
+ * ten. That was measured rather than assumed: a `Pool` built from a URL carrying both
+ * parameters reports `max: 10`, and one built from a config object reports what the object
+ * says. Infrastructure documentation that claims the cap lives in the connection string is
+ * describing a setting that does nothing.
+ *
+ * ---------------------------------------------------------------------------
+ * The number, and the arithmetic behind it
+ *
+ * Count twice. Next compiles this module into two separately instantiated copies — one for
+ * route handlers, one for the server-rendered page — so a single Node process holds two pools,
+ * and the connections it can occupy are double whatever this says. A Burstable B1ms allows
+ * fifty connections and reserves fifteen, leaving thirty-five for the application. At the
+ * default of eight that is sixteen per instance: two instances fit inside thirty-five with
+ * room for a migration and somebody's psql session, and three do not.
+ *
+ * Raise it with the database, not on its own. The setting that matters is the smaller of what
+ * the server allows and what the app asks for, and asking for more than the server has turns a
+ * slow page into a failed one.
+ */
+const POOL_MAX = Number(process.env.AXIOMATE_DB_POOL_MAX) || 8
+
+/**
+ * How long a request waits for a free connection before giving up.
+ *
+ * Without this, node-postgres waits indefinitely: an exhausted pool produces requests that
+ * hang until something upstream times out, which reads as "the app is down" rather than as
+ * "the pool is full". Ten seconds is longer than any query this application makes and short
+ * enough that the browser's own retry is still running when the error arrives.
+ */
+const CONNECT_TIMEOUT_MS = 10_000
+
 function create(): PrismaClient {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set, so there is no database to connect to.')
   }
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({
+      connectionString,
+      max: POOL_MAX,
+      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      // Closes connections a quiet instance is holding open, so a small server is not kept at
+      // its ceiling by an app nobody is using.
+      idleTimeoutMillis: 30_000,
+    }),
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   })
 }

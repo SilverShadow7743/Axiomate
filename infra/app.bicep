@@ -227,7 +227,7 @@ param healthCheckPath string = ''
  * top-level template makes from the `principalId` output below.
  * ============================================================================================ */
 
-@description('Postgres connection string. Empty is a supported mode — the workspace falls back to browser storage and nothing is shared between users — so leaving it unset degrades the product rather than breaking it. Pool size is set here, in the query string, and is what a scale-out has to respect.')
+@description('Postgres connection string. Empty is a supported mode — the workspace falls back to browser storage and nothing is shared between users — so leaving it unset degrades the product rather than breaking it. Pool size is NOT set here: query-string parameters are ignored by the driver, and the cap lives in lib/db/client.ts, read from AXIOMATE_DB_POOL_MAX. Count it twice per instance, because the client module is instantiated once for routes and once for rendering.')
 @secure()
 param databaseUrl string = ''
 
