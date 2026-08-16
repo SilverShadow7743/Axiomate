@@ -68,10 +68,75 @@ const seedIssue = (id: string, over: Partial<SeedIssueInput> = {}): SeedIssueInp
     ...over,
   }) as SeedIssueInput
 
+/**
+ * Remove every row this proof created.
+ *
+ * It used to delete the tenant alone, on the belief that everything would follow. Nothing
+ * would have: every model's foreign key to `Tenant` is `onDelete: Restrict`, deliberately, so
+ * that a firm with records cannot be dropped along with every issue anyone ever filed under
+ * it. Suspension sets `deletedAt`; deletion is refused. That is right for the application and
+ * fatal for a cleanup routine — the one-line scrub could only ever have worked on a tenant
+ * that owned nothing, which is the state it is in before the proof runs and never after.
+ *
+ * So the rows go explicitly, leaves first. The order below is not arbitrary and is worth
+ * keeping in this shape:
+ *
+ *   The node/statement-of-work cycle first. A node points at the SOW it is delivered under
+ *   with `Restrict`, and a SOW points back at its engagement node with `Cascade`. Neither can
+ *   go first, so the reference is cleared before either is deleted.
+ *
+ *   Then everything that hangs off an issue or a node, then issues, then nodes, then the
+ *   tenant. Self-references — an issue's parent issue, a node's parent node — need no ordering
+ *   because each table is emptied in a single statement, and Postgres checks those constraints
+ *   once the statement has finished rather than row by row.
+ *
+ * This asserts nothing about the schema. The previous comment claimed it did, which is how a
+ * routine that could not work read as one that proved something.
+ */
 async function scrub() {
-  // Deleting the tenant takes everything with it: every table's foreign key to it cascades or
-  // restricts, so this both cleans up and asserts the graph is wired the way it claims.
-  await prisma.tenant.deleteMany({ where: { id: TENANT } })
+  const where = { tenantId: TENANT }
+
+  await prisma.hierarchyNode.updateMany({ where, data: { sowId: null } })
+
+  await prisma.estimateRevision.deleteMany({ where })
+  await prisma.issueEstimate.deleteMany({ where })
+  await prisma.timeEntry.deleteMany({ where })
+  await prisma.approval.deleteMany({ where })
+  await prisma.notification.deleteMany({ where })
+  await prisma.issueNote.deleteMany({ where })
+  await prisma.evidence.deleteMany({ where })
+  await prisma.issueRelationship.deleteMany({ where })
+  await prisma.issueDependency.deleteMany({ where })
+  await prisma.issueActivity.deleteMany({ where })
+  await prisma.allocation.deleteMany({ where })
+  await prisma.commitment.deleteMany({ where })
+  await prisma.engagement.deleteMany({ where })
+  await prisma.appliedAction.deleteMany({ where })
+  await prisma.scheduleAudit.deleteMany({ where })
+  await prisma.workspaceMeta.deleteMany({ where })
+  await prisma.operatingModel.deleteMany({ where })
+  await prisma.scheduleWatch.deleteMany({ where })
+  await prisma.sow.deleteMany({ where })
+  await prisma.issue.deleteMany({ where })
+  await prisma.hierarchyNode.deleteMany({ where })
+
+  /**
+   * The tenant last, and it is also the check that the list above is complete.
+   *
+   * `Restrict` means this delete fails if any table still holds a row — so a model added to
+   * the schema and forgotten here cannot pass silently. The raw error names a constraint and
+   * not the fix, which is a poor way to learn this months from now, so it is translated.
+   */
+  try {
+    await prisma.tenant.deleteMany({ where: { id: TENANT } })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `The proof tenant could not be removed, so some table still holds its rows — most ` +
+        `likely a model added to the schema since this list was written. Add it to scrub(), ` +
+        `before the tenant and after anything that references it. Postgres said: ${detail}`,
+    )
+  }
 }
 
 async function main() {
