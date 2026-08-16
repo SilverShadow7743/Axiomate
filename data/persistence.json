@@ -1,9 +1,14 @@
 {
-  "at": "2026-08-16T16:00:05.552Z",
+  "at": "2026-08-16T17:50:18.546Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 25,
+  "passed": 26,
   "failed": 0,
   "checks": [
+    {
+      "what": "a seed carrying a duplicate link is reduced to one before it reaches the database",
+      "ok": true,
+      "detail": "2 of 3 kept"
+    },
     {
       "what": "two boots racing to seed an empty workspace produce one seed, not a collision",
       "ok": true,
@@ -70,9 +75,9 @@
       "detail": "Client moved UAT — “quotes” and a\nnewline"
     },
     {
-      "what": "a relationship and a generated lifecycle both persist",
+      "what": "a seeded link, a created link and a generated lifecycle all persist",
       "ok": true,
-      "detail": "1 relationships, 5 activities"
+      "detail": "2 relationships (seeded: true, dangling skipped: true), 5 activities"
     },
     {
       "what": "configuration changes survive",

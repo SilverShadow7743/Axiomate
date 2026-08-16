@@ -36,7 +36,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { importWorkspace, loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
 import { runScheduledPass } from '../lib/db/schedule'
-import { initWorkspace, type Action, type SeedIssueInput } from '../lib/workspace'
+import { initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
 import type { TenantId } from '../lib/tenant'
 
@@ -170,9 +170,35 @@ async function main() {
   await scrub()
 
   /* ---------------- import ---------------- */
+  /**
+   * Seeded WITH relationships, including a duplicate — because an empty array is what let the
+   * first Azure deployment fail.
+   *
+   * This passed `[]` for relationships, so the seeder's relationship loop had no rows to write
+   * and the one thing that could go wrong there went untested. The real seed carries two
+   * byte-identical entries for the same pair; the importer writes each with `create`, the
+   * second collides on the primary key, and the entire seeding transaction rolls back. The
+   * deployment then falls back to the seed file on every page load, reporting "changes are not
+   * being saved" — and looking, to anyone glancing at it, like a working application.
+   *
+   * The duplicate below is deliberate and must stay. It is the case that was missing.
+   */
+  const link = (id: string, source: string, target: string) =>
+    ({ id, sourceIssueId: source, targetIssueId: target, relationshipType: 'DUPLICATE_OF', note: 'Proof link' }) as WorkspaceState['relationships'][number]
+
   const seed = initWorkspace(
     [seedIssue('PROOF-1'), seedIssue('PROOF-2', { severity: 'Medium', owner: 'Sam' })],
-    [],
+    [
+      link('rel-proof-1-2', 'PROOF-1', 'PROOF-2'),
+      link('rel-proof-1-2', 'PROOF-1', 'PROOF-2'),
+      // A link to an issue the log never carried. Skipped rather than failing the import.
+      link('rel-proof-dangling', 'PROOF-1', 'NOPE-9'),
+    ],
+  )
+  check(
+    'a seed carrying a duplicate link is reduced to one before it reaches the database',
+    seed.relationships.length === 2,
+    `${seed.relationships.length} of 3 kept`,
   )
   /**
    * Two at once, because that is what a new deployment actually does.
@@ -304,10 +330,23 @@ async function main() {
     reasoned?.reason ?? 'no reason recorded',
   )
 
+  /**
+   * Two links, and which two is the point.
+   *
+   * One was seeded and one was created by a `link` action, so this covers both routes into the
+   * table. The count was 1 when the seed carried no relationships at all; it is 2 now, and the
+   * third — the seeded link pointing at an issue the log never carried — is deliberately absent,
+   * because the importer skips a dangling reference rather than failing the whole import on it.
+   */
+  const seededLink = state.relationships.some((r) => r.id === 'rel-proof-1-2')
+  const danglingSkipped = !state.relationships.some((r) => r.id === 'rel-proof-dangling')
   check(
-    'a relationship and a generated lifecycle both persist',
-    state.relationships.length === 1 && Object.values(state.activities).length > 0,
-    `${state.relationships.length} relationships, ${Object.values(state.activities).length} activities`,
+    'a seeded link, a created link and a generated lifecycle all persist',
+    state.relationships.length === 2 &&
+      seededLink &&
+      danglingSkipped &&
+      Object.values(state.activities).length > 0,
+    `${state.relationships.length} relationships (seeded: ${seededLink}, dangling skipped: ${danglingSkipped}), ${Object.values(state.activities).length} activities`,
   )
 
   check(

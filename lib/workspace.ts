@@ -59,6 +59,11 @@ import {
   type CommitmentKind,
   type ResourceProfile,
 } from './capacity'
+import {
+  availabilityForAssignment,
+  availabilityNote,
+  refusesAssignment,
+} from './availability'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
@@ -372,6 +377,17 @@ export const moduleNodeId = (client: string, mod: string) => `module:${client}:$
  * tiers are not created here — nothing in the log identifies them, so they exist only once a
  * user adds them.
  */
+/**
+ * First occurrence wins, order preserved.
+ *
+ * First rather than last because the two are identical where this is needed, and where they
+ * are not, the earlier record is the one anything already loaded will have been shown.
+ */
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  return items.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)))
+}
+
 export function initWorkspace(
   seedIssues: SeedIssueInput[],
   relationships: IssueRelationship[],
@@ -456,7 +472,26 @@ export function initWorkspace(
     issues,
     activities: {},
     dependencies: [],
-    relationships,
+    /**
+     * One record per id, because the id is the identity.
+     *
+     * `relationships` is an array rather than a keyed record — links are read as a list far
+     * more often than they are looked up — and an array cannot refuse a duplicate the way a
+     * record does. The seed carries one: two byte-identical entries for
+     * `rel-slg-024-slg-018`, the same pair, type and note recorded twice in the source log.
+     *
+     * In memory that is merely untidy. Against a database it is fatal, and quietly so: the
+     * importer writes each link with `create`, the second collides on the primary key, the
+     * whole seeding transaction rolls back, and the deployment falls back to the seed file
+     * with "changes are not being saved" — on every page load, forever, because nothing was
+     * ever written for the next boot to find. That is exactly how the first Azure deployment
+     * behaved, and the reason it was hard to see is that the fallback looks like a working app.
+     *
+     * Deduplicated here rather than in the importer or the seed file, because this is where
+     * identity is established. Fixing it downstream would leave the browser mirror and the
+     * reducer holding a state the database would refuse.
+     */
+    relationships: dedupeById(relationships),
     evidence: {},
     notes: {},
     estimates: {},
@@ -520,6 +555,15 @@ export type Action =
        * ago, and the intake endpoint creating a record nobody else has seen.
        */
       expected?: Partial<IssueRecord>
+      /**
+       * Name an owner who is not at work over the window this is planned for.
+       *
+       * Refused by default and allowed explicitly, on the same reasoning as
+       * `acceptOverallocation`: assigning somebody who is on leave is sometimes exactly right —
+       * they pick it up on their return, and somebody decided that. What the workspace owes is
+       * the difference between that decision and a name typed into the wrong row.
+       */
+      acceptUnavailable?: boolean
     }
   | { t: 'updateActivity'; id: string; patch: Partial<ActivityRec>; now: string }
   | { t: 'softDelete'; id: string; mode: 'cascade' | 'reparent'; now: string }
@@ -637,7 +681,15 @@ export type Action =
   /* ---- CONFIGURATION ---- */
   | { t: 'config'; op: ConfigOp; now: string }
   | { t: 'updateEngagement'; nodeId: string; patch: Partial<EngagementDetail>; now: string }
-  | { t: 'setAssignment'; issueId: string; responsibilityId: string; values: string[]; now: string }
+  | {
+      t: 'setAssignment'
+      issueId: string
+      responsibilityId: string
+      values: string[]
+      /** See `updateIssue`. The same escape hatch, because it is the same refusal. */
+      acceptUnavailable?: boolean
+      now: string
+    }
 
 /**
  * Operations on the operating model.
@@ -1136,6 +1188,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }
         }
       }
+      /**
+       * Is the person being named actually there?
+       *
+       * Guarded on the owner having *changed*, not on the key being in the patch, for the
+       * reason spelled out under `actualEnd` below: the edit form submits the whole record, so
+       * a presence test would re-judge the existing owner on every unrelated save and refuse a
+       * typo fix because the person who owns the row went on leave last week.
+       *
+       * The window comes from the patched record rather than the stored one, so setting an
+       * owner and a plan in one save is checked against the plan being saved.
+       */
+      const ownerVerdict =
+        a.patch.owner != null && a.patch.owner !== i.owner
+          ? availabilityForAssignment(state, { ...i, ...a.patch }, a.patch.owner, a.now)
+          : null
+      if (ownerVerdict && refusesAssignment(ownerVerdict) && !a.acceptUnavailable) {
+        return {
+          state,
+          error: `${ownerVerdict.message} Assign it anyway if that is the decision — it will be recorded as one.`,
+        }
+      }
+
       const changed = Object.entries(a.patch).filter(
         ([k, v]) => (i as unknown as Record<string, unknown>)[k] !== v,
       )
@@ -1153,7 +1227,18 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             by,
             // Only on the field the reason was given about. Stamping it on every field in the
             // patch would attribute a closure rationale to an unrelated typo fix.
-            reason: k === 'status' ? a.reason?.trim() || undefined : undefined,
+            //
+            // Owner carries a reason of its own, and one nobody typed: what was known about
+            // that person's time when the work was handed to them. It is written whenever the
+            // answer was anything other than "clear", including when it was "nothing is
+            // known" — a reader six weeks later needs to see that the question was asked and
+            // could not be answered, which is not what an empty reason says.
+            reason:
+              k === 'status'
+                ? a.reason?.trim() || undefined
+                : k === 'owner' && ownerVerdict
+                  ? availabilityNote(ownerVerdict)
+                  : undefined,
           },
         )
       }
@@ -1186,7 +1271,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           )
         }
       }
-      return { state: { ...state, issues: { ...state.issues, [a.id]: next }, audit }, message: 'Saved.' }
+      // The warning rides back on the success message, because a note only the audit trail
+      // sees arrives too late to be acted on by the person who could still change their mind.
+      const ownerNote = ownerVerdict ? availabilityNote(ownerVerdict) : undefined
+      return {
+        state: { ...state, issues: { ...state.issues, [a.id]: next }, audit },
+        message: ownerNote ? `Saved. ${ownerNote}` : 'Saved.',
+      }
     }
 
     case 'updateActivity': {
@@ -2880,6 +2971,33 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
 
       const after = readAssignment(next, type)
       if (before.join(', ') === after.join(', ')) return { state }
+
+      /**
+       * And are the people being named there to do it?
+       *
+       * Only the names being *added* — the ones already holding the responsibility were judged
+       * when they were given it, and re-judging them here would refuse removing a second
+       * reviewer because the first is on leave.
+       *
+       * Every person-valued responsibility, not just Owner. A firm that adds "Technical lead"
+       * has made it a way of putting work on somebody, and a check that only knew about the
+       * three seeded fields would go quiet exactly when the model was configured properly.
+       */
+      const verdicts =
+        type.valueKind === 'person'
+          ? after
+              .filter((v) => !before.includes(v))
+              .map((v) => availabilityForAssignment(state, next, v, a.now))
+          : []
+      const away = verdicts.find(refusesAssignment)
+      if (away && !a.acceptUnavailable) {
+        return {
+          state,
+          error: `${away.message} Assign it anyway if that is the decision — it will be recorded as one.`,
+        }
+      }
+      const notes = verdicts.map(availabilityNote).filter(Boolean).join(' ')
+
       return {
         state: {
           ...state,
@@ -2891,9 +3009,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             to: after.join(', ') || '—',
             at: a.now,
             by,
+            reason: notes || undefined,
           }),
         },
-        message: `${type.label} updated.`,
+        message: notes ? `${type.label} updated. ${notes}` : `${type.label} updated.`,
       }
     }
 

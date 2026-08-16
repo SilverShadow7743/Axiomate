@@ -113,7 +113,23 @@ export function describeDbError(err: unknown): string {
   if (/does not exist|P1003|relation .* does not exist/i.test(msg)) {
     return 'The database or its tables do not exist yet. Run `npm run db:push`.'
   }
-  return msg.split('\n')[0]
+  /**
+   * The first line that actually says something, plus the code if there is one.
+   *
+   * This was `msg.split('\n')[0]`, which returns an EMPTY STRING for essentially every Prisma
+   * error, because Prisma formats its messages with a leading newline before
+   * "Invalid `prisma.x.y()` invocation". So the one branch that exists to explain an
+   * unreachable database explained nothing: the first Azure deployment reported
+   * `"error": ""` beside "Changes are not being saved", and the actual cause — a unique
+   * constraint on a duplicate seed link — had to be found by running the built server locally
+   * and reading its stdout.
+   *
+   * A diagnostic that can return empty is worse than none, because it looks like it ran.
+   */
+  const line = msg.split('\n').map((l) => l.trim()).find(Boolean)
+  const code = (err as { code?: string })?.code
+  if (!line) return code ? `The database refused the operation (${code}).` : 'The database failed without saying why.'
+  return code ? `${line} (${code})` : line
 }
 
 /**
