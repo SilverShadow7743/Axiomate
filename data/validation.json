@@ -447,11 +447,11 @@
       "id": "FL3",
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
-      "verdict": "NOT TESTABLE",
-      "actual": "DATABASE_URL is not set, and there is no .env.example. The repository, mappers, write path and baseline migration exist across 1 module(s) and typecheck, but no test in this repository has ever run them against a database. Every proof here is reducer-level.",
-      "stops": "at the database — it has never been connected in this environment",
-      "severity": "P1",
-      "impact": "The most reversible-looking layer is the least verified. A mapper mistake would surface as data loss on first deployment."
+      "verdict": "PASS",
+      "actual": "24 of 24 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-16. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
     },
     {
       "id": "U",
@@ -517,10 +517,10 @@
       "id": "FL4",
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
-      "verdict": "PARTIAL",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. What is proven here is the decision, not the round trip: `split` is pure and driven directly, while the transaction that reads the recorded keys and writes them back has never run against Postgres.",
-      "stops": "at the transaction, which no database has yet executed",
-      "severity": "P2",
+      "verdict": "PASS",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-16: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "stops": "—",
+      "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
     },
     {

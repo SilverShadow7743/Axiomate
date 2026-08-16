@@ -72,7 +72,20 @@ import {
  * selected only appears once there are more of them than the window. Making it small is how the
  * persistence proof reproduces that in five rows instead of five thousand.
  */
-const AUDIT_WINDOW = Number(process.env.AXIOMATE_AUDIT_WINDOW) || 5000
+/**
+ * Read per query rather than captured at import.
+ *
+ * As a module constant this was fixed by whatever the environment happened to hold the first
+ * time anything imported this file — which in a framework that loads modules before it has
+ * finished assembling the environment is a value nobody chose. It also could not be exercised:
+ * the persistence proof sets the variable and reloads, and got the default every time, so the
+ * cap went unverified against a real database while appearing to be covered.
+ *
+ * The cost is one environment read per workspace load, against a query that crosses a network.
+ */
+function auditWindow(): number {
+  return Number(process.env.AXIOMATE_AUDIT_WINDOW) || 5000
+}
 
 export interface LoadedWorkspace {
   state: WorkspaceState
@@ -176,7 +189,7 @@ export async function loadWorkspace(
       db.scheduleAudit.findMany({
         where: { tenantId },
         orderBy: [{ at: 'desc' }, { id: 'desc' }],
-        take: AUDIT_WINDOW,
+        take: auditWindow(),
       }),
       db.workspaceMeta.findUnique({ where: { tenantId } }),
       db.operatingModel.findUnique({ where: { tenantId } }),

@@ -40,6 +40,28 @@ import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
+
+/**
+ * The last recorded persistence run, or null.
+ *
+ * Read rather than asserted. This file cannot reach a database, so the honest thing it can do
+ * about storage is quote a run that could, and carry its date so nobody mistakes an old pass
+ * for a current one.
+ */
+interface ProofRun {
+  at: string
+  target: string
+  passed: number
+  failed: number
+  checks: { what: string; ok: boolean; detail: string }[]
+}
+function readProof(): ProofRun | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'persistence.json'), 'utf8')) as ProofRun
+  } catch {
+    return null
+  }
+}
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
@@ -1926,22 +1948,35 @@ scenario(
   'The persistence layer is exercised at all',
   'Writes reach Postgres and reload correctly.',
   () => {
-    const configured = Boolean(process.env.DATABASE_URL)
-    const files = mentions(/prisma\.\w+\.(findMany|upsert|create)/).length
+    /*
+     * This harness has no database and never will — it drives the reducer, which is a pure
+     * function. So it cannot test persistence; it can only cite a run that did, with the date
+     * attached so a stale one is visible rather than implied.
+     */
+    const proof = readProof()
+    if (!proof) {
+      return {
+        verdict: 'NOT TESTABLE',
+        actual:
+          'No persistence run has been recorded. `npm run audit:persistence` writes data/persistence.json against a real database; until it has, the repository, mappers and write path typecheck and nothing more.',
+        stops: 'at the absence of a database',
+        severity: 'P1',
+        impact: 'Every claim about storage is a claim about code that has never executed.',
+      }
+    }
+    const all = proof.failed === 0
     return {
-      verdict: configured ? 'NOT TESTABLE' : 'NOT TESTABLE',
-      actual: `DATABASE_URL is ${configured ? 'set' : 'not set, and there is no .env.example'}. The repository, mappers, write path and baseline migration exist across ${files} module(s) and typecheck, but no test in this repository has ever run them against a database. Every proof here is reducer-level.`,
-      stops: 'at the database — it has never been connected in this environment',
-      severity: 'P1',
-      impact: 'The most reversible-looking layer is the least verified. A mapper mistake would surface as data loss on first deployment.',
+      verdict: all ? 'PASS' : 'FAIL',
+      actual: `${proof.passed} of ${proof.passed + proof.failed} persistence checks passed against ${proof.target}, recorded ${proof.at.slice(0, 10)}. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.${all ? '' : ' Failures: ' + proof.checks.filter((c) => !c.ok).map((c) => c.what).join('; ')}`,
+      stops: all ? '—' : 'at the checks listed above',
+      severity: all ? '—' : 'P1',
+      impact: all
+        ? 'Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked.'
+        : 'A mapper is dropping or coercing a value, which is the quiet failure this run exists to catch.',
     }
   },
 )
 
-
-/* ================================================================== *
- * 11 — Time approval, delivery and failure of the machinery
- * ================================================================== */
 
 scenario(
   'U',
@@ -2168,6 +2203,19 @@ scenario(
     const unkeyed = split([stripped(a) as SubmittedAction], recorded)
 
     /* And a key of the wrong shape is refused rather than quietly ignored. */
+    /*
+     * And the half no pure function can show: the transaction that reads the recorded keys,
+     * folds, and writes the new ones — all inside one serializable transaction, so a
+     * redelivery cannot interleave its way past the check. Cited from a real run.
+     */
+    const proof = readProof()
+    const redelivery = Boolean(
+      proof &&
+        proof.checks.some((c) => c.ok && c.what.startsWith('a re-delivered batch writes nothing')) &&
+        proof.checks.some((c) => c.ok && c.what.startsWith('and the keys are stored')) &&
+        proof.checks.some((c) => c.ok && c.what.startsWith('a refused keyed batch names')),
+    )
+
     const badKeys = ['', 'short', 42, 'has spaces', 'x'.repeat(MAX_KEY_LENGTH + 1)]
       .every((k) => keyProblem(k) !== null)
     const goodKey = keyProblem(a.key) === null
@@ -2185,10 +2233,10 @@ scenario(
       goodKey
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies ${second.planned.length} and recognises ${second.skipped.length} as already done, leaving ${countNotes(afterSecond)} notes. Without the key the same delivery leaves ${countNotes(unprotected)}. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. What is proven here is the decision, not the round trip: \`split\` is pure and driven directly, while the transaction that reads the recorded keys and writes them back has never run against Postgres.`,
-      stops: 'at the transaction, which no database has yet executed',
-      severity: 'P2',
+      verdict: good && redelivery ? 'PASS' : good ? 'PARTIAL' : 'FAIL',
+      actual: `Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies ${second.planned.length} and recognises ${second.skipped.length} as already done, leaving ${countNotes(afterSecond)} notes. Without the key the same delivery leaves ${countNotes(unprotected)}. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. ${redelivery ? `Against Postgres on ${proof!.at.slice(0, 10)}: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.` : 'What is proven here is the decision, not the round trip: the transaction that reads the recorded keys and writes them back has not been run against Postgres.'}`,
+      stops: redelivery ? '—' : 'at the transaction, which no database has yet executed',
+      severity: redelivery ? '—' : 'P2',
       impact:
         'Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository.',
     }

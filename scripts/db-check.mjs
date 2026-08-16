@@ -69,12 +69,32 @@ try {
 say(true, `DATABASE_URL reads ${mask(url)}`)
 
 const password = decodeURIComponent(parsed.password)
+
+/**
+ * `sslmode` has to be carried across by hand.
+ *
+ * The driver reads it from a connection string, and this check does not hand it one — it
+ * takes the URL apart so it can report the host and port separately. Dropping the parameter
+ * on the way through produced a failure that named the client's own IP and looked exactly
+ * like a firewall problem: Azure requires encryption and reports a plaintext attempt as "no
+ * pg_hba.conf entry for host …, no encryption". The last two words are the whole message.
+ *
+ * `require` follows libpq: encrypt, but do not verify the certificate. `verify-ca` and
+ * `verify-full` ask for the check as well.
+ */
+const sslmode = parsed.searchParams.get('sslmode') ?? 'prefer'
+const ssl =
+  sslmode === 'disable'
+    ? false
+    : { rejectUnauthorized: sslmode === 'verify-ca' || sslmode === 'verify-full' }
+
 const client = new pg.Client({
   user: decodeURIComponent(parsed.username),
   password,
   host: parsed.hostname,
   port: Number(parsed.port || 5432),
   database: parsed.pathname.slice(1),
+  ssl,
   connectionTimeoutMillis: 8000,
 })
 

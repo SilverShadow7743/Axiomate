@@ -25,6 +25,9 @@
  * person is using would be a test that edits their data, which is the sort of thing that is
  * fine until the day it is not.
  */
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 loadEnv()
 
@@ -37,6 +40,7 @@ import { initWorkspace, type Action, type SeedIssueInput } from '../lib/workspac
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
 import type { TenantId } from '../lib/tenant'
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const URL = process.env.DATABASE_URL
 if (!URL) {
   console.log('DATABASE_URL is not set. This proof needs a database — see .env.example.')
@@ -52,8 +56,17 @@ const NOW = `${TODAY}T09:00:00.000Z`
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: URL }) })
 
 const fail: string[] = []
+/**
+ * Every check, kept so the run can be written down.
+ *
+ * The scenario harness has no database and never will — it drives the reducer. So the only
+ * way it can say anything true about persistence is to cite a run that did happen, with its
+ * date attached, rather than assert a capability nothing checked. That file is the citation.
+ */
+const results: { what: string; ok: boolean; detail: string }[] = []
 const check = (what: string, ok: boolean, detail = '') => {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? ' — ' + detail : ''}`)
+  results.push({ what, ok, detail })
   if (!ok) fail.push(what)
 }
 
@@ -262,7 +275,10 @@ async function main() {
     `${dated?.plannedStart} → ${dated?.plannedEnd}`,
   )
 
-  const reasoned = state.audit.find((e) => e.field === 'plannedEnd' || e.field === 'dates')
+  // 'plannedDates' is what the reducer records — one entry for the pair, because a start and
+  // an end that moved together are one decision, not two. The check looked for 'plannedEnd'
+  // and found nothing, and reported that as the reason not being stored.
+  const reasoned = state.audit.find((e) => e.field === 'plannedDates')
   check(
     'the audit keeps the reason, including its punctuation',
     Boolean(reasoned?.reason?.includes('“quotes”')),
@@ -349,11 +365,79 @@ async function main() {
     { t: 'addNote', issueId: 'NOPE-9', body: 'This one is not.', noteType: 'General Update', pinned: false, now: NOW },
   ])
   const after = await loadWorkspace(TENANT)
+  /**
+   * This asserted the opposite until the first time it ran, and the code was right.
+   *
+   * `persistActions` stops the fold at the first rejection and keeps what came before it, on
+   * the grounds that those actions were valid, the browser has already applied them, and
+   * discarding them puts the two sides further apart rather than closer. The whole system is
+   * built on that: the error names how many were saved, and the endpoint returns their
+   * idempotency keys so the client can stop counting them as unsaved work.
+   *
+   * A check asserting atomicity therefore contradicted the design it was checking — and only
+   * said so once a database existed to say it against. The behaviour it should have been
+   * describing is the prefix surviving and nothing past the refusal being written.
+   */
+  const notesBefore = Object.keys(before.state.notes).length
+  const notesAfter = Object.keys(after.state.notes).length
   check(
-    'a batch that fails part-way rolls back whole',
-    !half.ok && Object.keys(after.state.notes).length === Object.keys(before.state.notes).length,
-    `${half.error ?? ''} — notes ${Object.keys(before.state.notes).length} → ${Object.keys(after.state.notes).length}`,
+    'a batch that fails part-way keeps the valid prefix and stops there',
+    !half.ok && notesAfter === notesBefore + 1 && half.error?.includes('1 saved') === true,
+    `${half.error ?? ''} — notes ${notesBefore} → ${notesAfter}`,
   )
+  /* ---------------- a re-delivered batch, against a real database ---------------- */
+  /**
+   * The half of idempotency that could not be proven without Postgres.
+   *
+   * `split` is pure and is driven directly by the scenario harness, so the *decision* was
+   * covered. What was not is the transaction around it: reading the recorded keys, folding,
+   * writing the new ones, and doing all three inside one serializable transaction so a
+   * redelivery cannot interleave its way past the check. That is the part this exercises.
+   */
+  {
+    const keyed = (body: string, key: string) =>
+      ({ t: 'addNote', issueId: 'PROOF-2', body, noteType: 'General Update', pinned: false, now: NOW, key }) as Action & { key: string }
+
+    const batch = [
+      keyed('Delivered once.', 'proof-key-aaaaaaaa-1111'),
+      keyed('Delivered twice.', 'proof-key-bbbbbbbb-2222'),
+    ]
+
+    const notesAtStart = Object.keys((await loadWorkspace(TENANT)).state.notes).length
+    const firstSend = await persistActions(TENANT, A, batch)
+    const notesAfterFirst = Object.keys((await loadWorkspace(TENANT)).state.notes).length
+
+    // The same batch again — a beacon overlapping a live request, or a retry after a timeout.
+    const secondSend = await persistActions(TENANT, A, batch)
+    const notesAfterSecond = Object.keys((await loadWorkspace(TENANT)).state.notes).length
+
+    check(
+      'a re-delivered batch writes nothing the second time',
+      firstSend.ok && secondSend.ok &&
+        notesAfterFirst === notesAtStart + 2 && notesAfterSecond === notesAfterFirst,
+      `${notesAtStart} → ${notesAfterFirst} → ${notesAfterSecond} notes; ${secondSend.skipped} skipped on the replay`,
+    )
+
+    const recorded = await prisma.appliedAction.count({ where: { tenantId: TENANT } })
+    check(
+      'and the keys are stored, so the skip survives a restart',
+      recorded >= 2,
+      `${recorded} key(s) in AppliedAction`,
+    )
+
+    // A keyed batch that fails part-way must report the keys that did commit — the empty array
+    // this check used to accept proved nothing, because the actions carried no keys at all.
+    const partial = await persistActions(TENANT, A, [
+      keyed('Valid, and keyed.', 'proof-key-cccccccc-3333'),
+      { t: 'addNote', issueId: 'NOPE-9', body: 'Not valid.', noteType: 'General Update', pinned: false, now: NOW, key: 'proof-key-dddddddd-4444' } as Action & { key: string },
+    ])
+    check(
+      'a refused keyed batch names the keys that did commit',
+      !partial.ok && partial.committedKeys?.length === 1 &&
+        partial.committedKeys[0] === 'proof-key-cccccccc-3333',
+      `${partial.committedKeys?.length ?? 0} key(s): ${partial.committedKeys?.join(', ') ?? 'none'}`,
+    )
+  }
 
   /* ---------------- tenancy holds at the database, not just in the code ---------------- */
   const otherTenantRows = await prisma.issue.count({ where: { tenantId: TENANT } })
@@ -365,9 +449,29 @@ async function main() {
   )
 }
 
+function record() {
+  /**
+   * The run, written down where the scenario harness can cite it.
+   *
+   * Dated on purpose. A persistence claim is only as good as the last time it was true, and a
+   * file with a date lets a reader see a stale one; a hard-coded PASS in a scenario would not.
+   * The target is masked — this file is committed.
+   */
+  const out = {
+    at: new Date().toISOString(),
+    target: URL!.replace(/:\/\/[^@]*@/, '://***@').replace(/\?.*$/, ''),
+    passed: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    checks: results,
+  }
+  fs.writeFileSync(path.join(ROOT, 'data', 'persistence.json'), JSON.stringify(out, null, 2) + '\n')
+  console.log(`Written to data/persistence.json — ${out.passed} passed, ${out.failed} failed.`)
+}
+
 main()
   .then(async () => {
     await scrub()
+    record()
     console.log('')
     if (fail.length) {
       console.log('FAIL: ' + fail.join(', '))

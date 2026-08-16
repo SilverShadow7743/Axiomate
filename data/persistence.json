@@ -1,0 +1,128 @@
+{
+  "at": "2026-08-16T15:48:20.493Z",
+  "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
+  "passed": 24,
+  "failed": 0,
+  "checks": [
+    {
+      "what": "the seed imports",
+      "ok": true,
+      "detail": "2 issues, 4 nodes"
+    },
+    {
+      "what": "and reads back with the same issues",
+      "ok": true,
+      "detail": "2 issues, 0 orphans"
+    },
+    {
+      "what": "a project is created and returns its id",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "what": "a batch across every table applies",
+      "ok": true,
+      "detail": "12 audit rows"
+    },
+    {
+      "what": "a note keeps its text exactly, quotes and newline included",
+      "ok": true,
+      "detail": "pinned=true"
+    },
+    {
+      "what": "quarter hours survive as a decimal, not a float",
+      "ok": true,
+      "detail": "6.25h, billable=false"
+    },
+    {
+      "what": "a zero size is zero rather than nothing",
+      "ok": true,
+      "detail": "sizeBytes=0"
+    },
+    {
+      "what": "an estimate keeps its scores, its wait and its baseline",
+      "ok": true,
+      "detail": "technical=4, baselined=true"
+    },
+    {
+      "what": "money keeps its pennies",
+      "ok": true,
+      "detail": "GBP 12345.67"
+    },
+    {
+      "what": "an allocation and a commitment keep their dates",
+      "ok": true,
+      "detail": "2026-09-01→2026-09-05, leave 7.5h/day"
+    },
+    {
+      "what": "a date written as a day comes back as the same day",
+      "ok": true,
+      "detail": "2026-08-01 → 2026-08-10"
+    },
+    {
+      "what": "the audit keeps the reason, including its punctuation",
+      "ok": true,
+      "detail": "Client moved UAT — “quotes” and a\nnewline"
+    },
+    {
+      "what": "a relationship and a generated lifecycle both persist",
+      "ok": true,
+      "detail": "1 relationships, 5 activities"
+    },
+    {
+      "what": "configuration changes survive",
+      "ok": true,
+      "detail": "High = 3 working days"
+    },
+    {
+      "what": "a capped trail keeps the newest entries, not the oldest",
+      "ok": true,
+      "detail": "3 entries, ending \"trail-fifth\""
+    },
+    {
+      "what": "and returns them oldest-first, which is what the write path appends to",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "what": "the id counter is stored, so a restart cannot re-mint an id",
+      "ok": true,
+      "detail": "stored seq 14, state seq 14"
+    },
+    {
+      "what": "the scheduled pass raises on the first run and not the second",
+      "ok": true,
+      "detail": "2 new · 0 continuing · 0 cleared · 2 messages raised | then | 0 new · 2 continuing · 0 cleared · 0 messages raised"
+    },
+    {
+      "what": "and its memory is stored, not held in the process",
+      "ok": true,
+      "detail": "0 new · 2 continuing · 0 cleared · 0 messages raised"
+    },
+    {
+      "what": "a batch that fails part-way keeps the valid prefix and stops there",
+      "ok": true,
+      "detail": "Issue not found. (action 2 of 2; 1 saved) — notes 1 → 2"
+    },
+    {
+      "what": "a re-delivered batch writes nothing the second time",
+      "ok": true,
+      "detail": "2 → 4 → 4 notes; 2 skipped on the replay"
+    },
+    {
+      "what": "and the keys are stored, so the skip survives a restart",
+      "ok": true,
+      "detail": "2 key(s) in AppliedAction"
+    },
+    {
+      "what": "a refused keyed batch names the keys that did commit",
+      "ok": true,
+      "detail": "1 key(s): proof-key-cccccccc-3333"
+    },
+    {
+      "what": "the proof tenant owns only its own rows",
+      "ok": true,
+      "detail": "2 of 2 issue rows"
+    }
+  ]
+}
