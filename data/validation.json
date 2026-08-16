@@ -517,11 +517,11 @@
       "id": "FL4",
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
-      "verdict": "FAIL",
-      "actual": "Replaying an identical action produces 2 records, because ids are minted server-side from the workspace counter and nothing identifies a request — there is no idempotency key. The unload flush makes this reachable rather than theoretical: a beacon fires on visibilitychange and can re-send a batch that is already in flight.",
-      "stops": "at request identity",
-      "severity": "P1",
-      "impact": "Hiding a tab mid-save can duplicate notes, evidence and dependencies. The user sees two of something they did once."
+      "verdict": "PARTIAL",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. What is proven here is the decision, not the round trip: `split` is pure and driven directly, while the transaction that reads the recorded keys and writes them back has never run against Postgres.",
+      "stops": "at the transaction, which no database has yet executed",
+      "severity": "P2",
+      "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
     },
     {
       "id": "XM1",

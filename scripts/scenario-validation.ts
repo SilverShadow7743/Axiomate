@@ -38,6 +38,7 @@ import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
+import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
@@ -2048,20 +2049,76 @@ scenario(
   'The same write is delivered twice',
   'The second delivery is recognised and ignored, rather than creating a second record.',
   () => {
-    const src = fs.readFileSync(path.join(ROOT, 'components/useAutosave.ts'), 'utf8')
-    const beaconOnHide = /visibilitychange/.test(src) && /sendBeacon/.test(src)
-    const hasKey = /idempotenc|requestId|clientActionId|Idempotency-Key/i.test(src)
-    // The reducer mints ids from its own counter, so a replay creates a new record rather
-    // than overwriting one. Demonstrated rather than asserted:
-    const once = ok(BASE, { t: 'addNote', issueId: 'OAPIL-1', body: 'Same note.', noteType: 'General Update', pinned: false, now: NOW } as Action)
-    const twice = ok(once, { t: 'addNote', issueId: 'OAPIL-1', body: 'Same note.', noteType: 'General Update', pinned: false, now: NOW } as Action)
-    const duplicated = Object.values(twice.notes).filter((n) => n.body === 'Same note.').length
+    /*
+     * Two deliveries of the same work, which is a normal event rather than a contrived one.
+     * A tab going away flushes its queue over `sendBeacon` because `fetch` is cancelled on
+     * unload, and that beacon can carry a slice a live request is already carrying.
+     */
+    const note = (body: string, key: string) => ({
+      t: 'addNote', issueId: 'OAPIL-1', body, noteType: 'General Update',
+      pinned: false, now: NOW, key,
+    } as SubmittedAction)
+
+    const a = note('Note A', 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
+    const b = note('Note B', 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb')
+    const c = note('Note C', 'cccccccc-3333-4333-8333-cccccccccccc')
+    const d = note('Note D', 'dddddddd-4444-4444-8444-dddddddddddd')
+
+    const countNotes = (st: WorkspaceState) =>
+      Object.values(st.notes).filter((n) => n.body.startsWith('Note ')).length
+
+    const applyAll = (st: WorkspaceState, items: { action: Action }[]) =>
+      items.reduce((acc, i) => ok(acc, i.action), st)
+
+    /* First delivery: nothing has been seen, so all three apply. */
+    const first = split([a, b, c], new Set<string>())
+    const afterFirst = applyAll(BASE, first.planned)
+
+    /*
+     * The beacon then fires carrying the same three plus one more typed in the meantime.
+     * This is the exact overlap a request-level key would miss: it is a genuinely different
+     * request, so its own id would differ, and every action in the overlap would apply twice.
+     */
+    const recorded = new Set(first.record)
+    const second = split([a, b, c, d], recorded)
+    const afterSecond = applyAll(afterFirst, second.planned)
+
+    /* The same action with its key removed, rather than set to undefined — which is still a key. */
+    const stripped = ({ key, ...rest }: SubmittedAction) => rest as Action
+
+    /* What the same second delivery does with no key at all — the behaviour being fixed. */
+    const unprotected = [a, b, c, d].reduce((acc, x) => ok(acc, stripped(x)), afterFirst)
+
+    /* A key repeated inside one batch is collapsed, so the insert cannot trip over itself. */
+    const withinBatch = split([a, a], new Set<string>())
+
+    /* Unkeyed actions always apply: intake and the scheduled pass write without one. */
+    const unkeyed = split([stripped(a) as SubmittedAction], recorded)
+
+    /* And a key of the wrong shape is refused rather than quietly ignored. */
+    const badKeys = ['', 'short', 42, 'has spaces', 'x'.repeat(MAX_KEY_LENGTH + 1)]
+      .every((k) => keyProblem(k) !== null)
+    const goodKey = keyProblem(a.key) === null
+
+    const good =
+      countNotes(afterFirst) === 3 &&
+      second.planned.length === 1 &&
+      second.skipped.length === 3 &&
+      countNotes(afterSecond) === 4 &&
+      countNotes(unprotected) === 7 &&
+      withinBatch.planned.length === 1 &&
+      withinBatch.record.length === 1 &&
+      unkeyed.planned.length === 1 &&
+      badKeys &&
+      goodKey
+
     return {
-      verdict: 'FAIL',
-      actual: `Replaying an identical action produces ${duplicated} records, because ids are minted server-side from the workspace counter and nothing identifies a request ${hasKey ? '(a key exists but is unused)' : '— there is no idempotency key'}. The unload flush makes this reachable rather than theoretical: ${beaconOnHide ? 'a beacon fires on visibilitychange and can re-send a batch that is already in flight' : 'no beacon path exists'}.`,
-      stops: 'at request identity',
-      severity: 'P1',
-      impact: 'Hiding a tab mid-save can duplicate notes, evidence and dependencies. The user sees two of something they did once.',
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies ${second.planned.length} and recognises ${second.skipped.length} as already done, leaving ${countNotes(afterSecond)} notes. Without the key the same delivery leaves ${countNotes(unprotected)}. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. What is proven here is the decision, not the round trip: \`split\` is pure and driven directly, while the transaction that reads the recorded keys and writes them back has never run against Postgres.`,
+      stops: 'at the transaction, which no database has yet executed',
+      severity: 'P2',
+      impact:
+        'Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository.',
     }
   },
 )

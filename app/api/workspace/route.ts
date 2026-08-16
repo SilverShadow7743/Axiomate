@@ -14,6 +14,7 @@ import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import type { Action } from '@/lib/workspace'
+import { keyProblem, type SubmittedAction } from '@/lib/idempotency'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -95,6 +96,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unrecognised action.' }, { status: 400 })
   }
 
+  /**
+   * The idempotency key is client-supplied and becomes half of a primary key, so it is
+   * checked here rather than trusted.
+   *
+   * Refused rather than ignored. A key of the wrong shape means the client believes it is
+   * protected against redelivery and is not — dropping it quietly would leave the request
+   * working and its only safeguard silently switched off, which is worse than a 400 the
+   * developer sees immediately.
+   */
+  for (const a of list as SubmittedAction[]) {
+    const problem = keyProblem(a.key)
+    if (problem) return NextResponse.json({ ok: false, error: problem }, { status: 400 })
+  }
+
   if (!databaseConfigured()) {
     // Not an error: running from the seed file with no database is a supported mode, and the
     // client is already keeping this session in its own mirror. Saying so lets the queue stop
@@ -130,7 +145,11 @@ export async function POST(req: Request) {
       )
     }
 
-    const result = await persistActions(currentTenantId(), session.actor, list as Action[])
+    const result = await persistActions(
+      currentTenantId(),
+      session.actor,
+      list as SubmittedAction[],
+    )
     return NextResponse.json(result, { status: result.ok ? 200 : 409 })
   } catch (err) {
     return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })

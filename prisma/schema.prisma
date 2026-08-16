@@ -138,6 +138,7 @@ model Tenant {
   estimates     IssueEstimate[]
   revisions     EstimateRevision[]
   audit         ScheduleAudit[]
+  appliedActions AppliedAction[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -873,5 +874,30 @@ model ScheduleAudit {
 
   @@id([tenantId, id])
   @@index([tenantId, rowId, at])
+  @@index([tenantId, at])
+}
+
+/// Keys of actions already applied, so a re-delivered batch does not write itself twice.
+///
+/// The row is the whole record: its existence is the fact. Nothing reads a column here except
+/// the pruner, which needs `at` to know what has aged out — see `KEY_RETENTION_DAYS` in
+/// `lib/idempotency.ts` for why thirty days, and why the daily pass prunes rather than the
+/// write path.
+///
+/// The composite primary key is what actually enforces this. The write path checks the set
+/// first, but two concurrent batches carrying the same key can both find nothing and both
+/// insert; the constraint is what turns that race into an error the transaction retries into
+/// the correct answer, rather than a duplicate nobody notices.
+model AppliedAction {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Minted by the client when the action entered its queue — never by the server, which
+  /// cannot tell a redelivery from a new intent. Shape-checked at the route boundary.
+  key String
+
+  at DateTime @default(now())
+
+  @@id([tenantId, key])
   @@index([tenantId, at])
 }

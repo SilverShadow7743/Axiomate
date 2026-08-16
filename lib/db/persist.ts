@@ -6,6 +6,7 @@ import { prisma } from './client'
 import { loadWorkspace } from './repo'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
+import { KEY_RETENTION_DAYS, keysIn, split, type SubmittedAction } from '../idempotency'
 import {
   activityToRow,
   auditToRow,
@@ -48,6 +49,14 @@ export interface PersistResult {
   createdId?: string
   /** Audit rows written, so the caller can report what was recorded. */
   audited: number
+  /**
+   * Actions recognised as already applied and therefore not applied again.
+   *
+   * Reported rather than kept quiet. A redelivery is a normal event — a tab closing mid-save
+   * produces one every time — but a batch where *everything* was skipped means the client is
+   * re-sending work it has already had acknowledged, and that is worth being able to see.
+   */
+  skipped: number
 }
 
 /**
@@ -66,7 +75,7 @@ export interface PersistResult {
 export async function persistActions(
   tenantId: TenantId,
   actor: Actor,
-  actions: Action[],
+  actions: SubmittedAction[],
 ): Promise<PersistResult> {
   // Retried because serializable isolation aborts a transaction that would have interleaved.
   // That abort is the mechanism working, not a failure: the loser replays against the state
@@ -75,7 +84,8 @@ export async function persistActions(
     try {
       return await runBatch(tenantId, actor, actions)
     } catch (err) {
-      if (attempt >= MAX_SERIALIZATION_RETRIES || !isSerializationFailure(err)) throw err
+      if (attempt >= MAX_SERIALIZATION_RETRIES) throw err
+      if (!isSerializationFailure(err) && !isDuplicateKey(err)) throw err
     }
   }
 }
@@ -86,12 +96,34 @@ function isSerializationFailure(err: unknown): boolean {
   return e?.code === 'P2034' || /40001|could not serialize|deadlock detected/i.test(e?.message ?? '')
 }
 
+/**
+ * Two concurrent batches carrying the same key both looked, both found nothing, and both
+ * inserted. One of them loses on the primary key.
+ *
+ * That is the constraint doing its job, and it has to be retried rather than reported: on the
+ * second pass the loser reads the key the winner committed, skips the action, and returns the
+ * correct answer — which is that the work was already done. Left unhandled it surfaces as a
+ * 500, the queue backs off four times and halts, and the fix for duplicate writes becomes a
+ * new way to stop saving.
+ *
+ * Scoped to this one constraint on purpose. A unique violation anywhere else in the schema is
+ * a real defect, and retrying it three times before reporting it would only make it harder to
+ * find.
+ */
+function isDuplicateKey(err: unknown): boolean {
+  const e = err as { code?: string; meta?: { target?: unknown } }
+  if (e?.code !== 'P2002') return false
+  const target = e.meta?.target
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')]
+  return fields.some((f) => /applied_?action|AppliedAction/i.test(f)) || fields.includes('key')
+}
+
 const MAX_SERIALIZATION_RETRIES = 3
 
 async function runBatch(
   tenantId: TenantId,
   actor: Actor,
-  actions: Action[],
+  actions: SubmittedAction[],
 ): Promise<PersistResult> {
   /**
    * The read happens INSIDE the transaction, and that placement is the whole point.
@@ -105,13 +137,32 @@ async function runBatch(
     async (tx) => {
       const { state } = await loadWorkspace(tenantId, tx)
 
+      /**
+       * Which of these actions have already been applied.
+       *
+       * Read inside the transaction, like the workspace itself and for the same reason: a set
+       * read before the transaction opened is a snapshot that another writer can invalidate
+       * before this one commits. Under serializable isolation, reading it here is what makes
+       * the check and the write a single decision.
+       */
+      const submittedKeys = keysIn(actions)
+      const seen = new Set<string>()
+      if (submittedKeys.length) {
+        const rows = await tx.appliedAction.findMany({
+          where: { tenantId, key: { in: submittedKeys } },
+          select: { key: true },
+        })
+        for (const r of rows) seen.add(r.key)
+      }
+      const { planned, skipped, record } = split(actions, seen)
+
       let current = state
       const applied: { action: Action; before: WorkspaceState; after: WorkspaceState }[] = []
       let failure: { error: string; index: number } | undefined
       let message: string | undefined
       let createdId: string | undefined
 
-      for (const [index, action] of actions.entries()) {
+      for (const [index, { action }] of planned.entries()) {
         // The server's actor, never the client's: the action carries no attribution to
         // forge, so what is written down is whoever this request resolved to.
         const result = applyWithRules(current, action, actor)
@@ -143,6 +194,26 @@ async function runBatch(
       for (const step of applied) {
         await persistSteps(tx, tenantId, step.action, step.before, step.after)
       }
+
+      /**
+       * Keys are recorded for the actions that actually went through, and no further.
+       *
+       * The fold stops at the first rejection and everything before it is still written, so
+       * the same boundary has to govern this: recording a key for an action the reducer
+       * refused would make the client's retry skip it forever, turning a rejection the user
+       * could have fixed into a change that silently never happens.
+       *
+       * `record` is already free of duplicates — `split` collapses a key repeated within one
+       * batch — so `createMany` cannot trip over its own input.
+       */
+      const appliedCount = failure ? failure.index : planned.length
+      const committedKeys = new Set(
+        planned.slice(0, appliedCount).map((p) => p.key).filter((k): k is string => Boolean(k)),
+      )
+      const toRecord = record.filter((k) => committedKeys.has(k))
+      if (toRecord.length) {
+        await tx.appliedAction.createMany({ data: toRecord.map((key) => ({ tenantId, key })) })
+      }
       if (newAudit.length) {
         await tx.scheduleAudit.createMany({ data: newAudit.map((a) => auditToRow(tenantId, a)) })
       }
@@ -159,11 +230,12 @@ async function runBatch(
       if (failure) {
         return {
           ok: false,
-          error: `${failure.error} (action ${failure.index + 1} of ${actions.length}; ${applied.length} saved)`,
+          error: `${failure.error} (action ${failure.index + 1} of ${planned.length}; ${applied.length} saved)`,
           audited: newAudit.length,
+          skipped: skipped.length,
         }
       }
-      return { ok: true, message, createdId, audited: newAudit.length }
+      return { ok: true, message, createdId, audited: newAudit.length, skipped: skipped.length }
     },
     {
       isolationLevel: 'Serializable',
@@ -572,4 +644,24 @@ function changedIds(before: WorkspaceState, after: WorkspaceState): string[] {
   for (const [id, v] of Object.entries(after.issues)) if (before.issues[id] !== v) out.push(id)
   for (const [id, v] of Object.entries(after.activities)) if (before.activities[id] !== v) out.push(id)
   return out
+}
+
+/**
+ * Forget action keys older than the retention window.
+ *
+ * Called by the daily pass rather than by the write path, and the placement is the point: a
+ * `deleteMany` inside every batch would put two concurrent writers in contention over the same
+ * expired rows under serializable isolation — a conflict created entirely by housekeeping,
+ * which is the false-conflict problem the field-level concurrency check exists to avoid.
+ *
+ * Outside a transaction for the same reason. Nothing depends on this having happened; a run
+ * that is skipped leaves rows that are ignored anyway, since every lookup names the keys it
+ * cares about.
+ */
+export async function pruneAppliedActions(tenantId: TenantId, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - KEY_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+  const { count } = await prisma.appliedAction.deleteMany({
+    where: { tenantId, at: { lt: cutoff } },
+  })
+  return count
 }
