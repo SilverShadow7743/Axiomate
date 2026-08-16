@@ -276,24 +276,45 @@ export function describeSave(s: SaveState): string {
 }
 
 export function describeSaveDetail(s: SaveState, dbEnabled: boolean): string {
-  if (s.status === 'error') {
-    /**
-     * The count is stated, and so is what reloading costs.
-     *
-     * A stopped queue keeps holding everything queued after the refusal, and it used to say
-     * only "Reload to resync" — which is the right advice and, on a queue holding forty
-     * changes, an instruction to discard them without saying so.
-     */
+  /**
+   * One sentence about what happened, then one about what is held — never two that disagree.
+   *
+   * They did. The message for an expired sign-in said "signing in and reloading will send it"
+   * and the tail said "reloading will discard them", in the same tooltip, and the tail was the
+   * true half: the queue is a ref and dies with the page. Each caller now supplies a complete
+   * statement of the cause, and this adds only facts that hold for every cause.
+   */
+  if (s.status === 'error' || s.status === 'paused') {
+    const n = s.pending
     const held =
-      s.pending > 0
-        ? ` ${s.pending} change${s.pending === 1 ? '' : 's'} ${s.pending === 1 ? 'is' : 'are'} still held here and reloading will discard ${s.pending === 1 ? 'it' : 'them'}.`
-        : ''
-    return `${s.error ?? 'The last change could not be saved.'} Reload to resync with the server.${held}`
-  }
-  if (s.status === 'paused') {
-    return `${s.error ?? 'The server is unreachable.'} ${s.pending} change${s.pending === 1 ? '' : 's'} held here and waiting — this will keep trying, and reconnecting sends them.`
+      n === 0
+        ? ''
+        : ` ${n} change${n === 1 ? '' : 's'} ${n === 1 ? 'is' : 'are'} held in this tab: ${
+            s.status === 'paused'
+              ? 'they will be sent when this succeeds'
+              : 'nothing further will be sent'
+          }, and reloading discards ${n === 1 ? 'it' : 'them'}.`
+    const cause =
+      s.error ?? (s.status === 'paused' ? 'The server is unreachable.' : 'The last change could not be saved.')
+    const advice = s.status === 'error' ? ' Reload to see what is actually stored.' : ''
+    return `${cause}${held}${advice}`
   }
   if (s.status === 'retrying') return 'The server did not respond. Trying again.'
+  /**
+   * Saved in the browser — and this branch has to come before the `dbEnabled` test below.
+   *
+   * Without it, the one case where the two disagree fell through to the final line and read
+   * "Everything is saved." That case is a deployment whose database disappeared between the
+   * page rendering and a write landing: the queue is deliberately discarded because there is
+   * nothing to deliver to, the browser mirror was switched off because a database was
+   * configured at render, and the user was told everything was safe when nothing had been
+   * written anywhere at all.
+   */
+  if (s.status === 'local') {
+    return dbEnabled
+      ? 'The database this page loaded with is no longer configured, so the last changes could not be saved anywhere. Reload to see what is stored.'
+      : 'No database is configured, so work is saved in this browser only. It will not be visible anywhere else, and clearing site data will remove it.'
+  }
   if (s.status === 'saving') return `${s.pending} change${s.pending === 1 ? '' : 's'} in flight.`
   if (!dbEnabled) {
     return 'No database is configured, so work is saved in this browser only. It will not be visible anywhere else, and clearing site data will remove it.'

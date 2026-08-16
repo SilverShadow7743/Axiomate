@@ -1862,8 +1862,15 @@ scenario(
     const refused = verdictFor({ kind: 'response', status: 409, serverError: 'Owner has moved on.', attempts: 1 })
     const malformed = verdictFor({ kind: 'response', status: 400, attempts: 1 })
     const oversized = verdictFor({ kind: 'response', status: 413, attempts: 1 })
+    /* A gateway or a renamed route, which the endpoint itself never emits. */
+    const gateway = verdictFor({ kind: 'response', status: 403, attempts: 1 })
+    const gone = verdictFor({ kind: 'response', status: 404, attempts: 1 })
+    /* And a database refusal the server has marked deterministic. */
+    const constraint = verdictFor({ kind: 'response', status: 500, permanent: true, attempts: 1 })
+    /* While a busy server is still worth waiting for, despite living among the permanents. */
+    const busy = verdictFor({ kind: 'response', status: 429, attempts: 1 })
     const noDatabase = verdictFor({ kind: 'response', disabled: true, status: 200, attempts: 1 })
-    const stoppedStay = [refused, malformed, oversized, noDatabase].every(
+    const stoppedStay = [refused, malformed, oversized, noDatabase, gateway, gone, constraint].every(
       (v) => !shouldResume({ halt: v.halt, trigger: 'online', pausedForMs: 1e9, pauses: 0, online: true, visible: true }),
     )
 
@@ -1879,12 +1886,15 @@ scenario(
       refused.halt === 'stopped' && refused.keepQueue &&
       malformed.halt === 'stopped' &&
       oversized.halt === 'stopped' &&
+      gateway.halt === 'stopped' && gone.halt === 'stopped' &&
+      constraint.halt === 'stopped' &&
+      busy.halt === 'running' &&
       noDatabase.halt === 'stopped' && !noDatabase.keepQueue &&
       stoppedStay && escalates
 
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `An outage is retried ${during.length} times inline and then the queue pauses rather than ending the session — holding its work and saying "${describeSave({ status: exhausted.status, pending: 3, savedAt: null })}". It starts again the moment connectivity returns, when the tab is looked at again, or after ${resumeDelayMs(0) / 1000}s on its own, escalating to ${resumeDelayMs(9) / 1000}s and never while the machine reports itself offline. The failures that cannot improve stay stopped through every trigger: a refused change, a malformed request, an oversized batch, and a deployment with no database — the last clearing its queue because there is nothing to deliver to, the others keeping theirs so the unload beacon can still try. What is proven is the policy: \`verdictFor\` and \`shouldResume\` are pure and driven directly. A queue actually resuming has never run in a browser, because without a database the endpoint answers \`disabled\` and stops before the paused path is reachable at all.`,
+      actual: `An outage is retried ${during.length} times inline and then the queue pauses rather than ending the session — holding its work and saying "${describeSave({ status: exhausted.status, pending: 3, savedAt: null })}". It starts again the moment connectivity returns, when the tab is looked at again, or after ${resumeDelayMs(0) / 1000}s on its own, escalating to ${resumeDelayMs(9) / 1000}s and never while the machine reports itself offline. The failures that cannot improve stay stopped through every trigger: a refused change, a malformed request, an oversized batch, a gateway 403, a renamed route, a database constraint the server marked deterministic, and a deployment with no database — the last clearing its queue because there is nothing to deliver to, the others keeping theirs so the unload beacon can still try. What is proven is the policy: \`verdictFor\` and \`shouldResume\` are pure and driven directly. A queue actually resuming has never run in a browser, because without a database the endpoint answers \`disabled\` and stops before the paused path is reachable at all.`,
       stops: 'at a resume observed in a browser',
       severity: 'P2',
       impact:

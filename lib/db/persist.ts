@@ -49,6 +49,8 @@ export interface PersistResult {
   createdId?: string
   /** Audit rows written, so the caller can report what was recorded. */
   audited: number
+  /** Keys of actions that committed. Present on a rejection, where the prefix still stands. */
+  committedKeys?: string[]
   /**
    * Actions recognised as already applied and therefore not applied again.
    *
@@ -238,6 +240,17 @@ async function runBatch(
           error: `${failure.error} (action ${failure.index + 1} of ${planned.length}; ${applied.length} saved)`,
           audited: newAudit.length,
           skipped: skipped.length,
+          /**
+           * The keys that committed before the refusal, so the client can stop counting them
+           * as unsaved.
+           *
+           * Everything before a rejection is written and stays written. Without this the
+           * browser keeps the whole batch and tells the user that fifty changes are held in
+           * the tab and a reload will lose them — when twelve of them are already durable in
+           * Postgres. Overstating the cost of a reload is a poor way to help somebody decide
+           * whether to reload.
+           */
+          committedKeys: toRecord,
         }
       }
       return { ok: true, message, createdId, audited: newAudit.length, skipped: skipped.length }

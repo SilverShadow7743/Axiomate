@@ -115,3 +115,37 @@ export function describeDbError(err: unknown): string {
   }
   return msg.split('\n')[0]
 }
+
+/**
+ * Whether this failure will happen again on every replay of the same batch.
+ *
+ * The write endpoint answers 500 for everything that throws, and the client cannot tell the
+ * two kinds apart from the outside — so it treats them all as an outage and retries them for
+ * the life of the tab. That produces an asymmetry sharp enough to be a bug in its own right:
+ * a change the *reducer* refuses stops the queue at once, while the very same change refused
+ * by the *database* is re-sent every time the tab regains focus, each attempt opening a
+ * twenty-second serializable transaction, while the screen promises it will keep trying.
+ *
+ * The distinction is whether the outcome is a pure function of stored state and this batch.
+ * A constraint violation is: the rows are what they are and the batch is what it is, so
+ * waiting changes nothing. A dropped connection, an exhausted pool, a serialization abort, a
+ * wrong password, a schema that has not been migrated yet — all of those can succeed later,
+ * some of them only after an operator acts, which still makes waiting the right behaviour.
+ *
+ * Listed by code rather than by message text, because these are the ones Prisma names.
+ */
+const PERMANENT_CODES = new Set([
+  'P2000', // value too long for the column
+  'P2002', // unique constraint — the retryable one is caught upstream in persist.ts
+  'P2003', // foreign key constraint
+  'P2011', // null constraint
+  'P2025', // a record the write depended on is not there
+])
+
+export function isPermanentDbError(err: unknown): boolean {
+  const e = err as { code?: string; name?: string; message?: string }
+  if (e?.code && PERMANENT_CODES.has(e.code)) return true
+  // A malformed query or argument. The batch would have to change to succeed, and it will not.
+  if (e?.name === 'PrismaClientValidationError') return true
+  return /value too long|invalid input syntax|22001|22P02/i.test(e?.message ?? '')
+}

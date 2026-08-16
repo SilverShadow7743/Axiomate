@@ -69,6 +69,16 @@ function withoutKeys(queued: SubmittedAction[], sent: SubmittedAction[]): Submit
 
 /** 0.5s, 1s, 2s, 4s. Long enough to ride out a restart, short enough to feel responsive. */
 const BACKOFF_MS = (attempt: number) => 500 * 2 ** attempt
+/**
+ * How long one request may hang before it is abandoned.
+ *
+ * Generous, because a cold start on a small App Service plan is slow and a batch opens a
+ * twenty-second transaction server-side. Finite, because every transition in the halt policy
+ * runs when a request settles — a socket that never answers leaves the queue running, draining
+ * and unreachable by all three resume triggers.
+ */
+const REQUEST_TIMEOUT_MS = 30_000
+
 /** Beyond this the queue is drained in chunks, so one request never carries a whole session. */
 const MAX_BATCH = 50
 
@@ -145,12 +155,52 @@ export function useAutosave(enabled: boolean): Autosave {
 
         while (!done) {
           try {
-            const res = await fetch('/api/workspace', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ actions: batch }),
-            })
-            const data = (await res.json()) as { ok: boolean; error?: string; disabled?: boolean }
+            /**
+             * A request that never answers is worse than one that fails.
+             *
+             * Every transition in the halt policy runs when a fetch settles, so a socket
+             * blackholed by a wifi handover or a suspended laptop leaves the queue `running`
+             * and `draining` forever: all three resume triggers decline because nothing is
+             * paused, every new edit returns immediately because a drain is in progress, and
+             * the indicator says "Saving" while the count climbs. The recovery window would
+             * otherwise be whatever the operating system decides, which this app neither sets
+             * nor knows.
+             */
+            const abort = new AbortController()
+            const cutoff = window.setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS)
+            let res: Response
+            try {
+              res = await fetch('/api/workspace', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ actions: batch }),
+                signal: abort.signal,
+              })
+            } finally {
+              window.clearTimeout(cutoff)
+            }
+
+            /**
+             * The status is read before the body is parsed.
+             *
+             * Parsing first meant anything answering with something other than JSON — a
+             * gateway's HTML 403, a proxy's own 413, a login page where the API used to be —
+             * threw before its status was ever examined, and was then classified as a network
+             * outage and retried for the life of the session. The status is the part that is
+             * always there.
+             */
+            let data: {
+              ok?: boolean
+              error?: string
+              disabled?: boolean
+              permanent?: boolean
+              committedKeys?: string[]
+            } = {}
+            try {
+              data = await res.json()
+            } catch {
+              data = {}
+            }
 
             if (data.ok) {
               queue.current = withoutKeys(queue.current, batch)
@@ -179,12 +229,25 @@ export function useAutosave(enabled: boolean): Autosave {
               kind: 'response',
               status: res.status,
               disabled: data.disabled,
+              permanent: data.permanent,
               serverError: data.error,
               attempts: attempt + 1,
             })
 
             if (verdict.halt === 'running') {
               throw new Error(data.error ?? `Server returned ${res.status}.`)
+            }
+
+            /**
+             * A refused batch still committed everything before the refusal, and those are
+             * durable. Dropping them stops the count claiming work is held here when Postgres
+             * already has it — and stops a reload being described as costing more than it does.
+             */
+            if (data.committedKeys?.length) {
+              queue.current = withoutKeys(
+                queue.current,
+                data.committedKeys.map((key) => ({ key }) as SubmittedAction),
+              )
             }
 
             settle(verdict)
@@ -244,7 +307,14 @@ export function useAutosave(enabled: boolean): Autosave {
       }
       halt.current = 'running'
       if (alive.current) {
-        setState((s) => ({ ...s, status: 'saving', pending: queue.current.length }))
+        // An empty queue resumes to `saved`, not to `saving`. Saying "Saving…" and then
+        // calling a drain whose loop body never runs leaves the indicator claiming progress
+        // for work that does not exist, until the next successful edit clears it.
+        setState((s) =>
+          queue.current.length
+            ? { ...s, status: 'saving', pending: 0 + queue.current.length }
+            : { ...s, status: 'saved', pending: 0, error: undefined },
+        )
       }
       void drain()
     },
@@ -301,7 +371,25 @@ export function useAutosave(enabled: boolean): Autosave {
        * the server applies the action once.
        */
       queue.current.push(...actions.map((action) => ({ ...action, key: mintKey() })))
-      setState((s) => ({ ...s, status: 'saving', pending: queue.current.length }))
+      /**
+       * "Saving" only if something is actually going to be sent.
+       *
+       * It said so unconditionally, which meant one keystroke after any halt repainted the
+       * indicator as progress: `drain()` returns immediately while the queue is stopped or
+       * paused, so the screen read "Saving 12 changes…" and the tooltip "12 changes in
+       * flight" with nothing in flight and nothing ever going to be. The error that had been
+       * displayed a moment earlier was still in state and unreachable, because no branch
+       * reads it for a saving status.
+       *
+       * That is the exact failure this file was rewritten to remove — a queue that has
+       * stopped persisting while the interface reports progress — reachable by typing one
+       * character.
+       */
+      setState((s) =>
+        halt.current === 'running'
+          ? { ...s, status: 'saving', pending: queue.current.length }
+          : { ...s, pending: queue.current.length },
+      )
       void drain()
     },
     [enabled, drain],
@@ -342,10 +430,26 @@ export function useAutosave(enabled: boolean): Autosave {
         '/api/workspace',
         new Blob([payload], { type: 'application/json' }),
       )
-      // Only what the beacon actually carried. Clearing the whole queue discarded everything
-      // past the batch limit — on a queue of sixty, ten changes were dropped on the floor with
-      // nothing said, which is the failure the beacon was added to prevent.
-      if (sent) queue.current = withoutKeys(queue.current, batch)
+      /**
+       * The queue is NOT cleared, and that is the whole correction.
+       *
+       * `sendBeacon` returns true when the browser has accepted the payload for transfer —
+       * not when the server accepted the writes. It is true while offline and true for a
+       * request that will be answered 401, 409 or 500. Nothing here ever sees the response,
+       * so treating that boolean as an acknowledgement deleted work on the strength of a
+       * promise to try.
+       *
+       * It mattered because this fires on `visibilitychange`, not only on unload: a tab
+       * switch or a phone locking runs it while the page keeps going. Mid-outage that meant
+       * fifty actions removed from the only copy that exists — with a database configured the
+       * browser mirror is deliberately off — while the indicator went on describing a queue
+       * of ten and promising to keep trying.
+       *
+       * Keeping them costs a possible duplicate delivery, which is exactly what every action
+       * carries a key to make safe. The drain remains the only thing that removes an action,
+       * and it removes it on an answer rather than on a send.
+       */
+      void sent
     }
     const onHide = () => {
       if (document.visibilityState === 'hidden') flush()

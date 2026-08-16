@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { databaseConfigured, describeDbError } from '@/lib/db/client'
+import { databaseConfigured, describeDbError, isPermanentDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
@@ -152,6 +152,9 @@ export async function POST(req: Request) {
     )
     return NextResponse.json(result, { status: result.ok ? 200 : 409 })
   } catch (err) {
-    return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })
+    return NextResponse.json(
+      { ok: false, error: describeDbError(err), permanent: isPermanentDbError(err) },
+      { status: 500 },
+    )
   }
 }

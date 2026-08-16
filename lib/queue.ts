@@ -36,6 +36,15 @@ export interface Failure {
   status?: number
   /** The server saying it has no database — an answer, not a failure. */
   disabled?: boolean
+  /**
+   * The server saying this will fail identically next time.
+   *
+   * Only the server can know. A 500 covers both a dropped connection and a constraint
+   * violation, and from out here they are the same three digits — so the endpoint says which,
+   * and this module believes it. Without that, a permanent refusal is retried for the life of
+   * the tab while the screen promises it will keep trying.
+   */
+  permanent?: boolean
   /** The server's own words, which are more specific than anything invented here. */
   serverError?: string
   /** Attempts already spent on this batch, including the one that just failed. */
@@ -51,7 +60,12 @@ export interface Verdict {
   message?: string
 }
 
-/** Attempts spent inline, with backoff, before a batch is set aside. */
+/**
+ * Backoff sleeps spent inline before a batch is set aside — so **five** requests, not four:
+ * the first try, then four more after 0.5s, 1s, 2s and 4s. The name counts the waits rather
+ * than the attempts, which is worth stating because tuning it changes the request count by one
+ * more than it looks.
+ */
 export const MAX_ATTEMPTS = 4
 
 export function verdictFor(f: Failure, maxAttempts: number = MAX_ATTEMPTS): Verdict {
@@ -76,58 +90,72 @@ export function verdictFor(f: Failure, maxAttempts: number = MAX_ATTEMPTS): Verd
       return {
         halt: 'paused',
         keepQueue: true,
-        status: 'error',
-        message:
-          'Sign in to save. Your work is still here — signing in and reloading will send it.',
+        status: 'paused',
+        message: 'Your sign-in expired. Signing in on another tab lets this one save.',
       }
     }
 
     /**
-     * The server's reducer refused the change, or the request was malformed. Replaying it
-     * produces the same refusal forever, so the queue stops.
-     *
-     * Stopped for the whole session rather than for the one action, and that is a decision
-     * rather than an oversight. A refusal means the browser and the server now disagree about
-     * a record; every action queued after it was computed against the version that lost, so
-     * sending them would write more changes derived from a state the server never had. The
-     * remedy is to reload and look at what is actually stored.
-     *
-     * What must not happen — and used to — is the queue quietly filling up behind this while
-     * the indicator shows a single stale error. The count travels with the message so the
-     * person can see how much is unsaved before deciding to reload.
+     * The server is busy or the request arrived too fast. Both improve by waiting, which is
+     * the definition of retryable, and both live in a range that is otherwise permanent.
      */
+    if (f.status === 408 || f.status === 429) {
+      return f.attempts > maxAttempts
+        ? { halt: 'paused', keepQueue: true, status: 'paused', message: f.serverError ?? 'The server is busy.' }
+        : { halt: 'running', keepQueue: true, status: 'retrying' }
+    }
+
     /**
-     * A batch the endpoint considers too large, which no amount of waiting shrinks.
+     * Every other refusal in the 4xx range, as a class rather than as a list.
      *
-     * Unreachable today — the client chunks at fifty and the endpoint refuses at two hundred —
-     * and listed anyway, because the alternative is a status that falls through to the retry
-     * path and is then retried for the life of the session. A permanent refusal treated as an
-     * outage is precisely the failure this module exists to stop, and it should not depend on
-     * two constants in different files continuing to disagree in the right direction.
+     * The list was `409`, `400` and `413`, which is every status *this* endpoint emits — and
+     * that is the wrong boundary, because the endpoint is not the only thing that can answer.
+     * A gateway returns 403, a renamed route returns 404, a proxy body cap returns its own
+     * 413. Each of those is refused identically on every replay, and each fell through to the
+     * retry path to be re-sent on every tab focus for the rest of the session while the screen
+     * said it would keep trying. Naming four literals and calling the fifth an outage is the
+     * failure this module exists to stop.
+     *
+     * 401, 408 and 429 are handled above precisely because they are the ones that can improve.
+     *
+     * The reducer's own refusal — a 409 — stops the whole session rather than the one action,
+     * and that is a decision rather than an oversight. It means the browser and the server now
+     * disagree about a record; every action queued after it was computed against the version
+     * that lost, so sending them would write more changes derived from a state the server
+     * never had. The remedy is to reload and look at what is actually stored.
      */
-    if (f.status === 413) {
+    if (f.status !== undefined && f.status >= 400 && f.status < 500) {
       return {
         halt: 'stopped',
         keepQueue: true,
         status: 'error',
-        message: f.serverError ?? 'That batch was too large to save.',
+        message: f.serverError ?? `The server refused this request (${f.status}).`,
       }
     }
 
-    if (f.status === 409 || f.status === 400) {
+    /**
+     * A 5xx the server has told us is deterministic.
+     *
+     * A constraint violation and a dropped connection are the same three digits from out here,
+     * so the endpoint marks the ones that are a pure function of stored state and this batch.
+     * Without this, a write the database will refuse forever is retried exactly as if the
+     * network were down — while a write the *reducer* refuses stops at once. Same change, same
+     * outcome, opposite behaviour.
+     */
+    if (f.permanent) {
       return {
         halt: 'stopped',
         keepQueue: true,
         status: 'error',
-        message: f.serverError ?? 'The server rejected a change.',
+        message: f.serverError ?? 'The database refused this change.',
       }
     }
   }
 
   /**
-   * Everything else — a dropped connection, a 500, a cold start that outlasted the backoff.
-   * Retried inline while attempts remain, and set aside rather than abandoned once they run
-   * out.
+   * Everything else — a dropped connection, a 5xx that could clear, a cold start that outlasted
+   * the backoff. Retried inline while attempts remain, and set aside rather than abandoned once
+   * they run out.
    */
   if (f.attempts > maxAttempts) {
     return {
@@ -153,7 +181,10 @@ export function verdictFor(f: Failure, maxAttempts: number = MAX_ATTEMPTS): Verd
  */
 export function resumeDelayMs(pauses: number): number {
   const ladder = [30_000, 60_000, 120_000, 240_000]
-  return ladder[Math.min(pauses, ladder.length - 1)] ?? 300_000
+  // Clamped at both ends. It was clamped only at the top, with a `?? 300_000` behind it that
+  // could not fire — and if a negative ever had reached it, it would have answered five
+  // minutes where thirty seconds was intended, making the first retry the slowest one.
+  return ladder[Math.min(Math.max(pauses, 0), ladder.length - 1)]
 }
 
 export type ResumeTrigger = 'timer' | 'online' | 'visible'
