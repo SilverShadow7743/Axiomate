@@ -6,6 +6,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
 import { SCHEDULE_ACTOR } from '@/lib/actor'
+import { secretValue } from '@/lib/secrets'
 
 /**
  * The clock.
@@ -31,7 +32,8 @@ import { SCHEDULE_ACTOR } from '@/lib/actor'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const TOKEN = process.env.AXIOMATE_SCHEDULE_TOKEN
+// Read through the guard: an unresolved vault reference would otherwise be the accepted token.
+const TOKEN = secretValue('AXIOMATE_SCHEDULE_TOKEN')
 
 export async function POST(req: Request) {
   if (!databaseConfigured()) {

@@ -312,6 +312,16 @@
       "impact": "Grants now rest on a proven identity wherever a firm supplies one. Until the four environment values are set, this deployment is still one operator on trust."
     },
     {
+      "id": "ST2d",
+      "title": "A deployment starts before its secrets have been written",
+      "expected": "Nothing is signed or accepted with a value that only looks like a secret.",
+      "verdict": "PASS",
+      "actual": "The unresolved reference is 77 characters, so a length check alone accepts it — and it is refused instead: \"AXIOMATE_SESSION_SECRET still holds an unresolved reference rather than a value. The vault…\" A placeholder is refused too, a real key is accepted, and the same guard reads both bearer tokens, where an unresolved reference would otherwise have become the accepted token rather than merely a weak signing key.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The deployment that has not had its secrets written yet now refuses to sign or accept anything, rather than working with a value published in its own templates."
+    },
+    {
       "id": "ST2c",
       "title": "Somebody edits another person's note",
       "expected": "The edit is refused, because a note is that person's account — unless they hold the supervisor grant.",

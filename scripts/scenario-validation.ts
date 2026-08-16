@@ -38,6 +38,7 @@ import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
+import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -1466,6 +1467,45 @@ scenario(
       stops: 'at a tenant — the flow cannot be driven end to end without a real Entra registration, so the redirect and callback are verified by construction rather than by running them',
       severity: 'P1',
       impact: 'Grants now rest on a proven identity wherever a firm supplies one. Until the four environment values are set, this deployment is still one operator on trust.',
+    }
+  },
+)
+
+scenario(
+  'ST2d',
+  'A deployment starts before its secrets have been written',
+  'Nothing is signed or accepted with a value that only looks like a secret.',
+  () => {
+    /*
+     * The state every first Azure deployment begins in. App Service resolves a Key Vault
+     * reference by substitution, and when it cannot — the identity has no role yet, the secret
+     * has not been written — it passes the reference through literally rather than blanking it.
+     * The result is a seventy-character string that clears any length check, and one anybody
+     * can reconstruct from the vault and secret names in this repository's own templates.
+     */
+    const unresolved = '@Microsoft.KeyVault(VaultName=axiomate-kv;SecretName=axiomate-session-secret)'
+    const longEnough = unresolved.length >= 32
+
+    const referenceRefused = classifySecret('AXIOMATE_SESSION_SECRET', unresolved, 32)
+    const placeholderRefused = classifySecret('AXIOMATE_SESSION_SECRET', 'changeme', 4)
+    const realAccepted = classifySecret(
+      'AXIOMATE_SESSION_SECRET',
+      'a-secret-of-at-least-thirty-two-characters',
+      32,
+    )
+
+    const good =
+      longEnough &&
+      'problem' in referenceRefused &&
+      'problem' in placeholderRefused &&
+      'value' in realAccepted
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The unresolved reference is ${unresolved.length} characters, so a length check alone accepts it — and it is refused instead: "${'problem' in referenceRefused ? referenceRefused.problem.slice(0, 90) : ''}…" A placeholder is refused too, a real key is accepted, and the same guard reads both bearer tokens, where an unresolved reference would otherwise have become the accepted token rather than merely a weak signing key.`,
+      stops: '—',
+      severity: '—',
+      impact: 'The deployment that has not had its secrets written yet now refuses to sign or accept anything, rather than working with a value published in its own templates.',
     }
   },
 )

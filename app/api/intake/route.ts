@@ -6,6 +6,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { classify, provenanceNote, type InboundMessage } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
+import { secretProblem, secretValue } from '@/lib/secrets'
 
 /**
  * Where work arrives from outside.
@@ -38,8 +39,15 @@ import { INTAKE_ACTOR } from '@/lib/actor'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-/** Long enough that guessing is not a strategy. Absent means the endpoint is closed. */
-const TOKEN = process.env.AXIOMATE_INTAKE_TOKEN
+/**
+ * The shared secret, read through the guard rather than straight from the environment.
+ *
+ * An unresolved Key Vault reference would otherwise *become* the token: the endpoint compares
+ * the header against whatever this holds, so the accepted bearer would be a string published in
+ * the deployment templates. Refusing it leaves intake closed, which is the right way to fail
+ * for a door that creates records from the internet.
+ */
+const TOKEN = secretValue('AXIOMATE_INTAKE_TOKEN')
 
 /*
  * The actor comes from `lib/actor.ts`, and the reason is worth keeping.
@@ -59,7 +67,7 @@ export async function POST(req: Request) {
       {
         ok: false,
         error:
-          'Intake is closed. Set AXIOMATE_INTAKE_TOKEN and send it as a bearer token — an endpoint that creates records from the internet does not run without one.',
+          `Intake is closed. ${secretProblem('AXIOMATE_INTAKE_TOKEN') ?? ''} An endpoint that creates records from the internet does not run without a usable shared secret.`,
       },
       { status: 503 },
     )
