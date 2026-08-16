@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "transform": "node scripts/transform-issues.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
@@ -16,6 +17,7 @@
     "audit:attribution": "npx tsx scripts/attribution-proof.ts",
     "audit:restore": "npx tsx scripts/restore-proof.ts",
     "audit:estimation": "npx tsx scripts/estimation-proof.ts",
+    "audit:persistence": "npx tsx scripts/persistence-proof.ts",
     "validate:scenarios": "npx tsx scripts/scenario-validation.ts",
     "validate:report": "node scripts/build-validation-report.mjs"
   },
