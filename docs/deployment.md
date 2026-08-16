@@ -38,6 +38,11 @@ long-lived credential that grants deployment rights to whoever holds it, and it 
 person who ever pastes it into a shell. A federated credential grants a token that lasts minutes,
 only to a run of this workflow, in this repository, in this environment.
 
+This is a **different registration** from the one people sign in through. That one is
+`docs/entra.md`'s subject, it holds a client secret, and it is configured on the app rather than in
+the pipeline. Reusing it here would give a deployment credential to an application that thousands
+of sign-ins touch, and would tie the pipeline's blast radius to the sign-in app's.
+
 Create, in the Axiocloud Solutions tenant:
 
 1. **An app registration** (or a user-assigned managed identity — either works; the app
@@ -98,10 +103,11 @@ App settings, on the production slot, all of them **not** marked as slot setting
 - `AXIOMATE_ENTRA_TENANT_ID`, `AXIOMATE_ENTRA_CLIENT_ID`, `AXIOMATE_ENTRA_CLIENT_SECRET`,
   `AXIOMATE_SESSION_SECRET`.
 - `AXIOMATE_ENTRA_REDIRECT_URI` — **mark this one as a slot setting**, and register both
-  hostnames as redirect URIs in the Entra app registration used for sign-in. The slot has a
-  different hostname, so a single shared value means sign-in on the slot bounces to production.
-  If that is left undone, the slot simply cannot be signed into, which the pipeline's anonymous
-  warm-up request does not notice and a person testing the slot by hand will.
+  hostnames as redirect URIs on the sign-in app registration. Use `scripts/entra-register.mjs`
+  rather than `az ad app update`, which replaces the list rather than adding to it; `docs/entra.md`
+  explains why. The slot has a different hostname, so a single shared value means sign-in on the
+  slot bounces to production. If that is left undone, the slot simply cannot be signed into, which
+  the pipeline's anonymous checks do not notice and a person testing the slot by hand will.
 - `AXIOMATE_INTAKE_TOKEN`, `AXIOMATE_SCHEDULE_TOKEN`, `ANTHROPIC_API_KEY` — as required.
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false`. The package is built in CI, gated in CI, and shipped
   whole. Letting Oryx rebuild on the host would produce a different artefact from the one the
@@ -161,6 +167,12 @@ the largest untested surface in the product was more literally true than it appe
 sets `NODE_OPTIONS=--conditions=react-server` on that step, which makes the gate real. The proper
 fix is that flag living in the `package.json` script, so the proof can be run by hand as easily as
 by the pipeline; see section 9.
+
+Expect the first run of this gate to find something. The proof has been observed to *start* with
+that flag and nothing more: there was no database available to run it against while the pipeline
+was written, so the first CI run will be the first time twenty-one tables and fourteen mapper pairs
+have ever executed. If it fails, read it as the gate working rather than as the pipeline being
+broken, and fix what it names.
 
 The job finishes by assembling the deployment package: the tree is reinstalled without dev
 dependencies, the generated Prisma client is carried across by hand (the generator is itself a dev
@@ -351,6 +363,12 @@ az webapp deployment slot swap \
 
 This is why the slot is left alone after a deploy rather than stopped or wiped, and it is the
 fastest recovery available: seconds, against an instance that is already warm.
+
+The pipeline will not do this for you, deliberately. Making the post-swap check trigger an
+automatic swap-back was rejected: one flaky HTTP request would then perform an unattended
+production change at the moment when the state of production is least well understood, and a
+system that swaps itself back and forth is a worse incident than a bad release somebody is already
+looking at.
 
 **The schema does not roll back, and pretending otherwise would be the dangerous answer.** Prisma
 generates no down migrations, this repository has none, and nothing in `prisma/migrations/`

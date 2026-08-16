@@ -428,10 +428,11 @@ jobs:
               exit 1
               ;;
           esac
-          # The workspace itself is warmed separately, because a healthy database connection is
-          # not a rendered page — and on a fresh database this is the request that runs the seed
-          # import. Doing it here means it happens once, on a slot, before the swap. See
-          # docs/deployment.md.
+          # The workspace page is requested separately, because a reachable database is not a
+          # rendered page: this is what proves the server component boots, the seed file is in
+          # the package and Next can serve a request at all. It proves nothing about the seed
+          # import, which an anonymous request cannot reach on a deployment with an identity
+          # provider configured — see docs/deployment.md, section 5.
           curl -fsS --max-time 180 -o /dev/null "https://$HOST/" \
             || { echo "The slot's workspace page did not render. Not swapping."; exit 1; }
 
@@ -448,6 +449,11 @@ jobs:
         # The same assertion against the production hostname. The slot passing it proves the
         # build; this proves the swap, and they are different things — slot-sticky settings do
         # not move, so a setting marked sticky by mistake is caught here and nowhere earlier.
+        #
+        # A failure here fails the run and tells a person what to do. Swapping back automatically
+        # was rejected: one flaky HTTP request would then perform an unattended production change,
+        # at the moment when the state of production is least well understood, and a swap loop is
+        # a worse incident than a bad release somebody is already looking at.
         run: |
           HOST=$(az webapp show \
             --resource-group "$AZURE_RESOURCE_GROUP" \

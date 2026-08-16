@@ -17,7 +17,7 @@
     "audit:attribution": "npx tsx scripts/attribution-proof.ts",
     "audit:restore": "npx tsx scripts/restore-proof.ts",
     "audit:estimation": "npx tsx scripts/estimation-proof.ts",
-    "audit:persistence": "npx tsx scripts/persistence-proof.ts",
+    "audit:persistence": "npx tsx --conditions=react-server scripts/persistence-proof.ts",
     "validate:scenarios": "npx tsx scripts/scenario-validation.ts",
     "validate:report": "node scripts/build-validation-report.mjs"
   },

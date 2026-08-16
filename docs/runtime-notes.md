@@ -62,13 +62,26 @@ off — `components/IssueWorkspace.tsx:350` returns early when `persistence.enab
 is right for a *store*. It is wrong for an *outbox*: the pending queue lives in a `useRef` and
 exists nowhere else, so it does not survive a reload, a crash, or a closed tab.
 
-**On this plan it fires on every deployment.** Basic B1 has no deployment slots, so a deploy is
-a hard restart of the only instance — `infra/app.bicep:80-82` says exactly this and calls it the
-honest cost of the default. Trace what a browser with a queued batch experiences. The in-flight
-`fetch` rejects, `attempt` becomes 1, and the queue retries on the 0.5s / 1s / 2s / 4s schedule
-at `:26`. Four attempts spend roughly **7.5 seconds in total**. A Next 16 cold start on a B1
-instance, including `PrismaClient` construction and the first pool connection, is not reliably
-inside that. When it is not, the queue halts and never resumes.
+**On this plan it fires on every deployment that catches somebody mid-edit.** Basic B1 has no
+deployment slots, so a deploy is a hard restart of the only instance — `infra/app.bicep:80-82`
+says exactly this and calls it the honest cost of the default. Trace what a browser with a
+queued batch experiences:
+
+```
+attempt=0 → fetch fails → attempt=1 → 1>=4? no → sleep BACKOFF_MS(0) = 500ms
+            fetch fails → attempt=2 → no       → sleep BACKOFF_MS(1) = 1000ms
+            fetch fails → attempt=3 → no       → sleep BACKOFF_MS(2) = 2000ms
+            fetch fails → attempt=4 → 4>=4     → HALT
+```
+
+Four requests, three sleeps, **3.5 seconds of grace** — and then the queue halts and never
+resumes. Note that the 4-second tier never fires, because the halt check at `:135` precedes the
+sleep at `:149`. The comment at `:25` describes the schedule as "0.5s, 1s, 2s, 4s. Long enough to
+ride out a restart", which overstates the budget by four seconds and is wrong about the
+conclusion: a Next 16 cold start on a B1 instance, including `PrismaClient` construction and the
+first pool connection, is not reliably inside three and a half seconds. A comment that
+misdescribes its own retry budget is worth correcting on its own account, because it is what
+anyone reading this code will believe.
 
 **And the 401 path fires daily.** `SESSION_SECONDS` is eight hours (`lib/auth/cookie.ts:16`),
 with a matching cookie `Max-Age`. A consultant who signs in at nine and is still in the same tab
@@ -166,9 +179,12 @@ limit is worse than no belief, because it is what makes raising `instanceCount` 
 `FATAL: sorry, too many clients already`. On the page path that propagates into `boot`'s catch
 (`lib/db/boot.ts:134`), and the user is served a fully working application quietly saying
 "Running from the issue log. Changes are not being saved." — they keep working and nothing is
-stored. Exhausting a *pool* while the server still has room is different: with
-`connectionTimeoutMillis` unset the request waits in the pool queue indefinitely, so the symptom
-is a page that never finishes loading rather than an error.
+stored. Exhausting a *pool* while the server still has room is different, and the two request
+paths differ again: the write path carries `maxWait: 10_000` (`persist.ts:174`), so a transaction
+that cannot get a connection surfaces as a Prisma error within ten seconds. The page render is
+not transactional and has no such bound, so with `connectionTimeoutMillis` unset it waits in the
+pool queue indefinitely. An operator can use that to tell the two apart: writes failing while the
+page hangs is pool exhaustion; both failing with a `FATAL` is the server's ceiling.
 
 **Likelihood at this firm.** Low today at one instance; certain on the day somebody scales out,
 and they will do so believing the connection string protects them.
@@ -249,6 +265,23 @@ and the truncation backwards.
   capped trail" and accepts the degradation — but it assumes the *oldest* age out. Under `asc`
   truncation the missing entries are the newest, which is to say the recent archives, which is to
   say precisely the ones somebody is likely to restore.
+
+**What the cap costs once it is saturated — the question was fifty thousand rows rather than five
+hundred.** The database side stays bounded: `take: 5000` against `@@index([tenantId, at])` is a
+cheap index scan whether the table holds five thousand rows or fifty. The cost lands in what
+those five thousand rows are then carried through. Serialising the seeded workspace gives 384 KB
+with an empty trail; a representative audit row — cuid, row id, field, from, to, ISO timestamp,
+author — is about 157 bytes of JSON, so a saturated trail adds roughly 785 KB. That takes the
+state from about 375 KB to about **1.1 MB, of which two thirds is audit**.
+
+Those bytes are paid twice on every interaction. Once because `loadWorkspace` is called inside
+every write transaction over a single pinned connection (`persist.ts:104-107`), so an autosave
+batch transfers the whole audit block before it writes a single cell edit. And once because
+`app/page.tsx` passes `initialState={state}` straight into a client component, so the same block
+goes over the wire to the browser on every page load. On localhost both are free; on a B1 over a
+consultant's connection neither is. These are order-of-magnitude figures from `JSON.stringify`
+rather than measured RSC payloads, but the ratio is the point and the ratio is not sensitive to
+the method.
 
 **Likelihood at this firm.** Certain, on a timescale of months. A few thousand records at a
 handful of audited edits each reaches five thousand rows without anything unusual happening, and
@@ -396,9 +429,10 @@ worth doing today.
 A review that finds a problem everywhere it looks is not being careful. These were examined and
 are correct as they stand.
 
-**Nothing in the server assumes one process, with two exceptions that turn out to be safe.** The
-search was `grep -rn "^let |^var |new Map|new Set|globalThis" lib/ app/` across every `.ts` and
-`.tsx`, which returns eight hits, six of them frozen constants.
+**Nothing in the server assumes one process, with three exceptions that turn out to be safe.**
+The search was `grep -rn "^let |^var |^const .*= new Map|^const .*= new Set|globalThis" lib/ app/`
+across every `.ts` and `.tsx`. It returns ten hits as the tree stands; six are frozen constants
+and one is the Prisma cache that finding 2 is about. The remaining three:
 
 - `lib/workspace.ts:671` — `let auditSeq = 0`, a per-process counter minting audit ids like
   `aud-3-OAPIL-010`. This looks exactly like a multi-instance collision: two instances both start
@@ -409,6 +443,11 @@ search was `grep -rn "^let |^var |new Map|new Set|globalThis" lib/ app/` across 
 - `lib/auth/entra.ts:159` — `jwksCache`, a per-tenant JWKS holder. Per-instance caching of a
   public key set is correct: each instance fetches once, and both agree because the keys come
   from Microsoft.
+- `app/api/health/route.ts:141` — the probe cache, whose own comment explains why module scope
+  rather than `globalThis` is right here. Per-instance is what a health check *should* be: the
+  question is whether this instance can reach the database, and an answer shared between
+  instances would be the wrong answer. A stale `connected` for up to ten seconds delays eviction
+  by well under one ping, inside App Service's ten-failure default.
 
 **Sign-in works across instances and needs no session affinity.** The three values that must
 survive the OAuth round trip — state, nonce and the PKCE verifier — go into short-lived HttpOnly
