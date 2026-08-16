@@ -63,6 +63,34 @@ export async function boot(): Promise<Boot> {
   const session = await getSessionFromCookies()
   const actor = session.actor
 
+  /**
+   * Nobody has signed in, on a deployment that has a provider: return nothing to look at.
+   *
+   * This is the read half of the gate, and it was missing. Refusing unverified writes at the
+   * endpoint felt like the answer and was half of one — a page render loads the whole workspace
+   * and ships it to the browser, so an anonymous visitor to a fully configured deployment was
+   * served every client, issue, note, time entry and contracted value in the initial payload.
+   * The session decided one thing: whether to show a Sign in button.
+   *
+   * The seed is emptied alongside the state, and that is not belt-and-braces. The seed file
+   * *is* the client log; returning it because the database was skipped would leak the same
+   * data by the other route.
+   */
+  if (identityEstablished() && !session.verified) {
+    return {
+      seed: { ...seed, issues: [], relationships: [] },
+      state: null,
+      tenantId,
+      actor,
+      signInRequired: true,
+      verified: false,
+      persistence: {
+        enabled: false,
+        note: 'Sign in to see this workspace.',
+      },
+    }
+  }
+
   if (!databaseConfigured()) {
     return {
       seed,

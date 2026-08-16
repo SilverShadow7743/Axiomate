@@ -1,0 +1,453 @@
+name: Deploy
+
+# The repository's branch is `master`. `main` is listed alongside it because that is the branch
+# this project will have once it is pushed to a remote, and a workflow that watches only the
+# branch that does not exist yet is indistinguishable from no workflow at all — it fails by
+# never running, which nobody notices. Both are listed until the branch question is settled.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# One deploy at a time, and never cancelled. A cancelled run can stop between `migrate deploy`
+# and the slot swap, which leaves a migrated database in front of the previous release's code —
+# the one state this pipeline is arranged to avoid. Queueing costs minutes; that state costs an
+# incident.
+concurrency:
+  group: axiomate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Derived, not copied: the repository states no version. There is no `.nvmrc` and no `engines`
+  # field, so this is the intersection of what the repository's own dependencies demand — Prisma
+  # 7.9 wants ^20.19 || ^22.12 || >=24, Next 16 wants >=20.9 — with what App Service Linux
+  # offers, where NODE|24-lts is the current recommended stack. 24 is the only major that
+  # satisfies all three. It must match the App Service runtime; see docs/deployment.md.
+  NODE_VERSION: '24'
+  AZURE_WEBAPP_NAME: axiomate-tms
+  AZURE_RESOURCE_GROUP: axiomate-tms-rg
+  # Azure Database for PostgreSQL flexible server holding the production database.
+  POSTGRES_SERVER_NAME: axiomate-tms-pg
+  DEPLOYMENT_SLOT: staging
+
+jobs:
+  # ===================================================================================
+  # Verify
+  #
+  # Every gate in this job runs on every push, and every one of them can fail the run. The
+  # distinction that matters is not "fast checks" versus "slow checks" but which checks need a
+  # database:
+  #
+  #   No database   tsc --noEmit, audit:tenancy, audit:attribution, audit:restore,
+  #                 audit:estimation, validate:scenarios, next build
+  #   Database      audit:persistence
+  #
+  # The database-dependent one is the reason this job runs a Postgres service container rather
+  # than skipping it. `audit:persistence` covers twenty-one tables and fourteen mapper pairs
+  # that typecheck and, until there is a database in CI, have never executed; the failure it
+  # looks for — a mapper that drops a field or rounds a number — raises no error anywhere else.
+  # Guarding it with `if: env.DATABASE_URL != ''` would have produced a green tick over a gate
+  # that never ran, which is worse than not having the gate, because it reads as coverage.
+  # ===================================================================================
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      # Ephemeral, and destroyed with the runner. `audit:persistence` creates its own tenant and
+      # removes it, so it is safe against a shared database too, but a throwaway one also proves
+      # the second thing this container is here for: that the baseline migration applies cleanly
+      # to an empty database, checked before that claim is tested against production.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: axiomate
+          POSTGRES_PASSWORD: axiomate
+          POSTGRES_DB: axiomate_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiomate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate the Prisma client
+        # Explicit because Prisma 7 no longer generates on install and this repository has no
+        # postinstall hook. Without it `next build` fails on the first import of @prisma/client,
+        # and it fails in a way that reads like an application error rather than a missing step.
+        run: npx prisma generate
+
+      - name: Typecheck
+        # `tsc --noEmit` rather than trusting the build: `next build` typechecks the app graph,
+        # and the audit scripts under scripts/ are outside it. They are the checks; a check that
+        # does not compile is not a check.
+        run: npx tsc --noEmit
+
+      - name: Audit — tenancy
+        # A query that forgets its `where` compiles, passes every type, and returns every firm's
+        # rows. This is the only check in the repository that looks for that, and it found nine
+        # such calls when it was written. It reads source text and needs nothing else.
+        run: npm run audit:tenancy
+
+      - name: Audit — attribution
+        # Runs the real reducer with two actors and asserts the audit trail differs. Pure.
+        run: npm run audit:attribution
+
+      - name: Audit — restore
+        run: npm run audit:restore
+
+      - name: Audit — estimation
+        run: npm run audit:estimation
+
+      - name: Apply migrations to the CI database
+        # The same command the deploy job runs against production, executed here first. If the
+        # migration history cannot be applied to an empty database, this is where that is found —
+        # on a runner, before anything has been deployed, rather than halfway through a release.
+        env:
+          DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
+        run: npx prisma migrate deploy
+
+      - name: Audit — persistence
+        # The gate that needs the service container. DATABASE_URL is set on this step alone
+        # rather than on the job, so nothing else in the pipeline can quietly acquire a database
+        # it was not meant to have — in particular `next build`, which must not bake one in.
+        env:
+          DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
+        run: npm run audit:persistence
+
+      - name: Keep the committed validation baseline
+        # `validate:scenarios` overwrites data/validation.json in place, so the committed copy is
+        # put aside first. It is the baseline the next step compares against.
+        run: cp data/validation.json "$RUNNER_TEMP/validation.baseline.json"
+
+      - name: Scenario validation
+        # This harness always exits 0 — by design, because most of what it reports is honest
+        # absence rather than failure. It is run for its output, and the next step decides.
+        run: npm run validate:scenarios
+
+      - name: Scenario validation — regression gate
+        # Which regressions block, and why this is not simply "fail if anything is not PASS".
+        #
+        # The harness is a map of what this product does not do yet: NOT IMPLEMENTED and NOT
+        # TESTABLE are its normal verdicts and there are many of them. A gate on the totals would
+        # block every honest release and would be switched off within a week. A gate on nothing
+        # would let a scenario that used to work stop working without anyone noticing.
+        #
+        # So the line is drawn at losing ground: a scenario that passed on the last commit and no
+        # longer passes fails the run. That is a regression by any reading, and the harness runs
+        # against a fixed `TODAY` constant, so the comparison is deterministic rather than a
+        # function of the day the pipeline happened to run.
+        #
+        # Everything else — a verdict that improved, a scenario that is new — is reported and
+        # allowed through, with a note when the committed baseline is stale.
+        run: |
+          cat > "$RUNNER_TEMP/compare.cjs" <<'JS'
+          const fs = require('node:fs')
+          const load = (p) => JSON.parse(fs.readFileSync(p, 'utf8')).findings
+          const [before, after] = process.argv.slice(2).map(load)
+          const was = new Map(before.map((f) => [f.id, f.verdict]))
+          const lost = []
+          const moved = []
+          for (const f of after) {
+            const prior = was.get(f.id)
+            if (prior === undefined) { moved.push(`${f.id} is new — ${f.verdict}`); continue }
+            if (prior === f.verdict) continue
+            if (prior === 'PASS') lost.push(`${f.id} was PASS and is now ${f.verdict}: ${f.title}`)
+            else moved.push(`${f.id} moved ${prior} to ${f.verdict}`)
+          }
+          for (const f of before) {
+            if (!after.some((x) => x.id === f.id)) moved.push(`${f.id} is gone from the run`)
+          }
+          if (moved.length) {
+            console.log('Verdicts that changed without blocking:')
+            for (const m of moved) console.log(`  ${m}`)
+            console.log('The committed data/validation.json is out of date; regenerate and commit it.')
+          }
+          if (lost.length) {
+            console.log('')
+            console.log('Scenarios that stopped passing:')
+            for (const l of lost) console.log(`  ${l}`)
+            process.exit(1)
+          }
+          console.log(`No scenario lost a PASS. ${after.length} scenarios compared.`)
+          JS
+          node "$RUNNER_TEMP/compare.cjs" "$RUNNER_TEMP/validation.baseline.json" data/validation.json
+
+      - name: Build
+        # Last, because it is the slowest thing here and every gate above it is cheaper. No
+        # DATABASE_URL: the root page is `force-dynamic` and reads the database per request, so
+        # nothing is prerendered and a build-time connection string would only be a chance to
+        # bake the wrong one in.
+        run: npm run build
+
+      - name: Assemble the deployment package
+        # Why the tree is rebuilt without dev dependencies rather than shipped whole.
+        #
+        # `node_modules` is 709 MB with dev dependencies and roughly a third of that without
+        # them, and TypeScript and the Prisma CLI have no business on a production host. The
+        # obstacle is that the generated Prisma client lives in `node_modules/.prisma` and is
+        # produced by the `prisma` CLI, which is itself a dev dependency: pruning removes the
+        # generator, so it cannot be regenerated afterwards. The client is therefore set aside
+        # and put back, which needs no network and pins nothing new.
+        #
+        # Rejected: shipping the whole tree, which doubles the upload and puts a compiler on the
+        # host; and `npx prisma generate` after the prune, which would fetch an unpinned Prisma
+        # from the network and could generate a client for a different version than the one the
+        # gates ran against. The better answer is `output: 'standalone'` in next.config.ts, which
+        # would make this step three lines long — that file belongs to another agent, so it is
+        # named in docs/deployment.md as a recommendation rather than done here.
+        run: |
+          cp -r node_modules/.prisma "$RUNNER_TEMP/prisma-client"
+          rm -rf node_modules
+          npm ci --omit=dev --no-audit --no-fund
+          cp -r "$RUNNER_TEMP/prisma-client" node_modules/.prisma
+          # `data/` is runtime input, not documentation: lib/data.ts reads issues.seed.json and
+          # axiomate.internal.json from process.cwd() on every boot, and the app throws on the
+          # first request without them. `.next/cache` is build state and is most of the bulk.
+          zip -qry "$RUNNER_TEMP/app.zip" \
+            .next node_modules data package.json package-lock.json next.config.ts \
+            -x '.next/cache/*'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: ${{ runner.temp }}/app.zip
+          retention-days: 14
+
+  # ===================================================================================
+  # Deploy
+  #
+  # Ordering, stated plainly: migrate, then deploy to the slot, then warm it, then swap.
+  #
+  # Migrations run before anything is swapped because the alternative is worse. Swapping first
+  # would put new code in front of an old schema for the length of the migration, and every
+  # request in that window hits a database that does not have the columns it is asking for. This
+  # way the failure mode is a failed migration against a production database that is still
+  # serving the previous release, which is recoverable by doing nothing further.
+  #
+  # What it costs: for the window between the migration and the swap — and for the warm-up of a
+  # slot that shares the production database — the schema is ahead of the code that is running.
+  # So every migration in this repository must be additive and readable by the previous release:
+  # add columns nullable, add tables, never drop or rename in the same release that stops using
+  # them. Destructive changes take two releases. That constraint is the price of this ordering
+  # and it is not negotiable once a firm's data is in the database.
+  # ===================================================================================
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # The environment is where DATABASE_URL lives, where a required reviewer can be attached, and
+    # what the federated credential is scoped to. See the OIDC comment below.
+    environment: production
+
+    permissions:
+      # Required for the OIDC token exchange. Nothing else in this workflow needs write scopes.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        # A full install, dev dependencies included, because the Prisma CLI is a dev dependency
+        # and this job applies migrations. The migration must be applied by the version in the
+        # lockfile — the version that produced the migration and the version the gates ran
+        # against — rather than by whatever `npx prisma` would fetch at the moment of the deploy.
+        run: npm ci --no-audit --no-fund
+
+      - name: Check the database URL is actually set
+        # prisma.config.ts falls back to a localhost connection string when DATABASE_URL is
+        # empty. A missing or misnamed secret would therefore not fail here — `migrate deploy`
+        # would connect to nothing on the runner, find no database, and the error would be about
+        # localhost rather than about the secret. This is the same failure class as a gate that
+        # silently skips, so it is asserted rather than assumed.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set on the production environment. Nothing has been deployed."
+            exit 1
+          fi
+          case "$DATABASE_URL" in
+            *localhost*|*127.0.0.1*)
+              echo "DATABASE_URL points at localhost. That is the fallback in prisma.config.ts, not a production database."
+              exit 1
+              ;;
+          esac
+
+      - name: Sign in to Azure
+        # OIDC federated credentials, and no client secret anywhere in this repository.
+        #
+        # A publish profile or a service principal secret is a long-lived credential that grants
+        # deployment rights to whoever holds it, sits in GitHub's secret store until somebody
+        # remembers to rotate it, and is copied into a developer's shell the first time a deploy
+        # has to be done by hand. The federated credential grants a short-lived token, only to a
+        # run of this workflow in this repository in this environment, and there is nothing to
+        # leak, rotate or revoke. What has to exist in Entra for it is in docs/deployment.md.
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Open the database firewall to this runner
+        # GitHub-hosted runners have no stable egress address, so the rule is created for this
+        # run's address and removed below whatever happens. Rejected: the "allow Azure services"
+        # rule, which is broader than this needs and does not cover GitHub's runners anyway; and
+        # leaving the server open to the internet, which is not a trade-off, it is a decision to
+        # have no perimeter. The durable answer is a self-hosted runner inside the VNet, which is
+        # infrastructure this pipeline does not own.
+        id: firewall
+        run: |
+          IP=$(curl -fsS https://api.ipify.org)
+          echo "rule=gh-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "gh-${GITHUB_RUN_ID}" \
+            --start-ip-address "$IP" \
+            --end-ip-address "$IP" \
+            --output none
+
+      - name: Apply migrations
+        # `migrate deploy` and never `db push`: it applies the committed migration history and
+        # refuses anything it does not recognise, where `db push` would reshape a production
+        # database to match the schema file and drop whatever did not fit.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Close the database firewall
+        # `always()`, because the interesting case is the one where the migration failed. A rule
+        # left behind by a failed run is a permanent hole opened by a temporary problem.
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "${{ steps.firewall.outputs.rule }}" \
+            --yes --output none || true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: ${{ runner.temp }}/package
+
+      - name: Deploy to the staging slot
+        # A slot, not the production site directly, and the reason is the browser-side write
+        # queue rather than a general preference for slots.
+        #
+        # `useAutosave` drains one request at a time and retries a failed request four times with
+        # 0.5s, 1s, 2s and 4s of backoff — a total budget of about seven and a half seconds. A
+        # direct deploy restarts the site: the container stops, the new one starts, and the first
+        # request to a cold Next.js server on App Service routinely takes longer than that budget
+        # on its own. The queue then halts, tells the user the server is unreachable, and — in
+        # database mode there is no local mirror, so the queue is only in memory — everything
+        # pending is lost if the tab is closed. A swap moves traffic to an instance that is
+        # already warm, so the gap is the connection drain rather than a cold start.
+        #
+        # What the slot costs: a second instance running for the length of the deploy, on the
+        # same App Service plan; a swap window in which requests in flight against the old
+        # instance can still be cut, so a batch that committed but did not answer will be
+        # replayed by the client; and the fact that the slot shares the production database, so
+        # warming it exercises production data. That last point is the one to read twice against
+        # the seed import — see docs/deployment.md.
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: ${{ env.DEPLOYMENT_SLOT }}
+          package: ${{ runner.temp }}/package/app.zip
+
+      - name: Warm the slot and check it can actually reach the database
+        # `/api/health`, and the assertion is on the body rather than the status code.
+        #
+        # Neither of the two obvious checks would do. A status-code check passes in the failure
+        # that matters most: the endpoint answers 200 with `"database":"not configured"` when
+        # DATABASE_URL is missing, because running without one is a supported mode of this
+        # application rather than a fault — and a hosted instance that has lost that app setting
+        # looks completely well while every person's afternoon goes into their own browser. And
+        # reading the rendered page was rejected because `boot.ts` returns an empty workspace and
+        # "Sign in to see this workspace" to an anonymous caller on any deployment with Entra
+        # configured, which is every production deployment and is exactly what this request is.
+        #
+        # So: warm it, then require the one value that means the release is serving real data.
+        run: |
+          HOST=$(az webapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --slot "$DEPLOYMENT_SLOT" \
+            --query defaultHostName -o tsv)
+          echo "Warming https://$HOST"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            # No -f: a 503 from the health endpoint is an answer worth reading, not a failure to
+            # retry past. The loop is waiting for the instance to exist, not for it to be well.
+            BODY=$(curl -sS --max-time 120 "https://$HOST/api/health" || true)
+            if [ -n "$BODY" ]; then break; fi
+            echo "  no response yet (attempt $attempt)"
+            sleep 10
+          done
+          echo "$BODY"
+          case "$BODY" in
+            '') echo "The slot never answered. Not swapping."; exit 1 ;;
+            *'"database":"connected"'*) echo "The slot can reach the production database." ;;
+            *'"database":"not configured"'*)
+              echo "The slot has no DATABASE_URL. It would run from the seed file and save nothing. Not swapping."
+              exit 1
+              ;;
+            *)
+              echo "The slot cannot reach the database. Not swapping."
+              exit 1
+              ;;
+          esac
+          # The workspace itself is warmed separately, because a healthy database connection is
+          # not a rendered page — and on a fresh database this is the request that runs the seed
+          # import. Doing it here means it happens once, on a slot, before the swap. See
+          # docs/deployment.md.
+          curl -fsS --max-time 180 -o /dev/null "https://$HOST/" \
+            || { echo "The slot's workspace page did not render. Not swapping."; exit 1; }
+
+      - name: Swap into production
+        run: |
+          az webapp deployment slot swap \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --slot "$DEPLOYMENT_SLOT" \
+            --target-slot production \
+            --output none
+
+      - name: Check production after the swap
+        # The same assertion against the production hostname. The slot passing it proves the
+        # build; this proves the swap, and they are different things — slot-sticky settings do
+        # not move, so a setting marked sticky by mistake is caught here and nowhere earlier.
+        run: |
+          HOST=$(az webapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query defaultHostName -o tsv)
+          BODY=$(curl -sS --max-time 120 "https://$HOST/api/health" || true)
+          echo "$BODY"
+          case "$BODY" in
+            *'"database":"connected"'*) echo "Production is live at https://$HOST" ;;
+            *)
+              echo "Production is not reaching its database. Swap back — see docs/deployment.md."
+              exit 1
+              ;;
+          esac

@@ -22,32 +22,42 @@ function cookie(req: Request, name: string): string | undefined {
   return undefined
 }
 
-/** Errors land on the app with a message rather than as raw JSON nobody can read. */
-function back(req: Request, message: string) {
+/**
+ * Errors land on the app with something a person can act on, and nothing more.
+ *
+ * A query parameter carrying the provider's own message was the obvious thing and the wrong
+ * one: App Service logs the full request line, so every failed sign-in wrote Entra's diagnostic
+ * text — which can name the tenant, the application and the account — into a log with a wider
+ * audience than the person who saw the page. The detail now goes to the server log, where it is
+ * still available to whoever is debugging, and the redirect carries a short code.
+ */
+function back(req: Request, message: string, code = 'failed') {
+  console.warn('[auth] sign-in failed:', message)
   const url = new URL('/', req.url)
-  url.searchParams.set('auth_error', message)
+  url.searchParams.set('auth_error', code)
   return NextResponse.redirect(url)
 }
 
 export async function GET(req: Request) {
   const config = entraConfig()
-  if (!config) return back(req, 'Entra is not configured on this server.')
+  if (!config) return back(req, 'Entra is not configured on this server.', 'not-configured')
 
   const url = new URL(req.url)
   const error = url.searchParams.get('error_description') ?? url.searchParams.get('error')
-  if (error) return back(req, error)
+  // Entra's own text goes to the log, not into another URL.
+  if (error) return back(req, error, 'provider-refused')
 
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
-  if (!code || !state) return back(req, 'Entra returned no authorisation code.')
+  if (!code || !state) return back(req, 'Entra returned no authorisation code.', 'no-code')
 
   // The state cookie is what ties this response to the request this browser started.
   if (state !== cookie(req, 'axiomate_state')) {
-    return back(req, 'This sign-in did not start in this browser.')
+    return back(req, 'This sign-in did not start in this browser.', 'wrong-browser')
   }
   const verifier = cookie(req, 'axiomate_verifier')
   const nonce = cookie(req, 'axiomate_nonce')
-  if (!verifier || !nonce) return back(req, 'The sign-in took too long. Try again.')
+  if (!verifier || !nonce) return back(req, 'The sign-in took too long. Try again.', 'expired')
 
   try {
     const { identity } = await completeSignIn(config, code, verifier, nonce)
@@ -69,6 +79,6 @@ export async function GET(req: Request) {
     }
     return res
   } catch (err) {
-    return back(req, err instanceof Error ? err.message : 'Sign-in failed.')
+    return back(req, err instanceof Error ? err.message : 'Sign-in failed.', 'failed')
   }
 }

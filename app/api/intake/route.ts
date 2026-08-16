@@ -5,6 +5,7 @@ import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
 import { classify, provenanceNote, type InboundMessage } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
+import { INTAKE_ACTOR } from '@/lib/actor'
 
 /**
  * Where work arrives from outside.
@@ -40,8 +41,17 @@ export const dynamic = 'force-dynamic'
 /** Long enough that guessing is not a strategy. Absent means the endpoint is closed. */
 const TOKEN = process.env.AXIOMATE_INTAKE_TOKEN
 
-/** Who a machine-created record is attributed to. Never a person: nobody typed this. */
-const INTAKE_ACTOR = { id: 'intake', name: 'Intake' }
+/*
+ * The actor comes from `lib/actor.ts`, and the reason is worth keeping.
+ *
+ * A local constant of the same name lived here and shadowed the shared one. The ids differed
+ * by the single prefix that matters: `isMachineActor` matches `machine:`, so this route's
+ * actor was not recognised as a machine, fell through to the fallback role, and ran as
+ * Administrator — the exact accident the machine role was added to prevent. It would have got
+ * worse the day somebody followed the advice to empty `defaultRoleIds`: intake would then hold
+ * no roles at all and refuse every message, with an error pointing at role assignment rather
+ * than at a duplicated constant.
+ */
 
 export async function POST(req: Request) {
   if (!TOKEN) {

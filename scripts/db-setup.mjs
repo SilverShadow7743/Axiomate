@@ -104,20 +104,22 @@ const sql = [
   '-- can drop anything on the server, and the day that matters is the day somebody points a',
   '-- migration at the wrong host.',
   '--',
-  '-- Safe to run twice. The role block checks first; creating the database again reports that',
-  '-- it exists and changes nothing. Nothing here drops anything.',
+  '-- Safe to run twice, and it sets the password every time rather than leaving an existing',
+  '-- role alone. Leaving it alone is the tempting choice and it is the wrong one: this',
+  '-- generator owns the password, .env already holds it, and a role quietly keeping an older',
+  "-- one produces a failure that reads as 'wrong password' with nothing to compare against.",
+  '--',
+  '-- Written as two statements that each expect the other to have failed, rather than as a DO',
+  '-- block. The block was tidier and used dollar quoting, which is one more thing for a shell',
+  '-- to eat between here and psql — and this file has already lost a backslash that way. One of',
+  '-- the two lines below always errors, harmlessly, and psql carries on: if the role exists the',
+  '-- ALTER sets its password and the CREATE complains; if it does not, the reverse. Either way',
+  '-- the role ends up with the password in .env.',
   '',
-  'DO $$',
-  'BEGIN',
-  "  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'axiomate') THEN",
-  `    EXECUTE 'CREATE ROLE axiomate LOGIN PASSWORD ' || quote_literal('${password.replace(/'/g, "''")}');`,
-  "    RAISE NOTICE 'Role axiomate created.';",
-  '  ELSE',
-  "    RAISE NOTICE 'Role axiomate already exists. Password left alone.';",
-  '  END IF;',
-  'END',
-  '$$;',
+  `ALTER ROLE axiomate LOGIN PASSWORD '${password.replace(/'/g, "''")}';`,
+  `CREATE ROLE axiomate LOGIN PASSWORD '${password.replace(/'/g, "''")}';`,
   '',
+  '-- And the database, which likewise errors harmlessly if it is already there.',
   'CREATE DATABASE axiomate_dev OWNER axiomate;',
   '',
 ].join('\n')
@@ -125,8 +127,11 @@ const sql = [
 fs.writeFileSync(sqlPath, sql)
 console.log('Written: scripts/db-setup.sql')
 console.log('')
-console.log('Next, as a database superuser:')
+console.log('Next, as a database superuser, from this directory:')
 console.log('  psql -U postgres -f scripts/db-setup.sql')
+console.log('')
+console.log('One of the two role statements will report an error. That is expected: they are')
+console.log('written so that whichever one does not apply fails harmlessly.')
 console.log('')
 console.log('Then:')
 console.log('  npm run db:migrate        apply the schema')

@@ -17,6 +17,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { getSession, identityEstablished } from '@/lib/principal'
 import Anthropic from '@anthropic-ai/sdk'
 import {
   DEFAULT_CHAT_CONFIG,
@@ -137,6 +138,22 @@ function parseConfig(raw: unknown): ChatConfig {
  * ================================================================== */
 
 export async function POST(req: Request) {
+  /**
+   * The same gate as the rest of the application, and it was missing here.
+   *
+   * This route had no check of any kind: no token, no session, no rate limit. On a deployment
+   * with a provider configured, that made it the one door left open — and what is behind it is
+   * the firm's own model key, billed to them, callable by anyone who finds the URL. It reads no
+   * stored data and writes nothing, which is why it was easy to overlook and is not a defence.
+   *
+   * Without a provider the deployment trusts whoever reaches it, exactly as the workspace
+   * endpoint does. The posture is the deployment's, not this route's to invent.
+   */
+  const session = getSession(req)
+  if (identityEstablished() && !session.verified) {
+    return NextResponse.json({ error: 'Sign in to use the assistant.' }, { status: 401 })
+  }
+
   let body: unknown
   try {
     body = await req.json()

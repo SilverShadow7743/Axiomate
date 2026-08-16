@@ -186,9 +186,15 @@ export function rolesFor(model: OperatingModel, actor: Actor): string[] {
   // Directory key first, then the address a provider supplied, then the display name. The
   // order is strongest-join-first: an object id is stable, an address is unique but changeable,
   // and a name is neither.
+  //
+  // The middle one was comparing an address against `actor.id`, which holds the provider's
+  // object id — a GUID that never equals an email. So the join every Entra sign-in was meant
+  // to use was dead, and everybody landed on the fallback role, which ships as Administrator.
+  // Nothing failed; the wrong thing quietly worked.
+  const claimed = actor.email?.trim().toLowerCase()
   const person =
     people.find((p) => p.id === actor.id) ??
-    people.find((p) => p.email && p.email.toLowerCase() === actor.id.toLowerCase()) ??
+    (claimed ? people.find((p) => p.email?.toLowerCase() === claimed) : undefined) ??
     people.find((p) => p.name.toLowerCase() === actor.name.toLowerCase())
   const own = (person?.roleIds ?? []).filter((r) => model.roles?.[r] && !model.roles[r].deletedAt)
   return own.length ? own : model.access.defaultRoleIds

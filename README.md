@@ -530,9 +530,11 @@ invisible. `provisioningName()` supplies the name written when a tenant row is f
 so renaming the firm never orphans the rows filed under it.
 
 **This is a tenant-scoped data model, not enforced isolation, and the distance between the two
-is identity.** There is no authentication in this app — no user, no session, no role binding —
-so nothing establishes which tenant a request belongs to, which is why `currentTenantId` reads
-one configured value: there is nothing yet to derive it from. Nothing in the schema stops a
+is identity.** Authentication now exists — Entra ID sign-in, in `lib/auth/` — and it activates
+only when four environment values are set. Even with it on, `currentTenantId` still reads one
+configured value rather than deriving a tenant from the person who signed in: knowing who
+somebody is and knowing which firm's data they may see are different questions, and only the
+first is answered. Nothing in the schema stops a
 query that forgets its `where` either; the compiler does that, and the database does not. The
 enforcement layer is row-level security, and RLS needs a database role per request, which needs
 identity — so it arrives with identity, not before it. The scoping is done first because it is
@@ -751,12 +753,15 @@ dense grid does not light up on every press.
   client generates, the mapper's conversion was exercised in both directions in-process, and
   the no-database path was verified in the browser — but every actual database read and write
   is typecheck-only, the same standing as the assistant's Claude branch below.
-- There is no authentication. Concurrency between writers *is* handled — `persistActions` runs
-  the load and the fold inside one `Serializable` transaction and retries up to three times on
-  a serialization failure, so a batch that would have interleaved replays against what the
-  winner produced rather than overwriting it. What is missing is anything above that: no user,
-  no session, and therefore no per-user conflict reporting — two people editing the same field
-  produce two valid, audited writes and the later one stands.
+- Authentication exists and is off unless configured. Entra ID sign-in is built, and once a
+  provider is set the write endpoint refuses an unverified request; without one the app runs as
+  the configured operator, and the permissions screen says which of the two it is. What has not
+  happened is a deployment with it switched on. Concurrency between writers *is* handled —
+  `persistActions` runs the load and the fold inside one `Serializable` transaction and retries
+  up to three times on a serialization failure, so a batch that would have interleaved replays
+  against what the winner produced rather than overwriting it. What is still missing above that
+  is per-user conflict reporting: two people editing the same field produce two valid, audited
+  writes and the later one stands, whether or not either signed in.
 - Tenant isolation is not enforced. Every table is tenant-scoped and every query names a
   tenant, but nothing establishes which tenant a request belongs to, because that needs
   identity — and row-level security, the layer that would enforce it, needs identity too. See

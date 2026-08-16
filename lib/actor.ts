@@ -22,6 +22,15 @@ export interface Actor {
   id: string
   /** What is written to `AuditEntry.by` and to the `createdBy` / `addedBy` fields. */
   name: string
+  /**
+   * The work address the provider supplied, when there is one.
+   *
+   * Present reluctantly, and only because it is the join to the people directory: `id` holds a
+   * provider's object id, which matches nothing a firm ever typed, and a display name is a
+   * field two people can share. It is used for resolving roles and for nothing else — never
+   * for attribution, which stays `name`, and never as proof of anything.
+   */
+  email?: string
 }
 
 /**

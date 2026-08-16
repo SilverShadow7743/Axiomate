@@ -62,7 +62,7 @@ function sessionFrom(cookie: string | undefined): Session {
   if ('claims' in result) {
     const { oid, name, email } = result.claims
     return {
-      actor: { id: oid, name: name || email || oid },
+      actor: { id: oid, name: name || email || oid, email: email || undefined },
       verified: true,
       source: 'entra',
       email: email || null,
