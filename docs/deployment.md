@@ -137,7 +137,7 @@ whether they need a database, not by how long they take:
 | `npm run audit:restore` | No | Archive and restore failing to invert each other |
 | `npm run audit:estimation` | No | Capacity compressing a sequential chain; a baselined estimate being edited rather than re-agreed |
 | `prisma migrate deploy` | Yes | The migration history failing to apply to an empty database |
-| `npm run audit:persistence` | Yes | A mapper that drops a field, coerces a type or rounds a number between the reducer and Postgres |
+| `npm run audit:persistence` | Yes | A mapper that drops a field, coerces a type or rounds a number between the reducer and Postgres. See the note below: as written in `package.json` this script cannot start |
 | `npm run validate:scenarios` | No | See section 4 |
 | `npm run build` | No | The application failing to compile |
 
@@ -150,6 +150,17 @@ push, before that claim is ever tested against production.
 
 `npm run validate:report` is not in the pipeline. It renders a page from the last run for people
 to read; it asserts nothing and gates nothing.
+
+**`audit:persistence` needed a workaround to run at all, and this is worth knowing.** Every module
+under `lib/db` begins with `import 'server-only'`. That package resolves, by export condition, to a
+file that throws unless the importer supplies `react-server` — Next supplies it, plain `tsx` does
+not. So `npx tsx scripts/persistence-proof.ts`, which is exactly what `npm run audit:persistence`
+runs, fails on its first import before it has looked at a database. The proof has therefore never
+run, on anyone's machine, since it was written; the validation report's claim that persistence is
+the largest untested surface in the product was more literally true than it appears. The workflow
+sets `NODE_OPTIONS=--conditions=react-server` on that step, which makes the gate real. The proper
+fix is that flag living in the `package.json` script, so the proof can be run by hand as easily as
+by the pipeline; see section 9.
 
 The job finishes by assembling the deployment package: the tree is reinstalled without dev
 dependencies, the generated Prisma client is carried across by hand (the generator is itself a dev
@@ -409,24 +420,29 @@ or this document.
 2. **The branch.** The repository is on `master` and the workflow watches both `master` and
    `main`. Pick one and drop the other, so the trigger states an intent rather than covering a
    doubt.
-3. **`tsx` is not a dependency.** Five scripts in `package.json` run `npx tsx`, and it appears in
+3. **`audit:persistence` cannot be run by hand.** Section 3. The script needs
+   `--conditions=react-server` and does not ask for it, so the pipeline supplies it from outside.
+   Moving it into the `package.json` script — `npx tsx --conditions=react-server
+   scripts/persistence-proof.ts` — makes the proof runnable by a developer against their own
+   database, which is where it is most useful and where the pipeline cannot help.
+4. **`tsx` is not a dependency.** Five scripts in `package.json` run `npx tsx`, and it appears in
    neither `dependencies` nor `devDependencies`. Every CI run therefore fetches an unpinned
    version from the network to execute code that gates deployments. That is a reproducibility gap
    and a supply-chain one, and it is a one-line fix in `package.json`.
-4. **Node is not pinned in the repository.** The version is derived in section 1 rather than
+5. **Node is not pinned in the repository.** The version is derived in section 1 rather than
    read. An `engines` field or an `.nvmrc` would make CI, App Service and a developer's machine
    agree by construction. Note that `@types/node` is on major 26 while everything else points at
    24, which is worth reconciling at the same time.
-5. **`output: 'standalone'` in `next.config.ts`** would replace the packaging step's careful
+6. **`output: 'standalone'` in `next.config.ts`** would replace the packaging step's careful
    dance around the pruned Prisma client with a directory Next produces for exactly this purpose,
    and would cut the upload substantially.
-6. **`/api/health` reports reachability, not readiness.** It answers `SELECT 1`, which succeeds
+7. **`/api/health` reports reachability, not readiness.** It answers `SELECT 1`, which succeeds
    against a database whose tables were never created — deliberately, since naming a table in a
    probe makes it go stale silently. That leaves one thing this pipeline would like to assert and
    cannot: that the schema the running code expects is the schema that is there. The migration
    step covers it going forward; nothing covers a database changed out of band.
-7. **The database firewall.** The pipeline opens a rule for the runner's address and closes it
+8. **The database firewall.** The pipeline opens a rule for the runner's address and closes it
    afterwards. A self-hosted runner inside the VNet, or a private endpoint, would remove the
    pinhole altogether. It is more infrastructure, and it is the correct end state.
-8. **Approval on the production environment.** Whether a person must approve each deploy is a
+9. **Approval on the production environment.** Whether a person must approve each deploy is a
    policy decision, and the GitHub environment is where it would be expressed.

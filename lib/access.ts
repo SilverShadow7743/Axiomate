@@ -330,12 +330,28 @@ export function accessProblems(policy: AccessPolicy, roleIds: string[]): string[
     out.push('No role could configure the platform — including to undo this change.')
   }
 
-  const fallbackCanConfigure = policy.defaultRoleIds.some((r) =>
+  /**
+   * Somebody who actually exists must be able to configure the platform.
+   *
+   * The check above asks whether any *role* grants it, which is not the same question and let
+   * the real lockout through: assign one person a client role, empty the fallback, and this
+   * passed while nobody alive held `config.manage`. The configuration screen is then gated by
+   * a permission nobody has, posting the action directly does not help because the reducer
+   * gates it too, and unsetting the identity provider does not either — recovery means editing
+   * the stored model in the database by hand.
+   *
+   * So the test is over the roles that are *reachable*: those somebody holds, plus the fallback
+   * anyone unrecognised lands on.
+   */
+  const reachable = new Set([...roleIds, ...policy.defaultRoleIds])
+  const someoneCanConfigure = [...reachable].some((r) =>
     (policy.grants[r] ?? []).includes('config.manage'),
   )
-  if (policy.enforced && !fallbackCanConfigure && !roleIds.length) {
+  if (policy.enforced && !someoneCanConfigure) {
     out.push(
-      'Nobody in the directory holds a role, and the fallback role cannot configure the platform. Assign someone a role first.',
+      roleIds.length
+        ? 'Nobody who holds a role could configure the platform after this change, and the fallback role cannot either. Give somebody a role that can first — otherwise this screen is the last one anybody can open.'
+        : 'Nobody in the directory holds a role, and the fallback role cannot configure the platform. Assign someone a role first.',
     )
   }
 

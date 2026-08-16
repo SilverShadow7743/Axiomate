@@ -156,9 +156,25 @@ async function probeDatabase(): Promise<DatabaseState> {
     ])
     return 'connected'
   } catch (err) {
-    // The one place the reason is allowed to exist. It goes to the log stream, which is
-    // access-controlled, and never into the response, which is not.
-    console.error('[health] The database probe failed:', describeDbError(err))
+    /**
+     * The one place the reason is allowed to exist. It goes to the log stream, which is
+     * access-controlled, and never into the response, which is not.
+     *
+     * The code is logged beside the description rather than the description alone, because the
+     * description can be empty. `describeDbError` recognises three faults worth a sentence and
+     * otherwise returns the error's first line — and a Prisma error message *begins* with a
+     * newline, so for anything it does not recognise that fallback is the empty string. A log
+     * line with nothing after the colon is the one outcome this log line exists to prevent, and
+     * an unrecognised fault is precisely when somebody most needs it to say something.
+     *
+     * Compensated for here rather than by changing the sanitiser, which is shared with routes
+     * that return it to a caller. A blank string is a poor log line and a reasonable thing to
+     * hand an API client, so the two callers want different repairs and only one of them is
+     * this file's to make.
+     */
+    const detail = err as { code?: string; name?: string }
+    const reason = describeDbError(err) || detail.name || 'Unrecognised failure.'
+    console.error(`[health] The database probe failed: ${reason} [${detail.code ?? 'no code'}]`)
     return 'unreachable'
   } finally {
     if (timer) clearTimeout(timer)

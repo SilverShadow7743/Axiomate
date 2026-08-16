@@ -337,8 +337,12 @@ to ignore the channel. Review them on a weekly cadence instead.
 3. The status mix on the two machine endpoints. Both fail silently, so check that they ran at
    all before checking whether they ran well.
 4. `AppServiceConsoleLogs` for the window. The health probe writes one line per failed probe
-   there with a sanitised description of why the database could not be reached — that is where
-   the detail deliberately kept out of the health response ends up.
+   there, carrying a sanitised description and the error code — that is where the detail
+   deliberately kept out of the health response ends up. Expect roughly one line per minute per
+   instance for as long as the fault lasts, since the probe is cached for ten seconds and the
+   platform pings once a minute. That is a trickle rather than a flood, but it is worth knowing
+   that the health endpoint is itself a source of ingestion, and that a long outage across a
+   scaled-out plan writes to the workspace it is being diagnosed in.
 5. Postgres, if steps one to four point at it. Everything above this line describes symptoms of
    a database that is slow, full, failing over, or out of connections; none of it can tell them
    apart.

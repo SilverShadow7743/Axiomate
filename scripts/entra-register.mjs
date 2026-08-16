@@ -408,6 +408,9 @@ try {
   if (!existing) {
     console.log(`Creating the registration “${displayName}”…`)
     app = withManifest(['ad', 'app', 'create', '--display-name', displayName, '--web-redirect-uris', redirectUri, ...shared]).value
+    // Checked because nothing below re-reads the registration on this path, and an appId that
+    // arrived as undefined would surface three calls later as an unrelated-looking failure.
+    if (!app?.appId) fail('Entra reported the registration was created but returned no appId.')
     console.log('Created.')
   } else {
     /**

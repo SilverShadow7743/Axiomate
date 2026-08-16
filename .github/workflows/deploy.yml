@@ -125,8 +125,18 @@ jobs:
         # The gate that needs the service container. DATABASE_URL is set on this step alone
         # rather than on the job, so nothing else in the pipeline can quietly acquire a database
         # it was not meant to have — in particular `next build`, which must not bake one in.
+        #
+        # NODE_OPTIONS is not optional here, and it is a workaround rather than a setting. Every
+        # module under lib/db begins with `import 'server-only'`, whose package resolves to a
+        # file that throws unless the `react-server` export condition is present. Next supplies
+        # that condition; plain `tsx` does not, so `npm run audit:persistence` as written in
+        # package.json fails on its first import, before it has looked at a database — which
+        # means this proof has never run, on anyone's machine, since it was written. Supplying
+        # the condition here makes the gate real today. The durable fix is in package.json,
+        # which is not this pipeline's file to change; it is in docs/deployment.md.
         env:
           DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
+          NODE_OPTIONS: --conditions=react-server
         run: npm run audit:persistence
 
       - name: Keep the committed validation baseline
@@ -208,8 +218,9 @@ jobs:
         # host; and `npx prisma generate` after the prune, which would fetch an unpinned Prisma
         # from the network and could generate a client for a different version than the one the
         # gates ran against. The better answer is `output: 'standalone'` in next.config.ts, which
-        # would make this step three lines long — that file belongs to another agent, so it is
-        # named in docs/deployment.md as a recommendation rather than done here.
+        # would make this step three lines long. Changing the application's build output is not a
+        # change the deployment pipeline should make on its own, so it is recorded as a
+        # recommendation in docs/deployment.md instead of done here.
         run: |
           cp -r node_modules/.prisma "$RUNNER_TEMP/prisma-client"
           rm -rf node_modules

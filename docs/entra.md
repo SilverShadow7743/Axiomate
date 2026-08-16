@@ -207,7 +207,10 @@ control and it is independent of everything below.
 
 The order matters. Doing step four first is what locks a firm out.
 
-1. **Make the join work for yourself.** See the next section. Until it does, you are an
+1. **Get yourself into the directory, under your Entra display name.** If you appear in the
+   imported log you are already there — check in **Configure → Roles & people** that the spelling
+   matches your display name exactly. If you are not there, see "The harder half" in the next
+   section, because there is no screen that will add you. Until this is done you are an
    administrator only by accident of the fallback.
 2. **Give yourself a role that includes `config.manage`.** In **Configure → Roles & people**,
    assign yourself Administrator, or Engagement Lead, which is the only seeded delivery role that
@@ -283,11 +286,16 @@ The Configure screen edits those entries and has no control for adding one: all 
 takes `id: string | null`, and a null id generates a new `PERSON_<n>` — so somebody signed in with
 `config.manage` can create a directory entry by posting the action to `/api/workspace` directly:
 
-```json
-{ "t": "config", "op": { "k": "upsertPerson", "id": null, "name": "Jane Okafor",
-  "roleIds": ["ROLE_PROJECT_MANAGER"], "email": "jane.okafor@axiocloudsolutions.com" },
-  "now": "2026-08-16T09:00:00.000Z" }
 ```
+POST /api/workspace
+{ "action": { "t": "config", "now": "2026-08-16T09:00:00.000Z",
+  "op": { "k": "upsertPerson", "id": null, "name": "Jane Okafor",
+          "roleIds": ["ROLE_PROJECT_MANAGER"],
+          "email": "jane.okafor@axiocloudsolutions.com" } } }
+```
+
+Send it with the session cookie of somebody who holds `config.manage`; the endpoint resolves the
+actor from that cookie and never from the body, so there is nothing to impersonate.
 
 That is a workaround, not a feature. The name in it must match the person's Entra display name
 exactly, for the reason above, and nothing in the interface will tell you if it does not.
