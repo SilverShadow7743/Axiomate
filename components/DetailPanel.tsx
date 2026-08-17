@@ -142,6 +142,7 @@ interface Props {
     a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
   ) => boolean
   onRelease: (id: string) => void
+  onRecordPattern: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
 }
 
 export default function DetailPanel({
@@ -176,6 +177,7 @@ export default function DetailPanel({
   onAttributeToSow,
   onAllocate,
   onRelease,
+  onRecordPattern,
   actor,
   onSaveIssue,
   onAddNote,
@@ -364,6 +366,7 @@ export default function DetailPanel({
             today={today}
             onAllocate={(a) => onAllocate(row.id, a)}
             onRelease={onRelease}
+            onRecordPattern={onRecordPattern}
           />
         ) : !issue ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>

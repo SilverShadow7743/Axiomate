@@ -9,7 +9,9 @@ import {
   planCheck,
   type Allocation,
   profilesAt,
+  WORKING_PATTERN,
 } from '@/lib/capacity'
+import { timelineOf } from '@/lib/versioning'
 import { summarise } from '@/lib/estimation'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -36,6 +38,7 @@ export default function CapacityPanel({
   today,
   onAllocate,
   onRelease,
+  onRecordPattern,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -51,6 +54,8 @@ export default function CapacityPanel({
     acceptOverallocation?: boolean
   }) => boolean
   onRelease: (id: string) => void
+  /** Record a change to somebody's working week, from a date, with a reason. */
+  onRecordPattern: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
 }) {
   const may = can(state.model, actor, 'capacity.allocate')
 
@@ -113,6 +118,13 @@ export default function CapacityPanel({
     [plannedHours, unestimated, state.allocations, state.model.resourceProfiles, state.versions, peopleByName, row.id, from, to],
   )
 
+  /* The pattern in force over the window, for the column beside the figures. */
+  const profilesNow = useMemo(
+    () => profilesAt(Object.values(state.versions), state.model.resourceProfiles, from),
+    [state.versions, state.model.resourceProfiles, from],
+  )
+  const profileOf = (person: string) => profilesNow[peopleByName[person.toLowerCase()]]
+
   const positions = useMemo(() => {
     const names = [...new Set(allocations.map((a) => a.person))]
     return names.map((person) => {
@@ -160,6 +172,7 @@ export default function CapacityPanel({
               <th>Share</th>
               <th>From</th>
               <th>To</th>
+              <th>Working week</th>
               <th>Where that leaves them</th>
               <th />
             </tr>
@@ -173,6 +186,24 @@ export default function CapacityPanel({
                   <td className="mono">{a.percentage}%</td>
                   <td className="mono">{a.startDate}</td>
                   <td className="mono">{a.endDate}</td>
+                  {/*
+                    * The pattern the figures rest on, beside the figures. `basis` says whether
+                    * anybody recorded it; "assumed" is shown as a word rather than left as the
+                    * absence of one, because a blank reads as "nothing to say here" and the
+                    * whole point is that there IS something to say.
+                    */}
+                  <td className="mono">
+                    {position ? (
+                      <>
+                        {profileOf(a.person)?.hoursPerDay ?? '—'}h × {profileOf(a.person)?.daysPerWeek ?? '—'}d{' '}
+                        <span className={position.basis === 'stated' ? 'est-block-note' : 'est-over'}>
+                          {position.basis === 'stated' ? 'recorded' : 'assumed'}
+                        </span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className={position?.overallocated ? 'est-over' : ''}>
                     {position ? describeCapacity(position) : '—'}
                   </td>
@@ -189,6 +220,15 @@ export default function CapacityPanel({
           </tbody>
         </table>
       )}
+
+      <PatternTimeline
+        state={state}
+        people={[...new Set(allocations.map((a) => a.person))]}
+        peopleByName={peopleByName}
+        today={today}
+        may={may.allowed}
+        onRecord={onRecordPattern}
+      />
 
       {may.allowed ? (
         <AllocateForm
@@ -336,5 +376,133 @@ function AllocateForm({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * What somebody's working week has been, and when it changed.
+ *
+ * A period nobody recorded is shown as "not known" rather than as a blank row. The distinction
+ * is the whole reason the timeline exists: a blank reads as "nothing to say", and what this has
+ * to say is that the figures above it rest on an assumption.
+ *
+ * Recording a change needs a reason, like every other dated record here — a period that cannot
+ * explain itself later is most of the point thrown away.
+ */
+function PatternTimeline({
+  state,
+  people,
+  peopleByName,
+  today,
+  may,
+  onRecord,
+}: {
+  state: WorkspaceState
+  people: string[]
+  peopleByName: Record<string, string>
+  today: string
+  may: boolean
+  onRecord: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
+}) {
+  const [open, setOpen] = useState<string | null>(null)
+  const [from, setFrom] = useState(today)
+  const [hours, setHours] = useState('7.5')
+  const [days, setDays] = useState('5')
+  const [reason, setReason] = useState('')
+
+  const versions = Object.values(state.versions)
+  if (!people.length) return null
+
+  return (
+    <section className="est-section">
+      <h4 className="est-h">Working weeks</h4>
+      <table className="cfg-table est-table">
+        <thead>
+          <tr>
+            <th>Who</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Week</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          {people.map((person) => {
+            const id = peopleByName[person.toLowerCase()]
+            const timeline = id ? timelineOf(versions, WORKING_PATTERN, id) : []
+            if (!timeline.length) {
+              return (
+                <tr key={person}>
+                  <td>{person}</td>
+                  <td colSpan={4} className="est-over">
+                    Not known — nothing has been recorded, so capacity for this person is computed
+                    from the shipped default.
+                  </td>
+                </tr>
+              )
+            }
+            return timeline.map((v) => {
+              const value = v.value as { hoursPerDay?: number; daysPerWeek?: number } | null
+              return (
+                <tr key={v.id}>
+                  <td>{person}</td>
+                  <td className="mono">{v.validFrom}</td>
+                  <td className="mono">{v.validTo ?? 'open'}</td>
+                  <td className="mono">
+                    {value?.hoursPerDay ?? '—'}h × {value?.daysPerWeek ?? '—'}d
+                  </td>
+                  <td>
+                    {v.reason} <span className="est-block-note">— {v.by}</span>
+                  </td>
+                </tr>
+              )
+            })
+          })}
+        </tbody>
+      </table>
+
+      {may ? (
+        <div className="time-week-actions">
+          <select value={open ?? ''} onChange={(e) => setOpen(e.target.value || null)} aria-label="Person">
+            <option value="">Record a change for…</option>
+            {people.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          {open ? (
+            <>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
+              <input className="fld-input" value={hours} onChange={(e) => setHours(e.target.value)} aria-label="Hours per day" />
+              <input className="fld-input" value={days} onChange={(e) => setDays(e.target.value)} aria-label="Days per week" />
+              <input
+                className="fld-input"
+                placeholder="Why it changed"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                aria-label="Reason"
+              />
+              <button
+                type="button"
+                className="btn"
+                disabled={!reason.trim() || !Number(hours) || !Number(days)}
+                title={reason.trim() ? 'Record this period' : 'A period needs a reason'}
+                onClick={() => {
+                  const id = peopleByName[open.toLowerCase()]
+                  if (!id) return
+                  if (onRecord(id, from, Number(hours), Number(days), reason)) {
+                    setReason('')
+                    setOpen(null)
+                  }
+                }}
+              >
+                Record
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   )
 }

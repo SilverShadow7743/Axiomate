@@ -1868,6 +1868,20 @@ export default function IssueWorkspace({
             dispatch({ t: 'addTime', issueId, ...entry, now: new Date().toISOString() })
           }
           onRemoveTime={(id) => dispatch({ t: 'removeTime', id, now: new Date().toISOString() })}
+          onRecordPattern={(personId, from, hoursPerDay, daysPerWeek, reason) =>
+            dispatch({
+              t: 'recordVersion',
+              subjectKind: 'person.workingPattern',
+              subjectId: personId,
+              validFrom: from,
+              // Open-ended. A change to somebody's working week runs until the next one is
+              // recorded; naming an end date now would be inventing when it stops.
+              validTo: null,
+              value: { hoursPerDay, daysPerWeek },
+              reason,
+              now: new Date().toISOString(),
+            })
+          }
           onSubmitWeek={(person, week) =>
             dispatch({ t: 'submitTimesheet', person, weekStarting: week, now: new Date().toISOString() })
           }
