@@ -41,8 +41,9 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { ACTION_PERMISSIONS, accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, accessProblems, can, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
+import { checkPersonSkill, type PersonSkill, type Skill, type SkillLevel, type SkillSource } from './skills'
 import {
   checkChange,
   decideChangeProblem,
@@ -129,6 +130,7 @@ import {
   initModel,
   liveWorkTypes,
   liveDisciplines,
+  liveSkills,
   type Discipline,
   type WorkType,
   resolveLabel,
@@ -280,6 +282,15 @@ export interface WorkspaceState {
   rates: Record<string, PersonRate>
   /** Variations to the contracts. Deltas — the SOW baseline is never edited by one. */
   changes: Record<string, ChangeRequest>
+  /**
+   * Who can do what, at what level, and who says so. See `./skills`.
+   *
+   * **Redacted field by field in `boot()`** for anybody without `skill.view` — unlike `rates`,
+   * which is withheld whole. A skill row holds a directory fact (this person has touched this)
+   * and a judgement (they are Practitioner, assessed, by name). The first is the reason the
+   * collection exists; the second is the reason it cannot go out unredacted.
+   */
+  personSkills: Record<string, PersonSkill>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -538,6 +549,7 @@ export function initWorkspace(
     timesheets: {},
     rates: {},
     changes: {},
+    personSkills: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -726,6 +738,37 @@ export type Action =
       reason: string
       now: string
     }
+  /**
+   * Say that somebody can do something, at a level, and who says so.
+   *
+   * `personId` is the DIRECTORY id, not a name — the same choice `PersonRate` made and for the
+   * same reason. Everything older in this reducer joins people by name; a skill is a record
+   * about a person rather than a record of what they typed, and it survives a rename.
+   */
+  | {
+      t: 'recordPersonSkill'
+      personId: string
+      skillId: string
+      level: SkillLevel
+      source: SkillSource
+      assessedBy: string | null
+      lastUsedOn: string | null
+      note: string
+      now: string
+    }
+  | {
+      t: 'correctPersonSkill'
+      id: string
+      patch: {
+        level?: SkillLevel
+        source?: SkillSource
+        assessedBy?: string | null
+        lastUsedOn?: string | null
+        note?: string
+      }
+      now: string
+    }
+  | { t: 'removePersonSkill'; id: string; now: string }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -854,6 +897,14 @@ export type ConfigOp =
   | { k: 'deleteWorkType'; id: string }
   | { k: 'upsertDiscipline'; id: string | null; label: string; description: string; ownerRoleId: string }
   | { k: 'deleteDiscipline'; id: string }
+  /*
+   * The skill CATALOGUE is configuration — a vocabulary the firm owns, like disciplines. The
+   * LEVELS people are recorded at are not, and travel as their own actions: a `ConfigOp` carries
+   * a whole operating model and takes `config.manage`, which is not the authority that should
+   * let somebody write a judgement about a colleague.
+   */
+  | { k: 'upsertSkill'; id: string | null; name: string; category: string; description: string }
+  | { k: 'deleteSkill'; id: string }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
@@ -3085,6 +3136,177 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    /**
+     * Record what somebody can do.
+     *
+     * Two gates, and the second one is the point of the feature. `skill.record` got the action
+     * through the funnel and covers your own, self-rated. Writing a level against ANOTHER
+     * person, or attaching the words "assessed" or "certified" to any level including your own,
+     * is a claim with somebody's reputation attached and takes `skill.assess`.
+     *
+     * The self-certification case is the one worth being explicit about: without the second
+     * check, anybody could record themselves as Expert, `certified`, and the product would show
+     * a certification nobody issued. `self` is the only source a person can put on their own
+     * row unaided, and that is exactly what the word means.
+     */
+    case 'recordPersonSkill': {
+      const person = state.model.people[a.personId]
+      // No archived check: `Person` has no `deletedAt`. The directory does not retire people.
+      if (!person) return { state, error: 'That person is not in the directory.' }
+      const skill = state.model.skills?.[a.skillId]
+      if (!skill || skill.deletedAt) {
+        return { state, error: 'That skill is not in the catalogue, or has been retired.' }
+      }
+
+      const problem = checkPersonSkill({ level: a.level, source: a.source, assessedBy: a.assessedBy })
+      if (problem) return { state, error: problem }
+
+      const mine = directoryPersonFor(state.model, actor)
+      const own = mine?.id === a.personId
+      if (!own || a.source !== 'self') {
+        const may = can(state.model, actor, 'skill.assess')
+        if (!may.allowed) {
+          return {
+            state,
+            error: own
+              ? `${may.reason ?? 'Not permitted.'} You can record your own skills as self-rated; saying they are assessed or certified is somebody else's judgement to record.`
+              : `${may.reason ?? 'Not permitted.'} Recording a level against another person needs the grant for it.`,
+          }
+        }
+      }
+
+      // One live row per person per skill. A second would make "what level is she at" a question
+      // with two answers, and nothing downstream chooses between them.
+      const already = Object.values(state.personSkills).find(
+        (p) => !p.deletedAt && p.personId === a.personId && p.skillId === a.skillId,
+      )
+      if (already) {
+        return { state, error: `${person.name} already has ${skill.name} recorded. Correct it rather than adding a second.` }
+      }
+
+      const seq = state.seq + 1
+      const id = `pskill-${seq}`
+      const next: PersonSkill = {
+        id,
+        personId: a.personId,
+        skillId: a.skillId,
+        level: a.level,
+        source: a.source,
+        assessedBy: a.source === 'assessed' ? (a.assessedBy?.trim() || by) : null,
+        lastUsedOn: a.lastUsedOn,
+        note: a.note.trim(),
+        // Never true in storage. The boundary sets it on the copy that leaves.
+        withheld: false,
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          personSkills: { ...state.personSkills, [id]: next },
+          audit: log(actor, state, {
+            rowId: a.personId,
+            field: `person.skill.${a.skillId}`,
+            from: null,
+            // The LEVEL is in the trail, unlike a rate's amount. A rate is pay and the audit is
+            // readable by anybody who may read history; a skill level is a delivery fact about
+            // capability, and a change to one is the kind of thing a review should be able to
+            // see happened. The judgement is protected at the boundary, not by omission here.
+            to: `${a.level} (${a.source})`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${skill.name} recorded for ${person.name}.`,
+      }
+    }
+
+    case 'correctPersonSkill': {
+      const existing = state.personSkills[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That skill record no longer exists.' }
+
+      const level = a.patch.level ?? existing.level
+      const source = a.patch.source ?? existing.source
+      const assessedBy = a.patch.assessedBy === undefined ? existing.assessedBy : a.patch.assessedBy
+      const problem = checkPersonSkill({ level, source, assessedBy })
+      if (problem) return { state, error: problem }
+
+      const mine = directoryPersonFor(state.model, actor)
+      const own = mine?.id === existing.personId
+      if (!own || source !== 'self') {
+        const may = can(state.model, actor, 'skill.assess')
+        if (!may.allowed) {
+          return {
+            state,
+            error: own
+              ? `${may.reason ?? 'Not permitted.'} You can correct your own self-rated level; assessed and certified are not yours to set.`
+              : `${may.reason ?? 'Not permitted.'} Changing somebody else's recorded level needs the grant for it.`,
+          }
+        }
+      }
+
+      const next: PersonSkill = {
+        ...existing,
+        level,
+        source,
+        assessedBy: source === 'assessed' ? (assessedBy?.trim() || by) : null,
+        lastUsedOn: a.patch.lastUsedOn === undefined ? existing.lastUsedOn : a.patch.lastUsedOn,
+        note: a.patch.note === undefined ? existing.note : a.patch.note.trim(),
+        recordedBy: by,
+        recordedAt: a.now,
+      }
+      return {
+        state: {
+          ...state,
+          personSkills: { ...state.personSkills, [existing.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.personId,
+            field: `person.skill.${existing.skillId}`,
+            from: `${existing.level} (${existing.source})`,
+            to: `${next.level} (${next.source})`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Corrected.',
+      }
+    }
+
+    case 'removePersonSkill': {
+      const existing = state.personSkills[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That skill record no longer exists.' }
+
+      const mine = directoryPersonFor(state.model, actor)
+      if (mine?.id !== existing.personId) {
+        const may = can(state.model, actor, 'skill.assess')
+        if (!may.allowed) {
+          return { state, error: `${may.reason ?? 'Not permitted.'} Removing somebody else's recorded skill needs the grant for it.` }
+        }
+      }
+      /*
+       * Soft, like everything else here. A withdrawn skill is not a skill nobody ever had, and
+       * "why did she stop being listed for this" is a question a delivery review asks. It also
+       * frees the one-live-row rule above, so the skill can be recorded again.
+       */
+      return {
+        state: {
+          ...state,
+          personSkills: { ...state.personSkills, [a.id]: { ...existing, deletedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: existing.personId,
+            field: `person.skill.${existing.skillId}`,
+            from: `${existing.level} (${existing.source})`,
+            to: null,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Withdrawn.',
+      }
+    }
+
     case 'submitTimesheet': {
       const attester = attesterFor(state, actor)
       const problem = submitProblem(
@@ -4344,6 +4566,58 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, disciplines: { ...m.disciplines, [op.id]: { ...discipline, deletedAt: now } } },
         { rowId: op.id, field: 'discipline', from: discipline.label, to: '(archived)', at: now, by },
         `Discipline "${discipline.label}" archived.`,
+      )
+    }
+
+    case 'upsertSkill': {
+      const name = op.name.trim()
+      if (!name) return { state, error: 'A skill needs a name.' }
+      const id = op.id ?? `skill-${m.seq}`
+      const existing = m.skills?.[id]
+      // The name must stay unique, like every other vocabulary here. Two "Data migration"
+      // entries make "who can do data migration" a question with two half-answers.
+      const clash = liveSkills(m).find(
+        (s) => s.id !== id && s.name.toLowerCase() === name.toLowerCase(),
+      )
+      if (clash) return { state, error: `A skill called "${clash.name}" already exists.` }
+      const skill: Skill = {
+        id,
+        name,
+        category: op.category.trim(),
+        description: op.description.trim(),
+        deletedAt: null,
+      }
+      return done(
+        { ...m, skills: { ...m.skills, [id]: skill }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'skill', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `Skill "${name}" updated.` : `Skill "${name}" added.`,
+      )
+    }
+
+    case 'deleteSkill': {
+      const skill = m.skills?.[op.id]
+      if (!skill) return { state, error: 'Skill not found.' }
+      /*
+       * Refused while anybody is still recorded against it, like a work type in use.
+       *
+       * The consequence of not refusing is quieter here than elsewhere and worse for it:
+       * `candidatesFor` filters person-skills against the live catalogue, so retiring a skill
+       * people hold does not orphan their rows visibly — it makes them stop matching. Somebody
+       * would search for the skill, find nobody, and conclude the firm cannot do it.
+       */
+      const held = Object.values(state.personSkills).filter(
+        (p) => !p.deletedAt && p.skillId === op.id,
+      )
+      if (held.length) {
+        return {
+          state,
+          error: `${held.length} ${held.length === 1 ? 'person is' : 'people are'} recorded against "${skill.name}". Withdraw those first, or leave it in place.`,
+        }
+      }
+      return done(
+        { ...m, skills: { ...m.skills, [op.id]: { ...skill, deletedAt: now } } },
+        { rowId: op.id, field: 'skill', from: skill.name, to: '(archived)', at: now, by },
+        `Skill "${skill.name}" archived.`,
       )
     }
 

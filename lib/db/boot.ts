@@ -1,5 +1,5 @@
-import { can } from '../access'
-import type { OperatingModel } from '../config'
+import { can, directoryPersonFor } from '../access'
+import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
 import { loadSeed, type SeedFile } from '../data'
@@ -158,7 +158,7 @@ export async function boot(): Promise<Boot> {
        * holds every rate, because it is the single mutation funnel and it needs the whole
        * timeline to refuse an overlapping period; what changes is what leaves the server.
        */
-      state: state && canSeeRates(state.model, actor) ? state : state && { ...state, rates: {} },
+      state: state && redactForReader(state, actor),
       tenantId,
       actor,
       signInRequired: identityEstablished() && !session.verified,
@@ -190,12 +190,42 @@ export async function boot(): Promise<Boot> {
 }
 
 /**
- * Whether this actor may be sent rates at all.
+ * Everything removed from the workspace before it is serialised into the page.
  *
- * A function rather than an inline `can(...)` because the same question has to be asked wherever
- * a rate-derived figure is computed — cost, revenue, margin — and one of those getting it wrong
- * is how the grant is routed around by something that never mentions a rate.
+ * One function, called once, so that "what does this reader actually receive" has a single
+ * answer somebody can read in full. The two redactions here are deliberately different shapes,
+ * and the difference is the interesting part:
+ *
+ *   - **Rates go out whole or not at all.** There is no half of a pay rate that is safe to
+ *     publish, so an actor without `rate.view` gets an empty map.
+ *   - **Skills go out with their judgement fields stripped.** A skill row holds a directory fact
+ *     — this person has done this, and last did it in March — and a judgement about a named
+ *     colleague. Emptying the collection would throw away the first to protect the second, and
+ *     the first is the reason anybody wants a skills directory.
+ *
+ * Withheld, not hidden, in both cases. `state` is serialised into the page and reaches the
+ * browser, so a screen that merely declines to render a figure still ships it — and this file
+ * already learned that once: the sign-in gate withheld the issues and shipped the summary of
+ * them, and the comment above records that emptying the two obvious collections was not the
+ * whole job.
+ *
+ * The reducer still holds everything, on the server, because it is the single mutation funnel
+ * and it needs the full set to refuse an overlapping rate period or a duplicate skill row.
  */
-function canSeeRates(model: OperatingModel, actor: Actor): boolean {
-  return can(model, actor, 'rate.view').allowed
+function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
+  const rates = can(state.model, actor, 'rate.view').allowed ? state.rates : {}
+
+  /*
+   * Your own rows are never withheld from you, whatever you hold. Being told that your recorded
+   * level is a thing you may not see would be a worse product than not recording it — and the
+   * person best placed to notice that an assessment is wrong is its subject.
+   */
+  const mine = directoryPersonFor(state.model, actor)?.id ?? null
+  const personSkills = can(state.model, actor, 'skill.view').allowed
+    ? state.personSkills
+    : Object.fromEntries(
+        Object.entries(state.personSkills).map(([id, p]) => [id, redactPersonSkill(p, mine)]),
+      )
+
+  return { ...state, rates, personSkills }
 }

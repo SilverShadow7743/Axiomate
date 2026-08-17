@@ -36,6 +36,7 @@ import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
 import type { ResourceProfile } from './capacity'
+import type { Skill } from './skills'
 
 /* ================================================================== *
  * Scope
@@ -355,6 +356,23 @@ export function disciplineLabel(model: OperatingModel, id: string): string {
 }
 
 /**
+ * The skill catalogue, grouped the way a firm reads it: by category, then by name.
+ *
+ * `?? {}` for the same reason `liveDisciplines` has it — this is reachable with a model parsed
+ * from browser storage that predates the key, where `mergeModel` has not run.
+ */
+export function liveSkills(model: OperatingModel): Skill[] {
+  return Object.values(model.skills ?? {})
+    .filter((s) => !s.deletedAt)
+    .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+}
+
+/** The name to show for a stored skill id, or the id itself if it no longer resolves. */
+export function skillName(model: OperatingModel, id: string): string {
+  return model.skills?.[id]?.name ?? id
+}
+
+/**
  * What a responsibility can be filled with.
  *  - `person` resolves against the directory (Owner, Raised By)
  *  - `party`  resolves against the accountable-party vocabulary (an organisation, not a human)
@@ -539,6 +557,16 @@ export interface OperatingModel {
   workTypes: Record<string, WorkType>
   /** Which discipline resolves it. Independent of `workTypes` — see `Discipline`. */
   disciplines: Record<string, Discipline>
+  /**
+   * The firm's skill catalogue. See `lib/skills.ts`.
+   *
+   * Ships **empty**, and is the only vocabulary here that does. Roles, work types and
+   * disciplines have defensible defaults because every consultancy has roughly those; a skill
+   * list is the firm's own competitive shape and a shipped one would be a guess presented as a
+   * starting point. The levels people are recorded at are NOT here — they are per person,
+   * attributed and dated, and they live in their own table.
+   */
+  skills: Record<string, Skill>
   /**
    * How long each severity is allowed, in working days from the raised date.
    *
@@ -896,6 +924,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   const disciplines: Record<string, Discipline> = {}
   for (const s of SEED_DISCIPLINES) disciplines[s.id] = { ...s, seeded: true, deletedAt: null }
 
+  // Empty on purpose — see `OperatingModel.skills`. There is no `SEED_SKILLS`.
+  const skills: Record<string, Skill> = {}
+
   const agents: Record<string, AgentRecord> = {}
   for (const a of SEED_AGENTS) agents[a.id] = seedAgent(a)
 
@@ -912,6 +943,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     responsibilities,
     workTypes,
     disciplines,
+    skills,
     sla: { ...DEFAULT_SLA },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
@@ -1151,6 +1183,11 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // Seed first so a build that adds a discipline gives it to every existing workspace, and
     // stored second so a relabelled one keeps the firm's wording rather than reverting on load.
     disciplines: { ...seed.disciplines, ...(stored.disciplines ?? {}) },
+    // Explicit like the rest, and load-bearing here: every model stored before this key existed
+    // has no `skills`, and the spread above would leave it undefined — which the first
+    // `Object.values(model.skills)` in the UI turns into a crash, in production, on the
+    // workspace that has data and never on the seed that does not.
+    skills: { ...seed.skills, ...(stored.skills ?? {}) },
     // Explicit, like every other key: a model stored before this existed has no `sla`, and the
     // spread above would set it to undefined — which is not a missing policy, it is a crash
     // the next time anything reads a severity from it.

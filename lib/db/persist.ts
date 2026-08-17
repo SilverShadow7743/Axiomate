@@ -26,6 +26,7 @@ import {
   versionToRow,
   timesheetToRow,
   rateToRow,
+  personSkillToRow,
   changeToRow,
   revisionToRow,
   relationshipToRow,
@@ -527,6 +528,21 @@ export async function persistSteps(
         if (before.rates[id] === r) continue
         const row = rateToRow(tenantId, r)
         await tx.personRate.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'recordPersonSkill':
+    case 'correctPersonSkill':
+    case 'removePersonSkill': {
+      for (const [id, p] of Object.entries(after.personSkills)) {
+        if (before.personSkills[id] === p) continue
+        const row = personSkillToRow(tenantId, p)
+        await tx.personSkill.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

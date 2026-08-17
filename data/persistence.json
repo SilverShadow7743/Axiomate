@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-17T13:16:46.564Z",
+  "at": "2026-08-17T14:06:01.943Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 33,
+  "passed": 38,
   "failed": 0,
   "checks": [
     {
@@ -115,24 +115,49 @@
       "detail": "Rejected · \"Wednesday is on the wrong issue.\" · decided by Persistence Proof · edit allowed"
     },
     {
+      "what": "a recorded skill comes back out of Postgres with its level, its assessor and when it was last used",
+      "ok": true,
+      "detail": "practitioner (assessed) by Persistence Proof, last used 2026-05-01, withheld false"
+    },
+    {
+      "what": "and the catalogue entry survives alongside it, in the model document rather than the table",
+      "ok": true,
+      "detail": "skill-4 \"Intercompany\" in D365 Finance"
+    },
+    {
+      "what": "a reader without the grant is sent the fact and not the judgement",
+      "ok": true,
+      "detail": "level null, assessor null, note \"\" — but still PERSON_1 on skill-4, last used 2026-05-01"
+    },
+    {
+      "what": "and the subject of a row is never withheld from themselves",
+      "ok": true,
+      "detail": "own row reads practitioner"
+    },
+    {
+      "what": "and a redacted row is refused by the mapper rather than saved as an erased level",
+      "ok": true,
+      "detail": "Refusing to persist a redacted person-skill (pskill-17). Levels are stripped for reading only."
+    },
+    {
       "what": "a timeline comes back out of Postgres with its boundaries and reasons intact",
       "ok": true,
-      "detail": "ver-17 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-18 2026-07-01→open \"Moved to a four-day week\" by proof"
+      "detail": "ver-18 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-19 2026-07-01→open \"Moved to a four-day week\" by proof"
     },
     {
       "what": "and the exclusive boundary survives it — 30 June is the old week, 1 July the new",
       "ok": true,
-      "detail": "30 Jun → ver-17, 1 Jul → ver-18, before any period → null"
+      "detail": "30 Jun → ver-18, 1 Jul → ver-19, before any period → null"
     },
     {
       "what": "a correction moves the timeline and does not move a stamp",
       "ok": true,
-      "detail": "the period now starts 2025-12-01 and December resolves to ver-17; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-17. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
+      "detail": "the period now starts 2025-12-01 and December resolves to ver-18; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-18. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
     },
     {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 18, state seq 14"
+      "detail": "stored seq 19, state seq 14"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",
@@ -167,7 +192,7 @@
     {
       "what": "the proof tenant owns only its own rows",
       "ok": true,
-      "detail": "2 of 233 issue rows"
+      "detail": "2 of 235 issue rows"
     }
   ]
 }

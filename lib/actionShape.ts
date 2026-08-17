@@ -7,6 +7,7 @@ import { SNAPSHOT_PURPOSES } from './evidence'
 import { NOTE_TYPES } from './notes'
 import { TIME_ACTIVITIES } from './time'
 import { COMMITMENT_KINDS } from './capacity'
+import { SKILL_ORDER, SKILL_SOURCES } from './skills'
 
 /**
  * Deciding whether an action is the shape it claims to be.
@@ -121,6 +122,8 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteWorkType',
   'upsertDiscipline',
   'deleteDiscipline',
+  'upsertSkill',
+  'deleteSkill',
   'setSla',
   'setSizeBands',
   'setStatusPolicy',
@@ -651,6 +654,30 @@ const SHAPES = {
     reason: req(text),
     now,
   },
+  recordPersonSkill: {
+    personId: req(id),
+    skillId: req(id),
+    level: req(oneOf(new Set(SKILL_ORDER))),
+    source: req(oneOf(new Set(SKILL_SOURCES))),
+    assessedBy: req(textOrNull),
+    lastUsedOn: req(isoDateOrNull),
+    note: req(text),
+    now,
+  },
+  correctPersonSkill: {
+    id: req(id),
+    patch: req(
+      patchOf({
+        level: oneOf(new Set(SKILL_ORDER)),
+        source: oneOf(new Set(SKILL_SOURCES)),
+        assessedBy: textOrNull,
+        lastUsedOn: isoDateOrNull,
+        note: text,
+      }),
+    ),
+    now,
+  },
+  removePersonSkill: { id: req(id), now },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),

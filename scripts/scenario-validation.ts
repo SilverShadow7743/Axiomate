@@ -89,6 +89,16 @@ import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
 import {
+  candidatesFor,
+  checkPersonSkill,
+  describeMatch,
+  redactPersonSkill,
+  type PersonSkill,
+  type Requirement,
+  type Skill,
+  type SkillLevel,
+} from '../lib/skills'
+import {
   contractedPosition,
   decideChangeProblem,
   describeContracted,
@@ -3103,6 +3113,101 @@ scenario(
       severity: 'P2',
       impact:
         'Scope change is the commonest commercial event in consulting and it had nowhere to live: a work-type string on an issue, and a SOW status that said a variation happened without saying what it was worth.',
+    }
+  },
+)
+
+scenario(
+  'SK1',
+  'A piece of work needs somebody who can do it, and the shortlist says what it cannot see',
+  'Recorded skill produces candidates rather than a recommendation, a stale skill is marked rather than dropped, and a level nobody may read shortens the list visibly rather than silently.',
+  () => {
+    const cat: Skill[] = [
+      { id: 'sk-ic', name: 'Intercompany', category: 'D365 Finance', description: '', deletedAt: null },
+      { id: 'sk-x', name: 'X++', category: 'Technical', description: '', deletedAt: null },
+      { id: 'sk-old', name: 'AX 2012 upgrades', category: 'Legacy', description: '', deletedAt: NOW },
+    ]
+    const ps = (id: string, person: string, skillId: string, level: SkillLevel, over: Partial<PersonSkill> = {}): PersonSkill => ({
+      id, personId: person, skillId, level, source: 'self', assessedBy: null,
+      lastUsedOn: '2026-06-01', note: '', withheld: false,
+      recordedBy: 'Operator', recordedAt: NOW, deletedAt: null, ...over,
+    })
+
+    const held = [
+      ps('p1', 'AMOLAK', 'sk-ic', 'expert', { source: 'assessed', assessedBy: 'Nishant' }),
+      ps('p2', 'AMOLAK', 'sk-x', 'practitioner'),
+      ps('p3', 'DHARMENDRA', 'sk-ic', 'practitioner', { lastUsedOn: '2021-01-01' }),   // long ago
+      ps('p4', 'JAYA', 'sk-ic', 'aware'),                                              // below the floor
+      ps('p5', 'MICHAEL', 'sk-ic', 'expert', { lastUsedOn: null }),                    // nobody has said
+      ps('p6', 'TARUN', 'sk-old', 'expert'),                                           // retired skill
+      ps('p7', 'PRIYA', 'sk-ic', 'expert', { deletedAt: NOW }),                        // withdrawn
+    ]
+
+    const need: Requirement[] = [
+      { skillId: 'sk-ic', level: 'practitioner' },
+      { skillId: 'sk-x', level: 'working' },
+    ]
+    const m = candidatesFor(need, held, cat, '2026-08-17')
+    const names = (cs: { personId: string }[]) => cs.map((c) => c.personId).sort()
+
+    /* Everything, one requirement, so partial-versus-qualified is exercised rather than assumed. */
+    const onlyIc = candidatesFor([{ skillId: 'sk-ic', level: 'practitioner' }], held, cat, '2026-08-17')
+
+    /*
+     * The redaction, driven through the matcher rather than described. A reader without
+     * `skill.view` gets rows whose level is stripped, and the shortlist computed from them must
+     * be SHORTER and must say so — a quietly shorter list reads as "the firm has nobody".
+     */
+    const asStranger = held.map((h) => redactPersonSkill(h, 'NOBODY'))
+    const blind = candidatesFor(need, asStranger, cat, '2026-08-17')
+    const asSelf = held.map((h) => redactPersonSkill(h, 'AMOLAK'))
+    const mine = candidatesFor(need, asSelf, cat, '2026-08-17')
+
+    /* An assessed level with no assessor is refused; a self-rated one needs nobody. */
+    const anonymous = checkPersonSkill({ level: 'expert', source: 'assessed', assessedBy: '  ' })
+    const signed = checkPersonSkill({ level: 'expert', source: 'assessed', assessedBy: 'Nishant' })
+    const own = checkPersonSkill({ level: 'expert', source: 'self', assessedBy: null })
+    const nonsense = checkPersonSkill({ level: 'guru' as SkillLevel, source: 'self', assessedBy: null })
+
+    const good =
+      /* only Amolak meets BOTH; Dharmendra and Michael meet one of the two */
+      names(m.qualified).join() === 'AMOLAK' &&
+      names(m.partial).join() === 'DHARMENDRA,MICHAEL' &&
+      /* Jaya is below the floor on the only skill she holds, so she is not a candidate at all */
+      !names(m.partial).includes('JAYA') &&
+      /* a retired catalogue entry produces nobody, and a withdrawn row is not a candidate */
+      !names(onlyIc.qualified).includes('TARUN') &&
+      !names(onlyIc.qualified).includes('PRIYA') &&
+      /* stale is MARKED, not filtered — the firm may have nobody fresher */
+      m.partial.find((c) => c.personId === 'DHARMENDRA')?.stale === true &&
+      m.partial.find((c) => c.personId === 'MICHAEL')?.stale === true &&
+      m.qualified[0]?.stale === false &&
+      /* it is a shortlist and it says what it is blind to */
+      m.blind.length === 4 &&
+      /shortlist, not a recommendation/.test(describeMatch(m, (id) => id)) &&
+      /* and the redaction shortens it visibly rather than silently */
+      blind.qualified.length === 0 &&
+      blind.partial.length === 0 &&
+      // Five, not seven: the retired skill and the withdrawn row are filtered out BEFORE the
+      // unreadable tally, so the count reports rows this reader would otherwise have matched
+      // against rather than every row in the table.
+      blind.unreadable === 5 &&
+      /shorter than the truth/.test(describeMatch(blind, (id) => id)) &&
+      /* your own rows are never withheld, so you still find yourself */
+      names(mine.qualified).join() === 'AMOLAK' &&
+      /* an unsigned assessment is refused, a signed one is not, and a bad level never lands */
+      anonymous !== null &&
+      signed === null &&
+      own === null &&
+      nonsense !== null
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Asked for Intercompany at practitioner and X++ at working: ${m.qualified.length} person meets both (${names(m.qualified).join(', ')}) and ${m.partial.length} meet part of it (${names(m.partial).join(', ')}). Jaya holds Intercompany at Aware, below the floor, so she is not on the list; Priya's row is withdrawn and Tarun's skill has been retired from the catalogue, so neither produces a candidate. Dharmendra last used it in 2021 and nobody has said when Michael last used his — both are marked stale rather than dropped, because a firm may have nobody fresher and hiding them would answer a different question. Nothing is ranked and no best match is returned: the result carries the four things it cannot see — ${m.blind.slice(0, 2).join('; ')} — and describeMatch says so in the sentence. Read by somebody without skill.view, the same data yields ${blind.qualified.length} candidates and reports ${blind.unreadable} unreadable rows, so a shortlist shortened by a permission announces itself instead of looking like an empty firm; Amolak reading it still finds himself, because a person's own rows are never withheld from them.`,
+      stops: 'at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers "who could do this" only once somebody states what "this" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity.ts refuses to make.',
+      severity: '—',
+      impact:
+        'Capacity could say whether a plan was possible and never who should be on it. This closes one of the three gaps capacity.ts names — skill — and leaves the other two, client relationship and who was on the call last week, absent and stated as absent rather than quietly assumed away.',
     }
   },
 )

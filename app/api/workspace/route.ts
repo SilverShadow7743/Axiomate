@@ -66,6 +66,9 @@ const KINDS = new Set([
   'decideChangeRequest',
   'recordRate',
   'correctRate',
+  'recordPersonSkill',
+  'correctPersonSkill',
+  'removePersonSkill',
   'submitTimesheet',
   'decideTimesheet',
   // `notify` is deliberately absent. Notifications are raised by rules, and the server plans

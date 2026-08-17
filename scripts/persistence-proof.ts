@@ -39,6 +39,8 @@ import { runScheduledPass } from '../lib/db/schedule'
 import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
 import { timelineOf, valueAt, stamp } from '../lib/versioning'
+import { redactPersonSkill } from '../lib/skills'
+import { personSkillToRow } from '../lib/db/map'
 import type { TenantId } from '../lib/tenant'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -136,6 +138,7 @@ async function scrub() {
   await prisma.version.deleteMany({ where })
   await prisma.timesheet.deleteMany({ where })
   await prisma.personRate.deleteMany({ where })
+  await prisma.personSkill.deleteMany({ where })
   await prisma.changeRequest.deleteMany({ where })
   await prisma.engagement.deleteMany({ where })
   await prisma.appliedAction.deleteMany({ where })
@@ -483,6 +486,107 @@ async function main() {
         returned.decidedBy === 'Persistence Proof' &&
         !editable.error,
       `${returned?.status} · "${returned?.reason}" · decided by ${returned?.decidedBy} · edit ${editable.error ? 'refused: ' + editable.error : 'allowed'}`,
+    )
+  }
+
+  /* ---------------- a recorded skill, and what a reader without the grant gets ---------------- */
+  {
+    const before = await loadWorkspace(TENANT)
+    // Seeded from the issue owners by `initWorkspace`, so this is a real directory entry rather
+    // than an id invented here — the reducer refuses one that is not in the directory.
+    const priya = Object.values(before.state.model.people).find((p) => p.name === 'Priya')
+
+    await persistActions(TENANT, A, [
+      { t: 'config', op: { k: 'upsertSkill', id: null, name: 'Intercompany', category: 'D365 Finance', description: 'Cross-entity postings and eliminations.' }, now: NOW },
+    ])
+    const withSkill = await loadWorkspace(TENANT)
+    const skill = Object.values(withSkill.state.model.skills ?? {}).find((s) => s.name === 'Intercompany')
+
+    const written = await persistActions(TENANT, A, [
+      {
+        t: 'recordPersonSkill',
+        personId: priya?.id ?? 'MISSING',
+        skillId: skill?.id ?? 'MISSING',
+        level: 'practitioner',
+        source: 'assessed',
+        assessedBy: 'Persistence Proof',
+        lastUsedOn: '2026-05-01',
+        note: 'Led the eliminations rebuild.',
+        now: NOW,
+      },
+    ])
+
+    const back = await loadWorkspace(TENANT)
+    const row = Object.values(back.state.personSkills).find((p) => p.personId === priya?.id)
+    check(
+      'a recorded skill comes back out of Postgres with its level, its assessor and when it was last used',
+      written.ok &&
+        row?.level === 'practitioner' &&
+        row?.source === 'assessed' &&
+        row?.assessedBy === 'Persistence Proof' &&
+        row?.lastUsedOn === '2026-05-01' &&
+        row?.withheld === false,
+      row
+        ? `${row.level} (${row.source}) by ${row.assessedBy}, last used ${row.lastUsedOn}, withheld ${row.withheld}`
+        : `nothing stored — ${written.error ?? written.message}`,
+    )
+
+    /*
+     * The catalogue lives in the OperatingModel JSON document and the level lives in a table, so
+     * this asserts a round trip across BOTH stores in one read. A skill whose catalogue entry
+     * did not survive is a level against an id that resolves to nothing, and the screen would
+     * show a raw `skill-7` where a name belongs.
+     */
+    check(
+      'and the catalogue entry survives alongside it, in the model document rather than the table',
+      skill?.name === 'Intercompany' &&
+        (back.state.model.skills ?? {})[skill?.id ?? '']?.category === 'D365 Finance',
+      `${skill?.id} "${skill?.name}" in ${(back.state.model.skills ?? {})[skill?.id ?? '']?.category}`,
+    )
+
+    /*
+     * The boundary, driven rather than described.
+     *
+     * This is the assertion that would have caught shipping a named performance judgement to
+     * every browser. It calls the same function `boot()` calls, with a reader who is not the
+     * subject, and checks that what comes back has the judgement removed and the directory fact
+     * intact — both halves, because passing only the first would mean the redaction had simply
+     * emptied the row.
+     */
+    const stranger = redactPersonSkill(row!, 'SOMEBODY_ELSE')
+    check(
+      'a reader without the grant is sent the fact and not the judgement',
+      stranger.level === null &&
+        stranger.source === null &&
+        stranger.assessedBy === null &&
+        stranger.note === '' &&
+        stranger.withheld === true &&
+        stranger.personId === row!.personId &&
+        stranger.skillId === row!.skillId &&
+        stranger.lastUsedOn === '2026-05-01',
+      `level ${stranger.level}, assessor ${stranger.assessedBy}, note "${stranger.note}" — but still ${stranger.personId} on ${stranger.skillId}, last used ${stranger.lastUsedOn}`,
+    )
+    check(
+      'and the subject of a row is never withheld from themselves',
+      redactPersonSkill(row!, row!.personId).level === 'practitioner',
+      `own row reads ${redactPersonSkill(row!, row!.personId).level}`,
+    )
+
+    /*
+     * A redacted row must never be written back. Nothing in the application does this — the
+     * reducer's arms require a level — but the mapper refuses it anyway, because the failure it
+     * prevents is silent: a level overwritten with nothing by somebody who could not see it.
+     */
+    let refused = ''
+    try {
+      personSkillToRow(TENANT, stranger)
+    } catch (e) {
+      refused = e instanceof Error ? e.message : String(e)
+    }
+    check(
+      'and a redacted row is refused by the mapper rather than saved as an erased level',
+      refused.includes('Refusing to persist a redacted person-skill'),
+      refused || 'IT WAS ACCEPTED, which would erase a level',
     )
   }
 

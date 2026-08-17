@@ -1,5 +1,5 @@
 import { isMachineActor, type Actor } from './actor'
-import type { OperatingModel } from './config'
+import type { OperatingModel, Person } from './config'
 
 /**
  * What each role may do, and the check every mutation passes through.
@@ -74,6 +74,21 @@ export const PERMISSIONS = [
     what: 'Record or correct a cost or charge-out rate, from a date, with a reason.',
   },
   { key: 'time.approve', label: 'Decide a timesheet', what: 'Approve a submitted week, or return it with a reason. Never your own: the person who submitted may not decide it, whatever they hold.' },
+  /*
+   * Three keys rather than one, on the same split as `time.record` / `time.recordForOthers`.
+   *
+   * A skills directory that only a lead can fill in stays empty, so recording your own is part
+   * of doing the work. Saying how good somebody ELSE is, or attaching the word "assessed" to a
+   * level, is a judgement about a colleague and takes its own grant. Reading other people's
+   * levels is a third thing again — see the boundary note in `lib/skills.ts`.
+   */
+  { key: 'skill.record', label: 'Record your own skills', what: 'Say what you can do and at what level. Your own only, and self-rated — see the next two.' },
+  { key: 'skill.assess', label: "Assess somebody's skill", what: "Record a level against another person, or mark any level as assessed or certified rather than self-rated." },
+  {
+    key: 'skill.view',
+    label: 'See skill levels',
+    what: 'How good somebody is said to be, who said so, and any note. Without it the directory still shows WHO holds a skill and when they last used it — the levels are removed from the page payload, not merely hidden, and your own are never withheld from you.',
+  },
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
@@ -144,6 +159,9 @@ const DELIVERY_CORE: PermissionKey[] = [
   // Submitting is part of doing the work: anybody who records time has a week to attest to.
   // Approving is not here — it is added to the two roles below that already decide things.
   'time.submit',
+  // Same argument: a skills directory nobody but a lead may write to is a directory that stays
+  // empty. This covers your own, self-rated. Assessing anybody else is a separate grant.
+  'skill.record',
 ]
 
 /**
@@ -181,12 +199,20 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
-  ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
+  /*
+   * A principal assesses but does not staff, so they read levels and record them and get none of
+   * the commercial grants. This is the role the word "assessed" is really for: a senior person
+   * putting their name to a judgement about somebody they have worked with.
+   */
+  ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
-  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit'],
+  // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
+  // too. A support consultant has skills like anybody else, and a directory that cannot hear
+  // from a whole role is a directory with a hole in it nobody would think to look for.
+  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record'],
   // The one client role that decides anything: a sponsor is the person a change order is
   // actually put to, and a rule that names them is worthless if the grant does not.
   ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide'],
@@ -222,6 +248,24 @@ export function rolesFor(model: OperatingModel, actor: Actor): string[] {
   // fallback role would hand it whatever an unrecognised human gets.
   if (isMachineActor(actor)) return model.access.machineRoleIds ?? []
 
+  const person = directoryPersonFor(model, actor)
+  const own = (person?.roleIds ?? []).filter((r) => model.roles?.[r] && !model.roles[r].deletedAt)
+  return own.length ? own : model.access.defaultRoleIds
+}
+
+/**
+ * The directory entry this actor is, or undefined.
+ *
+ * Extracted from `rolesFor`, which is where this join was written and where it must stay
+ * identical to. Two places asking "which person is this?" and answering differently is how an
+ * actor ends up holding a role they cannot see the consequences of — and there are now two
+ * places asking: permissions, and whether a skill row is your own and so never withheld.
+ *
+ * Returns undefined for a machine actor. A machine is not a person, and giving it somebody's
+ * directory entry because a name happened to match would hand it that person's private rows.
+ */
+export function directoryPersonFor(model: OperatingModel, actor: Actor): Person | undefined {
+  if (isMachineActor(actor)) return undefined
   const people = Object.values(model.people ?? {})
   // Directory key first, then the address a provider supplied, then the display name. The
   // order is strongest-join-first: an object id is stable, an address is unique but changeable,
@@ -232,12 +276,11 @@ export function rolesFor(model: OperatingModel, actor: Actor): string[] {
   // to use was dead, and everybody landed on the fallback role, which ships as Administrator.
   // Nothing failed; the wrong thing quietly worked.
   const claimed = actor.email?.trim().toLowerCase()
-  const person =
+  return (
     people.find((p) => p.id === actor.id) ??
     (claimed ? people.find((p) => p.email?.toLowerCase() === claimed) : undefined) ??
     people.find((p) => p.name.toLowerCase() === actor.name.toLowerCase())
-  const own = (person?.roleIds ?? []).filter((r) => model.roles?.[r] && !model.roles[r].deletedAt)
-  return own.length ? own : model.access.defaultRoleIds
+  )
 }
 
 export interface Decision {
@@ -359,6 +402,16 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   // their pay, and the two are not the same authority.
   recordRate: 'rate.edit',
   correctRate: 'rate.edit',
+  /*
+   * The FLOOR, not the whole rule. `skill.record` covers your own, self-rated; the reducer arms
+   * additionally demand `skill.assess` for anybody else's row, or for the words "assessed" and
+   * "certified". Exactly the `time.record` / `time.recordForOthers` split, and written here as
+   * the weaker of the two deliberately — a funnel demanding the stronger one would stop a
+   * consultant recording their own skills, which is how the directory gets filled at all.
+   */
+  recordPersonSkill: 'skill.record',
+  correctPersonSkill: 'skill.record',
+  removePersonSkill: 'skill.record',
   recordVersion: 'capacity.record',
   correctVersion: 'capacity.record',
   // Raising or editing a variation is amending commercial scope, so it takes the same grant

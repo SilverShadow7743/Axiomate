@@ -14,6 +14,8 @@ import {
   liveWorkTypes,
   liveDisciplines,
   liveRoles,
+  liveSkills,
+  skillName,
   resolveAgentEnabled,
   resolveLabel,
   resolveLabels,
@@ -28,7 +30,8 @@ import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
-import { can } from '@/lib/access'
+import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/skills'
+import { can, directoryPersonFor } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
@@ -68,6 +71,7 @@ type Tab =
   | 'workTypes'
   | 'disciplines'
   | 'rates'
+  | 'skills'
   | 'serviceLevels'
   | 'transitions'
   | 'permissions'
@@ -84,6 +88,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'disciplines', label: 'Disciplines', group: 'Operating model' },
   { id: 'rates', label: 'Rates', group: 'Governance' },
+  { id: 'skills', label: 'Skills', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
@@ -113,10 +118,19 @@ interface Props {
    */
   onRecordRate: (r: { personId: string; kind: RateKind; validFrom: string; validTo: string | null; amount: number; currency: string; reason: string }) => boolean
   onCorrectRate: (id: string, patch: { validFrom?: string; amount?: number }, reason: string) => boolean
+  /**
+   * Skill LEVELS are records too, and off the config path for a sharper reason than rates.
+   *
+   * The catalogue travels through `onConfig` because it is a vocabulary the firm owns. A level
+   * is a judgement about a named colleague, and `config.manage` — which lets somebody rename a
+   * work type — is not the authority that should carry one.
+   */
+  onRecordSkill: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
+  onRemoveSkill: (id: string) => boolean
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onClose }: Props) {
+export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onRecordSkill, onRemoveSkill, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -230,6 +244,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
+          {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onRemove={onRemoveSkill} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
@@ -3321,6 +3336,342 @@ function Rates({
         </div>
       ) : (
         <p className="cfg-note">{mayEdit.reason ?? 'Read only.'}</p>
+      )}
+    </section>
+  )
+}
+
+/* ================================================================== *
+ * Skills
+ * ================================================================== */
+
+/**
+ * What people can do, and the firm's catalogue of what there is to be able to do.
+ *
+ * Both on one screen because they are useless apart: a catalogue nobody is recorded against
+ * answers nothing, and a level against a skill that is not in the catalogue cannot be recorded
+ * at all. They travel by different routes — the catalogue is configuration, a level is a record
+ * — and the screen says so rather than hiding it.
+ *
+ * The tab is visible to everybody, unlike Rates. Without `skill.view` the levels arrive stripped
+ * and the table says so plainly; what survives is who holds which skill and when they last used
+ * it, which is the half worth having a directory for.
+ */
+function Skills({
+  state,
+  actor,
+  onConfig,
+  onRecord,
+  onRemove,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  onConfig: (op: ConfigOp) => boolean
+  onRecord: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
+  onRemove: (id: string) => boolean
+}) {
+  const mayConfigure = can(state.model, actor, 'config.manage')
+  const mayAssess = can(state.model, actor, 'skill.assess')
+  const mayRecord = can(state.model, actor, 'skill.record')
+  const maySeeLevels = can(state.model, actor, 'skill.view')
+
+  const catalogue = liveSkills(state.model)
+  const people = Object.values(state.model.people).sort((a, b) => a.name.localeCompare(b.name))
+  const rows = Object.values(state.personSkills).filter((p) => !p.deletedAt)
+  const me = directoryPersonFor(state.model, actor)
+
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('')
+  const [description, setDescription] = useState('')
+
+  /* Defaults to you. Somebody without `skill.assess` cannot change it, and the control is
+     disabled rather than absent so the reason is visible rather than mysterious. */
+  const [who, setWho] = useState(me?.id ?? '')
+  const [skillId, setSkillId] = useState('')
+  const [level, setLevel] = useState<SkillLevel>('working')
+  const [source, setSource] = useState<SkillSource>('self')
+  const [assessedBy, setAssessedBy] = useState('')
+  const [lastUsedOn, setLastUsedOn] = useState('')
+  const [note, setNote] = useState('')
+
+  const nameOf = (personId: string) => state.model.people[personId]?.name ?? personId
+  const ready = who && skillId && (source !== 'assessed' || assessedBy.trim() !== '')
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Skills</h3>
+      <p className="cfg-note">
+        What people can do, how well, and how recently. A level is dated by when the skill was
+        last <em>used</em>, not by when it was recorded &mdash; a consultant who last touched a
+        module four years ago is not a current practitioner in it, and a staffing shortlist that
+        cannot tell those apart proposes the wrong person with confidence.
+      </p>
+      <p className="cfg-note">
+        This does not schedule anybody. It can say who is able to do a piece of work; it cannot
+        see who the client already trusts, who was on the call last week, who is free, or what
+        anybody costs &mdash; and those routinely decide the staffing.
+      </p>
+
+      <h4 className="cfg-sub">The catalogue</h4>
+      <p className="cfg-note">
+        The firm&rsquo;s own list. Nothing is shipped in it: roles and work types have defensible
+        defaults because every consultancy has roughly those, and a skill list is the one part of
+        an operating model that is the firm&rsquo;s own competitive shape.
+      </p>
+
+      {catalogue.length === 0 ? (
+        <p className="cfg-note">Nothing in the catalogue yet. Add the first skill below.</p>
+      ) : (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>Skill</th>
+              <th>Group</th>
+              <th>What it means</th>
+              <th>Recorded against</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {catalogue.map((sk) => {
+              const held = rows.filter((r) => r.skillId === sk.id).length
+              return (
+                <tr key={sk.id}>
+                  <td>{sk.name}</td>
+                  <td>{sk.category || <span className="est-block-note">&mdash;</span>}</td>
+                  <td>{sk.description}</td>
+                  <td className="mono">{held}</td>
+                  <td>
+                    {mayConfigure.allowed && (
+                      <button
+                        className="btn-link"
+                        disabled={held > 0}
+                        title={held > 0 ? `${held} recorded against it. Withdraw those first.` : 'Retire it'}
+                        onClick={() => onConfig({ k: 'deleteSkill', id: sk.id })}
+                      >
+                        Retire
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {mayConfigure.allowed ? (
+        <div className="time-form">
+          <div className="time-row">
+            <label className="fld time-fld-person">
+              <span className="fld-label">Skill</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Intercompany, X++ extensions, Data migration" />
+            </label>
+            <label className="fld">
+              <span className="fld-label">Group</span>
+              <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="D365 Finance" />
+            </label>
+            <label className="fld time-fld-note">
+              <span className="fld-label">What it means</span>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="So two people rating themselves answer the same question" />
+            </label>
+            <button
+              className="btn"
+              disabled={!name.trim()}
+              title={name.trim() ? 'Add it' : 'A skill needs a name'}
+              onClick={() => {
+                if (onConfig({ k: 'upsertSkill', id: null, name, category, description })) {
+                  setName('')
+                  setCategory('')
+                  setDescription('')
+                }
+              }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="cfg-note">{mayConfigure.reason ?? 'The catalogue is read only for you.'}</p>
+      )}
+
+      <h4 className="cfg-sub">Who can do what</h4>
+      {!maySeeLevels.allowed && (
+        <p className="cfg-note">
+          Levels are not shown at your access level, and are not sent to this page at all &mdash;
+          what you see below is who holds a skill and when they last used it. Your own are always
+          shown in full.
+        </p>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="cfg-note">
+          Nobody is recorded against anything yet. Until somebody is, no shortlist can be
+          produced &mdash; and an empty shortlist would mean &ldquo;nothing is written down&rdquo;
+          rather than &ldquo;nobody can do it&rdquo;.
+        </p>
+      ) : (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>Who</th>
+              <th>Skill</th>
+              <th>Level</th>
+              <th>Who says so</th>
+              <th>Last used</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows
+              .slice()
+              .sort((a, b) => nameOf(a.personId).localeCompare(nameOf(b.personId)) || a.skillId.localeCompare(b.skillId))
+              .map((r) => {
+                const stale = isStale(r.lastUsedOn, new Date().toISOString().slice(0, 10))
+                const mineToTouch = me?.id === r.personId
+                return (
+                  <tr key={r.id}>
+                    <td>{nameOf(r.personId)}</td>
+                    <td>{skillName(state.model, r.skillId)}</td>
+                    <td>
+                      {r.level ? (
+                        levelLabel(r.level)
+                      ) : (
+                        <span className="est-block-note">not shown at your access level</span>
+                      )}
+                    </td>
+                    <td>
+                      {r.source ? (
+                        <>
+                          {sourceLabel(r.source)}
+                          {r.assessedBy && <span className="est-block-note"> &mdash; {r.assessedBy}</span>}
+                        </>
+                      ) : (
+                        <span className="est-block-note">&mdash;</span>
+                      )}
+                    </td>
+                    <td className="mono">
+                      {r.lastUsedOn ?? <span className="est-block-note">not said</span>}
+                      {stale && <span className="est-block-note"> &middot; stale</span>}
+                    </td>
+                    <td>
+                      {(mineToTouch || mayAssess.allowed) && (
+                        <button className="btn-link" onClick={() => onRemove(r.id)}>
+                          Withdraw
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+          </tbody>
+        </table>
+      )}
+
+      {mayRecord.allowed && catalogue.length > 0 ? (
+        <div className="time-form">
+          <div className="time-row">
+            <label className="fld time-fld-person">
+              <span className="fld-label">Who</span>
+              <select
+                value={who}
+                disabled={!mayAssess.allowed}
+                title={mayAssess.allowed ? undefined : 'You can record your own skills. Recording somebody else\u2019s needs the grant for it.'}
+                onChange={(e) => setWho(e.target.value)}
+              >
+                <option value="">Choose a person&hellip;</option>
+                {people.map((pp) => (
+                  <option key={pp.id} value={pp.id}>
+                    {pp.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fld time-fld-person">
+              <span className="fld-label">Skill</span>
+              <select value={skillId} onChange={(e) => setSkillId(e.target.value)}>
+                <option value="">Choose a skill&hellip;</option>
+                {catalogue.map((sk) => (
+                  <option key={sk.id} value={sk.id}>
+                    {sk.category ? `${sk.category} \u2014 ${sk.name}` : sk.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fld">
+              <span className="fld-label">Level</span>
+              <select value={level} onChange={(e) => setLevel(e.target.value as SkillLevel)}>
+                {SKILL_LEVELS.map((l) => (
+                  <option key={l.key} value={l.key}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fld">
+              <span className="fld-label">Who says so</span>
+              <select
+                value={source}
+                disabled={!mayAssess.allowed}
+                title={mayAssess.allowed ? undefined : 'Self-rated is the only source you can set on your own record. That is what the word means.'}
+                onChange={(e) => setSource(e.target.value as SkillSource)}
+              >
+                <option value="self">Self-rated</option>
+                <option value="assessed">Assessed</option>
+                <option value="certified">Certified</option>
+              </select>
+            </label>
+            {source === 'assessed' && (
+              <label className="fld">
+                <span className="fld-label">Assessed by</span>
+                <input value={assessedBy} onChange={(e) => setAssessedBy(e.target.value)} placeholder="Whose judgement this is" />
+              </label>
+            )}
+            <label className="fld">
+              <span className="fld-label">Last used</span>
+              <input type="date" value={lastUsedOn} onChange={(e) => setLastUsedOn(e.target.value)} />
+            </label>
+            <label className="fld time-fld-note">
+              <span className="fld-label">Note</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where, and on what" />
+            </label>
+            <button
+              className="btn"
+              disabled={!ready}
+              title={ready ? 'Record it' : 'Needs a person, a skill, and an assessor if it is assessed'}
+              onClick={() => {
+                if (
+                  onRecord({
+                    personId: who,
+                    skillId,
+                    level,
+                    source,
+                    assessedBy: source === 'assessed' ? assessedBy : null,
+                    lastUsedOn: lastUsedOn || null,
+                    note,
+                  })
+                ) {
+                  setSkillId('')
+                  setNote('')
+                  setAssessedBy('')
+                }
+              }}
+            >
+              Record
+            </button>
+          </div>
+          {/*
+            * Deliberately not offered: a date for when the level was reached. It would be
+            * recorded once and never corrected, and a wrong date on a capability claim is worse
+            * than no date. `Last used` is the field that decays, and it is the one that matters.
+            */}
+        </div>
+      ) : (
+        <p className="cfg-note">
+          {catalogue.length === 0
+            ? 'Add something to the catalogue before recording anybody against it.'
+            : mayRecord.reason ?? 'Read only.'}
+        </p>
       )}
     </section>
   )

@@ -13,6 +13,7 @@ import {
   timesheetFromRow,
   rateFromRow,
   changeFromRow,
+  personSkillFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -131,6 +132,7 @@ type Reader = Pick<
   | 'timesheet'
   | 'personRate'
   | 'changeRequest'
+  | 'personSkill'
 >
 
 /**
@@ -156,7 +158,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -212,6 +214,7 @@ export async function loadWorkspace(
       db.timesheet.findMany({ where: { tenantId }, orderBy: { weekStarting: 'asc' } }),
       db.personRate.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
       db.changeRequest.findMany({ where: { tenantId }, orderBy: { requestedAt: 'asc' } }),
+      db.personSkill.findMany({ where: { tenantId }, orderBy: { recordedAt: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -243,6 +246,12 @@ export async function loadWorkspace(
      */
     rates: Object.fromEntries(rates.map((r) => [r.id, rateFromRow(r)])),
     changes: Object.fromEntries(changes.map((c) => [c.id, changeFromRow(c)])),
+    /*
+     * Unredacted, for the same reason as `rates` above: the reducer needs every row to refuse a
+     * duplicate, and the scheduled pass has no actor to redact against. The field-level
+     * redaction happens in `boot()`, at the boundary, once.
+     */
+    personSkills: Object.fromEntries(personSkills.map((p) => [p.id, personSkillFromRow(p)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),

@@ -143,6 +143,7 @@ model Tenant {
   timesheets    Timesheet[]
   rates         PersonRate[]
   changes       ChangeRequest[]
+  personSkills  PersonSkill[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -1081,6 +1082,51 @@ model PersonRate {
 
   @@id([tenantId, id])
   @@index([tenantId, personId, kind, validFrom])
+}
+
+/// What a person can do, at what level, and who says so.
+///
+/// A table rather than a key in the OperatingModel document, unlike the skill CATALOGUE which is
+/// a firm vocabulary and lives there. This is a per-person record: attributed, dated, corrected,
+/// withdrawn, and it grows with the directory rather than with the firm's taxonomy.
+///
+/// `level` and `source` are stored non-null and always populated. The nullable version of those
+/// fields exists only on the copy that crosses the boundary, where `lib/skills.ts` strips them
+/// for a reader without `skill.view` — see the note there. Nothing in this table is ever
+/// withheld from the reducer, which needs every row to refuse a duplicate.
+///
+/// `personId` is the DIRECTORY id, like `PersonRate.personId`. A skill survives a rename.
+model PersonSkill {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `pskill-12`, minted from the durable workspace counter.
+  id       String
+  personId String
+  /// References `OperatingModel.skills` — a JSON document, so no foreign key can enforce it.
+  /// The reducer refuses a record against an unknown or retired skill instead.
+  skillId  String
+
+  /// aware | working | practitioner | expert.
+  level  String
+  /// self | assessed | certified.
+  source String
+  /// Who assessed it. Required by the reducer when `source` is `assessed`, null otherwise.
+  assessedBy String?
+
+  /// When it was last used on real work. Null means nobody has said, which is not the same as
+  /// never — and the product reports it as stale rather than as absent.
+  lastUsedOn String?
+  note       String  @db.Text
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  @@id([tenantId, id])
+  /// The two reads: everybody's level in one skill, and one person's whole profile.
+  @@index([tenantId, skillId, level])
+  @@index([tenantId, personId])
 }
 
 /// What was true about something, from when, and why it changed.

@@ -206,6 +206,26 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       // mirror written by somebody without `rate.view` legitimately has an empty one.
       rates: parsed.rates ?? {},
       changes: parsed.changes ?? {},
+      /*
+       * The one collection where mirror-wins is the wrong rule, because of what the mirror can
+       * contain: rows this browser received with their levels stripped.
+       *
+       * A person without `skill.view` is sent `withheld: true` rows and mirrors them. If they
+       * are later granted it — or a colleague who holds it signs in on the same machine —
+       * mirror-wins would hand the redacted copies back and the screen would go on saying "not
+       * shown at your access level" to somebody it is now shown to. Nothing would error; the
+       * grant would simply appear not to work.
+       *
+       * So the server's copy goes down first and only the mirror's readable rows land on top. A
+       * withheld row carries nothing the server did not already send, and losing it costs
+       * nothing.
+       */
+      personSkills: {
+        ...(seed.personSkills ?? {}),
+        ...Object.fromEntries(
+          Object.entries(parsed.personSkills ?? {}).filter(([, p]) => !p.withheld),
+        ),
+      },
       engagements: { ...seed.engagements, ...(parsed.engagements ?? {}) },
       // Merged, not taken whole. The mirror's model predates every operating-model key added
       // since it was written, and adopting it verbatim made those keys `undefined` — which is

@@ -23,6 +23,7 @@ import type {
   Timesheet as TimesheetRow,
   PersonRate as PersonRateRow,
   ChangeRequest as ChangeRequestRow,
+  PersonSkill as PersonSkillRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -40,6 +41,7 @@ import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
 import type { ChangeRequest, ChangeStatus } from '../changeRequest'
+import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -977,6 +979,63 @@ export function rateFromRow(r: PersonRateRow): PersonRate {
     byId: r.byId ?? undefined,
     byEmail: r.byEmail,
     reason: r.reason,
+  }
+}
+
+/* ================================================================== *
+ * Person skills
+ * ================================================================== */
+
+/**
+ * `withheld` has no column, deliberately.
+ *
+ * It is not a fact about the record — it is a fact about the copy a particular reader was sent,
+ * and it is decided at the boundary in `boot()` from that reader's grants. A column would make
+ * it storable, and a storable "you may not see this" is one migration away from being written
+ * to, at which point the reducer would start refusing to read its own rows.
+ */
+export function personSkillToRow(tenantId: TenantId, p: PersonSkill): Prisma.PersonSkillUncheckedCreateInput {
+  if (p.level === null || p.source === null) {
+    /*
+     * A redacted row must never reach the database. This cannot happen through the reducer —
+     * the arms require both — but it CAN happen if a future path ever persists state that came
+     * back from a browser, and the failure would be silent data loss: a level overwritten with
+     * nothing by somebody who was never allowed to see it.
+     */
+    throw new Error(`Refusing to persist a redacted person-skill (${p.id}). Levels are stripped for reading only.`)
+  }
+  return {
+    tenantId,
+    id: p.id,
+    personId: p.personId,
+    skillId: p.skillId,
+    level: p.level,
+    source: p.source,
+    assessedBy: p.assessedBy,
+    // A String date, like `Version.validFrom` — see the note there.
+    lastUsedOn: p.lastUsedOn,
+    note: p.note,
+    recordedBy: p.recordedBy,
+    recordedAt: new Date(p.recordedAt),
+    deletedAt: p.deletedAt ? new Date(p.deletedAt) : null,
+  }
+}
+
+export function personSkillFromRow(r: PersonSkillRow): PersonSkill {
+  return {
+    id: r.id,
+    personId: r.personId,
+    skillId: r.skillId,
+    level: r.level as SkillLevel,
+    source: r.source as SkillSource,
+    assessedBy: r.assessedBy,
+    lastUsedOn: r.lastUsedOn,
+    note: r.note,
+    // Always false coming out of storage. Only the boundary sets it.
+    withheld: false,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 
