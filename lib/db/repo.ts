@@ -10,6 +10,7 @@ import {
   activityToRow,
   auditFromRow,
   versionFromRow,
+  timesheetFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -125,6 +126,7 @@ type Reader = Pick<
   | 'workspaceMeta'
   | 'operatingModel'
   | 'version'
+  | 'timesheet'
 >
 
 /**
@@ -150,7 +152,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -203,6 +205,7 @@ export async function loadWorkspace(
        * other's rows.
        */
       db.version.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
+      db.timesheet.findMany({ where: { tenantId }, orderBy: { weekStarting: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -224,9 +227,7 @@ export async function loadWorkspace(
     allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),
     versions: Object.fromEntries(versions.map((v) => [v.id, versionFromRow(v)])),
-    // Loaded from its own table in the storage step. Empty here so the in-memory shape is
-    // complete from the first commit rather than half-existing across two.
-    timesheets: {},
+    timesheets: Object.fromEntries(timesheets.map((t) => [t.id, timesheetFromRow(t)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),

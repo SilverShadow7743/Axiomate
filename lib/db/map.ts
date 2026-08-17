@@ -20,6 +20,7 @@ import type {
   // Aliased because `Version` is also the domain type one import below, and the two are not
   // the same shape — the row holds `null` where the domain holds `undefined`.
   Version as VersionRow,
+  Timesheet as TimesheetRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -34,6 +35,7 @@ import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { Version } from '../versioning'
+import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -866,6 +868,46 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Timesheets
+ * ================================================================== */
+
+/**
+ * `weekStarting` is a `String` column and stays one here, for the same reason `Version.validFrom`
+ * does: it is compared and grouped as a string, and a `DateTime` round trip through
+ * `fromDate` — which returns `string | null` — into a non-null field has no honest conversion.
+ */
+export function timesheetToRow(tenantId: TenantId, t: Timesheet): Prisma.TimesheetUncheckedCreateInput {
+  return {
+    tenantId,
+    id: t.id,
+    person: t.person,
+    weekStarting: t.weekStarting,
+    status: t.status,
+    submittedAt: new Date(t.submittedAt),
+    submittedBy: t.submittedBy,
+    // Null rather than absent, in both directions. A week awaiting a decision has genuinely not
+    // been decided, and `undefined` would round-trip to a different value than it started as.
+    decidedAt: t.decidedAt ? new Date(t.decidedAt) : null,
+    decidedBy: t.decidedBy,
+    reason: t.reason,
+  }
+}
+
+export function timesheetFromRow(r: TimesheetRow): Timesheet {
+  return {
+    id: r.id,
+    person: r.person,
+    weekStarting: r.weekStarting,
+    status: r.status as TimesheetStatus,
+    submittedAt: r.submittedAt.toISOString(),
+    submittedBy: r.submittedBy,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    decidedBy: r.decidedBy,
+    reason: r.reason,
   }
 }
 

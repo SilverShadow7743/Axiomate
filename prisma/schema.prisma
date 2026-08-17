@@ -140,6 +140,7 @@ model Tenant {
   audit         ScheduleAudit[]
   appliedActions AppliedAction[]
   versions      Version[]
+  timesheets    Timesheet[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -925,6 +926,47 @@ model AppliedAction {
 
   @@id([tenantId, key])
   @@index([tenantId, at])
+}
+
+/// A week somebody has attested to, and what an approver decided about it.
+///
+/// It carries NO hours. The entries stay in `TimeEntry`, and the total is derived from them on
+/// read — the freeze in the reducer is what stops them moving underneath a submitted week. The
+/// alternative, copying the lines onto the sheet at submission, keeps a second copy of every
+/// hour that is then free to disagree with the first.
+///
+/// `@@unique([tenantId, person, weekStarting])` is the rule, not an optimisation: a person has
+/// one timesheet per week. A resubmission after a return reuses the row rather than minting a
+/// second, and what happened to it is the audit trail.
+///
+/// `person` is a name, like `TimeEntry.person` and for the same reason — the same join the rest
+/// of the model uses until people have keys.
+model Timesheet {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `ts-12`, minted from the durable workspace counter.
+  id     String
+  person String
+  /// ISO date, always a Monday. Not a week number: ISO and US numbering disagree about which
+  /// week is which, and neither is readable in a database row.
+  weekStarting String
+
+  /// Submitted | Approved | Rejected. A String rather than an enum, as `status` is on Issue —
+  /// the vocabulary is the product's and an enum here would need a migration to extend.
+  status String
+
+  submittedAt DateTime
+  submittedBy String
+  decidedAt   DateTime?
+  decidedBy   String?
+  /// Why it was returned. Required on a rejection and null on an approval: "yes" is complete on
+  /// its own, "no" is not.
+  reason String? @db.Text
+
+  @@id([tenantId, id])
+  @@unique([tenantId, person, weekStarting])
+  @@index([tenantId, status])
 }
 
 /// What was true about something, from when, and why it changed.

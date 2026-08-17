@@ -24,6 +24,7 @@ import {
   allocationToRow,
   commitmentToRow,
   versionToRow,
+  timesheetToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -484,6 +485,25 @@ export async function persistSteps(
      * correction is audited with both sides; removing the row instead would take the only
      * record of what the workspace used to believe.
      */
+    /*
+     * Submit and decide both write the one row. Compared by identity, so a decision writes the
+     * sheet it decided and nothing else — and a resubmission updates the same row rather than
+     * inserting a second, which the unique constraint would refuse anyway.
+     */
+    case 'submitTimesheet':
+    case 'decideTimesheet': {
+      for (const [id, t] of Object.entries(after.timesheets)) {
+        if (before.timesheets[id] === t) continue
+        const row = timesheetToRow(tenantId, t)
+        await tx.timesheet.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
     case 'recordVersion':
     case 'correctVersion': {
       for (const [id, v] of Object.entries(after.versions)) {
