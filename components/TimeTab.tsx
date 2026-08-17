@@ -45,6 +45,7 @@ export default function TimeTab({
   today,
   onAdd,
   onRemove,
+  onUpdate,
   onSubmitWeek,
   onDecideWeek,
 }: {
@@ -65,6 +66,14 @@ export default function TimeTab({
   onSubmitWeek: (person: string, week: string) => boolean
   /** Approve or return. `reason` is required on a return and ignored on an approval. */
   onDecideWeek: (id: string, decision: 'approved' | 'rejected', reason?: string) => boolean
+  /**
+   * Correct an entry.
+   *
+   * The reducer arm, the API allowlist entry and the persist arm all existed and no screen
+   * dispatched it — so an hour could be logged and withdrawn but not corrected, and the only
+   * way to fix a typo was to delete the record of the work and write a new one.
+   */
+  onUpdate: (id: string, patch: { hours?: number; note?: string; billable?: boolean }) => boolean
 }) {
   const may = can(state.model, actor, 'time.record')
   const mayOthers = can(state.model, actor, 'time.recordForOthers')
@@ -111,6 +120,7 @@ export default function TimeTab({
   const cannotSubmit = submitProblem(sheets, person, week, attester)
   const cannotApprove = decideProblem(sheet, 'approved', undefined, attester)
   const [returnReason, setReturnReason] = useState('')
+  const [editing, setEditing] = useState<string | null>(null)
   const cannotReturn = decideProblem(sheet, 'rejected', returnReason, attester)
 
   /**
@@ -344,7 +354,7 @@ export default function TimeTab({
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
+              {entries.flatMap((e) => [
                 <tr key={e.id}>
                   <td className="mono">{formatIso(e.date)}</td>
                   <td>{e.person}</td>
@@ -359,13 +369,36 @@ export default function TimeTab({
                   </td>
                   <td>
                     {mayRemove(e, actor, mayOthers.allowed) && (
-                      <button className="btn-link" onClick={() => onRemove(e.id)}>
-                        Remove
-                      </button>
+                      <>
+                        {/*
+                          * Correct, then Remove. Correcting is the commoner intent and was the
+                          * one with no control at all — so a typo could only be fixed by
+                          * deleting the record of the work and writing a new one, which loses
+                          * who first entered it and when.
+                          */}
+                        <button className="btn-link" onClick={() => setEditing(editing === e.id ? null : e.id)}>
+                          {editing === e.id ? 'Cancel' : 'Correct'}
+                        </button>{' '}
+                        <button className="btn-link" onClick={() => onRemove(e.id)}>
+                          Remove
+                        </button>
+                      </>
                     )}
                   </td>
-                </tr>
-              ))}
+                </tr>,
+                editing === e.id ? (
+                  <tr key={`${e.id}-edit`}>
+                    <td colSpan={7}>
+                      <CorrectEntry
+                        entry={e}
+                        onSave={(patch) => {
+                          if (onUpdate(e.id, patch)) setEditing(null)
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ) : null,
+              ])}
             </tbody>
           </table>
           {summary.byActivity.length > 1 && (
@@ -388,4 +421,55 @@ export default function TimeTab({
 /** Own hours, or the grant to touch anybody else's. */
 function mayRemove(entry: TimeEntry, actor: Actor, hasOverride: boolean): boolean {
   return entry.person.toLowerCase() === actor.name.toLowerCase() || hasOverride
+}
+
+/**
+ * Correct an entry's hours, note or billable flag.
+ *
+ * Deliberately NOT the date or the person. Moving an entry to another day or another person is
+ * not a correction — it changes which week is being attested to and whose time it is, and both
+ * are things the freeze and the attestation rules are built around. `updateTime` will accept
+ * either, and the reducer checks both the old week and the new one; offering it here would
+ * invite it as a matter of course. Withdraw and re-enter is the honest route for those.
+ */
+function CorrectEntry({
+  entry,
+  onSave,
+}: {
+  entry: TimeEntry
+  onSave: (patch: { hours?: number; note?: string; billable?: boolean }) => void
+}) {
+  const [hours, setHours] = useState(String(entry.hours))
+  const [note, setNote] = useState(entry.note)
+  const [billable, setBillable] = useState(entry.billable)
+
+  const parsed = Number(hours)
+  const problem = checkEntry({ hours: parsed, date: entry.date, person: entry.person }, entry.date)
+  const changed = parsed !== entry.hours || note !== entry.note || billable !== entry.billable
+
+  return (
+    <div className="time-row">
+      <label className="fld time-fld-hours">
+        <span className="fld-label">Hours</span>
+        <input type="number" min={0.25} step={0.25} max={MAX_HOURS_PER_ENTRY} value={hours} onChange={(e) => setHours(e.target.value)} />
+      </label>
+      <label className="fld time-fld-note">
+        <span className="fld-label">Note</span>
+        <input value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <label className="fld">
+        <span className="fld-label">Billable</span>
+        <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
+      </label>
+      <button
+        className="btn"
+        disabled={Boolean(problem) || !changed}
+        title={problem?.message ?? (changed ? 'Save the correction' : 'Nothing has changed')}
+        onClick={() => onSave({ hours: parsed, note, billable })}
+      >
+        Save
+      </button>
+      {problem && <span className="ov-gate">{problem.message}</span>}
+    </div>
+  )
 }

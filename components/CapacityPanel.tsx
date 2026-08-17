@@ -10,6 +10,8 @@ import {
   type Allocation,
   profilesAt,
   WORKING_PATTERN,
+  COMMITMENT_KINDS,
+  type CommitmentKind,
 } from '@/lib/capacity'
 import { timelineOf } from '@/lib/versioning'
 import { summarise } from '@/lib/estimation'
@@ -39,6 +41,9 @@ export default function CapacityPanel({
   onAllocate,
   onRelease,
   onRecordPattern,
+  onCorrectPattern,
+  onCommit,
+  onReleaseCommitment,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -56,8 +61,24 @@ export default function CapacityPanel({
   onRelease: (id: string) => void
   /** Record a change to somebody's working week, from a date, with a reason. */
   onRecordPattern: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
+  /** Correct a period that was recorded wrongly. The other half of effective dating. */
+  onCorrectPattern: (versionId: string, validFrom: string, reason: string) => boolean
+  /** Record leave, a public holiday or internal work that comes off available capacity. */
+  onCommit: (c: {
+    person: string
+    kind: CommitmentKind
+    startDate: string
+    endDate: string
+    hoursPerDay: number
+    note: string
+  }) => boolean
+  /** Withdraw one. */
+  onReleaseCommitment: (id: string) => void
 }) {
   const may = can(state.model, actor, 'capacity.allocate')
+  // A different grant: committing somebody to a project is a claim on time that is not yours;
+  // recording that they are on leave is a fact about their diary. See lib/access.ts.
+  const mayRecord = can(state.model, actor, 'capacity.record')
 
   const [from, setFrom] = useState(row.plannedStartDate ?? today)
   const [to, setTo] = useState(row.plannedEndDate ?? addDays(today, 90))
@@ -124,6 +145,21 @@ export default function CapacityPanel({
     [state.versions, state.model.resourceProfiles, from],
   )
   const profileOf = (person: string) => profilesNow[peopleByName[person.toLowerCase()]]
+
+  /*
+   * Leave and holidays touching this window, for the people allocated here.
+   *
+   * The panel already SUBTRACTED these from every figure it shows and gave nobody a way to
+   * enter one — so every availability number in the product was optimistic, and the reason was
+   * invisible. Showing them beside the allocations is half the fix; the form below is the rest.
+   */
+  const commitmentsHere = useMemo(() => {
+    const names = new Set(allocations.map((a) => a.person.trim().toLowerCase()))
+    return Object.values(state.commitments)
+      .filter((c) => !c.deletedAt && names.has(c.person.trim().toLowerCase()))
+      .filter((c) => c.startDate <= to && c.endDate >= from)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  }, [state.commitments, allocations, from, to])
 
   const positions = useMemo(() => {
     const names = [...new Set(allocations.map((a) => a.person))]
@@ -221,13 +257,62 @@ export default function CapacityPanel({
         </table>
       )}
 
+      <section className="est-section">
+        <h4 className="est-h">Time off and internal work</h4>
+        {commitmentsHere.length === 0 ? (
+          <div className="panel-note">
+            Nothing recorded in this window. Every figure above therefore assumes nobody is on
+            leave — which is the optimistic reading, and worth correcting before it is quoted.
+          </div>
+        ) : (
+          <table className="cfg-table est-table">
+            <thead>
+              <tr>
+                <th>Who</th>
+                <th>What</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Hours a day</th>
+                <th>Note</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {commitmentsHere.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.person}</td>
+                  <td>{c.kind}</td>
+                  <td className="mono">{c.startDate}</td>
+                  <td className="mono">{c.endDate}</td>
+                  <td className="mono">{c.hoursPerDay}h</td>
+                  <td>{c.note}</td>
+                  <td>
+                    {mayRecord.allowed && (
+                      <button className="btn-link" onClick={() => onReleaseCommitment(c.id)}>
+                        Withdraw
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {mayRecord.allowed ? (
+          <CommitmentForm people={[...new Set(allocations.map((a) => a.person))]} defaultFrom={from} onCommit={onCommit} />
+        ) : (
+          <div className="panel-note">{mayRecord.reason ?? 'Read only.'}</div>
+        )}
+      </section>
+
       <PatternTimeline
         state={state}
         people={[...new Set(allocations.map((a) => a.person))]}
         peopleByName={peopleByName}
         today={today}
-        may={may.allowed}
+        may={mayRecord.allowed}
         onRecord={onRecordPattern}
+        onCorrect={onCorrectPattern}
       />
 
       {may.allowed ? (
@@ -396,6 +481,7 @@ function PatternTimeline({
   today,
   may,
   onRecord,
+  onCorrect,
 }: {
   state: WorkspaceState
   people: string[]
@@ -403,8 +489,12 @@ function PatternTimeline({
   today: string
   may: boolean
   onRecord: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
+  onCorrect: (versionId: string, validFrom: string, reason: string) => boolean
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const [correcting, setCorrecting] = useState<string | null>(null)
+  const [correctFrom, setCorrectFrom] = useState('')
+  const [correctWhy, setCorrectWhy] = useState('')
   const [from, setFrom] = useState(today)
   const [hours, setHours] = useState('7.5')
   const [days, setDays] = useState('5')
@@ -424,6 +514,7 @@ function PatternTimeline({
             <th>To</th>
             <th>Week</th>
             <th>Why</th>
+            <th />
           </tr>
         </thead>
         <tbody>
@@ -434,7 +525,7 @@ function PatternTimeline({
               return (
                 <tr key={person}>
                   <td>{person}</td>
-                  <td colSpan={4} className="est-over">
+                  <td colSpan={5} className="est-over">
                     Not known — nothing has been recorded, so capacity for this person is computed
                     from the shipped default.
                   </td>
@@ -454,12 +545,58 @@ function PatternTimeline({
                   <td>
                     {v.reason} <span className="est-block-note">— {v.by}</span>
                   </td>
+                  <td>
+                    {/*
+                      * Correcting moves the period; it does not rewrite what was computed from
+                      * it. Anything already stamped from this version keeps the value it used —
+                      * see `correctionImpact` in lib/versioning.ts.
+                      */}
+                    {may ? (
+                      <button className="btn-link" onClick={() => setCorrecting(correcting === v.id ? null : v.id)}>
+                        {correcting === v.id ? 'Cancel' : 'Correct'}
+                      </button>
+                    ) : null}
+                  </td>
                 </tr>
               )
             })
           })}
         </tbody>
       </table>
+
+      {correcting ? (
+        <div className="time-week-actions">
+          <span className="est-block-note">Correcting a period start:</span>
+          <input
+            type="date"
+            value={correctFrom}
+            onChange={(e) => setCorrectFrom(e.target.value)}
+            aria-label="Corrected start date"
+          />
+          <input
+            className="fld-input"
+            placeholder="Why it was wrong"
+            value={correctWhy}
+            onChange={(e) => setCorrectWhy(e.target.value)}
+            aria-label="Reason for the correction"
+          />
+          <button
+            type="button"
+            className="btn"
+            disabled={!correctFrom || !correctWhy.trim()}
+            title={correctWhy.trim() ? 'Correct this period' : 'A correction needs a reason'}
+            onClick={() => {
+              if (onCorrect(correcting, correctFrom, correctWhy)) {
+                setCorrecting(null)
+                setCorrectFrom('')
+                setCorrectWhy('')
+              }
+            }}
+          >
+            Correct
+          </button>
+        </div>
+      ) : null}
 
       {may ? (
         <div className="time-week-actions">
@@ -504,5 +641,127 @@ function PatternTimeline({
         </div>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Record leave, a public holiday, internal work or training.
+ *
+ * `hoursPerDay` rather than a flag, because half-days are the common case and a boolean would
+ * force somebody to choose between recording a half-day as a whole one or not recording it. It
+ * defaults to the full day rather than to zero: the usual entry is a whole day off, and a zero
+ * default would silently record a commitment that subtracts nothing.
+ *
+ * A note is required for `Internal` and `Training` and optional for the rest. "Leave" and
+ * "Public holiday" explain themselves; "Internal" does not, and internal work is exactly the
+ * category that becomes unaccountable when nobody says what it was.
+ */
+function CommitmentForm({
+  people,
+  defaultFrom,
+  onCommit,
+}: {
+  people: string[]
+  defaultFrom: string
+  onCommit: (c: {
+    person: string
+    kind: CommitmentKind
+    startDate: string
+    endDate: string
+    hoursPerDay: number
+    note: string
+  }) => boolean
+}) {
+  const [person, setPerson] = useState('')
+  const [kind, setKind] = useState<CommitmentKind>('Leave')
+  const [startDate, setStart] = useState(defaultFrom)
+  const [endDate, setEnd] = useState(defaultFrom)
+  const [hoursPerDay, setHours] = useState('7.5')
+  const [note, setNote] = useState('')
+
+  const needsNote = kind === 'Internal' || kind === 'Training'
+  const ready =
+    person.trim() !== '' &&
+    startDate !== '' &&
+    endDate <= '9999-12-31' &&
+    endDate >= startDate &&
+    Number(hoursPerDay) > 0 &&
+    (!needsNote || note.trim() !== '')
+
+  const submit = () => {
+    if (!ready) return
+    if (onCommit({ person, kind, startDate, endDate, hoursPerDay: Number(hoursPerDay), note })) {
+      setPerson('')
+      setNote('')
+    }
+  }
+
+  return (
+    <div className="time-form">
+      <div className="time-row">
+        <label className="fld time-fld-person">
+          <span className="fld-label">Who</span>
+          <input
+            value={person}
+            onChange={(e) => setPerson(e.target.value)}
+            list="cap-commit-people"
+            placeholder="Name from the directory"
+          />
+          <datalist id="cap-commit-people">
+            {people.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </label>
+        <label className="fld">
+          <span className="fld-label">What</span>
+          <select value={kind} onChange={(e) => setKind(e.target.value as CommitmentKind)}>
+            {COMMITMENT_KINDS.map((k) => (
+              <option key={k}>{k}</option>
+            ))}
+          </select>
+        </label>
+        <label className="fld">
+          <span className="fld-label">From</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setStart(e.target.value)
+              // A single day is the common entry, so the end follows the start until somebody
+              // moves it past — rather than leaving an end date before the start, which the
+              // reducer would refuse and the person would have to work out why.
+              if (endDate < e.target.value) setEnd(e.target.value)
+            }}
+          />
+        </label>
+        <label className="fld">
+          <span className="fld-label">To</span>
+          <input type="date" value={endDate} min={startDate} onChange={(e) => setEnd(e.target.value)} />
+        </label>
+        <label className="fld time-fld-hours">
+          <span className="fld-label">Hours a day</span>
+          <input
+            type="number"
+            min={0.25}
+            step={0.25}
+            value={hoursPerDay}
+            onChange={(e) => setHours(e.target.value)}
+            title="A half day is 3.75 on a 7.5-hour pattern"
+          />
+        </label>
+        <label className="fld time-fld-note">
+          <span className="fld-label">Note{needsNote ? '' : ' (optional)'}</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={needsNote ? 'What this is' : ''}
+          />
+        </label>
+        <button className="btn" disabled={!ready} onClick={submit} title={ready ? 'Record it' : needsNote && !note.trim() ? 'Internal work needs a note saying what it is' : 'Fill in who and when'}>
+          Record
+        </button>
+      </div>
+    </div>
   )
 }

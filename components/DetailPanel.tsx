@@ -17,6 +17,7 @@ import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
+import type { CommitmentKind } from '@/lib/capacity'
 import CommercialPanel from './CommercialPanel'
 import CapacityPanel from './CapacityPanel'
 import type { Sow } from '@/lib/sow'
@@ -138,12 +139,18 @@ interface Props {
   onUpdateEngagement: (nodeId: string, patch: Partial<EngagementDetail>) => void
   onUpsertSow: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
   onAttributeToSow: (nodeId: string, sowId: string | null) => void
+  onArchiveSow: (id: string) => void
   onAllocate: (
     projectId: string,
     a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
   ) => boolean
   onRelease: (id: string) => void
   onRecordPattern: (personId: string, from: string, hoursPerDay: number, daysPerWeek: number, reason: string) => boolean
+  onCorrectPattern: (versionId: string, validFrom: string, reason: string) => boolean
+  onCommit: (c: { person: string; kind: CommitmentKind; startDate: string; endDate: string; hoursPerDay: number; note: string }) => boolean
+  onReleaseCommitment: (id: string) => void
+  /** Correct an existing time entry. The reducer arm existed with no way to reach it. */
+  onUpdateTime: (id: string, patch: { hours?: number; note?: string; billable?: boolean }) => boolean
 }
 
 export default function DetailPanel({
@@ -176,9 +183,14 @@ export default function DetailPanel({
   onUpdateEngagement,
   onUpsertSow,
   onAttributeToSow,
+  onArchiveSow,
   onAllocate,
   onRelease,
   onRecordPattern,
+  onCorrectPattern,
+  onCommit,
+  onReleaseCommitment,
+  onUpdateTime,
   actor,
   onSaveIssue,
   onAddNote,
@@ -409,6 +421,7 @@ export default function DetailPanel({
                 allRows={allRows}
                 onUpsert={onUpsertSow}
                 onAttribute={onAttributeToSow}
+            onArchive={onArchiveSow}
               />
             )}
           </>
@@ -422,6 +435,9 @@ export default function DetailPanel({
             onAllocate={(a) => onAllocate(row.id, a)}
             onRelease={onRelease}
             onRecordPattern={onRecordPattern}
+            onCorrectPattern={onCorrectPattern}
+            onCommit={onCommit}
+            onReleaseCommitment={onReleaseCommitment}
           />
         ) : !issue ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
@@ -463,6 +479,7 @@ export default function DetailPanel({
             onRemove={onRemoveTime}
             onSubmitWeek={onSubmitWeek}
             onDecideWeek={onDecideWeek}
+            onUpdate={onUpdateTime}
           />
         ) : tab === 'Notes' ? (
           <NotesTab

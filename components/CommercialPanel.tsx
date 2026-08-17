@@ -29,6 +29,7 @@ export default function CommercialPanel({
   allRows,
   onUpsert,
   onAttribute,
+  onArchive,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -36,6 +37,8 @@ export default function CommercialPanel({
   allRows: ScheduleRow[]
   onUpsert: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
   onAttribute: (nodeId: string, sowId: string | null) => void
+  /** Retire a statement of work. Refused by the reducer while live projects sit under it. */
+  onArchive: (id: string) => void
 }) {
   const mayEdit = can(state.model, actor, 'sow.edit')
   const mayAttribute = can(state.model, actor, 'sow.attribute')
@@ -128,6 +131,20 @@ export default function CommercialPanel({
               <span className="comm-ref">{sow.reference}</span>
               <span className="comm-title">{sow.title}</span>
               <span className={`comm-status st-${sow.status.toLowerCase()}`}>{sow.status}</span>
+              <span className="grow" />
+              {/*
+                * Retiring a SOW had no control, so one entered by mistake stayed for good.
+                * The reducer refuses while live projects are attributed to it — the button does
+                * not pre-empt that, because the refusal names how many and is more useful than
+                * a disabled control with a guess in its tooltip.
+                */}
+              <button
+                className="btn ghost"
+                title="Archive this statement of work. Refused while projects are still delivered under it."
+                onClick={() => onArchive(sow.id)}
+              >
+                Archive
+              </button>
             </div>
 
             <div className="comm-figures">

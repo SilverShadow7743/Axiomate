@@ -1855,6 +1855,7 @@ export default function IssueWorkspace({
           onUpsertSow={(id, engagementId, patch) =>
             dispatch({ t: 'upsertSow', id, engagementId, patch, now: new Date().toISOString() })
           }
+          onArchiveSow={(id) => dispatch({ t: 'archiveSow', id, now: new Date().toISOString() })}
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
           }
@@ -1868,6 +1869,18 @@ export default function IssueWorkspace({
             dispatch({ t: 'addTime', issueId, ...entry, now: new Date().toISOString() })
           }
           onRemoveTime={(id) => dispatch({ t: 'removeTime', id, now: new Date().toISOString() })}
+          onCorrectPattern={(versionId, validFrom, reason) =>
+            dispatch({ t: 'correctVersion', id: versionId, patch: { validFrom }, reason, now: new Date().toISOString() })
+          }
+          onCommit={(c) =>
+            dispatch({ t: 'upsertCommitment', id: null, ...c, now: new Date().toISOString() })
+          }
+          onReleaseCommitment={(id) =>
+            dispatch({ t: 'removeCommitment', id, now: new Date().toISOString() })
+          }
+          onUpdateTime={(id, patch) =>
+            dispatch({ t: 'updateTime', id, patch, now: new Date().toISOString() })
+          }
           onRecordPattern={(personId, from, hoursPerDay, daysPerWeek, reason) =>
             dispatch({
               t: 'recordVersion',

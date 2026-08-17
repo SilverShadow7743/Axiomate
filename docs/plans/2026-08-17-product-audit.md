@@ -155,6 +155,26 @@ dispatches it.
 | `setWorkflowEnabled` | **Doubly unreachable**: nothing dispatches it, and the arm refuses anyway because both seeded workflows are `declared` | Remove or implement |
 | `notify` | Unreachable **by design** — excluded from the API allowlist because client and server run the same planner, so a `notify` over the wire could only be one the client invented | Keep as is |
 
+### Update, same day — eight of the eleven are now reachable
+
+`upsertCommitment` / `removeCommitment` (leave and holidays, with the commitments touching the
+window shown beside the allocations they were silently subtracted from), `updateTime` (a Correct
+control, deliberately not offering date or person — moving an entry between weeks or people is
+not a correction and the freeze is built around that), `correctVersion` (on each period in the
+working-weeks timeline), `archiveSow`, `deletePerson`, and `upsertDiscipline` / `deleteDiscipline`
+(a new Disciplines tab in Configuration).
+
+**Two remain unwired, and both are decisions rather than omissions:**
+
+- **`setResourceProfile`** — it edits the *stored* working pattern, which effective dating has
+  now superseded: `recordVersion` is the route, and it carries a date and a reason where this
+  carries neither. Wiring it would offer two ways to change one fact, one of which loses the
+  history. **Recommendation: delete the arm**, once nothing depends on it.
+- **`setWorkflowEnabled`** — unreachable *and* self-refusing, because both seeded workflows are
+  `declared` and the arm refuses to enable a workflow with no runtime. It is correct in refusing.
+  **Recommendation: remove the arm and the two seeded workflows**, or build an executor. A
+  mechanism that stores, renders and refuses is the one shape this codebase otherwise avoids.
+
 ### Rendered, but with no way through
 
 - **`EvidencePanel` persists a dead URL.** A picked file becomes `URL.createObjectURL(file)` — a

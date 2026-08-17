@@ -12,6 +12,7 @@ import {
   kindLabel,
   liveResponsibilities,
   liveWorkTypes,
+  liveDisciplines,
   liveRoles,
   resolveAgentEnabled,
   resolveLabel,
@@ -63,6 +64,7 @@ type Tab =
   | 'workflows'
   | 'routing'
   | 'workTypes'
+  | 'disciplines'
   | 'serviceLevels'
   | 'transitions'
   | 'permissions'
@@ -77,6 +79,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
+  { id: 'disciplines', label: 'Disciplines', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
@@ -204,6 +207,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onCl
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
+          {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
@@ -580,6 +584,7 @@ function RolesAndPeople({
               <th>Work address</th>
               <th>Roles</th>
               <th>Source</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -652,6 +657,24 @@ function RolesAndPeople({
                   </span>
                 </td>
                 <td className="cfg-inherit">{p.fromSource ? 'imported log' : 'entered here'}</td>
+                <td>
+                  {/*
+                    * Removing somebody was a reducer arm with no control at all, so a person
+                    * added by mistake — or a duplicate entry, which this directory has already
+                    * produced once — could never be taken out.
+                    *
+                    * It does NOT cascade. Allocations, time and notifications key on the name,
+                    * so removing a directory row leaves those pointing at somebody the workspace
+                    * no longer knows. The title says so rather than the button pretending.
+                    */}
+                  <button
+                    className="btn ghost"
+                    title={`Remove ${p.name} from the directory. Anything already recorded against the name stays where it is.`}
+                    onClick={() => onConfig({ k: 'deletePerson', id: p.id })}
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -716,6 +739,153 @@ function RolesAndPeople({
   )
 }
 
+
+/* ================================================================== *
+ * Disciplines
+ * ================================================================== */
+
+/**
+ * Which discipline resolves a piece of work — the third classification axis.
+ *
+ * Separate from Work types on purpose, and the separation is the point: a Technical issue can be
+ * a Defect or a Change Request, and folding the two lists together would make "the technical
+ * defects" an unaskable question. See `Discipline` in lib/config.ts.
+ *
+ * `upsertDiscipline` and `deleteDiscipline` were reducer arms with no screen. This is the screen.
+ */
+function Disciplines({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const model = state.model
+  const disciplines = liveDisciplines(model)
+  const roles = Object.values(model.roles).filter((r) => !r.deletedAt)
+  const [added, setAdded] = useState('')
+
+  /** How many records carry each — so archiving one is an informed decision, as with work types. */
+  const counts = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const i of Object.values(state.issues)) {
+      if (i.deletedAt || !i.discipline) continue
+      n[i.discipline] = (n[i.discipline] ?? 0) + 1
+    }
+    return n
+  }, [state.issues])
+
+  const unclassified = useMemo(
+    () => Object.values(state.issues).filter((i) => !i.deletedAt && !i.discipline).length,
+    [state.issues],
+  )
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Disciplines</h3>
+      <p className="cfg-note">
+        Who resolves a piece of work, as opposed to what kind of thing it is. A record carries a
+        work type <em>and</em> a discipline <em>and</em> a process area, and the three vary
+        independently — which is what makes &ldquo;the technical defects&rdquo; a question that
+        can be asked.
+      </p>
+      <p className="cfg-note">
+        The suggested owner is a proposal for routing, never an assignment. Nothing here sets an
+        owner, and a discipline whose usual owner is on leave must not stop work being given to
+        somebody else.
+      </p>
+      {unclassified > 0 && (
+        <p className="cfg-note">
+          {unclassified} live record{unclassified === 1 ? ' carries' : 's carry'} no discipline.
+          That is the honest state of an imported log — nothing was guessed on their behalf.
+        </p>
+      )}
+
+      {disciplines.map((d) => {
+        const used = counts[d.id] ?? 0
+        return (
+          <div className="cfg-card" key={d.id}>
+            <div className="cfg-card-head">
+              <input
+                defaultValue={d.label}
+                aria-label={`Name for ${d.id}`}
+                onBlur={(e) =>
+                  e.target.value.trim() !== d.label &&
+                  onConfig({ k: 'upsertDiscipline', id: d.id, label: e.target.value, description: d.description, ownerRoleId: d.ownerRoleId })
+                }
+              />
+              <span className="cfg-key">{d.id}</span>
+              {d.seeded && <Badge kind="seeded">standard</Badge>}
+              <span className="cfg-inherit">{used === 1 ? '1 record' : `${used} records`}</span>
+              <span className="grow" />
+              <button
+                className="btn ghost"
+                disabled={d.seeded || used > 0}
+                title={
+                  d.seeded
+                    ? 'One of the standard disciplines. It can be renamed, not removed.'
+                    : used > 0
+                      ? `${used} record${used === 1 ? ' is' : 's are'} in this discipline. Reclassify them first.`
+                      : 'Archive this discipline'
+                }
+                onClick={() => onConfig({ k: 'deleteDiscipline', id: d.id })}
+              >
+                Archive
+              </button>
+            </div>
+            <div className="cfg-row">
+              <label className="fld">
+                <span className="fld-label">Usually resolved by</span>
+                <select
+                  value={d.ownerRoleId}
+                  onChange={(e) =>
+                    onConfig({ k: 'upsertDiscipline', id: d.id, label: d.label, description: d.description, ownerRoleId: e.target.value })
+                  }
+                >
+                  <option value="">Not settled</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <input
+              defaultValue={d.description}
+              placeholder="What this discipline covers — when somebody should choose it"
+              aria-label={`Description for ${d.label}`}
+              onBlur={(e) =>
+                e.target.value.trim() !== d.description &&
+                onConfig({ k: 'upsertDiscipline', id: d.id, label: d.label, description: e.target.value, ownerRoleId: d.ownerRoleId })
+              }
+            />
+          </div>
+        )
+      })}
+
+      <div className="cfg-add">
+        <input
+          value={added}
+          placeholder="Add a discipline"
+          aria-label="New discipline"
+          onChange={(e) => setAdded(e.target.value)}
+        />
+        <button
+          className="btn"
+          disabled={!added.trim()}
+          onClick={() => {
+            if (onConfig({ k: 'upsertDiscipline', id: null, label: added, description: '', ownerRoleId: '' })) {
+              setAdded('')
+            }
+          }}
+        >
+          Add
+        </button>
+      </div>
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Work types
