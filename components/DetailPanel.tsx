@@ -46,6 +46,7 @@ import {
  */
 export type Tab =
   | 'Overview'
+  | 'Capacity'
   | 'Notes'
   | 'Estimation'
   | 'Time'
@@ -204,6 +205,29 @@ export default function DetailPanel({
    * opens a collapsed pane. Without it, Log time on a workspace with the details hidden would
    * switch to a tab nobody can see and look like it had done nothing at all.
    */
+  /**
+   * Land on a tab this row actually has.
+   *
+   * Selecting a project while sitting on Notes used to leave `tab` on a value the new row does
+   * not offer. The body fell through to the capacity panel anyway, so nothing looked broken —
+   * and the active tab was one the bar no longer contained, which is how a control ends up
+   * highlighted and unreachable.
+   */
+  useEffect(() => {
+    if (!row) return
+    const available: Tab[] = row.issue
+      ? [
+          'Overview', 'Notes', 'Estimation', 'Time', 'Schedule', 'Lifecycle',
+          'Relationships', 'Resolution Path', 'Evidence', 'History', 'Data Source',
+        ]
+      : row.kind === 'project'
+        ? ['Capacity', 'History', 'Data Source']
+        : ['Overview', 'History', 'Data Source']
+    // Both directions. Moving from a project back to an issue while on Capacity would otherwise
+    // leave the body with no branch to take, which renders as an empty panel.
+    if (!available.includes(tab)) setTab(available[0])
+  }, [row, tab])
+
   useEffect(() => {
     if (!requestTab) return
     setTab(requestTab)
@@ -263,19 +287,35 @@ export default function DetailPanel({
         }))
     : []
 
-  const TABS: Tab[] = [
-    'Overview',
-    'Notes',
-    'Estimation',
-    'Time',
-    'Schedule',
-    'Lifecycle',
-    'Relationships',
-    'Resolution Path',
-    'Evidence',
-    'History',
-    'Data Source',
-  ]
+  /**
+   * The tabs this row actually has, rather than a fixed list.
+   *
+   * It was fixed, and it was misleading in a way that made a whole panel unfindable. A project
+   * row shows the capacity panel for EVERY tab except two, so the bar offered Notes, Estimation
+   * and Time on a project and showed capacity whichever you picked — and somebody looking for
+   * capacity had no reason to think clicking the row was the way to it. There is no affordance
+   * for "this tab does nothing here"; the honest fix is not to offer it.
+   *
+   * Issues keep the full set. Structural rows get what they have: Capacity for a project,
+   * History everywhere (they are audited like everything else), and Data Source always.
+   */
+  const TABS: Tab[] = issue
+    ? [
+        'Overview',
+        'Notes',
+        'Estimation',
+        'Time',
+        'Schedule',
+        'Lifecycle',
+        'Relationships',
+        'Resolution Path',
+        'Evidence',
+        'History',
+        'Data Source',
+      ]
+    : row?.kind === 'project'
+      ? ['Capacity', 'History', 'Data Source']
+      : ['Overview', 'History', 'Data Source']
 
   return (
     <div className="detail" style={{ height }}>
@@ -328,7 +368,22 @@ export default function DetailPanel({
         </div>
       </div>
 
-      {panelState === 'compact' ? null : (
+      {/*
+        * Compact used to render nothing at all — the tab bar with an empty space under it, which
+        * reads as a broken panel rather than as a collapsed one. It is reached automatically on
+        * a viewport under 700px tall, so somebody on a laptop could select a row, see the tabs,
+        * and conclude the feature was missing. One line, naming the control that opens it.
+        */}
+      {panelState === 'compact' ? (
+        row ? (
+          <div className="detail-body">
+            <div className="panel-note">
+              The detail pane is collapsed. Use ▲ above, or drag the handle, to see{' '}
+              {row.issue ? 'this issue' : row.kind === 'project' ? 'capacity for this project' : 'this row'}.
+            </div>
+          </div>
+        ) : null
+      ) : (
       <div className="detail-body">
         {!row ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
@@ -357,7 +412,7 @@ export default function DetailPanel({
               />
             )}
           </>
-        ) : !issue && row.kind === 'project' ? (
+        ) : !issue && row.kind === 'project' && tab !== 'Overview' ? (
           <CapacityPanel
             row={row}
             state={state}
