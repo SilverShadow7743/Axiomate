@@ -216,7 +216,7 @@ export default function IssueFocus({
       {/* --- context bar: where the user came from, and what they are editing --- */}
       <div className="focus-bar">
         <button className="btn ghost back" onClick={attemptClose}>
-          ← Issue Tree &amp; Resolution Schedule
+          ← Back to the tree
         </button>
         <span className="grow" />
         {issue && <span className="idtag">{issue.id}</span>}

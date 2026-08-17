@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Issue Tree & Resolution Schedule — Axiomate TMS',
+  title: 'Axiomate TMS',
   description:
     // Deliberately names no client. This string is served to anyone who loads the page,
     // signed in or not, and is exactly what a search engine indexes — so a description that

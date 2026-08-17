@@ -33,6 +33,7 @@ import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
 import { sortTree } from '@/lib/sort'
 import { availabilityForAssignment, refusesAssignment } from '@/lib/availability'
+import UserMenu from './UserMenu'
 import { addDays, maxIso, minIso } from '@/lib/dates'
 import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'
 import { DOMAIN_PAD_DAYS, ROW_H } from '@/lib/layout'
@@ -1418,13 +1419,11 @@ export default function IssueWorkspace({
         <span className="wordmark">
           axiomate<i>.</i>
         </span>
-        {/* Axiomate is the product; this is the firm running it. The tree's top tier is that
-            firm's client, so naming the firm is what makes "Client" mean anything. */}
-        <span className="org-name" title={state.model.organization.description}>
-          {state.model.organization.name}
-        </span>
-        <span className="sep" />
-        <span className="page-title">Issue Tree &amp; Resolution Schedule</span>
+        {/* The firm's name and the page title used to sit here. Both were removed from the
+            header deliberately: the firm is the one running the product and does not need
+            telling, and the tree itself is the page — labelling it competes with the row that
+            is actually selected. The organisation name is still configured and still used
+            wherever it disambiguates, such as the filter summary for "All clients". */}
 
         <div className="search">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -1439,11 +1438,9 @@ export default function IssueWorkspace({
           />
         </div>
 
-        {signInRequired && (
-          <a className="btn primary signin-btn" href="/api/auth/signin">
-            Sign in
-          </a>
-        )}
+        {/* Moved to the far right, beside the save state, where an account control is looked
+            for. `UserMenu` decides which of the three states to show; this no longer needs to
+            know whether a provider exists. */}
 
         <Inbox
           state={state}
@@ -1549,6 +1546,11 @@ export default function IssueWorkspace({
         >
           {panelState === 'compact' ? 'Show details' : 'Hide details'}
         </button>
+        <UserMenu
+          actor={actor}
+          verified={Boolean(verified)}
+          signInRequired={Boolean(signInRequired)}
+        />
       </div>
 
       {/* Below the topbar rather than over the grid, because it is about this page and not

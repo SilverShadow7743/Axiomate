@@ -4280,3 +4280,160 @@ select.cell-editor {
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+/* ==================================================================
+ * Account: the header chip, its menu, and the sign-in page
+ *
+ * Built from the existing tokens only — no new colours and no new spacing scale. The chip sits
+ * beside the save state at the far right because that is where an account control is looked
+ * for, and it borrows `.menu` for the panel so it opens like every other menu in the header.
+ * ================================================================== */
+
+.user-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 3px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.user-chip:hover { background: var(--surface-2); }
+.user-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.user-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.user-avatar.lg { width: 32px; height: 32px; font-size: 13px; }
+
+/* An unverified session is not a lesser person, but it is a different fact, and the avatar is
+   the one part of this always on screen. Hollow rather than filled, so it reads as "not
+   vouched for" rather than as an error. */
+.user-avatar.unverified {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+
+.user-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-panel {
+  top: 30px;
+  right: 0;
+  left: auto;
+  min-width: 260px;
+  padding: 0;
+}
+
+.user-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.user-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.user-mail {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-state {
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.menu-note {
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.menu-item.danger { color: var(--h-overdue); }
+.user-panel form { margin: 0; }
+.user-panel .menu-item { width: 100%; text-align: left; }
+
+/* ---------------- the sign-in page ---------------- */
+
+.signin-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--surface);
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.signin-brand { display: flex; align-items: baseline; gap: 8px; }
+.signin-mark { font-weight: 700; letter-spacing: -0.02em; }
+.signin-org { font-size: 12px; color: var(--text-muted); }
+
+.signin-card h1 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.signin-lede { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+
+.signin-action {
+  align-self: flex-start;
+  margin-top: 4px;
+  text-decoration: none;
+}
+.signin-foot { margin: 0; font-size: 11px; color: var(--text-muted); }
+
+.signin-none {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 3px;
+}
+.signin-none strong { color: var(--text); }
