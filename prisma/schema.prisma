@@ -870,7 +870,14 @@ model ScheduleAudit {
   to     String? @db.Text
   reason String? @db.Text
   at     DateTime @default(now())
+  /// The display name, which is what History shows.
   by     String
+  /// The identity behind that name: the provider's stable object id, and the address it
+  /// supplied. Nullable because every row written before this existed has neither, and
+  /// because a machine actor has an id and no mailbox. A trail keyed on a display name alone
+  /// cannot answer 'everything this account did' — only 'everything anyone called this did'.
+  byId    String?
+  byEmail String?
 
   @@id([tenantId, id])
   @@index([tenantId, rowId, at])

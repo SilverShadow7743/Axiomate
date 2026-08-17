@@ -741,11 +741,28 @@ export interface OpResult {
 
 let auditSeq = 0
 function log(
+  actor: Actor,
   state: WorkspaceState,
-  entry: Omit<AuditEntry, 'id'>,
+  entry: Omit<AuditEntry, 'id' | 'byId' | 'byEmail'>,
 ): AuditEntry[] {
   auditSeq += 1
-  return [...state.audit, { ...entry, id: `aud-${auditSeq}-${entry.rowId}` }]
+  return [...state.audit, { ...entry, ...identityOf(actor), id: `aud-${auditSeq}-${entry.rowId}` }]
+}
+
+/**
+ * The identity behind the name, stamped in one place.
+ *
+ * Thirty-four call sites append audit entries, and every one of them supplied a display name
+ * because that was all an entry had room for. Adding two more fields at each would be
+ * thirty-four chances to forget one, and a trail is worth exactly as much as its least
+ * complete entry — so the actor became a parameter of `log` and the stamping happens here.
+ *
+ * `byEmail` is null rather than absent for a machine: the scheduled pass and the intake
+ * connector have stable ids and no mailbox, and null says "asked, and there is none" where
+ * undefined would say "never asked".
+ */
+function identityOf(actor: Actor): Pick<AuditEntry, 'byId' | 'byEmail'> {
+  return { byId: actor.id, byEmail: actor.email ?? null }
 }
 
 /**
@@ -757,14 +774,15 @@ function log(
  * deserves its own line in its own history.
  */
 function logAll(
+  actor: Actor,
   state: WorkspaceState,
-  entries: Omit<AuditEntry, 'id'>[],
+  entries: Omit<AuditEntry, 'id' | 'byId' | 'byEmail'>[],
 ): AuditEntry[] {
   return [
     ...state.audit,
     ...entries.map((e) => {
       auditSeq += 1
-      return { ...e, id: `aud-${auditSeq}-${e.rowId}` }
+      return { ...e, ...identityOf(actor), id: `aud-${auditSeq}-${e.rowId}` }
     }),
   ]
 }
@@ -945,7 +963,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             ...state,
             seq,
             nodes: { ...state.nodes, [id]: node },
-            audit: log(state, {
+            audit: log(actor, state, {
               rowId: id,
               field: 'created',
               from: null,
@@ -1025,7 +1043,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             ...state,
             seq,
             issues: { ...state.issues, [id]: issue },
-            audit: log(state, {
+            audit: log(actor, state, {
               rowId: id,
               field: 'created',
               from: null,
@@ -1071,7 +1089,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           seq,
           activities: { ...state.activities, [id]: rec },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: id,
             field: 'created',
             from: null,
@@ -1096,6 +1114,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let audit = state.audit
       for (const [k, v] of changed) {
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: a.id,
@@ -1217,6 +1236,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let audit = state.audit
       for (const [k, v] of changed) {
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: a.id,
@@ -1258,6 +1278,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           next.actualEnd = derivedEnd
           // A derived write is still a write, so it belongs in the audit trail.
           audit = log(
+            actor,
             { ...state, audit },
             {
               rowId: a.id,
@@ -1287,6 +1308,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       for (const [k, v] of Object.entries(a.patch)) {
         if ((act as unknown as Record<string, unknown>)[k] === v) continue
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: a.id,
@@ -1379,7 +1401,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           nodes,
           issues,
           activities,
-          audit: logAll(state, [
+          audit: logAll(actor, state, [
             {
               rowId: a.id,
               field: 'archived',
@@ -1519,7 +1541,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           nodes,
           issues,
           activities,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.id,
             field: 'restored',
             from: 'archived',
@@ -1575,7 +1597,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           nodes,
           issues,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.id,
             field: 'parent',
             from: from ? nameOf(state, from) : '(root)',
@@ -1615,7 +1637,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           seq: state.seq + 1,
           relationships: [...state.relationships, rel],
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.sourceIssueId,
             field: 'relationship',
             from: null,
@@ -1636,7 +1658,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           relationships: state.relationships.filter((r) => r.id !== a.id),
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: rel.sourceIssueId,
             field: 'relationship',
             from: `${rel.relationshipType} ${rel.targetIssueId}`,
@@ -1661,7 +1683,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               ...state.issues,
               [a.id]: { ...i, plannedStart: a.start, plannedEnd: a.end, scheduleMode: 'MANUAL' },
             },
-            audit: log(state, {
+            audit: log(actor, state, {
               rowId: a.id,
               field: 'plannedDates',
               // "— → —" reads as a date range rather than as "there wasn't one".
@@ -1690,7 +1712,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               origin: 'user',
             },
           },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.id,
             field: 'plannedDates',
             from: `${act.plannedStartDate} → ${act.plannedEndDate}`,
@@ -1738,7 +1760,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           seq: state.seq + 1,
           dependencies: [...state.dependencies, dep],
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.successorId,
             field: 'dependency',
             from: null,
@@ -1759,7 +1781,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           dependencies: state.dependencies.filter((d) => d.id !== a.id),
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: dep.successorId,
             field: 'dependency',
             from: `${dep.dependencyType} from ${nameOf(state, dep.predecessorId)}`,
@@ -1802,7 +1824,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           seq,
           evidence: { ...state.evidence, [id]: item },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'evidence',
             from: null,
@@ -1825,6 +1847,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       for (const [k, v] of Object.entries(a.patch)) {
         if ((ev as unknown as Record<string, unknown>)[k] === v) continue
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: ev.issueId,
@@ -1853,7 +1876,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           // Soft delete, consistent with every other record in this model.
           evidence: { ...state.evidence, [a.id]: { ...ev, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: ev.issueId,
             field: 'evidence',
             from: `${ev.kind}: ${ev.name}`,
@@ -1940,7 +1963,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           seq,
           activities,
           dependencies: deps,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'lifecycle',
             from: null,
@@ -1970,7 +1993,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           dependencies: state.dependencies.filter(
             (d) => !d.predecessorId.startsWith(`${a.issueId}#`) && !d.successorId.startsWith(`${a.issueId}#`),
           ),
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'lifecycle',
             from: `${n} activities`,
@@ -2020,7 +2043,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           notes: { ...state.notes, [id]: note },
           issues: { ...state.issues, [a.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } },
           seq,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'note',
             from: null,
@@ -2079,7 +2102,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           issues: issue
             ? { ...state.issues, [note.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } }
             : state.issues,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: note.issueId,
             field: 'note',
             from: String(note[changed[0]] ?? ''),
@@ -2106,7 +2129,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // Soft, like every other record: a working record that can be silently removed is
           // not a record of anything.
           notes: { ...state.notes, [a.id]: { ...note, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: note.issueId,
             field: 'note',
             from: note.noteType,
@@ -2182,7 +2205,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           estimateRevisions: revisions,
           seq,
           audit: material
-            ? log(state, {
+            ? log(actor, state, {
                 rowId: a.issueId,
                 field: 'estimate',
                 from: `${before.effortHours ?? '—'}h / ${before.workingDays ?? '—'}d`,
@@ -2218,7 +2241,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             ...state.estimates,
             [a.issueId]: { ...est, baselinedAt: a.now, baselinedBy: by, updatedAt: a.now, updatedBy: by },
           },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'estimate',
             from: 'draft',
@@ -2285,7 +2308,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           timeEntries: { ...state.timeEntries, [id]: entry },
           issues: { ...state.issues, [a.issueId]: { ...issue, lastActivity: today } },
           seq,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: 'time',
             from: '',
@@ -2330,6 +2353,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let audit = state.audit
       for (const k of changed) {
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: entry.issueId,
@@ -2363,7 +2387,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           timeEntries: { ...state.timeEntries, [a.id]: { ...entry, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: entry.issueId,
             field: 'time',
             from: `${entry.hours}h · ${entry.activity} · ${entry.person}`,
@@ -2418,7 +2442,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           approvals: { ...state.approvals, [id]: approval },
           seq,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.subjectId,
             field: 'approval',
             from: '',
@@ -2474,7 +2498,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           approvals: { ...state.approvals, [a.id]: next },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: approval.subjectId,
             field: 'approval',
             from: `${rule.label} — requested by ${approval.requestedBy}`,
@@ -2514,7 +2538,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           seq,
           // Audited against the record it is about, and carrying the rule that caused it, so
           // "why did I get this" and "why did this record change" have the same answer.
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.aboutId,
             field: 'notification',
             from: '',
@@ -2616,6 +2640,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         for (const key of ['effortHours', 'value', 'status'] as const) {
           if (existing[key] !== next[key]) {
             audit = log(
+              actor,
               { ...state, audit },
               {
                 rowId: a.engagementId,
@@ -2631,6 +2656,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         }
       } else {
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: a.engagementId,
@@ -2663,7 +2689,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           sows: { ...state.sows, [a.id]: { ...sow, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: sow.engagementId,
             field: 'sow',
             from: sow.reference,
@@ -2700,7 +2726,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           nodes: { ...state.nodes, [a.nodeId]: { ...node, sowId: a.sowId } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.nodeId,
             field: 'sow',
             from: was,
@@ -2771,7 +2797,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           allocations: { ...state.allocations, [id]: next },
           seq,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.projectId,
             field: 'allocation',
             from: existing ? `${existing.person} ${existing.percentage}%` : '',
@@ -2796,7 +2822,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           allocations: { ...state.allocations, [a.id]: { ...alloc, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: alloc.projectId,
             field: 'allocation',
             from: `${alloc.person} ${alloc.percentage}%`,
@@ -2852,7 +2878,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ...state,
           commitments: { ...state.commitments, [id]: next },
           seq,
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: 'CAPACITY',
             field: 'commitment',
             from: existing ? `${existing.kind} ${existing.startDate}→${existing.endDate}` : '',
@@ -2874,7 +2900,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           commitments: { ...state.commitments, [a.id]: { ...c, deletedAt: a.now } },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: 'CAPACITY',
             field: 'commitment',
             from: `${c.person}: ${c.kind}`,
@@ -2921,6 +2947,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let audit = state.audit
       for (const k of changed) {
         audit = log(
+          actor,
           { ...state, audit },
           {
             rowId: a.nodeId,
@@ -3002,7 +3029,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           issues: { ...state.issues, [a.issueId]: next },
-          audit: log(state, {
+          audit: log(actor, state, {
             rowId: a.issueId,
             field: type.label,
             from: before.join(', ') || '—',
@@ -3049,7 +3076,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
   const m = state.model
   const scopeName = (id: string) => (id === ROOT_SCOPE ? 'the organisation' : nameOf(state, id))
   const done = (model: OperatingModel, entry: Omit<AuditEntry, 'id'>, message: string): OpResult => ({
-    state: { ...state, model, audit: log(state, entry) },
+    state: { ...state, model, audit: log(actor, state, entry) },
     message,
   })
 

@@ -324,6 +324,24 @@ async function main() {
   // an end that moved together are one decision, not two. The check looked for 'plannedEnd'
   // and found nothing, and reported that as the reason not being stored.
   const reasoned = state.audit.find((e) => e.field === 'plannedDates')
+  /**
+   * The identity behind the name, and the reason this is checked against Postgres rather than
+   * against the reducer: it is a column, and a column that is written but never read back is
+   * indistinguishable from one that was never written.
+   *
+   * The proof's actor has an id and no address, which is the machine shape — the scheduled pass
+   * and the intake connector are the same. null therefore has to survive as null rather than
+   * becoming an empty string, or 'no mailbox' and 'a mailbox nobody typed' stop being different.
+   */
+  const stamped = state.audit.find((e) => e.byId)
+  check(
+    'an audit entry carries the identity behind the name, not just the name',
+    stamped?.byId === A.id && stamped?.byEmail === null && Boolean(stamped?.by),
+    stamped
+      ? `by "${stamped.by}", id ${stamped.byId}, email ${JSON.stringify(stamped.byEmail)}`
+      : `no entry carried an id — ${state.audit.length} entries, sample ${JSON.stringify(state.audit.slice(0, 2).map((e) => ({ f: e.field, by: e.by, byId: e.byId })))}`,
+  )
+
   check(
     'the audit keeps the reason, including its punctuation',
     Boolean(reasoned?.reason?.includes('“quotes”')),

@@ -8,6 +8,7 @@ import { provisioningName, type TenantId } from '../tenant'
 import {
   activityFromRow,
   activityToRow,
+  auditFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -221,18 +222,20 @@ export async function loadWorkspace(
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
       issues.map((i) => i.type),
     ),
-    // Reversed here rather than in the query, because the query had to sort the other way to
-    // choose the right rows. Ascending is what everything downstream assumes.
-    audit: [...audit].reverse().map((r) => ({
-      id: r.id,
-      rowId: r.rowId,
-      field: r.field,
-      from: r.from,
-      to: r.to,
-      at: r.at.toISOString(),
-      by: r.by,
-      reason: r.reason ?? undefined,
-    })),
+    /**
+     * Reversed here rather than in the query, because the query had to sort the other way to
+     * choose the right rows. Ascending is what everything downstream assumes.
+     *
+     * Through `auditFromRow` rather than a literal written out here. It was a literal, and it
+     * was a second implementation of a mapping that already existed one import away — so when
+     * the trail gained `byId` and `byEmail`, the writer learned about them and the reader did
+     * not. Every entry went into Postgres carrying the identity behind the name and came back
+     * out without it, which is invisible from either side on its own: the column was populated
+     * and the application never saw it.
+     *
+     * Caught by the persistence proof, which is the only check that reads back what it wrote.
+     */
+    audit: [...audit].reverse().map(auditFromRow),
     seq: meta?.seq ?? 1,
   }
 

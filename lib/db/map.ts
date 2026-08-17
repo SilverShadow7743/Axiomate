@@ -450,6 +450,11 @@ export function auditToRow(tenantId: TenantId, a: AuditEntry): Prisma.ScheduleAu
     reason: a.reason ?? null,
     at: new Date(a.at),
     by: a.by,
+    // The identity behind the name. Nullable rather than defaulted: a row written before
+    // these columns existed genuinely has neither, and inventing one would put a stable id
+    // on an entry nobody can vouch for.
+    byId: a.byId ?? null,
+    byEmail: a.byEmail ?? null,
   }
 }
 
@@ -462,6 +467,8 @@ export function auditFromRow(r: AuditRow): AuditEntry {
     to: r.to,
     at: r.at.toISOString(),
     by: r.by,
+    byId: r.byId ?? undefined,
+    byEmail: r.byEmail,
     reason: r.reason ?? undefined,
   }
 }

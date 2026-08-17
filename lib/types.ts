@@ -163,7 +163,23 @@ export interface AuditEntry {
   from: string | null
   to: string | null
   at: string
+  /**
+   * The display name, kept because it is what History shows and what a person recognises.
+   *
+   * It is not the identity. Two colleagues can share a name and one person's name can change,
+   * so a trail keyed on this alone cannot answer "everything this account did" — only
+   * "everything anyone called this did". The two fields below are the identity; this is the
+   * label for it.
+   */
   by: string
+  /**
+   * The provider's stable object id for the actor, and the address it supplied.
+   *
+   * Optional because entries written before these fields existed have neither, and because a
+   * machine actor has an id and no mailbox. Absent means unknown — never "nobody".
+   */
+  byId?: string
+  byEmail?: string | null
   reason?: string
 }
 
