@@ -38,6 +38,7 @@ import { persistActions } from '../lib/db/persist'
 import { runScheduledPass } from '../lib/db/schedule'
 import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
+import { timelineOf, valueAt, stamp } from '../lib/versioning'
 import type { TenantId } from '../lib/tenant'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -480,6 +481,97 @@ async function main() {
         returned.decidedBy === 'Persistence Proof' &&
         !editable.error,
       `${returned?.status} · "${returned?.reason}" · decided by ${returned?.decidedBy} · edit ${editable.error ? 'refused: ' + editable.error : 'allowed'}`,
+    )
+  }
+
+  /* ---------------- an effective-dated timeline, and a correction ---------------- */
+  {
+    const SUBJECT = 'PROOF_PERSON'
+    await persistActions(TENANT, A, [
+      {
+        t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: SUBJECT,
+        validFrom: '2026-01-01', validTo: '2026-07-01', value: { hoursPerDay: 7.5, daysPerWeek: 5 },
+        reason: 'Original contract', now: NOW,
+      },
+      {
+        t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: SUBJECT,
+        validFrom: '2026-07-01', validTo: null, value: { hoursPerDay: 6, daysPerWeek: 4 },
+        reason: 'Moved to a four-day week', now: NOW,
+      },
+    ])
+
+    const back = await loadWorkspace(TENANT)
+    const mine = timelineOf(Object.values(back.state.versions), 'person.workingPattern', SUBJECT)
+    const [first, second] = mine
+
+    check(
+      'a timeline comes back out of Postgres with its boundaries and reasons intact',
+      mine.length === 2 &&
+        first?.validFrom === '2026-01-01' &&
+        first?.validTo === '2026-07-01' &&
+        second?.validTo === null &&
+        first?.reason === 'Original contract' &&
+        first?.byId === 'proof',
+      mine.map((v) => `${v.id} ${v.validFrom}→${v.validTo ?? 'open'} "${v.reason}" by ${v.byId}`).join(' | '),
+    )
+
+    /*
+     * `validTo` is EXCLUSIVE, and this is the assertion that says so after a round trip. A period
+     * ending 2026-07-01 does not cover 1 July. Inclusive-versus-exclusive is where this kind of
+     * arithmetic goes wrong, and it goes wrong quietly — both readings return a number.
+     */
+    const versions = Object.values(back.state.versions)
+    const onJun30 = valueAt(versions, 'person.workingPattern', SUBJECT, '2026-06-30')
+    const onJul01 = valueAt(versions, 'person.workingPattern', SUBJECT, '2026-07-01')
+    const before = valueAt(versions, 'person.workingPattern', SUBJECT, '2025-12-31')
+    check(
+      'and the exclusive boundary survives it — 30 June is the old week, 1 July the new',
+      onJun30?.id === first?.id && onJul01?.id === second?.id && before === null,
+      `30 Jun → ${onJun30?.id ?? 'null'}, 1 Jul → ${onJul01?.id ?? 'null'}, before any period → ${before === null ? 'null' : 'SOMETHING, which is wrong'}`,
+    )
+
+    /*
+     * A correction moves the timeline and does not move a stamp.
+     *
+     * The stamp is constructed here rather than observed, because nothing in the application
+     * stamps anything yet — an approved timesheet line holding a rate will be the first. That is
+     * honest and it is not end-to-end coverage, and this check should not be read as claiming
+     * otherwise. What it does prove is the property the design rests on: the copy is independent
+     * of the row it came from, across a real database round trip.
+     */
+    const stamped = stamp(onJun30, NOW)
+    await persistActions(TENANT, A, [
+      {
+        t: 'correctVersion', id: first!.id,
+        patch: { validFrom: '2025-12-01' },
+        reason: 'Backdated — the contract started a month earlier', now: NOW,
+      },
+    ])
+    const afterCorrection = await loadWorkspace(TENANT)
+    const corrected = afterCorrection.state.versions[first!.id]
+    const nowCoversDecember = valueAt(
+      Object.values(afterCorrection.state.versions), 'person.workingPattern', SUBJECT, '2025-12-15',
+    )
+    const audited = afterCorrection.state.audit.filter(
+      (e) => e.rowId === SUBJECT && e.field === 'person.workingPattern',
+    )
+
+    check(
+      'a correction moves the timeline and does not move a stamp',
+      corrected?.validFrom === '2025-12-01' &&
+        nowCoversDecember?.id === first!.id &&
+        stamped?.stampedFrom === first!.id &&
+        /*
+         * Field by field, NOT `JSON.stringify`. Postgres stores this as JSONB, which does not
+         * preserve key order — the value comes back as `{daysPerWeek, hoursPerDay}` having gone
+         * in as `{hoursPerDay, daysPerWeek}`. Comparing the serialised form makes an identical
+         * value look changed, which is a false alarm about the one property this check exists
+         * to prove.
+         */
+        (stamped?.value as { hoursPerDay?: number; daysPerWeek?: number } | undefined)?.hoursPerDay === 7.5 &&
+        (stamped?.value as { hoursPerDay?: number; daysPerWeek?: number } | undefined)?.daysPerWeek === 5 &&
+        audited.some((e) => e.from === 'from 2026-01-01' && e.to === 'from 2025-12-01'),
+      `the period now starts ${corrected?.validFrom} and December resolves to ${nowCoversDecember?.id}; the stamp still holds ${JSON.stringify(stamped?.value)} from ${stamped?.stampedFrom}. Trail: ${audited.map((e) => `${e.from} -> ${e.to}`).join(' | ') || 'NOTHING RECORDED'}`,
     )
   }
 
