@@ -166,6 +166,7 @@ What that leaves open, in the order it blocks things:
 
 | # | Action | Note |
 |---|---|---|
+| I0 | **Sequence changed, 17 Aug** | The audit's commercial ordering (rates → CR → skills → documents → milestones → **invoices**) was paused in favour of operational delivery. Reason: six entities were built in two days and none had been exercised by a person, against a workspace with zero SOWs, zero rates and zero milestones in it. `Invoice` keeps its dependencies and loses nothing by waiting. See `docs/verification-checklist.md` |
 | I1 | **Nothing has been opened in a browser** | The row menu, inline status editing, the Capacity tab, the leave form, the timesheet Submit, the Rates tab, the Changes UI and now the Skills tab are all in production and **none has been rendered in a browser** — the workspace is behind Entra and I cannot sign in. This is the largest single piece of unverified work |
 | I2 | **The skill catalogue is empty** | Deliberately — the product ships no default skills, because a firm's skill list is its own. Until somebody adds entries, the Skills tab has a form and nothing to record against. Adding the ten or fifteen that matter for OAPIL and SLG is a ten-minute job for somebody who knows the work |
 | I2b | **Nothing has been uploaded** | The model, both endpoints, the store contract and the Evidence panel are built and deployed; the only path exercised so far is the refusal. Scenario D stays PARTIAL until one real file has been stored and produced — the same discipline applied to the intake path |
