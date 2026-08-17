@@ -524,6 +524,16 @@
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
     },
     {
+      "id": "HV1",
+      "title": "A working pattern changes, and last quarter still has to add up",
+      "expected": "What was true is preserved with its period, and a later correction cannot move a figure already computed.",
+      "verdict": "PARTIAL",
+      "actual": "A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. `validTo` is exclusive: 30 June answers 7.5h and 1 July answers 6h, so two periods can abut without overlapping. An overlap is refused — \"That period overlaps one already recorded: 2026-01-01 to 2026-07-01. T…\" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the 1 record computed from that version and moves none of it: the stamp still holds 7.5h from ver-1. What is not proven is the round trip — no version has been stored, and nothing in the application stamps anything yet, because the first thing that will is an approved timesheet.",
+      "stops": "at storage, and at a stamp made by the application rather than by this scenario",
+      "severity": "P2",
+      "impact": "The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

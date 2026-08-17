@@ -49,6 +49,7 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import { overlapProblem, type Version } from './versioning'
 import {
   capacityFor,
   checkAllocation,
@@ -240,6 +241,13 @@ export interface WorkspaceState {
   allocations: Record<string, Allocation>
   /** Leave, holidays and internal work — what comes off capacity before anything is sold. */
   commitments: Record<string, Commitment>
+  /**
+   * What was true, from when. See `./versioning`.
+   *
+   * Keyed by id rather than by subject, because a stamp refers to a version by id and the
+   * lookup that has to be fast is the one a correction makes.
+   */
+  versions: Record<string, Version<unknown>>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
@@ -472,6 +480,8 @@ export function initWorkspace(
     issues,
     activities: {},
     dependencies: [],
+    // A fresh workspace has no history yet — the first version is recorded, never seeded.
+    versions: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -660,6 +670,36 @@ export type Action =
        * that and an accident is whether anybody said so. Recorded in the audit trail either way.
        */
       acceptOverallocation?: boolean
+      now: string
+    }
+  /**
+   * A new period for something that changes over time.
+   *
+   * `value` is unknown here and typed at the boundary by `subjectKind` — the reducer's job is
+   * the period arithmetic, not the shape of a working pattern.
+   */
+  | {
+      t: 'recordVersion'
+      subjectKind: string
+      subjectId: string
+      validFrom: string
+      validTo?: string | null
+      value: unknown
+      reason: string
+      now: string
+    }
+  /**
+   * Move a period, or change what it held.
+   *
+   * Distinct from recording a new one, and the distinction is the point: a correction says the
+   * record was always wrong, where a new period says the world changed. Conflating them makes a
+   * backdated promotion indistinguishable from a second promotion.
+   */
+  | {
+      t: 'correctVersion'
+      id: string
+      patch: { validFrom?: string; validTo?: string | null; value?: unknown }
+      reason: string
       now: string
     }
   | { t: 'removeAllocation'; id: string; now: string }
@@ -2754,6 +2794,97 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     }
 
     /* ---------------- CAPACITY ---------------- */
+
+    case 'recordVersion': {
+      if (!a.reason.trim()) {
+        return { state, error: 'A version needs a reason — a record that cannot explain itself later is most of the point thrown away.' }
+      }
+      const candidate = {
+        subjectKind: a.subjectKind,
+        subjectId: a.subjectId,
+        validFrom: a.validFrom,
+        validTo: a.validTo ?? null,
+      }
+      const clash = overlapProblem(Object.values(state.versions), candidate)
+      if (clash) return { state, error: clash }
+
+      const seq = state.seq + 1
+      const id = `ver-${seq}`
+      const next: Version<unknown> = {
+        id,
+        ...candidate,
+        value: a.value,
+        recordedAt: a.now,
+        // From the actor, like the audit entry — never from the action, which would let a
+        // client attribute a version to somebody else.
+        by,
+        byId: actor.id,
+        byEmail: actor.email ?? null,
+        reason: a.reason.trim(),
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          versions: { ...state.versions, [id]: next },
+          audit: log(actor, state, {
+            rowId: a.subjectId,
+            field: a.subjectKind,
+            from: null,
+            to: `from ${a.validFrom}`,
+            at: a.now,
+            by,
+            reason: next.reason,
+          }),
+        },
+        message: `Recorded from ${a.validFrom}.`,
+      }
+    }
+
+    case 'correctVersion': {
+      const existing = state.versions[a.id]
+      if (!existing) return { state, error: 'That version no longer exists.' }
+      if (!a.reason.trim()) return { state, error: 'A correction needs a reason.' }
+
+      const candidate = {
+        id: existing.id,
+        subjectKind: existing.subjectKind,
+        subjectId: existing.subjectId,
+        validFrom: a.patch.validFrom ?? existing.validFrom,
+        validTo: a.patch.validTo === undefined ? existing.validTo : a.patch.validTo,
+      }
+      const clash = overlapProblem(Object.values(state.versions), candidate)
+      if (clash) return { state, error: clash }
+
+      const next: Version<unknown> = {
+        ...existing,
+        ...candidate,
+        value: a.patch.value === undefined ? existing.value : a.patch.value,
+        reason: a.reason.trim(),
+      }
+      /*
+       * The correction is audited with both sides, which is what makes the transaction-time
+       * question answerable without a second axis: the trail says what the period used to be,
+       * when it was changed and by whom. Anything already stamped from this version keeps its
+       * own copy and does not move — see `correctionImpact`.
+       */
+      return {
+        state: {
+          ...state,
+          versions: { ...state.versions, [existing.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.subjectId,
+            field: existing.subjectKind,
+            from: `from ${existing.validFrom}`,
+            to: `from ${next.validFrom}`,
+            at: a.now,
+            by,
+            reason: next.reason,
+          }),
+        },
+        message: 'Corrected.',
+      }
+    }
 
     case 'upsertAllocation': {
       const project = state.nodes[a.projectId]

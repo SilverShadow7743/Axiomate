@@ -250,6 +250,33 @@ const timestamp: Check = (v) => {
   return Number.isFinite(Date.parse(v)) ? null : 'must be a readable timestamp'
 }
 
+/**
+ * An ISO calendar date, which is not the same check as a timestamp.
+ *
+ * `Date.parse` accepts far more than this wants — "2026" and "Aug 17 2026" both parse and
+ * neither sorts correctly as a string, which is the property the whole versioning module rests
+ * on when it compares `validFrom` to a query date.
+ */
+const isoDate: Check = (v) => {
+  if (typeof v !== 'string') return `must be a string, received ${typeOf(v)}`
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return 'must be a date as YYYY-MM-DD'
+  return Number.isFinite(Date.parse(v)) ? null : 'must be a real date'
+}
+const isoDateOrNull: Check = (v) => (v === null ? null : isoDate(v))
+
+/**
+ * What can be versioned, as a closed list.
+ *
+ * `value` below is deliberately unchecked — it is JSON typed by the kind, and this module
+ * cannot know the shape of a working pattern without importing the domain it is validating.
+ * Bounding the *kind* is what keeps that from being a hole: an unrecognised subject is refused
+ * here, so the unchecked value can only ever belong to something this build understands.
+ */
+const SUBJECT_KINDS: ReadonlySet<string> = new Set(['person.workingPattern'])
+
+/** Anything at all. Only ever used where a closed `subjectKind` already bounds the payload. */
+const opaque: Check = () => null
+
 /** One of a closed vocabulary. The allowed values are ours, so listing them back is safe. */
 function oneOf(allowed: ReadonlySet<string>): Check {
   return (v) => {
@@ -554,6 +581,23 @@ const SHAPES = {
   updateEngagement: { nodeId: req(id), patch: req(plainObject), now },
   // `acceptUnavailable` for the same reason as `updateIssue`: this is the other arm that can
   // name somebody, and the reducer refuses both when that person is away for the whole window.
+  recordVersion: {
+    subjectKind: req(oneOf(SUBJECT_KINDS)),
+    subjectId: req(id),
+    validFrom: req(isoDate),
+    validTo: opt(isoDateOrNull),
+    value: req(opaque),
+    reason: req(text),
+    now,
+  },
+  correctVersion: {
+    id: req(id),
+    patch: req(
+      patchOf({ validFrom: isoDate, validTo: isoDateOrNull, value: opaque }),
+    ),
+    reason: req(text),
+    now,
+  },
   setAssignment: {
     issueId: req(id), responsibilityId: req(id), values: req(strings), now,
     acceptUnavailable: opt(bool),

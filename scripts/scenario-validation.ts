@@ -41,6 +41,7 @@ import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem } from '../lib/actionShape'
+import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/availability'
 
 /**
@@ -2306,6 +2307,79 @@ scenario(
       severity: redelivery ? '—' : 'P2',
       impact:
         'Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository.',
+    }
+  },
+)
+
+scenario(
+  'HV1',
+  'A working pattern changes, and last quarter still has to add up',
+  'What was true is preserved with its period, and a later correction cannot move a figure already computed.',
+  () => {
+    /*
+     * Driven against lib/versioning.ts directly, before it has a caller. Boundary arithmetic is
+     * where this kind of code goes wrong and it goes wrong quietly, so it is proven here rather
+     * than inferred from a capacity figure looking plausible.
+     */
+    const v = (id: string, from: string, to: string | null, hours: number): Version<number> => ({
+      id, subjectKind: 'person.workingPattern', subjectId: 'P1', validFrom: from, validTo: to,
+      value: hours, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
+    })
+    const timeline = [v('ver-1', '2026-01-01', '2026-07-01', 7.5), v('ver-2', '2026-07-01', null, 6)]
+    const on = (d: string) => valueAt(timeline, 'person.workingPattern', 'P1', d)
+
+    /*
+     * The null case first, deliberately. It is the property everything else rests on, and the
+     * tempting fix — falling back to the current value when nothing covers a date — would still
+     * return a plausible number while destroying the reason this exists.
+     */
+    const beforeAnything = on('2025-12-31')
+    const unknownPerson = valueAt(timeline, 'person.workingPattern', 'P9', '2026-03-01')
+
+    const inside = on('2026-03-01')
+    const dayBefore = on('2026-06-30')
+    const onBoundary = on('2026-07-01')
+    const openEnded = on('2027-05-05')
+
+    /* Overlaps refused, gaps and abutting periods allowed. */
+    const subject = { subjectKind: 'person.workingPattern', subjectId: 'P1' }
+    const overlapping = overlapProblem(timeline, { ...subject, validFrom: '2026-05-01', validTo: '2026-08-01' })
+    const abutting = overlapProblem([timeline[0]], { ...subject, validFrom: '2026-07-01', validTo: null })
+    const gapped = overlapProblem([timeline[0]], { ...subject, validFrom: '2026-09-01', validTo: null })
+    const backwards = overlapProblem([], { ...subject, validFrom: '2026-06-01', validTo: '2026-01-01' })
+    const correctingItself = overlapProblem(timeline, { ...subject, id: 'ver-1', validFrom: '2026-01-15', validTo: '2026-07-01' })
+
+    /* A correction reports what was computed from the version, and moves none of it. */
+    const stamps = [
+      { stampedFrom: 'ver-1', describes: 'the week of 2 Mar, approved' },
+      { stampedFrom: 'ver-2', describes: 'the week of 6 Jul' },
+    ]
+    const affected = correctionImpact(stamps, 'ver-1')
+    const held = stamp(inside, NOW)
+    const stillSevenAndAHalf = held?.value === 7.5 && held.stampedFrom === 'ver-1'
+
+    const good =
+      beforeAnything === null &&
+      unknownPerson === null &&
+      inside?.value === 7.5 &&
+      dayBefore?.value === 7.5 &&
+      onBoundary?.value === 6 &&
+      openEnded?.value === 6 &&
+      Boolean(overlapping) &&
+      abutting === null &&
+      gapped === null &&
+      Boolean(backwards) &&
+      correctingItself === null &&
+      affected.length === 1 &&
+      stillSevenAndAHalf
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it: the stamp still holds ${held?.value}h from ${held?.stampedFrom}. What is not proven is the round trip — no version has been stored, and nothing in the application stamps anything yet, because the first thing that will is an approved timesheet.`,
+      stops: 'at storage, and at a stamp made by the application rather than by this scenario',
+      severity: 'P2',
+      impact:
+        'The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys.',
     }
   },
 )
