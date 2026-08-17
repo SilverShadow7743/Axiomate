@@ -3287,11 +3287,31 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const existing = state.personSkills[a.id]
       if (!existing || existing.deletedAt) return { state, error: 'That skill record no longer exists.' }
 
+      /*
+       * The same two conditions as correcting, and they have to be the same.
+       *
+       * The first version checked only whether the row was yours, which made the two arms
+       * disagree: a consultant could not correct a typo in an assessment written about them,
+       * and could delete the whole thing. Withdrawing a signed judgement is the stronger act of
+       * the two, so it cannot be the one with the weaker gate.
+       *
+       * Your own SELF-rated rows stay freely retractable. Saying you can no longer do something
+       * is a claim about yourself, and nobody else has put their name to it.
+       */
       const mine = directoryPersonFor(state.model, actor)
-      if (mine?.id !== existing.personId) {
+      if (mine?.id !== existing.personId || existing.source !== 'self') {
         const may = can(state.model, actor, 'skill.assess')
         if (!may.allowed) {
-          return { state, error: `${may.reason ?? 'Not permitted.'} Removing somebody else's recorded skill needs the grant for it.` }
+          return {
+            state,
+            error:
+              mine?.id === existing.personId
+                // Deliberately does NOT suggest recording a self-rated one alongside it: the
+                // one-live-row rule above refuses that, and an error offering a way out the
+                // product then blocks is worse than one that simply says who to ask.
+                ? `${may.reason ?? 'Not permitted.'} This level was ${existing.source === 'certified' ? 'certified' : 'assessed'} by somebody else, so withdrawing it is theirs to do. Ask ${existing.assessedBy?.trim() || 'whoever recorded it'} if it is wrong.`
+                : `${may.reason ?? 'Not permitted.'} Removing somebody else's recorded skill needs the grant for it.`,
+          }
         }
       }
       /*

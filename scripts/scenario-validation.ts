@@ -3213,6 +3213,98 @@ scenario(
 )
 
 scenario(
+  'SK2',
+  'A consultant records their own skills, and cannot rewrite what somebody else said about them',
+  'Self-rated is yours to record, correct and retract. An assessed level is the assessor’s, and the two arms agree about that rather than one being stricter than the other.',
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const other = Object.values(BASE.model.people).find((p) => p.id !== priyaRow.id)!
+    const priya: Actor = { id: priyaRow.id, name: 'Priya' }
+
+    /* The catalogue first, by somebody who may configure. */
+    const withSkill = ok(BASE, {
+      t: 'config', op: { k: 'upsertSkill', id: null, name: 'Intercompany', category: 'D365 Finance', description: '' }, now: NOW,
+    } as Action)
+    const sk = Object.values(withSkill.model.skills)[0]!
+
+    /* A consultant: `skill.record`, and deliberately not `skill.assess`. */
+    const staffed = ok(withSkill, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaRow.id, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+
+    const rec = (s: WorkspaceState, personId: string, source: 'self' | 'assessed' | 'certified', who: Actor) =>
+      apply(s, {
+        t: 'recordPersonSkill', personId, skillId: sk.id, level: 'practitioner', source,
+        assessedBy: source === 'assessed' ? 'Nishant Sekhar' : null,
+        lastUsedOn: '2026-06-01', note: '', now: NOW,
+      } as Action, who)
+
+    /* Her own, self-rated: the case the whole `skill.record` grant exists for. */
+    const own = rec(staffed, priyaRow.id, 'self', priya)
+    /* Her own, claiming a certification nobody issued. */
+    const selfCertified = rec(staffed, priyaRow.id, 'certified', priya)
+    /* Somebody else's. */
+    const forOther = rec(staffed, other.id, 'self', priya)
+    /* And a second row for the same pair, which would make her level a question with two answers. */
+    const duplicate = rec(own.state, priyaRow.id, 'self', priya)
+
+    /*
+     * Now an assessment about her, written by somebody who holds the grant — from `staffed`
+     * rather than from `own.state`, because the one-live-row rule would refuse a second row for
+     * the same pair and this needs the assessed one to be the row that exists.
+     */
+    const assessedAboutHer = rec(staffed, priyaRow.id, 'assessed', A)
+    const theirRow = Object.values(assessedAboutHer.state.personSkills).find(
+      (p) => p.personId === priyaRow.id && !p.deletedAt,
+    )!
+
+    /*
+     * The two that were wrong, and are the reason this scenario exists.
+     *
+     * The Correct control rendered on precisely this row — her own, assessed by somebody else —
+     * and every click was refused, because the reducer inherits `source` from the stored row
+     * when the patch omits it. And Withdraw checked only whether the row was hers, so she could
+     * delete a signed judgement she could not correct. The stronger act had the weaker gate.
+     */
+    const fixTheirs = apply(assessedAboutHer.state, {
+      t: 'correctPersonSkill', id: theirRow.id, patch: { level: 'expert' }, now: NOW,
+    } as Action, priya)
+    const dropTheirs = apply(assessedAboutHer.state, {
+      t: 'removePersonSkill', id: theirRow.id, now: NOW,
+    } as Action, priya)
+
+    /* Her own self-rated row — the one she recorded at step one — stays hers to correct and to retract. */
+    const hersRow = Object.values(own.state.personSkills).find((p) => p.personId === priyaRow.id && !p.deletedAt)!
+    const fixMine = apply(own.state, {
+      t: 'correctPersonSkill', id: hersRow.id, patch: { level: 'expert' }, now: NOW,
+    } as Action, priya)
+    const dropMine = apply(own.state, { t: 'removePersonSkill', id: hersRow.id, now: NOW } as Action, priya)
+
+    const good =
+      !own.error &&
+      Boolean(selfCertified.error) &&
+      Boolean(forOther.error) &&
+      Boolean(duplicate.error) &&
+      !assessedAboutHer.error &&
+      /* the two faults */
+      Boolean(fixTheirs.error) &&
+      Boolean(dropTheirs.error) &&
+      /* and her own remains fully hers */
+      !fixMine.error &&
+      !dropMine.error
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A consultant holding skill.record may record her own skills self-rated, and that is the case the grant exists for — a directory only a lead may write to stays empty. She may not certify herself ("${selfCertified.error}"), which is what stops the product showing a certification nobody issued, and she may not record against a colleague ("${forOther.error}"). A second row for the same person and skill is refused, because "what level is she at" must not have two answers. Somebody holding skill.assess then records an assessed level about her. She can neither correct it ("${fixTheirs.error}") nor withdraw it ("${dropTheirs.error}") — and those two agreeing is the point: the first version let her delete a signed judgement she was not allowed to correct, so the stronger act had the weaker gate. Her own self-rated row stays hers to correct and to retract.`,
+      stops: '—',
+      severity: '—',
+      impact:
+        'A level is a claim with somebody’s name on it. This is what keeps the name attached to the person who made the claim, in both directions — nobody can award themselves a credential, and nobody can quietly delete one written about them.',
+    }
+  },
+)
+
+scenario(
   'AC1',
   'A permission is added to the product and somebody can actually use it',
   'Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.',

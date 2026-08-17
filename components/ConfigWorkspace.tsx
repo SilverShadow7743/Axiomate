@@ -3566,11 +3566,20 @@ function Skills({
                       {(mineToTouch || mayAssess.allowed) && (
                         <>
                           {/*
-                            * Offered only where the level is readable. Correcting a level you
-                            * cannot see would mean overwriting a value blind, and the form has
-                            * nothing honest to prefill the control with.
+                            * Two conditions, and the second is the one that is easy to miss.
+                            *
+                            * `r.level !== null` — correcting a level you cannot see would mean
+                            * overwriting a value blind, and the form has nothing honest to
+                            * prefill with.
+                            *
+                            * `r.source === 'self' || mayAssess` — the reducer inherits `source`
+                            * from the stored row when the patch omits it, and this patch does
+                            * omit it, so correcting an ASSESSED row is an assessed write and
+                            * takes `skill.assess`. Without this the button rendered on exactly
+                            * the row a consultant most wants to fix — their own, assessed by
+                            * somebody else — and every click was refused.
                             */}
-                          {r.level !== null && (
+                          {r.level !== null && (r.source === 'self' || mayAssess.allowed) && (
                             <>
                               <button
                                 className="btn-link"
@@ -3584,9 +3593,12 @@ function Skills({
                               </button>{' '}
                             </>
                           )}
-                          <button className="btn-link" onClick={() => onRemove(r.id)}>
-                            Withdraw
-                          </button>
+                          {/* Same gate as Correct, because the reducer applies the same one. */}
+                          {(r.source === 'self' || mayAssess.allowed) && (
+                            <button className="btn-link" onClick={() => onRemove(r.id)}>
+                              Withdraw
+                            </button>
+                          )}
                         </>
                       )}
                     </td>

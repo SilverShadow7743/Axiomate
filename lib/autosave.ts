@@ -207,18 +207,22 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       rates: parsed.rates ?? {},
       changes: parsed.changes ?? {},
       /*
-       * The one collection where mirror-wins is the wrong rule, because of what the mirror can
-       * contain: rows this browser received with their levels stripped.
+       * Server first, and only the mirror's READABLE rows on top — the reverse of the rule
+       * every collection above uses. It is a guard against an invariant, not a fix for an
+       * observed failure, and the distinction is worth stating because the first version of
+       * this comment claimed the failure and was wrong.
        *
-       * A person without `skill.view` is sent `withheld: true` rows and mirrors them. If they
-       * are later granted it — or a colleague who holds it signs in on the same machine —
-       * mirror-wins would hand the redacted copies back and the screen would go on saying "not
-       * shown at your access level" to somebody it is now shown to. Nothing would error; the
-       * grant would simply appear not to work.
+       * The invariant: a `withheld` row cannot reach this mirror today. Redaction happens in
+       * `boot()`, which only produces a state when a database supplied one, and this function
+       * is only called when `persistence.enabled` is false — see `IssueWorkspace`, where the
+       * mirror is explicitly "for the no-database mode, and only for that". The two conditions
+       * are mutually exclusive, so in the mode that writes this mirror nothing is ever stripped.
        *
-       * So the server's copy goes down first and only the mirror's readable rows land on top. A
-       * withheld row carries nothing the server did not already send, and losing it costs
-       * nothing.
+       * The guard is here anyway because the day those stop being exclusive — a mirror kept
+       * alongside a database, for offline use — mirror-wins would hand redacted copies back
+       * after a grant was given, and the grant would appear not to work while nothing errored.
+       * A withheld row carries nothing the server did not already send, so dropping one costs
+       * nothing and the rule is cheap to hold now rather than to remember later.
        */
       personSkills: {
         ...(seed.personSkills ?? {}),

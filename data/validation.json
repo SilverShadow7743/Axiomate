@@ -614,6 +614,16 @@
       "impact": "Capacity could say whether a plan was possible and never who should be on it. This closes one of the three gaps capacity.ts names — skill — and leaves the other two, client relationship and who was on the call last week, absent and stated as absent rather than quietly assumed away."
     },
     {
+      "id": "SK2",
+      "title": "A consultant records their own skills, and cannot rewrite what somebody else said about them",
+      "expected": "Self-rated is yours to record, correct and retract. An assessed level is the assessor’s, and the two arms agree about that rather than one being stricter than the other.",
+      "verdict": "PASS",
+      "actual": "A consultant holding skill.record may record her own skills self-rated, and that is the case the grant exists for — a directory only a lead may write to stays empty. She may not certify herself (\"Assess somebody's skill is not something Functional Consultant can do here. You can record your own skills as self-rated; saying they are assessed or certified is somebody else's judgement to record.\"), which is what stops the product showing a certification nobody issued, and she may not record against a colleague (\"Assess somebody's skill is not something Functional Consultant can do here. Recording a level against another person needs the grant for it.\"). A second row for the same person and skill is refused, because \"what level is she at\" must not have two answers. Somebody holding skill.assess then records an assessed level about her. She can neither correct it (\"Assess somebody's skill is not something Functional Consultant can do here. You can correct your own self-rated level; assessed and certified are not yours to set.\") nor withdraw it (\"Assess somebody's skill is not something Functional Consultant can do here. This level was assessed by somebody else, so withdrawing it is theirs to do. Ask Nishant Sekhar if it is wrong.\") — and those two agreeing is the point: the first version let her delete a signed judgement she was not allowed to correct, so the stronger act had the weaker gate. Her own self-rated row stays hers to correct and to retract.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A level is a claim with somebody’s name on it. This is what keeps the name attached to the person who made the claim, in both directions — nobody can award themselves a credential, and nobody can quietly delete one written about them."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
