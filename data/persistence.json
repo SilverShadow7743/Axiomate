@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-17T10:48:48.602Z",
+  "at": "2026-08-17T10:52:15.119Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 27,
+  "passed": 30,
   "failed": 0,
   "checks": [
     {
@@ -100,9 +100,24 @@
       "detail": ""
     },
     {
+      "what": "a submitted week comes back out of Postgres",
+      "ok": true,
+      "detail": "ts-16 · Priya · 2026-08-03 · Submitted · by Priya"
+    },
+    {
+      "what": "and the freeze survives the reload — a guard that holds only in memory is not a guard",
+      "ok": true,
+      "detail": "The week of 03 Aug is submitted and awaiting approval. Hours cannot be changed until it is approved or returned to you."
+    },
+    {
+      "what": "a returned week keeps its reason and becomes editable again",
+      "ok": true,
+      "detail": "Rejected · \"Wednesday is on the wrong issue.\" · decided by Persistence Proof · edit allowed"
+    },
+    {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 14, state seq 14"
+      "detail": "stored seq 16, state seq 14"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",
@@ -137,7 +152,7 @@
     {
       "what": "the proof tenant owns only its own rows",
       "ok": true,
-      "detail": "2 of 220 issue rows"
+      "detail": "2 of 221 issue rows"
     }
   ]
 }

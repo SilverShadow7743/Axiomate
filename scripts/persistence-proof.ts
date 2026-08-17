@@ -36,7 +36,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { importWorkspace, loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
 import { runScheduledPass } from '../lib/db/schedule'
-import { initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
+import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
 import type { TenantId } from '../lib/tenant'
 
@@ -410,6 +410,77 @@ async function main() {
       `${trail.length} entries, ending "${trail[trail.length - 1]?.to}"`,
     )
     check('and returns them oldest-first, which is what the write path appends to', ascending)
+  }
+
+  /* ---------------- a submitted week, and a freeze that survives a reload ---------------- */
+  /*
+   * The second of these is the one that matters.
+   *
+   * A guard that holds only in the browser's copy of state is not a guard. This repository has
+   * already shipped one thing that was true in memory and false in Postgres — the audit trail
+   * learned `byId` on the writer and not on the reader — so the freeze is re-checked against a
+   * workspace loaded fresh from the database rather than against the state left in this process.
+   */
+  {
+    const WEEK = '2026-08-03' // a Monday, and safely in the past
+    const submitter: Actor = { id: 'proof-priya', name: 'Priya' }
+    const approver: Actor = { id: 'proof-lead', name: 'Persistence Proof' }
+
+    await persistActions(TENANT, submitter, [
+      { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: 'Inside the week', now: NOW },
+    ])
+    const submitted = await persistActions(TENANT, submitter, [
+      { t: 'submitTimesheet', person: 'Priya', weekStarting: WEEK, now: NOW },
+    ])
+
+    const reloaded = await loadWorkspace(TENANT)
+    const sheet = Object.values(reloaded.state.timesheets).find(
+      (t) => t.person === 'Priya' && t.weekStarting === WEEK,
+    )
+    check(
+      'a submitted week comes back out of Postgres',
+      Boolean(submitted.ok && sheet && sheet.status === 'Submitted' && sheet.submittedBy === 'Priya'),
+      sheet ? `${sheet.id} · ${sheet.person} · ${sheet.weekStarting} · ${sheet.status} · by ${sheet.submittedBy}` : 'no timesheet found',
+    )
+
+    /*
+     * The freeze, checked against the RELOADED state. `apply` is pure, so this asks the question
+     * the browser would ask after a refresh: does the workspace that came back from the database
+     * still refuse an edit inside the submitted week?
+     */
+    const entry = Object.values(reloaded.state.timeEntries).find(
+      (e) => !e.deletedAt && e.person === 'Priya' && e.date === '2026-08-05',
+    )
+    const blocked = apply(
+      reloaded.state,
+      { t: 'updateTime', id: entry!.id, patch: { hours: 6 }, now: NOW },
+      submitter,
+    )
+    check(
+      'and the freeze survives the reload — a guard that holds only in memory is not a guard',
+      Boolean(blocked.error && /awaiting approval/.test(blocked.error)),
+      blocked.error ?? 'the edit was ALLOWED, which is the fault this check exists for',
+    )
+
+    /* A decision, and its reason, are durable too — including the null on an approval. */
+    await persistActions(TENANT, approver, [
+      { t: 'decideTimesheet', id: sheet!.id, decision: 'rejected', reason: 'Wednesday is on the wrong issue.', now: NOW },
+    ])
+    const afterReturn = await loadWorkspace(TENANT)
+    const returned = afterReturn.state.timesheets[sheet!.id]
+    const editable = apply(
+      afterReturn.state,
+      { t: 'updateTime', id: entry!.id, patch: { hours: 6 }, now: NOW },
+      submitter,
+    )
+    check(
+      'a returned week keeps its reason and becomes editable again',
+      returned?.status === 'Rejected' &&
+        returned.reason === 'Wednesday is on the wrong issue.' &&
+        returned.decidedBy === 'Persistence Proof' &&
+        !editable.error,
+      `${returned?.status} · "${returned?.reason}" · decided by ${returned?.decidedBy} · edit ${editable.error ? 'refused: ' + editable.error : 'allowed'}`,
+    )
   }
 
   /* ---------------- ids do not collide after a restart ---------------- */
