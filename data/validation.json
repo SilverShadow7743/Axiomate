@@ -534,6 +534,26 @@
       "impact": "The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys."
     },
     {
+      "id": "TW1",
+      "title": "A consultant records time against work that has run past its due date",
+      "expected": "The overrun warns and never refuses; only a closed issue shuts the window, and a derived opening date says it was derived.",
+      "verdict": "PARTIAL",
+      "actual": "Three days past the due date and still open, the entry is allowed and carries a warning — \"Logged 3 days after the due date (2026-08-10). Still open.\" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, \"Hours genuinely spent on closed work can still be recorded, with a reason and an approval to reopen the window — that is what the extension is for.\". The opening date is 2026-08-03 with provenance `default` and the words \"opens at the raised date — no start date set\", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports `stated` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without `time.recordForOthers` and are allowed with it — the design writes that permission `time.logForOthers`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. Nothing calls any of this yet: `addTime` still always succeeds.",
+      "stops": "at addTime, which does not consult the window rule yet — step 4 of the design, and the one carrying the regression risk",
+      "severity": "P2",
+      "impact": "The rule is provable and arguable before a single consultant meets it. Until it is wired in, time can still be logged against a closed issue."
+    },
+    {
+      "id": "TW2",
+      "title": "A daily cap is checked against a working pattern nobody recorded",
+      "expected": "The cap is reported unenforced rather than defaulted to eight, and a late entry has to explain itself only past the allowance.",
+      "verdict": "PARTIAL",
+      "actual": "A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is 7.5h from ver-7 and 1 July is 6h from ver-8, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a 7.5h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly 7 days: 7 days late needs nothing, 8 days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.",
+      "stops": "at addTime and at the versions table — nothing records a working pattern as a version yet, so every real cap today would be unenforced",
+      "severity": "P2",
+      "impact": "The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

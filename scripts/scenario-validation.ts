@@ -43,6 +43,18 @@ import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/availability'
+import {
+  backdated,
+  dailyCap,
+  dailyCapWarning,
+  refusesTimeEntry,
+  timeEntryAllowed,
+  timeEntryNote,
+  windowOpening,
+  BACKDATING_ALLOWANCE_DAYS,
+  type WindowIssue,
+  type WindowPerson,
+} from '../lib/timeWindow'
 
 /**
  * The last recorded persistence run, or null.
@@ -2380,6 +2392,164 @@ scenario(
       severity: 'P2',
       impact:
         'The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys.',
+    }
+  },
+)
+
+scenario(
+  'TW1',
+  'A consultant records time against work that has run past its due date',
+  'The overrun warns and never refuses; only a closed issue shuts the window, and a derived opening date says it was derived.',
+  () => {
+    /*
+     * Driven against lib/timeWindow.ts directly, before `addTime` consults it. That is
+     * deliberate: this rule is the first thing that will ever refuse a time entry, and the
+     * person it lands on is a consultant at the end of a week with hours to record. A refusal
+     * that fires on the common case — every issue that runs past its due date — would turn the
+     * extension flow into a formality people click through.
+     */
+    const issue = (over: Partial<WindowIssue> = {}): WindowIssue => ({
+      id: 'OAPIL-1', status: 'In Progress', owner: 'Priya',
+      raised: '2026-08-03', plannedStart: null, plannedEnd: '2026-08-10', ...over,
+    })
+    const priya: WindowPerson = { name: 'Priya', permissions: ['time.record'] }
+    const sam: WindowPerson = { name: 'Sam', permissions: ['time.record'] }
+    const lead: WindowPerson = { name: 'Sam', permissions: ['time.record', 'time.recordForOthers'] }
+
+    /*
+     * The absent case first, deliberately. An issue with no planned start still has a window,
+     * and the whole question is whether the window admits where its date came from: a fallback
+     * presented as a plan is the defect, not the fallback itself.
+     */
+    const fellBack = windowOpening(issue())
+    const stated = windowOpening(issue({ plannedStart: '2026-08-05' }))
+
+    const pastDue = timeEntryAllowed(issue(), priya, '2026-08-13', 'none')
+    const closed = timeEntryAllowed(issue({ status: 'Closed - confirmed' }), priya, '2026-08-13', 'none')
+    const before = timeEntryAllowed(issue(), priya, '2026-07-20', 'none')
+    /* The opening date itself is inside the window — the comparison is strict for a reason. */
+    const onOpening = timeEntryAllowed(issue(), priya, '2026-08-03', 'none')
+    const others = timeEntryAllowed(issue(), sam, '2026-08-13', 'none')
+    const withPermission = timeEntryAllowed(issue(), lead, '2026-08-13', 'none')
+    /* A submitted week freezes; a returned one is editable again, which is why it was returned. */
+    const frozen = timeEntryAllowed(issue(), priya, '2026-08-13', 'submitted')
+    const returned = timeEntryAllowed(issue(), priya, '2026-08-13', 'rejected')
+
+    const good =
+      fellBack.source === 'default' &&
+      fellBack.date === '2026-08-03' &&
+      fellBack.because.includes('no start date set') &&
+      stated.source === 'stated' &&
+      stated.date === '2026-08-05' &&
+      pastDue.kind === 'allowed' &&
+      !refusesTimeEntry(pastDue) &&
+      pastDue.warnings.length === 1 &&
+      pastDue.warnings[0].startsWith('Logged 3 days after the due date') &&
+      pastDue.opening.source === 'default' &&
+      closed.kind === 'issue-closed' &&
+      refusesTimeEntry(closed) &&
+      closed.message.includes('extension') &&
+      before.kind === 'before-window' &&
+      onOpening.kind === 'allowed' &&
+      others.kind === 'not-permitted' &&
+      others.message.includes('time.recordForOthers') &&
+      withPermission.kind === 'allowed' &&
+      frozen.kind === 'week-frozen' &&
+      returned.kind === 'allowed' &&
+      timeEntryNote(pastDue) !== undefined &&
+      timeEntryNote(onOpening) === undefined
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. Nothing calls any of this yet: \`addTime\` still always succeeds.`,
+      stops: 'at addTime, which does not consult the window rule yet — step 4 of the design, and the one carrying the regression risk',
+      severity: 'P2',
+      impact:
+        'The rule is provable and arguable before a single consultant meets it. Until it is wired in, time can still be logged against a closed issue.',
+    }
+  },
+)
+
+scenario(
+  'TW2',
+  "A daily cap is checked against a working pattern nobody recorded",
+  'The cap is reported unenforced rather than defaulted to eight, and a late entry has to explain itself only past the allowance.',
+  () => {
+    const pattern = (id: string, from: string, to: string | null, value: unknown): Version<unknown> => ({
+      id, subjectKind: 'person.workingPattern', subjectId: 'P1', validFrom: from, validTo: to,
+      value, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
+    })
+    const timeline = [
+      pattern('ver-7', '2026-01-01', '2026-07-01', { hoursPerDay: 7.5 }),
+      pattern('ver-8', '2026-07-01', null, { hoursPerDay: 6 }),
+    ]
+
+    /*
+     * Every unknown first. `valueAt` answering null is the property the rest rests on, and the
+     * tempting repair — defaulting to eight — would still produce a plausible number while
+     * checking a consultant's day against a working week nobody entered.
+     */
+    const beforeAnything = dailyCap(timeline, 'P1', '2025-12-31')
+    const unknownPerson = dailyCap(timeline, 'P9', '2026-06-30')
+    /*
+     * And the second unknown, which the rule as written does not mention: `recordVersion` types
+     * a version's value as opaque, so a version can exist and carry nothing usable. That is not
+     * a zero-hour day.
+     */
+    const shapeless = dailyCap(
+      [{ ...pattern('ver-9', '2026-01-01', null, { daysPerWeek: 4 }), subjectId: 'P2' }],
+      'P2',
+      '2026-06-01',
+    )
+    const noWarningWithoutACap = dailyCapWarning(beforeAnything, 11)
+
+    /* Then the cap that is known — and known *as at the work date*, not as at today. */
+    const june = dailyCap(timeline, 'P1', '2026-06-30')
+    const july = dailyCap(timeline, 'P1', '2026-07-01')
+    const longDay = dailyCapWarning(june, 11)
+    const ordinaryDay = dailyCapWarning(june, 7.5)
+
+    /*
+     * Backdating, at the boundary in both directions. `daysBetween` is inclusive — same day is
+     * one — so the difference is a subtraction away from being silently a day out.
+     */
+    const sameDay = backdated('2026-08-01', '2026-08-01')
+    const atAllowance = backdated('2026-08-01', '2026-08-08')
+    const pastAllowance = backdated('2026-08-01', '2026-08-09')
+
+    const good =
+      beforeAnything.kind === 'unenforced' &&
+      beforeAnything.hoursPerDay === null &&
+      unknownPerson.kind === 'unenforced' &&
+      unknownPerson.hoursPerDay === null &&
+      shapeless.kind === 'unenforced' &&
+      shapeless.hoursPerDay === null &&
+      shapeless.fromVersion === 'ver-9' &&
+      noWarningWithoutACap === null &&
+      june.kind === 'enforced' &&
+      june.hoursPerDay === 7.5 &&
+      june.fromVersion === 'ver-7' &&
+      july.hoursPerDay === 6 &&
+      july.fromVersion === 'ver-8' &&
+      longDay !== null &&
+      ordinaryDay === null &&
+      sameDay.days === 0 &&
+      !sameDay.backdated &&
+      atAllowance.days === BACKDATING_ALLOWANCE_DAYS &&
+      !atAllowance.backdated &&
+      atAllowance.message === null &&
+      pastAllowance.days === BACKDATING_ALLOWANCE_DAYS + 1 &&
+      pastAllowance.backdated &&
+      pastAllowance.justificationRequired &&
+      pastAllowance.approvalRequired
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.`,
+      stops: 'at addTime and at the versions table — nothing records a working pattern as a version yet, so every real cap today would be unenforced',
+      severity: 'P2',
+      impact:
+        'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
     }
   },
 )
