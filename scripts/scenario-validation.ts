@@ -85,7 +85,7 @@ import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
 import { summarise } from '../lib/estimation'
-import { PERMISSION_KEYS } from '../lib/access'
+import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
 import {
@@ -3103,6 +3103,53 @@ scenario(
       severity: 'P2',
       impact:
         'Scope change is the commonest commercial event in consulting and it had nowhere to live: a work-type string on an issue, and a SOW status that said a variation happened without saying what it was worth.',
+    }
+  },
+)
+
+scenario(
+  'AC1',
+  'A permission is added to the product and somebody can actually use it',
+  'Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.',
+  () => {
+    /*
+     * This is a check about SILENCE, and it was written after the silence cost four features.
+     *
+     * `DEFAULT_GRANTS` is what a new workspace starts with, and `mergeModel` merges grants per
+     * role with STORED winning — deliberately, so a firm's customisation is not reverted by a
+     * deployment. The consequence is that adding a permission in code does nothing for an
+     * existing workspace: the key exists, the reducer checks it, no stored role holds it, and
+     * every attempt is refused by a screen that renders perfectly.
+     *
+     * On the day this was written five permissions were in that state in production —
+     * `time.submit`, `time.approve`, `rate.view`, `rate.edit`, `change.approve` — so nobody
+     * could submit a timesheet, approve one, see a rate, set one, or decide a change request.
+     * Four features, all working, all unusable, and nothing anywhere said so.
+     *
+     * This half of it is what a harness CAN check: that the shipped defaults name an owner for
+     * every key. The other half — a stored model that predates a key — is a property of a live
+     * database and is what `scripts/reconcile-grants.ts` reports and repairs.
+     */
+    const policy = defaultAccessPolicy()
+    const granted = new Set(Object.values(policy.grants).flat())
+    const ungranted = PERMISSION_KEYS.filter((k) => !granted.has(k))
+
+    /* And every granted key must be a key that exists — a typo grants nothing and looks fine. */
+    const known = new Set<string>(PERMISSION_KEYS)
+    const unknown = [...new Set(Object.values(policy.grants).flat())].filter((k) => !known.has(k))
+
+    /* The administrator holds everything, which is what makes the role recoverable. */
+    const adminHasAll = PERMISSION_KEYS.every((k) => (policy.grants.ROLE_ADMIN ?? []).includes(k))
+
+    const good = ungranted.length === 0 && unknown.length === 0 && adminHasAll
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `All ${PERMISSION_KEYS.length} permissions the code defines are granted to at least one shipped role${ungranted.length ? ` — except ${ungranted.join(', ')}, which nobody can use` : ''}. No grant names a key that does not exist${unknown.length ? ` — except ${unknown.join(', ')}` : ''}, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.`,
+      stops: 'at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them',
+      severity: '—',
+      impact:
+        'Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made.',
     }
   },
 )

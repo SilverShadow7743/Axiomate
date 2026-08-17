@@ -27,6 +27,8 @@ import {
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
+import { rateTimeline, type RateKind } from '@/lib/rates'
+import { can } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
@@ -65,6 +67,7 @@ type Tab =
   | 'routing'
   | 'workTypes'
   | 'disciplines'
+  | 'rates'
   | 'serviceLevels'
   | 'transitions'
   | 'permissions'
@@ -80,6 +83,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
   { id: 'disciplines', label: 'Disciplines', group: 'Operating model' },
+  { id: 'rates', label: 'Rates', group: 'Governance' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
@@ -100,10 +104,19 @@ interface Props {
   /** Whether this deployment verifies who somebody is, rather than taking their word. */
   signedIn: boolean
   onConfig: (op: ConfigOp) => boolean
+  /**
+   * Rates are records, not configuration, so they do not travel through `onConfig`.
+   *
+   * Keeping them off that path is not tidiness: `ConfigOp` is one action carrying a whole
+   * operating model, and a cost rate has no business inside a payload that a `config.manage`
+   * holder may send.
+   */
+  onRecordRate: (r: { personId: string; kind: RateKind; validFrom: string; validTo: string | null; amount: number; currency: string; reason: string }) => boolean
+  onCorrectRate: (id: string, patch: { validFrom?: string; amount?: number }, reason: string) => boolean
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onClose }: Props) {
+export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -176,7 +189,15 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onCl
           {['Operating model', 'Automation', 'Governance'].map((group) => (
             <div key={group}>
               <div className="cfg-rail-group">{group}</div>
-              {TABS.filter((t) => t.group === group).map((t) => (
+              {TABS.filter((t) => t.group === group)
+                /*
+                  * Absent, not empty. `boot()` strips rates from the payload for anybody without
+                  * `rate.view`, so this tab would render an empty table and read as "no rates
+                  * have been recorded" — which is a different statement from "you may not see
+                  * them", and the wrong one.
+                  */
+                .filter((t) => t.id !== 'rates' || can(state.model, actor, 'rate.view').allowed)
+                .map((t) => (
                 <button
                   key={t.id}
                   className={`cfg-rail-item${tab === t.id ? ' on' : ''}`}
@@ -208,6 +229,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onCl
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
+          {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
@@ -3080,5 +3102,226 @@ function Scopes({
         </table>
       </section>
     </>
+  )
+}
+
+/* ================================================================== *
+ * Rates
+ * ================================================================== */
+
+/**
+ * What people cost and what they are charged out at, over time.
+ *
+ * This tab is not rendered at all without `rate.view`, and the data behind it is removed from
+ * the page payload for the same actors — see `boot()`. Hiding a figure on screen while shipping
+ * it in the initial HTML is the failure this product has already had once.
+ *
+ * Cost and bill are shown side by side per person because the interesting number is the gap
+ * between them, and a screen that made you click twice to compare would be a screen where
+ * nobody compared.
+ */
+function Rates({
+  state,
+  actor,
+  onRecord,
+  onCorrect,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  onRecord: (r: { personId: string; kind: RateKind; validFrom: string; validTo: string | null; amount: number; currency: string; reason: string }) => boolean
+  onCorrect: (id: string, patch: { validFrom?: string; amount?: number }, reason: string) => boolean
+}) {
+  const mayEdit = can(state.model, actor, 'rate.edit')
+  const rates = Object.values(state.rates)
+  const people = Object.values(state.model.people).sort((a, b) => a.name.localeCompare(b.name))
+
+  const [who, setWho] = useState('')
+  const [kind, setKind] = useState<RateKind>('cost')
+  const [from, setFrom] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('GBP')
+  const [why, setWhy] = useState('')
+  const [correcting, setCorrecting] = useState<string | null>(null)
+  const [newAmount, setNewAmount] = useState('')
+  const [correctWhy, setCorrectWhy] = useState('')
+
+  /* Only people with something recorded, plus whoever is being edited. A directory of 26 with
+     four rates in it is a page of empty rows otherwise. */
+  const withRates = people.filter((p) => rates.some((r) => r.personId === p.id))
+  const ready = who && from && Number(amount) > 0 && why.trim() !== ''
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Rates</h3>
+      <p className="cfg-note">
+        What a person costs the firm and what a client is charged, per hour, over a period. Both
+        are dated: an hour is priced at the rate in force on the day it was worked, so a rise in
+        July does not change what March cost.
+      </p>
+      <p className="cfg-note">
+        Cost and charge-out move independently — a pay rise does not change a signed rate card,
+        and a renegotiated card does not change anybody&rsquo;s pay — so they are recorded
+        separately rather than as one row with two columns.
+      </p>
+      <p className="cfg-note">
+        These figures are withheld from the page entirely for anybody without <em>See rates</em>,
+        not merely hidden on screen. The audit trail records that a rate was set and from when,
+        and deliberately not what it was set to.
+      </p>
+
+      {withRates.length === 0 ? (
+        <p className="cfg-note">
+          Nothing recorded yet. Until a person has both a cost and a charge-out rate covering a
+          day, work done on that day has no cost — and the figure is reported as absent rather
+          than as a smaller number.
+        </p>
+      ) : (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>Who</th>
+              <th>What</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Per hour</th>
+              <th>Why</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {withRates.flatMap((p) =>
+              (['cost', 'bill'] as RateKind[]).flatMap((k) =>
+                rateTimeline(rates, p.id, k).map((r) => [
+                  <tr key={r.id}>
+                    <td>{p.name}</td>
+                    <td>{k === 'cost' ? 'Cost' : 'Charge-out'}</td>
+                    <td className="mono">{r.validFrom}</td>
+                    <td className="mono">{r.validTo ?? 'open'}</td>
+                    <td className="mono">
+                      {r.currency} {r.amount.toLocaleString()}
+                    </td>
+                    <td>
+                      {r.reason} <span className="est-block-note">— {r.by}</span>
+                    </td>
+                    <td>
+                      {mayEdit.allowed && (
+                        <button
+                          className="btn-link"
+                          onClick={() => {
+                            setCorrecting(correcting === r.id ? null : r.id)
+                            setNewAmount(String(r.amount))
+                          }}
+                        >
+                          {correcting === r.id ? 'Cancel' : 'Correct'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>,
+                  correcting === r.id ? (
+                    <tr key={`${r.id}-fix`}>
+                      <td colSpan={7}>
+                        <div className="time-row">
+                          <label className="fld time-fld-hours">
+                            <span className="fld-label">Per hour</span>
+                            <input type="number" min={0} step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+                          </label>
+                          <label className="fld time-fld-note">
+                            <span className="fld-label">Why it was wrong</span>
+                            <input value={correctWhy} onChange={(e) => setCorrectWhy(e.target.value)} />
+                          </label>
+                          <button
+                            className="btn"
+                            disabled={!correctWhy.trim() || !(Number(newAmount) > 0)}
+                            title={correctWhy.trim() ? 'Correct it' : 'A correction needs a reason'}
+                            onClick={() => {
+                              if (onCorrect(r.id, { amount: Number(newAmount) }, correctWhy)) {
+                                setCorrecting(null)
+                                setCorrectWhy('')
+                              }
+                            }}
+                          >
+                            Correct
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null,
+                ]),
+              ),
+            )}
+          </tbody>
+        </table>
+      )}
+
+      {mayEdit.allowed ? (
+        <div className="time-form">
+          <div className="time-row">
+            <label className="fld time-fld-person">
+              <span className="fld-label">Who</span>
+              <select value={who} onChange={(e) => setWho(e.target.value)}>
+                <option value="">Choose a person…</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="fld">
+              <span className="fld-label">What</span>
+              <select value={kind} onChange={(e) => setKind(e.target.value as RateKind)}>
+                <option value="cost">Cost to the firm</option>
+                <option value="bill">Charged to the client</option>
+              </select>
+            </label>
+            <label className="fld">
+              <span className="fld-label">From</span>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="fld time-fld-hours">
+              <span className="fld-label">Per hour</span>
+              <input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+            <label className="fld">
+              <span className="fld-label">Currency</span>
+              <input value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} />
+            </label>
+            <label className="fld time-fld-note">
+              <span className="fld-label">Why</span>
+              <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="New starter, annual review, renegotiated card" />
+            </label>
+            {/*
+              * No end date. A rate runs until the next one is recorded, and the reducer refuses
+              * an overlap — so naming an end now would be inventing when it stops.
+              */}
+            <button
+              className="btn"
+              disabled={!ready}
+              title={ready ? 'Record it' : 'Needs a person, a date, an amount and a reason'}
+              onClick={() => {
+                if (
+                  onRecord({
+                    personId: who,
+                    kind,
+                    validFrom: from,
+                    validTo: null,
+                    amount: Number(amount),
+                    currency,
+                    reason: why,
+                  })
+                ) {
+                  setAmount('')
+                  setWhy('')
+                }
+              }}
+            >
+              Record
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="cfg-note">{mayEdit.reason ?? 'Read only.'}</p>
+      )}
+    </section>
   )
 }

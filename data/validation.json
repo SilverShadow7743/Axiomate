@@ -604,6 +604,16 @@
       "impact": "Scope change is the commonest commercial event in consulting and it had nowhere to live: a work-type string on an issue, and a SOW status that said a variation happened without saying what it was worth."
     },
     {
+      "id": "AC1",
+      "title": "A permission is added to the product and somebody can actually use it",
+      "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
+      "verdict": "PASS",
+      "actual": "All 31 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
+      "severity": "—",
+      "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

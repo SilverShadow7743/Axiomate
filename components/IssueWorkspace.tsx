@@ -2011,6 +2011,12 @@ export default function IssueWorkspace({
           signedIn={Boolean(verified)}
           onConfig={applyConfigOp}
           onClose={() => setConfigOpen(false)}
+          onRecordRate={(r) =>
+            dispatch({ t: 'recordRate', ...r, now: new Date().toISOString() })
+          }
+          onCorrectRate={(id, patch, reason) =>
+            dispatch({ t: 'correctRate', id, patch, reason, now: new Date().toISOString() })
+          }
         />
       )}
 
