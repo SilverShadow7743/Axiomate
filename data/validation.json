@@ -574,6 +574,16 @@
       "impact": "Sign-in and sign-out both ended on a browser error page for every user, and every check inside the process passed. A redirect is only correct relative to something outside the process, which is why this asserts against a proxied request rather than a plain one."
     },
     {
+      "id": "HV2",
+      "title": "Capacity is computed against the working week in force at the time",
+      "expected": "A period is checked against the pattern recorded for it, and a figure resting on an assumption says so.",
+      "verdict": "PASS",
+      "actual": "A date before anything was recorded resolves to the stored profile, which reports itself as a default — NOT to a version that does not exist, and not to a fabricated eight. Where a pattern is in force it wins and is marked stated, read at the work date rather than at today: April is 8h over 5 days, July is 6h over 4, so an allocation running in April is checked against April even after a move to a four-day week. A version whose value carries no usable hours resolves to the stored profile rather than a zero-hour day. Somebody with neither a profile nor a version resolves to nothing at all. The null does not propagate into capacityFor — it must answer, because it is what refuses an overallocation — so the PROVENANCE does instead: position.basis is stated against a recorded pattern and default against an assumed one, and describeCapacity says so out loud in the second case and not the first.",
+      "stops": "nowhere for the working pattern. A pattern that changes mid-allocation is read at the START of the window rather than splitting it — that is a different feature, and it would change what capacityFor returns rather than how it is called",
+      "severity": "—",
+      "impact": "A capacity figure computed from an assumed working week is not wrong, but it is a different claim from one computed from a confirmed week — and the difference now travels with the number instead of being lost the moment it is quoted."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

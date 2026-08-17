@@ -1,4 +1,5 @@
 import { workingDaysBetween } from './dates'
+import { valueAt, type Version } from './versioning'
 
 /**
  * How much time a person actually has, and what is already committed against it.
@@ -64,6 +65,106 @@ export interface ResourceProfile {
 
 export function defaultProfile(personId: string): ResourceProfile {
   return { personId, hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: 'default' }
+}
+
+/**
+ * The working pattern for one person **as at a date**, rather than as it stands today.
+ *
+ * This is the join between the effective-dated timeline and everything that computes capacity.
+ * A version covering the date wins and is marked `stated`, because somebody recorded it and said
+ * when it started. With no version covering the date, the stored profile is returned unchanged —
+ * carrying its own `source`, which for every profile in this workspace today is `default`.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this returns a usable profile rather than null
+ *
+ * `valueAt` returns null for a date nothing was recorded for, and that honesty is the point of
+ * the whole mechanism. But `capacityFor` has to answer with a number: it is what refuses an
+ * overallocation, and "we do not know" is not an answer a refusal can be built on.
+ *
+ * So the null does not propagate — the PROVENANCE does. A figure computed from an assumed
+ * working pattern is not wrong, it is a different claim from one computed from a confirmed
+ * pattern, and `CapacityPosition.basis` carries that difference to wherever the number is shown.
+ * That is the resolution the plan named in advance: a `basis` on the position rather than a null
+ * nobody can act on.
+ *
+ * The alternative — every caller re-defaulting on its own — would produce exactly the same
+ * numbers while losing the one thing that distinguishes them.
+ */
+export function profileAt(
+  versions: Version[],
+  profiles: Record<string, ResourceProfile>,
+  personId: string,
+  on: string,
+): ResourceProfile | undefined {
+  const stored = profiles[personId]
+  // `Version<unknown>` in, because that is what the store holds — the value is typed by the
+  // subject kind and this is the function that knows what this kind means.
+  const version = valueAt(versions, WORKING_PATTERN, personId, on)
+  if (!version) return stored
+
+  const value = (version.value ?? {}) as WorkingPattern
+  /*
+   * The VERSION's own values, before any fallback.
+   *
+   * Merging first and then testing for absence does not work, and the first draft of this did
+   * exactly that: `usable(value.hoursPerDay) ?? stored?.hoursPerDay` is never undefined when a
+   * stored profile exists, so the guard below never fired and a version carrying `{ note: 'x' }`
+   * came back marked `stated` with the stored default's numbers. A figure nobody recorded,
+   * wearing the label that says somebody did.
+   */
+  const statedHours = usable(value.hoursPerDay)
+  const statedDays = usable(value.daysPerWeek)
+  // A version whose value carries nothing usable is not a working pattern. It resolves to what
+  // was stored — keeping that profile's own `source` — rather than to a zero-hour day.
+  if (statedHours === undefined && statedDays === undefined) return stored
+
+  const base = stored ?? defaultProfile(personId)
+  return {
+    ...base,
+    hoursPerDay: statedHours ?? base.hoursPerDay,
+    daysPerWeek: statedDays ?? base.daysPerWeek,
+    // Stated, because a version exists only if somebody recorded one with a reason.
+    source: 'stated',
+  }
+}
+
+/**
+ * The same, for every person at once — the shape `planCheck` already takes.
+ *
+ * Deliberately returns `Record<personId, ResourceProfile>` so `planCheck`'s signature does not
+ * change. That function is about plans, not about time, and pushing date-awareness into it would
+ * put the timeline in a place nobody would look for it.
+ */
+export function profilesAt(
+  versions: Version[],
+  profiles: Record<string, ResourceProfile>,
+  on: string,
+): Record<string, ResourceProfile> {
+  const ids = new Set([
+    ...Object.keys(profiles),
+    // Somebody with a recorded pattern and no stored profile still has a working pattern.
+    ...versions.filter((v) => v.subjectKind === WORKING_PATTERN).map((v) => v.subjectId),
+  ])
+  const out: Record<string, ResourceProfile> = {}
+  for (const id of ids) {
+    const resolved = profileAt(versions, profiles, id, on)
+    if (resolved) out[id] = resolved
+  }
+  return out
+}
+
+/** The subject kind versions of a working pattern are recorded under. */
+export const WORKING_PATTERN = 'person.workingPattern'
+
+interface WorkingPattern {
+  hoursPerDay?: unknown
+  daysPerWeek?: unknown
+}
+
+/** A positive finite number, or nothing. A version's value is opaque and may be anything. */
+function usable(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
 }
 
 /**
@@ -151,6 +252,18 @@ export interface CapacityPosition {
   overallocated: boolean
   /** Allocated as a share of available, so 130% reads as clearly as −40 hours. */
   utilisationPct: number | null
+  /**
+   * Where the working pattern behind these numbers came from.
+   *
+   * `stated` means somebody recorded a pattern covering this period and said when it started.
+   * `default` means the shipped fallback was used — 7.5 hours over 5 days — and every figure
+   * above is therefore an assumption wearing the costume of a measurement.
+   *
+   * It travels on the position rather than being looked up beside it, because the number and
+   * its provenance get separated the moment they can be: the figure is quoted in a review and
+   * the caveat stays on the screen it came from.
+   */
+  basis: 'stated' | 'default'
 }
 
 /** Days of overlap between two periods, counted in working days. */
@@ -178,6 +291,8 @@ export function capacityFor(
 ): CapacityPosition {
   const hoursPerDay = profile?.hoursPerDay ?? defaultProfile('').hoursPerDay
   const daysPerWeek = profile?.daysPerWeek ?? 5
+  // No profile at all is a default just as surely as a profile that says it is one.
+  const basis: 'stated' | 'default' = profile?.source === 'stated' ? 'stated' : 'default'
   const calendarWorkingDays = workingDaysBetween(from, to)
   // A four-day week is four fifths of the working days in the calendar, not four days a week
   // aligned to particular ones — which day is off is a fact this model does not carry, and
@@ -216,18 +331,29 @@ export function capacityFor(
     remainingHours,
     overallocated: remainingHours < 0,
     utilisationPct: availableHours > 0 ? round((allocatedHours / availableHours) * 100) : null,
+    basis,
   }
 }
 
-/** How a position reads. One sentence, and it leads with the part that is wrong. */
+/**
+ * How a position reads. One sentence, and it leads with the part that is wrong.
+ *
+ * A default basis is stated at the end rather than left off. The figures are the same either
+ * way; what differs is whether anybody has confirmed the working week they rest on, and that is
+ * the difference between a measurement and an assumption.
+ */
 export function describeCapacity(p: CapacityPosition): string {
+  const assumed =
+    p.basis === 'default'
+      ? ' Working pattern assumed — nobody has recorded one covering this period.'
+      : ''
   if (p.overallocated) {
-    return `${p.person} is committed to ${p.allocatedHours}h against ${p.availableHours}h available — ${Math.abs(p.remainingHours)}h more than exists.`
+    return `${p.person} is committed to ${p.allocatedHours}h against ${p.availableHours}h available — ${Math.abs(p.remainingHours)}h more than exists.${assumed}`
   }
   if (p.availableHours === 0) {
-    return `${p.person} has no available time in this window: ${p.grossHours}h gross, all of it committed elsewhere.`
+    return `${p.person} has no available time in this window: ${p.grossHours}h gross, all of it committed elsewhere.${assumed}`
   }
-  return `${p.person} has ${p.remainingHours}h left of ${p.availableHours}h available (${Math.round(p.utilisationPct ?? 0)}% committed).`
+  return `${p.person} has ${p.remainingHours}h left of ${p.availableHours}h available (${Math.round(p.utilisationPct ?? 0)}% committed).${assumed}`
 }
 
 /* ================================================================== *

@@ -8,6 +8,7 @@ import {
   describeCapacity,
   planCheck,
   type Allocation,
+  profilesAt,
 } from '@/lib/capacity'
 import { summarise } from '@/lib/estimation'
 import type { ScheduleRow } from '@/lib/types'
@@ -109,7 +110,7 @@ export default function CapacityPanel({
         from,
         to,
       ),
-    [plannedHours, unestimated, state.allocations, state.model.resourceProfiles, peopleByName, row.id, from, to],
+    [plannedHours, unestimated, state.allocations, state.model.resourceProfiles, state.versions, peopleByName, row.id, from, to],
   )
 
   const positions = useMemo(() => {
@@ -118,7 +119,7 @@ export default function CapacityPanel({
       const personId = peopleByName[person.toLowerCase()]
       return capacityFor(
         person,
-        state.model.resourceProfiles[personId],
+        profilesAt(Object.values(state.versions), state.model.resourceProfiles, from)[personId],
         Object.values(state.commitments),
         Object.values(state.allocations),
         from,

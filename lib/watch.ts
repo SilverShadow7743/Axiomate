@@ -1,7 +1,7 @@
 import { workingDaysBetween } from './dates'
 import { computeHealth, isTerminal } from './schedule'
 import { summarise } from './estimation'
-import { planCheck } from './capacity'
+import { planCheck, profilesAt } from './capacity'
 import { sowPosition } from './sow'
 import { buildTree } from './tree'
 import type { WorkspaceState } from './workspace'
@@ -180,7 +180,9 @@ export function observe(
       planned,
       unestimated,
       Object.values(state.allocations),
-      state.model.resourceProfiles,
+      // Resolved at the start of the window rather than passed as they stand. `planCheck`'s
+      // signature is untouched: it takes the same map, resolved at a date.
+      profilesAt(Object.values(state.versions), state.model.resourceProfiles, from),
       peopleByName,
       node.id,
       from,

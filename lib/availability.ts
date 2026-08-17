@@ -1,4 +1,4 @@
-import { capacityFor, describeCapacity, type Allocation, type Commitment, type CapacityPosition } from './capacity'
+import { capacityFor, profileAt, describeCapacity, type Allocation, type Commitment, type CapacityPosition } from './capacity'
 import type { IssueRecord, WorkspaceState } from './workspace'
 
 /**
@@ -152,7 +152,13 @@ export function availabilityOf(
     }
   }
 
-  const profile = state.model.resourceProfiles[match.id]
+  // At the start of the window, not as it stands today — the same reading `profileFor` takes.
+  const profile = profileAt(
+    Object.values(state.versions),
+    state.model.resourceProfiles,
+    match.id,
+    window.from,
+  )
   const commitments = touching(Object.values(state.commitments) as Commitment[], key, window)
   const allocations = touching(Object.values(state.allocations) as Allocation[], key, window)
 

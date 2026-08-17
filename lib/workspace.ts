@@ -65,6 +65,7 @@ import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import {
   capacityFor,
+  profileAt,
   checkAllocation,
   defaultProfile,
   describeCapacity,
@@ -1025,10 +1026,31 @@ function attesterFor(state: WorkspaceState, actor: Actor): Attester {
   }
 }
 
-function profileFor(state: WorkspaceState, person: string): ResourceProfile | undefined {
+/**
+ * The working pattern to use for this person **over this period**.
+ *
+ * Takes a date, and that is the whole of step 5. It used to return whatever profile is stored
+ * today and hand it to `capacityFor` regardless of when the work is: an allocation running from
+ * March was checked against the week somebody moved to in July.
+ *
+ * `on` is the START of the window being checked. A pattern that changes mid-allocation is a real
+ * thing and this does not model it — the honest reading is "the pattern in force when this
+ * period begins", which is what a delivery manager means when they commit somebody in March.
+ * Splitting a window at every version boundary is a different feature and would change what
+ * `capacityFor` returns, not just how it is called.
+ *
+ * The name-to-id join is `rolesFor`'s third and weakest, and it is what is available: profiles
+ * are keyed by directory id and allocations by name.
+ */
+function profileFor(
+  state: WorkspaceState,
+  person: string,
+  on: string,
+): ResourceProfile | undefined {
   const key = person.trim().toLowerCase()
   const match = Object.values(state.model.people).find((p) => p.name.toLowerCase() === key)
-  return match ? state.model.resourceProfiles[match.id] : undefined
+  if (!match) return undefined
+  return profileAt(Object.values(state.versions), state.model.resourceProfiles, match.id, on)
 }
 
 export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult {
@@ -3339,7 +3361,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
        * exactly the surprise this exists to prevent.
        */
       const others = Object.values(state.allocations).filter((x) => x.id !== id)
-      const profile = profileFor(state, next.person)
+      // The start of the window, so an allocation is checked against the pattern in force when
+      // it begins rather than against whatever is true today.
+      const profile = profileFor(state, next.person, a.startDate)
       const position = capacityFor(
         next.person,
         profile,
@@ -3429,7 +3453,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
        */
       const position = capacityFor(
         next.person,
-        profileFor(state, next.person),
+        profileFor(state, next.person, a.startDate),
         [...Object.values(state.commitments).filter((c) => c.id !== id), next],
         Object.values(state.allocations),
         a.startDate,

@@ -87,6 +87,7 @@ import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/t
 import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
+import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, isFrozen, submitProblem, decideProblem, statusAfter,
   type Timesheet, type Attester,
@@ -2847,6 +2848,87 @@ scenario(
       severity: '—',
       impact:
         'Sign-in and sign-out both ended on a browser error page for every user, and every check inside the process passed. A redirect is only correct relative to something outside the process, which is why this asserts against a proxied request rather than a plain one.',
+    }
+  },
+)
+
+scenario(
+  'HV2',
+  'Capacity is computed against the working week in force at the time',
+  'A period is checked against the pattern recorded for it, and a figure resting on an assumption says so.',
+  () => {
+    const P = 'PERSON_X'
+    const pattern = (id: string, from: string, to: string | null, value: unknown): Version<unknown> => ({
+      id, subjectKind: 'person.workingPattern', subjectId: P, validFrom: from, validTo: to,
+      value, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
+    })
+    const timeline = [
+      pattern('ver-a', '2026-04-01', '2026-07-01', { hoursPerDay: 8, daysPerWeek: 5 }),
+      pattern('ver-b', '2026-07-01', null, { hoursPerDay: 6, daysPerWeek: 4 }),
+    ]
+    const stored = { [P]: { personId: P, hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: 'default' as const } }
+
+    /*
+     * The unknown first, because it is the property the whole mechanism exists to provide and
+     * the one a re-default would silently destroy.
+     */
+    const beforeAnything = profileAt(timeline, stored, P, '2026-03-31')
+    const noProfileNoVersion = profileAt(timeline, {}, 'PERSON_NOBODY', '2026-05-01')
+
+    /* Then the pattern in force, read AT THE DATE rather than as it stands today. */
+    const inApril = profileAt(timeline, stored, P, '2026-04-15')
+    const inJuly = profileAt(timeline, stored, P, '2026-07-15')
+
+    /* A version whose value carries nothing usable is not a zero-hour day. */
+    const shapeless = profileAt(
+      [{ ...pattern('ver-c', '2026-04-01', null, { note: 'nothing usable' }), subjectId: 'PERSON_Y' }],
+      { PERSON_Y: { ...stored[P], personId: 'PERSON_Y' } },
+      'PERSON_Y',
+      '2026-05-01',
+    )
+
+    /* And the whole map at once, which is the shape planCheck already takes. */
+    const map = profilesAt(timeline, stored, '2026-07-15')
+
+    /*
+     * The number, and what it rests on. `capacityFor` must answer — it is what refuses an
+     * overallocation — so the null does not propagate. The PROVENANCE does.
+     */
+    const alloc = [{ id: 'a1', person: 'X', projectId: 'p', startDate: '2026-07-06', endDate: '2026-07-10', percentage: 100, note: '', createdBy: 'x', createdAt: NOW, deletedAt: null }]
+    const onStated = capacityFor('X', inJuly, [], alloc, '2026-07-06', '2026-07-10')
+    const onAssumed = capacityFor('X', beforeAnything, [], alloc, '2026-03-23', '2026-03-27')
+    const said = describeCapacity(onAssumed)
+    const notSaid = describeCapacity(onStated)
+
+    const good =
+      /* nothing recorded for that date falls back to the stored profile, which says it is a default */
+      beforeAnything?.source === 'default' &&
+      beforeAnything?.hoursPerDay === 7.5 &&
+      noProfileNoVersion === undefined &&
+      /* the version in force wins, and is marked stated */
+      inApril?.hoursPerDay === 8 &&
+      inApril?.daysPerWeek === 5 &&
+      inApril?.source === 'stated' &&
+      inJuly?.hoursPerDay === 6 &&
+      inJuly?.daysPerWeek === 4 &&
+      inJuly?.source === 'stated' &&
+      /* an unusable value resolves to what was stored rather than to zero */
+      shapeless?.hoursPerDay === 7.5 &&
+      shapeless?.source === 'default' &&
+      map[P]?.hoursPerDay === 6 &&
+      /* and the basis travels with the number */
+      onStated.basis === 'stated' &&
+      onAssumed.basis === 'default' &&
+      /assumed/i.test(said) &&
+      !/assumed/i.test(notSaid)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A date before anything was recorded resolves to the stored profile, which reports itself as a ${beforeAnything?.source} — NOT to a version that does not exist, and not to a fabricated eight. Where a pattern is in force it wins and is marked stated, read at the work date rather than at today: April is ${inApril?.hoursPerDay}h over ${inApril?.daysPerWeek} days, July is ${inJuly?.hoursPerDay}h over ${inJuly?.daysPerWeek}, so an allocation running in April is checked against April even after a move to a four-day week. A version whose value carries no usable hours resolves to the stored profile rather than a zero-hour day. Somebody with neither a profile nor a version resolves to nothing at all. The null does not propagate into capacityFor — it must answer, because it is what refuses an overallocation — so the PROVENANCE does instead: position.basis is ${onStated.basis} against a recorded pattern and ${onAssumed.basis} against an assumed one, and describeCapacity says so out loud in the second case and not the first.`,
+      stops: 'nowhere for the working pattern. A pattern that changes mid-allocation is read at the START of the window rather than splitting it — that is a different feature, and it would change what capacityFor returns rather than how it is called',
+      severity: '—',
+      impact:
+        'A capacity figure computed from an assumed working week is not wrong, but it is a different claim from one computed from a confirmed week — and the difference now travels with the number instead of being lost the moment it is quoted.',
     }
   },
 )
