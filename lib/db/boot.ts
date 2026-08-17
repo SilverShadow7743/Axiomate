@@ -1,3 +1,5 @@
+import { can } from '../access'
+import type { OperatingModel } from '../config'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
 import { loadSeed, type SeedFile } from '../data'
@@ -143,7 +145,20 @@ export async function boot(): Promise<Boot> {
 
     return {
       seed,
-      state,
+      /*
+       * Rates are removed from the payload for anybody without `rate.view`.
+       *
+       * WITHHELD, not hidden. `state` is serialised into the page and reaches the browser, so a
+       * screen that merely declines to render a rate still ships it — and this file already
+       * learned that lesson once: the sign-in gate withheld the issues and shipped the summary
+       * of them, and the comment above records that emptying the two obvious collections was not
+       * the whole job.
+       *
+       * So this is the same job done deliberately rather than by omission. The reducer still
+       * holds every rate, because it is the single mutation funnel and it needs the whole
+       * timeline to refuse an overlapping period; what changes is what leaves the server.
+       */
+      state: state && canSeeRates(state.model, actor) ? state : state && { ...state, rates: {} },
       tenantId,
       actor,
       signInRequired: identityEstablished() && !session.verified,
@@ -172,4 +187,15 @@ export async function boot(): Promise<Boot> {
       },
     }
   }
+}
+
+/**
+ * Whether this actor may be sent rates at all.
+ *
+ * A function rather than an inline `can(...)` because the same question has to be asked wherever
+ * a rate-derived figure is computed — cost, revenue, margin — and one of those getting it wrong
+ * is how the grant is routed around by something that never mentions a rate.
+ */
+function canSeeRates(model: OperatingModel, actor: Actor): boolean {
+  return can(model, actor, 'rate.view').allowed
 }

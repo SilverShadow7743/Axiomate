@@ -42,6 +42,7 @@ export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   isFrozen,
   frozenMessage,
@@ -263,6 +264,14 @@ export interface WorkspaceState {
   timeEntries: Record<string, TimeEntry>
   /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/timesheet.ts. */
   timesheets: Record<string, Timesheet>
+  /**
+   * What people cost and are charged at.
+   *
+   * **Redacted in `boot()` for anybody without `rate.view`**, so an actor who may not see rates
+   * receives an empty map rather than a hidden one. The reducer still holds them, because it is
+   * the single mutation funnel and an arm that bypassed it would lose the audit trail.
+   */
+  rates: Record<string, PersonRate>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -519,6 +528,7 @@ export function initWorkspace(
     // A fresh workspace has no history yet — the first version is recorded, never seeded.
     versions: {},
     timesheets: {},
+    rates: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -672,6 +682,24 @@ export type Action =
     }
   | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
   | { t: 'removeTime'; id: string; now: string }
+  | {
+      t: 'recordRate'
+      personId: string
+      kind: RateKind
+      validFrom: string
+      validTo: string | null
+      amount: number
+      currency: string
+      reason: string
+      now: string
+    }
+  | {
+      t: 'correctRate'
+      id: string
+      patch: { validFrom?: string; validTo?: string | null; amount?: number; currency?: string }
+      reason: string
+      now: string
+    }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -2793,6 +2821,112 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * Resubmission reuses the same row rather than minting a second: a week has one timesheet,
      * and the trail of what happened to it is the audit trail, not a pile of superseded rows.
      */
+    /**
+     * Record what somebody costs, or is charged out at, from a date.
+     *
+     * The same shape as `recordVersion` and for the same reasons: a period, a reason, and
+     * identity taken from the actor rather than from the action. The differences are that the
+     * value is money and that reading it needs a grant of its own.
+     */
+    case 'recordRate': {
+      if (!a.reason.trim()) {
+        return { state, error: 'A rate needs a reason \u2014 "what changed and why" is the whole point of dating it.' }
+      }
+      if (!(a.amount > 0) || !Number.isFinite(a.amount)) {
+        return { state, error: 'A rate is an amount per hour, greater than zero.' }
+      }
+      if (!state.model.people[a.personId]) {
+        return { state, error: 'That person is not in the directory.' }
+      }
+      const clash = rateProblem(Object.values(state.rates), {
+        personId: a.personId,
+        kind: a.kind,
+        validFrom: a.validFrom,
+        validTo: a.validTo,
+      })
+      if (clash) return { state, error: clash }
+
+      const seq = state.seq + 1
+      const id = `rate-${seq}`
+      const next: PersonRate = {
+        id,
+        personId: a.personId,
+        kind: a.kind,
+        validFrom: a.validFrom,
+        validTo: a.validTo,
+        amount: a.amount,
+        currency: a.currency.trim() || 'GBP',
+        recordedAt: a.now,
+        by,
+        byId: actor.id,
+        byEmail: actor.email ?? null,
+        reason: a.reason.trim(),
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          rates: { ...state.rates, [id]: next },
+          audit: log(actor, state, {
+            rowId: a.personId,
+            field: `person.${a.kind}Rate`,
+            from: null,
+            // The AMOUNT is deliberately not in the trail. An audit row is readable by anybody
+            // who may read history, and putting a salary in it would route round the grant that
+            // exists to protect it. What changed and when is recorded; what it changed to is in
+            // the rate itself, behind `rate.view`.
+            to: `from ${a.validFrom}`,
+            at: a.now,
+            by,
+            reason: next.reason,
+          }),
+        },
+        message: `Recorded from ${a.validFrom}.`,
+      }
+    }
+
+    case 'correctRate': {
+      const existing = state.rates[a.id]
+      if (!existing) return { state, error: 'That rate no longer exists.' }
+      if (!a.reason.trim()) return { state, error: 'A correction needs a reason.' }
+      if (a.patch.amount !== undefined && !(a.patch.amount > 0)) {
+        return { state, error: 'A rate is an amount per hour, greater than zero.' }
+      }
+      const candidate = {
+        id: existing.id,
+        personId: existing.personId,
+        kind: existing.kind,
+        validFrom: a.patch.validFrom ?? existing.validFrom,
+        validTo: a.patch.validTo === undefined ? existing.validTo : a.patch.validTo,
+      }
+      const clash = rateProblem(Object.values(state.rates), candidate)
+      if (clash) return { state, error: clash }
+
+      const next: PersonRate = {
+        ...existing,
+        ...candidate,
+        amount: a.patch.amount ?? existing.amount,
+        currency: a.patch.currency?.trim() || existing.currency,
+        reason: a.reason.trim(),
+      }
+      return {
+        state: {
+          ...state,
+          rates: { ...state.rates, [existing.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.personId,
+            field: `person.${existing.kind}Rate`,
+            from: `from ${existing.validFrom}`,
+            to: `from ${next.validFrom}`,
+            at: a.now,
+            by,
+            reason: next.reason,
+          }),
+        },
+        message: 'Corrected.',
+      }
+    }
+
     case 'submitTimesheet': {
       const attester = attesterFor(state, actor)
       const problem = submitProblem(

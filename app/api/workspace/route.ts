@@ -61,6 +61,8 @@ const KINDS = new Set([
   'removeCommitment',
   'recordVersion',
   'correctVersion',
+  'recordRate',
+  'correctRate',
   'submitTimesheet',
   'decideTimesheet',
   // `notify` is deliberately absent. Notifications are raised by rules, and the server plans

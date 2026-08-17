@@ -25,6 +25,7 @@ import {
   commitmentToRow,
   versionToRow,
   timesheetToRow,
+  rateToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -496,6 +497,20 @@ export async function persistSteps(
         if (before.timesheets[id] === t) continue
         const row = timesheetToRow(tenantId, t)
         await tx.timesheet.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'recordRate':
+    case 'correctRate': {
+      for (const [id, r] of Object.entries(after.rates)) {
+        if (before.rates[id] === r) continue
+        const row = rateToRow(tenantId, r)
+        await tx.personRate.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

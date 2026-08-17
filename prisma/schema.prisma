@@ -141,6 +141,7 @@ model Tenant {
   appliedActions AppliedAction[]
   versions      Version[]
   timesheets    Timesheet[]
+  rates         PersonRate[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -967,6 +968,55 @@ model Timesheet {
   @@id([tenantId, id])
   @@unique([tenantId, person, weekStarting])
   @@index([tenantId, status])
+}
+
+/// What a person costs, and what they are charged out at, over a period.
+///
+/// Deliberately NOT a `Version`, although the mechanism is identical and `lib/versioning.ts`
+/// predicts this exact use. `WorkspaceState.versions` is serialised into the page payload and
+/// reaches the browser; putting a cost rate in the same collection as a working pattern would
+/// make every reader of any dated fact a reader of everybody's pay. Rates are a separate
+/// collection with a separate permission, redacted in `boot()` for anyone without `rate.view`.
+///
+/// The arithmetic is still shared — `lib/rates.ts` delegates every period question to
+/// `lib/versioning.ts`, so the exclusive `validTo` and the overlap refusal are the proven ones
+/// rather than a second implementation.
+///
+/// `cost` and `bill` are rows, not columns, because they move independently: a pay rise does not
+/// change a signed rate card, and a renegotiated rate card does not change anybody's salary. A
+/// row per rate per period is the only shape that can say the bill rate changed in April and the
+/// cost rate did not.
+///
+/// `personId` is the DIRECTORY id, not a name. Everything else in this schema still joins people
+/// by name; a rate is the one record where surviving a rename is not optional.
+model PersonRate {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `rate-12`, minted from the durable workspace counter.
+  id       String
+  personId String
+  /// cost | bill.
+  kind     String
+
+  /// Inclusive. String for the same reason `Version.validFrom` is — the comparison is a string
+  /// comparison and a DateTime round trip has no honest conversion into a non-null field.
+  validFrom String
+  /// EXCLUSIVE. Null means still true.
+  validTo   String?
+
+  /// Per hour. Decimal because it is money and it will be summed.
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("GBP")
+
+  recordedAt DateTime
+  by         String
+  byId       String?
+  byEmail    String?
+  reason     String  @db.Text
+
+  @@id([tenantId, id])
+  @@index([tenantId, personId, kind, validFrom])
 }
 
 /// What was true about something, from when, and why it changed.

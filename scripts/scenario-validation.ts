@@ -87,6 +87,7 @@ import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/t
 import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
+import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, isFrozen, submitProblem, decideProblem, statusAfter,
@@ -2929,6 +2930,85 @@ scenario(
       severity: '—',
       impact:
         'A capacity figure computed from an assumed working week is not wrong, but it is a different claim from one computed from a confirmed week — and the difference now travels with the number instead of being lost the moment it is quoted.',
+    }
+  },
+)
+
+scenario(
+  'RT1',
+  'A cost is computed from the rate in force on the day the work was done',
+  'Hours are priced at their own date, an unrated hour makes the total absent rather than smaller, and nobody without the grant is sent a rate at all.',
+  () => {
+    const P = 'PERSON_R'
+    const rate = (id: string, kind: 'cost' | 'bill', from: string, to: string | null, amount: number, currency = 'GBP'): PersonRate => ({
+      id, personId: P, kind, validFrom: from, validTo: to, amount, currency,
+      recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
+    })
+    const rates = [
+      rate('r1', 'cost', '2026-01-01', '2026-07-01', 40),
+      rate('r2', 'cost', '2026-07-01', null, 50),
+      rate('r3', 'bill', '2026-01-01', null, 100),
+    ]
+
+    /* The unknown first — a date before anything was recorded has no rate, and does not fall back. */
+    const beforeAnything = rateAt(rates, P, 'cost', '2025-12-31')
+    const unknownPerson = rateAt(rates, P + 'X', 'cost', '2026-03-01')
+
+    /* Then the rate in force, read AT THE WORK DATE rather than at today. */
+    const inMarch = rateAt(rates, P, 'cost', '2026-03-01')
+    const inAugust = rateAt(rates, P, 'cost', '2026-08-01')
+
+    /* Cost and bill move independently — that is why they are rows and not columns. */
+    const billInAugust = rateAt(rates, P, 'bill', '2026-08-01')
+
+    /* A margin over two periods, priced day by day. */
+    const complete = costOf(rates, [
+      { personId: P, date: '2026-03-02', hours: 10 },  // 40 cost / 100 bill
+      { personId: P, date: '2026-08-03', hours: 10 },  // 50 cost / 100 bill
+    ])
+
+    /* One unrated hour and the WHOLE total is absent, with the hole named. */
+    const holed = costOf(rates, [
+      { personId: P, date: '2026-03-02', hours: 10 },
+      { personId: P, date: '2025-11-01', hours: 4 },   // before any rate
+    ])
+
+    /* Mixed currencies cannot be summed without a conversion nobody recorded. */
+    const mixed = costOf(
+      [...rates, rate('r4', 'cost', '2026-01-01', null, 60, 'USD')].filter((r) => r.id !== 'r1'),
+      [{ personId: P, date: '2026-03-02', hours: 5 }],
+    )
+
+    /* Overlaps are refused by the same machinery `Version` uses, not a second copy of it. */
+    const overlap = rateProblem(rates, { personId: P, kind: 'cost', validFrom: '2026-06-01', validTo: null })
+    const abutting = rateProblem(rates, { personId: P, kind: 'bill', validFrom: '2025-06-01', validTo: '2026-01-01' })
+
+    const good =
+      beforeAnything === null &&
+      unknownPerson === null &&
+      inMarch?.amount === 40 &&
+      inAugust?.amount === 50 &&
+      billInAugust?.amount === 100 &&
+      complete.cost === 900 &&
+      complete.revenue === 2000 &&
+      complete.margin === 1100 &&
+      complete.unratedHours === 0 &&
+      holed.cost === null &&
+      holed.margin === null &&
+      holed.unratedHours === 4 &&
+      holed.hours === 14 &&
+      /no rate on the day/.test(describeCost(holed)) &&
+      mixed.cost === null &&
+      overlap !== null &&
+      abutting === null
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs ${inMarch?.amount} and 3 August costs ${inAugust?.amount}, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to ${complete.cost} cost against ${complete.revenue} billed — margin ${complete.margin} at ${complete.marginPct}%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: ${holed.unratedHours}h of ${holed.hours}h unrated, cost ${JSON.stringify(holed.cost)}. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.`,
+      stops: 'at the timesheet — nothing feeds worked hours into this yet, and no screen records a rate. Cost is computable and not yet computed.',
+      severity: '—',
+      impact:
+        'This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing.',
     }
   },
 )

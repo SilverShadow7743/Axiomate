@@ -584,6 +584,16 @@
       "impact": "A capacity figure computed from an assumed working week is not wrong, but it is a different claim from one computed from a confirmed week — and the difference now travels with the number instead of being lost the moment it is quoted."
     },
     {
+      "id": "RT1",
+      "title": "A cost is computed from the rate in force on the day the work was done",
+      "expected": "Hours are priced at their own date, an unrated hour makes the total absent rather than smaller, and nobody without the grant is sent a rate at all.",
+      "verdict": "PASS",
+      "actual": "A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs 40 and 3 August costs 50, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to 900 cost against 2000 billed — margin 1100 at 55%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: 4h of 14h unrated, cost null. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.",
+      "stops": "at the timesheet — nothing feeds worked hours into this yet, and no screen records a rate. Cost is computable and not yet computed.",
+      "severity": "—",
+      "impact": "This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

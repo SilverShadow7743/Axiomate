@@ -63,6 +63,16 @@ export const PERMISSIONS = [
   { key: 'time.record', label: 'Record time', what: 'Log hours against work. Your own time — see the next one for anybody else\u2019s.' },
   { key: 'time.recordForOthers', label: "Record others' time", what: "Log or correct hours on somebody else's behalf." },
   { key: 'time.submit', label: 'Submit a timesheet', what: 'Present your own week for approval. Covers your weeks only — the reducer compares the actor to the person on the sheet, so holding this is not enough to submit somebody else’s.' },
+  {
+    key: 'rate.view',
+    label: 'See rates',
+    what: 'What people cost and what they are charged out at, and every figure derived from those \u2014 cost, revenue and margin. Withheld from the page payload entirely for anybody without it, not merely hidden on screen.',
+  },
+  {
+    key: 'rate.edit',
+    label: 'Set rates',
+    what: 'Record or correct a cost or charge-out rate, from a date, with a reason.',
+  },
   { key: 'time.approve', label: 'Decide a timesheet', what: 'Approve a submitted week, or return it with a reason. Never your own: the person who submitted may not decide it, whatever they hold.' },
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
@@ -160,7 +170,13 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is the "declared, with no runtime" pattern this codebase keeps deleting.
    */
   [MACHINE_ROLE_ID]: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'approval.request', 'estimate.edit'],
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
+  /*
+   * Rates go to the engagement lead and the administrator, and to nobody else by default \u2014 not
+   * even the project manager, who otherwise has the wider delivery grant. What somebody is paid
+   * is not delivery information, and a role that needs it in a particular firm can be given it
+   * deliberately.
+   */
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
   ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
@@ -334,6 +350,10 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
    * than the typo. A correction is already audited with both sides and a required reason, which
    * is the control that actually applies here.
    */
+  // Rates have their own grant. `capacity.record` is about somebody's diary; this is about
+  // their pay, and the two are not the same authority.
+  recordRate: 'rate.edit',
+  correctRate: 'rate.edit',
   recordVersion: 'capacity.record',
   correctVersion: 'capacity.record',
   upsertSow: 'sow.edit',

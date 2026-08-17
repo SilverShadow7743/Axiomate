@@ -21,6 +21,7 @@ import type {
   // the same shape — the row holds `null` where the domain holds `undefined`.
   Version as VersionRow,
   Timesheet as TimesheetRow,
+  PersonRate as PersonRateRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -36,6 +37,7 @@ import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
+import type { PersonRate, RateKind } from '../rates'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -868,6 +870,58 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Rates
+ * ================================================================== */
+
+/**
+ * `amount` is `Decimal` in the database and `number` in the domain, and the conversion is the
+ * one thing to be careful about here.
+ *
+ * `Number()` on a Prisma `Decimal` is exact for every rate a firm will ever set — the column is
+ * 12,2, so the values are hundredths well inside a double's integer range. It is NOT exact for
+ * arbitrary decimals, and if this column ever widens, this line is the one that breaks quietly.
+ * Stated rather than assumed, because a rounding error in a rate is a rounding error in a margin.
+ */
+export function rateToRow(tenantId: TenantId, r: PersonRate): Prisma.PersonRateUncheckedCreateInput {
+  return {
+    tenantId,
+    id: r.id,
+    personId: r.personId,
+    kind: r.kind,
+    // Strings, like `Version.validFrom`, so the round trip is the identity function and the
+    // exclusive boundary stays exact.
+    validFrom: r.validFrom,
+    validTo: r.validTo,
+    amount: r.amount,
+    currency: r.currency,
+    recordedAt: new Date(r.recordedAt),
+    by: r.by,
+    byId: r.byId ?? null,
+    byEmail: r.byEmail ?? null,
+    reason: r.reason,
+  }
+}
+
+export function rateFromRow(r: PersonRateRow): PersonRate {
+  return {
+    id: r.id,
+    personId: r.personId,
+    kind: r.kind as RateKind,
+    validFrom: r.validFrom,
+    validTo: r.validTo,
+    amount: Number(r.amount),
+    currency: r.currency,
+    recordedAt: r.recordedAt.toISOString(),
+    by: r.by,
+    // The same asymmetry as `auditFromRow` and `versionFromRow`, for the same reason: `byId?`
+    // has no null in it and `byEmail?` does.
+    byId: r.byId ?? undefined,
+    byEmail: r.byEmail,
+    reason: r.reason,
   }
 }
 

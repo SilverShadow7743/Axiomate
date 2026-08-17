@@ -609,6 +609,22 @@ const SHAPES = {
     reason: req(text),
     now,
   },
+  recordRate: {
+    personId: req(id),
+    kind: req(oneOf(new Set(['cost', 'bill']))),
+    validFrom: req(isoDate),
+    validTo: opt(isoDateOrNull),
+    amount: req(num),
+    currency: req(text),
+    reason: req(text),
+    now,
+  },
+  correctRate: {
+    id: req(id),
+    patch: req(patchOf({ validFrom: isoDate, validTo: isoDateOrNull, amount: num, currency: text })),
+    reason: req(text),
+    now,
+  },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),

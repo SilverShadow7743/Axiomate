@@ -11,6 +11,7 @@ import {
   auditFromRow,
   versionFromRow,
   timesheetFromRow,
+  rateFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -127,6 +128,7 @@ type Reader = Pick<
   | 'operatingModel'
   | 'version'
   | 'timesheet'
+  | 'personRate'
 >
 
 /**
@@ -152,7 +154,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -206,6 +208,7 @@ export async function loadWorkspace(
        */
       db.version.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
       db.timesheet.findMany({ where: { tenantId }, orderBy: { weekStarting: 'asc' } }),
+      db.personRate.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -228,6 +231,14 @@ export async function loadWorkspace(
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),
     versions: Object.fromEntries(versions.map((v) => [v.id, versionFromRow(v)])),
     timesheets: Object.fromEntries(timesheets.map((t) => [t.id, timesheetFromRow(t)])),
+    /*
+     * Loaded in full here, and REDACTED in `boot()` for anybody without `rate.view`.
+     *
+     * The repository is the wrong place to apply a permission: the reducer needs every rate to
+     * refuse an overlapping period, and the scheduled pass has no actor at all. Filtering here
+     * would make a write silently corrupt a timeline the writer could not see.
+     */
+    rates: Object.fromEntries(rates.map((r) => [r.id, rateFromRow(r)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
