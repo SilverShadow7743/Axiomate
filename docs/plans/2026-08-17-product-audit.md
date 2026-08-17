@@ -127,7 +127,7 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 | Intake | Email → issue | **Implemented & working** | `/api/intake`, Logic App live | Classifies, files, provenance `guessed` | No real client mail has flowed | Watch one arrive |
 | Scheduled pass | Daily clock | **Implemented & working** | Logic App, run verified | Ages issues, SLA, prunes keys | — | Keep |
 | Notifications | In-app inbox | **Partially implemented** | `Notification`; 1 row | Raised, read, delivery status | **No transport exists** — no SMTP, Graph or Teams code | See C |
-| Documents | Evidence | **UI only / placeholder** | `Evidence`; **0 rows** | Metadata + optional external URL | **No file is ever stored.** `blob:` URLs are explicitly refused | See C |
+| Documents | Evidence + Document | **Implemented, one consent short** | `Evidence` + `Document` | Bytes in SharePoint via Graph; record only when bytes exist | No file has travelled the whole path yet — the library is not consented | Grant it |
 | Agents | Registry | **Backend only / declared** | 38 agents, **2 live** | Registry is the design | 36 do nothing, and the UI says so | Keep the honesty |
 | Workflow | Steps | **Backend only / not executed** | `WorkflowRecord`; 2 seeded | Stored, orderable | Nothing runs them | See C |
 | Reporting | Daily IMS | **Partially implemented** | `lib/reports/dailyIms` | CSV/text export | Scenario RP2 `NOT IMPLEMENTED` | P2 |
@@ -240,7 +240,8 @@ populated.
 
 > **Since the audit (17 August).** Three of these were built and are live: `PersonRate`
 > (effective-dated cost and charge-out), `ChangeRequest` (a signed delta against a SOW baseline),
-> and `Skill` + `PersonSkill` (named levels, provenance, and when the skill was last used). The
+> `Skill` + `PersonSkill` (named levels, provenance, and when the skill was last used), and
+> `Document` (files actually held, in the firm's own SharePoint library). The
 > paragraph above stands for what remains — location, employment type, certifications, industry
 > and past experience are all still absent. The entries below are annotated where they have
 > changed; anything unannotated is still true.
@@ -396,7 +397,7 @@ mutation goes through one reducer with one permission check. That is the right f
 | Estimation | **Live** | subject, description, module, type, severity | domain gate | 5 complexity scores + basis | yes — never baselined | keep |
 | Email Intake | **Live in effect** | mailbox message | routing rules | classified issue | provenance `guessed` | keep |
 | Timesheet Intelligence | declared | entries, weeks | timesheets ✓ | missing time, wrong coding | required | **P2 — now feasible** |
-| SOW Intelligence | declared | SOW document | **file storage — absent** | structured scope | required | P3 — blocked |
+| SOW Intelligence | declared | SOW document | file storage ✓ (pending one consent) | structured scope | required | **P2 — unblocked once the library is consented.** `SowScopeItem` is the next piece, and the audit's own instruction was not to build it before this existed |
 | Resource Allocation / Skill Match | declared | demand, skills | skills ✓ · **demand — absent** | recommended allocation | required | **P2 — half unblocked.** `candidatesFor` answers "who could do this" from recorded skill and returns candidates, never a ranking. Nothing yet states what a deliverable *needs*, so the requirement has to be typed rather than read |
 | Margin Protection | declared | revenue, cost, hours | rates ✓ | threshold breach | required | **P2 — unblocked.** `costOf` prices each hour at the rate in force on its own date, and reports the whole total as absent rather than short when any hour is unrated |
 | Milestone Risk | declared | milestones | **project milestones — absent** | forecast | required | P3 — blocked |
@@ -477,7 +478,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | ~~`RateCard` / `PersonRate` (effective-dated)~~ | Unblocks cost, margin, billing, three agents | **BUILT** — `lib/rates.ts`, withheld whole from anybody without `rate.view` |
 | ~~`ChangeRequest`~~ | Commercial change is currently a string | **BUILT** — a signed delta; the SOW baseline is never edited |
 | ~~`Skill`, `PersonSkill` (with proficiency)~~ | Unblocks allocation intelligence and two agents | **BUILT** — named levels not numbers, provenance (`self`/`assessed`/`certified`), and `lastUsedOn` so a lapsed skill reads as lapsed. Catalogue in the model, levels in a table, judgement fields redacted at the boundary |
-| `Document` / file storage | Unblocks SOW intelligence and deliverable evidence | **P1** |
+| ~~`Document` / file storage~~ | Unblocks SOW intelligence and deliverable evidence | **BUILT** — SharePoint via Graph, not Blob. A row exists only when the bytes do; the locator never leaves the server. **One admin action outstanding**: grant `Files.ReadWrite.All` and name a drive |
 | `Milestone` as a first-class record at project/SOW level | Unblocks outcomes, milestone billing, two agents | **P1** |
 | `HolidayCalendar` + `CalendarDay` | A holiday is currently N person-rows; Mon–Fri is hardcoded | **P2** |
 | `Location`, `BusinessUnit`, `Practice` | Org master data; onshore/offshore | **P2** |
@@ -523,7 +524,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | Master data out of JSON | | ✓ | | **P0** | — | Start with people; then roles, profiles |
 | Change Request entity | | | ✓ | **P1** | SOW ✓ | Model with scope, effort, value, approval, dates |
 | Milestone as a first-class record | | ✓ | | **P1** | — | Project/SOW level, with acceptance and evidence |
-| File storage | | | ✓ | **P1** | Azure Blob | Upload → store → link to Evidence/SOW |
+| ~~File storage~~ | | | ✓ | **DONE** | ~~Azure Blob~~ SharePoint/Graph | Upload → store → link to Evidence. Reachable: attach, download, withdraw, and attach-to-an-evidence-row |
 | ~~Skills + proficiency~~ | | | ✓ | **DONE** | people table | `Skill`, `PersonSkill` — reachable: catalogue, record, correct, withdraw |
 | Notification transport | | ✓ | | **P1** | Graph/SMTP | Email first; Teams second |
 | Use the SOW module | ✓ | | | **P1** | — | Enter the real OAPIL/SLG contracts |
@@ -565,7 +566,7 @@ rest possible.*
 | `ChangeRequest` entity | Scope change is a string with no value or approval | SOW | **M** | Build |
 | Milestone as a record at project/SOW level | Cannot answer "which milestone is at risk" | — | **M** | Build |
 | Acceptance state on deliverables | Cannot answer "delivered but not accepted" | milestone | **M** | Build |
-| File storage + upload | No evidence, no SOW document | Azure Blob | **M** | Build |
+| ~~File storage + upload~~ | No evidence, no SOW document | ~~Azure Blob~~ SharePoint/Graph | **M** | **Built — grant the consent** |
 | Email notification transport | Nothing leaves the app | Graph | **S** | Build |
 | RAID as work types | Governance without four new modules | — | **S** | Build |
 | Validate today's work in a browser | Three features shipped unopened | — | **S** | Validate |
@@ -611,7 +612,7 @@ blocked on data that does not exist. Building them now produces screens that can
    Both are small and both create wrong answers today.
 7. **Model `ChangeRequest` as an entity.** Scope change is the most common commercial event in
    consulting and it currently has nowhere to live.
-8. **Add file storage.** It blocks deliverable evidence, SOW documents and acceptance proof.
+8. ~~**Add file storage.**~~ **Built.** One administrator action stands between it and working — see `.env.example`, *Attached files*.
 9. **Promote Milestone to a record at project level**, with acceptance criteria and evidence.
 10. **Decide on row-level security.** Identity now exists, which was the stated blocker. Either
     commit to real multi-tenancy or write down that this is a single-firm deployment.

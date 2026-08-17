@@ -224,6 +224,13 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
        * A withheld row carries nothing the server did not already send, so dropping one costs
        * nothing and the rule is cheap to hold now rather than to remember later.
        */
+      /*
+       * Mirror-wins, like every collection except the one below it, because a mirrored document
+       * row is never a downgraded copy of anything — the locator is stripped for every reader,
+       * so the mirror holds exactly what the page held. `?? {}` because a mirror written before
+       * documents existed has no such key.
+       */
+      documents: parsed.documents ?? {},
       personSkills: {
         ...(seed.personSkills ?? {}),
         ...Object.fromEntries(

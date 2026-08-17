@@ -14,6 +14,7 @@ import {
   rateFromRow,
   changeFromRow,
   personSkillFromRow,
+  documentFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -133,6 +134,7 @@ type Reader = Pick<
   | 'personRate'
   | 'changeRequest'
   | 'personSkill'
+  | 'document'
 >
 
 /**
@@ -158,7 +160,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -215,6 +217,13 @@ export async function loadWorkspace(
       db.personRate.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
       db.changeRequest.findMany({ where: { tenantId }, orderBy: { requestedAt: 'asc' } }),
       db.personSkill.findMany({ where: { tenantId }, orderBy: { recordedAt: 'asc' } }),
+      /*
+       * Uncapped, unlike the audit trail above, and that is a decision rather than an omission.
+       * A cap would hide the oldest documents, and evidence is asked for precisely when it is
+       * old. `describeDocuments` records the size at which this stops being free and says that
+       * the fix is to scope the collection to the record being viewed — not to truncate it.
+       */
+      db.document.findMany({ where: { tenantId }, orderBy: { uploadedAt: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -252,6 +261,9 @@ export async function loadWorkspace(
      * redaction happens in `boot()`, at the boundary, once.
      */
     personSkills: Object.fromEntries(personSkills.map((p) => [p.id, personSkillFromRow(p)])),
+    // Locators intact here. The reducer needs them to write a row back, and the download
+    // endpoint needs them to fetch. `boot()` is the one place they are stripped.
+    documents: Object.fromEntries(documents.map((d) => [d.id, documentFromRow(d)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),

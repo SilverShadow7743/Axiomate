@@ -42,6 +42,17 @@ export interface EvidenceItem {
   mimeType: string | null
   sizeBytes: number | null
   note: string
+  /**
+   * The stored file this row describes, when the app actually holds one.
+   *
+   * Null is the honest and still-common case: an `imported` row describes material reconstructed
+   * from the issue log, and a `link` points at somewhere else entirely. Evidence says WHY
+   * something is attached; a `Document` IS the thing. Keeping them as two records preserves the
+   * distinction this file opens by drawing — "this issue came from row 117 of a spreadsheet"
+   * versus "somebody attached a screenshot proving the fix worked" — and lets one specification
+   * be attached to two issues without duplicating either description.
+   */
+  documentId: string | null
   addedAt: string
   addedBy: string
   /**

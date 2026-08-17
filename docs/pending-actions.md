@@ -18,6 +18,7 @@ Nothing below can move without a decision or an action that is yours.
 | A3 | **Confirm or overrule two design reversals** | Both are committed in `2026-08-17-work-management-design.md` and both go against what you asked for. See section E |
 | A4 | **Client filter default** | Requested and not yet built — see D1. It needs one answer: what "project stakeholder" resolves to. Allocation? Engagement membership? Named on the SOW? |
 | A5 | **Issue-type taxonomy** | Requested and not yet built — see D2. There is a modelling question in it worth five minutes of your time before anybody writes code |
+| A6 | **Grant the document library consent** | This is the single thing standing between file storage and working, and it is an Entra admin action nobody but you can take. In the portal: App registrations → the Axiomate registration → API permissions → Microsoft Graph → **Application** permissions → `Files.ReadWrite.All` → Grant admin consent. Then set `AXIOMATE_DOCS_DRIVE_ID` to the target library's drive id (`GET /v1.0/sites/<host>:/sites/<site>:/drives`). Until both are done every upload is refused with a sentence saying which one is missing. **Point it at a library that exists for this purpose** — the token is app-only, so SharePoint's own permissions are not a second line of defence |
 
 ---
 
@@ -167,6 +168,7 @@ What that leaves open, in the order it blocks things:
 |---|---|---|
 | I1 | **Nothing has been opened in a browser** | The row menu, inline status editing, the Capacity tab, the leave form, the timesheet Submit, the Rates tab, the Changes UI and now the Skills tab are all in production and **none has been rendered in a browser** — the workspace is behind Entra and I cannot sign in. This is the largest single piece of unverified work |
 | I2 | **The skill catalogue is empty** | Deliberately — the product ships no default skills, because a firm's skill list is its own. Until somebody adds entries, the Skills tab has a form and nothing to record against. Adding the ten or fifteen that matter for OAPIL and SLG is a ten-minute job for somebody who knows the work |
+| I2b | **Nothing has been uploaded** | The model, both endpoints, the store contract and the Evidence panel are built and deployed; the only path exercised so far is the refusal. Scenario D stays PARTIAL until one real file has been stored and produced — the same discipline applied to the intake path |
 | I3 | **Nothing states what a deliverable requires** | `candidatesFor` answers "who could do this" and the requirement has to be typed rather than read off a work item. That is the remaining half of skill matching, and it is a modelling decision, not a screen |
 | I4 | `ChangeRequest.issueId` exists and nothing sets it | The register and the contract still describe the same change twice. Scenarios O and P name this |
 | I5 | `setResourceProfile` and `setWorkflowEnabled` | Recommended for **removal**, not wiring — see the audit. Both are reachable arms whose behaviour is now supplied by something better |

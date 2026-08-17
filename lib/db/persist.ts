@@ -27,6 +27,7 @@ import {
   timesheetToRow,
   rateToRow,
   personSkillToRow,
+  documentToRow,
   changeToRow,
   revisionToRow,
   relationshipToRow,
@@ -543,6 +544,35 @@ export async function persistSteps(
         if (before.personSkills[id] === p) continue
         const row = personSkillToRow(tenantId, p)
         await tx.personSkill.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    /*
+     * The evidence sweep is not incidental. `recordDocument` can stamp `documentId` onto an
+     * evidence row in the same act, and `removeDocument` clears it from every row that pointed
+     * at the withdrawn file — persisting only the document would leave the database holding a
+     * pointer the reducer had already cleared.
+     */
+    case 'recordDocument':
+    case 'removeDocument': {
+      for (const [id, d] of Object.entries(after.documents)) {
+        if (before.documents[id] === d) continue
+        const row = documentToRow(tenantId, d)
+        await tx.document.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      for (const [id, e] of Object.entries(after.evidence)) {
+        if (before.evidence[id] === e) continue
+        const row = evidenceToRow(tenantId, e)
+        await tx.evidence.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

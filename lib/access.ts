@@ -82,6 +82,22 @@ export const PERMISSIONS = [
    * level, is a judgement about a colleague and takes its own grant. Reading other people's
    * levels is a third thing again — see the boundary note in `lib/skills.ts`.
    */
+  /*
+   * Two keys, not three. There is deliberately no `document.view`.
+   *
+   * Attaching a file and withdrawing one are acts; reading what is attached to a record you can
+   * already see is not, and `evidence.add` / `evidence.remove` have had exactly this shape since
+   * the beginning with no view grant beside them. A document behind a grant that its own
+   * evidence row is not behind would be a confidentiality boundary drawn through the middle of
+   * one attachment.
+   *
+   * What downloads DO require is a verified session — `GET /api/documents/[id]` refuses an
+   * anonymous request, and that is the control that matters. Per-record confidentiality is a
+   * different feature (row-level security, which the audit lists as an open decision) and
+   * pretending a permission key here delivers it would be worse than not having one.
+   */
+  { key: 'document.upload', label: 'Attach a file', what: 'Upload a document against an issue, a statement of work, a project or a change. The file is stored, not just described.' },
+  { key: 'document.remove', label: "Withdraw somebody else's file", what: 'Withdraw a file another person attached. Your own can always be withdrawn by you.' },
   { key: 'skill.record', label: 'Record your own skills', what: 'Say what you can do and at what level. Your own only, and self-rated — see the next two.' },
   { key: 'skill.assess', label: "Assess somebody's skill", what: "Record a level against another person, or mark any level as assessed or certified rather than self-rated." },
   {
@@ -156,6 +172,9 @@ const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 const DELIVERY_CORE: PermissionKey[] = [
   'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link',
   'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request',
+  // Beside `evidence.add`, because attaching the file and describing it are one act to the
+  // person doing it. Anybody who may say "here is the proof" may hold up the proof.
+  'document.upload',
   // Submitting is part of doing the work: anybody who records time has a week to attest to.
   // Approving is not here — it is added to the two roles below that already decide things.
   'time.submit',
@@ -199,7 +218,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
@@ -212,7 +231,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
   // too. A support consultant has skills like anybody else, and a directory that cannot hear
   // from a whole role is a directory with a hole in it nobody would think to look for.
-  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record'],
+  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record', 'document.upload'],
   // The one client role that decides anything: a sponsor is the person a change order is
   // actually put to, and a rule that names them is worthless if the grant does not.
   ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide'],
@@ -412,6 +431,16 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   recordPersonSkill: 'skill.record',
   correctPersonSkill: 'skill.record',
   removePersonSkill: 'skill.record',
+  /*
+   * `recordDocument` is the metadata half, and the bytes are already stored by the time it runs.
+   * The upload endpoint therefore checks this same key BEFORE it reads the body — a permission
+   * enforced only here would mean storing a file for somebody who was never allowed to attach
+   * one, and then refusing to write the row that would let anybody find it again.
+   */
+  recordDocument: 'document.upload',
+  // The floor. Withdrawing somebody ELSE's attachment additionally needs `document.remove`,
+  // checked in the arm — the same shape as time and skills.
+  removeDocument: 'document.upload',
   recordVersion: 'capacity.record',
   correctVersion: 'capacity.record',
   // Raising or editing a variation is amending commercial scope, so it takes the same grant

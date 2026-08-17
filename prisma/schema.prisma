@@ -144,6 +144,7 @@ model Tenant {
   rates         PersonRate[]
   changes       ChangeRequest[]
   personSkills  PersonSkill[]
+  documents     Document[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -413,6 +414,15 @@ model Evidence {
   mimeType  String?
   sizeBytes Int?
   note      String  @db.Text
+
+  /// The stored file this row describes, when the app holds one. Null for an imported row (which
+  /// describes material nobody kept) and for a link (which points elsewhere).
+  ///
+  /// No foreign key, deliberately: `Document` hangs off four different kinds of subject and is
+  /// withdrawn softly, so a constraint here would either block a withdrawal or cascade one
+  /// record's deletion into another's. The reducer clears this field when a document is
+  /// withdrawn, which is the same job done where the rule is readable.
+  documentId String?
 
   origin  EvidenceOrigin @default(USER)
   addedAt DateTime
@@ -1127,6 +1137,57 @@ model PersonSkill {
   /// The two reads: everybody's level in one skill, and one person's whole profile.
   @@index([tenantId, skillId, level])
   @@index([tenantId, personId])
+}
+
+/// A file this application actually holds.
+///
+/// A row exists ONLY when the bytes exist. There is no "we do not hold this" state, because that
+/// is the fault the entity was built to fix — see the note in `lib/documents.ts`. Material the
+/// firm does not hold is an `Evidence` row with `origin = 'imported'`, which says so.
+///
+/// The bytes are not here. They live in the firm's SharePoint document library, reached through
+/// Microsoft Graph, and `locator` is the id that finds them again. `store` records WHICH backend,
+/// per row rather than from configuration, so a half-finished migration between stores stays
+/// legible instead of leaving rows nobody can fetch.
+///
+/// `subjectKind` + `subjectId` follow `Version`'s polymorphic shape. No foreign key is possible:
+/// a document can hang off an issue, a SOW, a hierarchy node or a change request, and two of
+/// those are rows while the others are reachable only through this tenant's own tables. The
+/// reducer checks the subject exists instead, which is also where an orphan would otherwise be
+/// created holding real bytes that nothing lists.
+model Document {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `doc-12`, minted from the durable workspace counter.
+  id          String
+  /// issue | sow | node | change.
+  subjectKind String
+  subjectId   String
+
+  /// The name as uploaded. Display and download only — never used to build a storage path.
+  name      String
+  mimeType  String
+  sizeBytes Int
+  /// SHA-256 of the bytes actually written, hex. Matched WITHIN a tenant only: a cross-tenant
+  /// checksum match would answer "does that other firm hold this exact file".
+  checksum  String
+  /// How the store finds the bytes. Never leaves the server — see `DocumentRecord.locator`.
+  locator   String
+  /// graph.
+  store     String
+
+  note         String   @db.Text
+  uploadedBy   String
+  uploadedById String?
+  uploadedAt   DateTime
+  deletedAt    DateTime?
+
+  @@id([tenantId, id])
+  /// The read that matters: everything attached to one record.
+  @@index([tenantId, subjectKind, subjectId])
+  /// And the duplicate check, which is per subject and never across the tenant.
+  @@index([tenantId, checksum])
 }
 
 /// What was true about something, from when, and why it changed.

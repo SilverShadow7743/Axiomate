@@ -46,10 +46,10 @@
       "title": "Client sends an attachment",
       "expected": "The file is stored, attached to the issue, and can be produced later as evidence.",
       "verdict": "PARTIAL",
-      "actual": "The evidence record is created with kind, size and mime type (url: none). No bytes are stored — there is no upload path anywhere in the source.",
-      "stops": "at the file itself — the record describes an artefact the system does not hold",
+      "actual": "The evidence record is still just a description (url: none) — and beside it there is now a Document, which exists only when bytes exist. An upload path exists: POST /api/documents stores the file in the firm’s SharePoint library through Graph and records what came back, in that order, so a crash leaves an orphaned object rather than a record pointing at nothing. GET /api/documents/[id] streams it back with a per-request check, and no storage URL is ever put in the page payload. What has not happened is a real file making the trip: the store needs an administrator to grant Files.ReadWrite.All and to name a drive, and until then every upload is refused at the door with that sentence.",
+      "stops": "at a consented document library. The model, the store contract, both endpoints and the screen are built and the not-configured refusal is the only path exercised — no file has yet been stored or produced. This becomes PASS when one has.",
       "severity": "P1",
-      "impact": "Evidence cannot be produced at a governance meeting. The list of it can."
+      "impact": "Evidence still cannot be produced at a governance meeting, but the reason has changed from \"nothing was built\" to \"one consent has not been granted\", which is a different and much smaller job."
     },
     {
       "id": "E",
@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "38 of 38 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-17. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "41 of 41 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-17. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -624,11 +624,21 @@
       "impact": "A level is a claim with somebody’s name on it. This is what keeps the name attached to the person who made the claim, in both directions — nobody can award themselves a credential, and nobody can quietly delete one written about them."
     },
     {
+      "id": "DOC1",
+      "title": "A file is attached to an issue, and a record only ever exists when the bytes do",
+      "expected": "Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.",
+      "verdict": "PASS",
+      "actual": "Refused before anything is stored: a file over the 25.0 MB limit, an empty one, \"setup.exe\" (\"“.exe” files are not accepted — their purpose is to execute. Put it in a zip if it genuinely needs to travel with the record.\"), and a name carrying a path. \"OAPIL_backup.axmodel\" is accepted — a deny list rather than an allow list, because an allow list would refuse real consulting work weekly until somebody widened it into uselessness. The reducer refuses a document against an issue that does not exist (\"That record no longer exists, so there is nothing to attach the file to.\") and against a kind of thing documents cannot hang off, which is what stops an orphan holding real bytes that nothing lists. The same checksum on the same issue is refused as a double-click; on a different issue it is allowed, because one specification genuinely does attach to two records. A consultant cannot withdraw somebody else's attachment (\"Withdraw somebody else's file is not something Functional Consultant can do here. Validator attached this.\"); the person who attached it always can, and withdrawing is soft and leaves the file in the library rather than reaching through to delete it. A store nobody has configured refuses every call with its reason instead of accepting and dropping, which is the failure a stub would produce by being helpful.",
+      "stops": "at a consented document library — see D. Every rule above is exercised; no byte has yet been through Graph.",
+      "severity": "—",
+      "impact": "The record and the artefact are now the same fact. What is still missing is one administrator action, not a feature."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 34 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 36 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."

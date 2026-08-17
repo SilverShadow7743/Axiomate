@@ -40,7 +40,7 @@ import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceS
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
 import { timelineOf, valueAt, stamp } from '../lib/versioning'
 import { redactPersonSkill } from '../lib/skills'
-import { personSkillToRow } from '../lib/db/map'
+import { personSkillToRow, documentToRow } from '../lib/db/map'
 import type { TenantId } from '../lib/tenant'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -139,6 +139,7 @@ async function scrub() {
   await prisma.timesheet.deleteMany({ where })
   await prisma.personRate.deleteMany({ where })
   await prisma.personSkill.deleteMany({ where })
+  await prisma.document.deleteMany({ where })
   await prisma.changeRequest.deleteMany({ where })
   await prisma.engagement.deleteMany({ where })
   await prisma.appliedAction.deleteMany({ where })
@@ -587,6 +588,65 @@ async function main() {
       'and a redacted row is refused by the mapper rather than saved as an erased level',
       refused.includes('Refusing to persist a redacted person-skill'),
       refused || 'IT WAS ACCEPTED, which would erase a level',
+    )
+  }
+
+  /* ---------------- a stored file, and the locator that must not leave ---------------- */
+  {
+    const issueId = Object.values((await loadWorkspace(TENANT)).state.issues)[0]!.id
+    const written = await persistActions(TENANT, A, [
+      {
+        t: 'recordDocument', subjectKind: 'issue', subjectId: issueId,
+        name: 'Signed SOW.pdf', mimeType: 'application/pdf', sizeBytes: 240_000,
+        checksum: 'b'.repeat(64), locator: 'graph-item-proof-1', store: 'graph',
+        note: 'Countersigned copy.', now: NOW,
+      } as Action,
+    ])
+
+    const back = await loadWorkspace(TENANT)
+    const doc = Object.values(back.state.documents).find((d) => d.name === 'Signed SOW.pdf')
+    check(
+      'a stored file comes back out of Postgres with its checksum and the locator that finds it',
+      written.ok &&
+        doc?.locator === 'graph-item-proof-1' &&
+        doc?.checksum === 'b'.repeat(64) &&
+        doc?.sizeBytes === 240_000 &&
+        doc?.store === 'graph' &&
+        doc?.subjectKind === 'issue',
+      doc
+        ? `${doc.name} · ${doc.sizeBytes} bytes · ${doc.store}:${doc.locator} · on ${doc.subjectKind} ${doc.subjectId}`
+        : `nothing stored — ${written.error ?? written.message}`,
+    )
+
+    /*
+     * The rule that keeps a storage handle on the server, driven rather than described.
+     *
+     * `boot()` strips it from every copy that leaves, unconditionally. This asserts the other
+     * half — that a stripped copy can never come back the other way. Without it the failure is
+     * silent and total: a record that survives looking perfectly healthy with the only field
+     * that can find its bytes erased.
+     */
+    let refused = ''
+    try {
+      documentToRow(TENANT, { ...doc!, locator: null })
+    } catch (e) {
+      refused = e instanceof Error ? e.message : String(e)
+    }
+    check(
+      'and a copy whose locator was stripped for reading cannot be written back',
+      refused.includes('Refusing to persist document'),
+      refused || 'IT WAS ACCEPTED, which would erase the only route to the bytes',
+    )
+
+    /* Withdrawing is soft, and it clears the evidence row that pointed at the file. */
+    const withdrawn = await persistActions(TENANT, A, [
+      { t: 'removeDocument', id: doc!.id, now: NOW } as Action,
+    ])
+    const after = await loadWorkspace(TENANT)
+    check(
+      'withdrawing is soft and survives the reload — the record is still there, marked',
+      withdrawn.ok && Boolean(after.state.documents[doc!.id]?.deletedAt),
+      `deletedAt ${after.state.documents[doc!.id]?.deletedAt ?? 'null — it vanished, which is wrong'}`,
     )
   }
 

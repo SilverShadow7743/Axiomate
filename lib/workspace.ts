@@ -45,6 +45,15 @@ import { ACTION_PERMISSIONS, accessProblems, can, directoryPersonFor, permission
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import { checkPersonSkill, type PersonSkill, type Skill, type SkillLevel, type SkillSource } from './skills'
 import {
+  duplicateOf,
+  formatBytes,
+  subjectProblem,
+  uploadProblem,
+  type DocumentRecord,
+  type DocumentSubject,
+} from './documents'
+import type { StoreKind } from './documents'
+import {
   checkChange,
   decideChangeProblem,
   statusAfterDecision,
@@ -291,6 +300,19 @@ export interface WorkspaceState {
    * collection exists; the second is the reason it cannot go out unredacted.
    */
   personSkills: Record<string, PersonSkill>
+  /**
+   * Files the application actually holds. See `./documents`.
+   *
+   * Metadata only. `locator` is null in every copy that leaves the server — unconditionally, not
+   * per grant — because the browser downloads through `GET /api/documents/[id]` and has no use
+   * for it. See the note on `DocumentRecord.locator`.
+   *
+   * This is the first collection here that grows without bound. `describeDocuments` records the
+   * number at which that stops being free and what to do about it, deliberately instead of
+   * capping the load: evidence exists to be produced at a governance meeting, and the piece
+   * somebody asks for is usually an old one.
+   */
+  documents: Record<string, DocumentRecord>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -550,6 +572,7 @@ export function initWorkspace(
     rates: {},
     changes: {},
     personSkills: {},
+    documents: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -769,6 +792,34 @@ export type Action =
       now: string
     }
   | { t: 'removePersonSkill'; id: string; now: string }
+  /**
+   * Record that a file has been stored. **The bytes are already in the store when this runs.**
+   *
+   * The reducer never sees a byte, and that is not squeamishness about size — it is the ordering
+   * rule the whole entity rests on. Storing first and recording second means a crash between the
+   * two leaves an object nobody can see, costing pennies. Recording first would leave a row
+   * pointing at nothing: a screen offering a document that cannot be opened, which is precisely
+   * the fault this entity was built to fix.
+   *
+   * So this action carries what the store returned — locator, checksum, the size actually
+   * written — and not what a browser claimed.
+   */
+  | {
+      t: 'recordDocument'
+      subjectKind: DocumentSubject
+      subjectId: string
+      name: string
+      mimeType: string
+      sizeBytes: number
+      checksum: string
+      locator: string
+      store: StoreKind
+      note: string
+      /** Attach it to an issue's evidence list in the same act, when one is being described. */
+      evidenceId?: string | null
+      now: string
+    }
+  | { t: 'removeDocument'; id: string; now: string }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -2280,6 +2331,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         mimeType: a.mimeType,
         sizeBytes: a.sizeBytes,
         note: a.note,
+        /*
+         * Null, always, from this arm. Describing evidence and storing a file are two acts, and
+         * this is the first — `recordDocument` stamps the join when bytes actually land. An
+         * evidence row that claimed a document before one existed would be the fault the whole
+         * entity was built to fix, written by the arm that predates it.
+         */
+        documentId: null,
         addedAt: a.now,
         addedBy: by,
         origin: 'user',
@@ -3333,6 +3391,153 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Withdrawn.',
+      }
+    }
+
+    /**
+     * Record a file the store has already accepted.
+     *
+     * The subject is checked against the collection it names, and that check is here rather than
+     * only at the endpoint because of what the intake bug taught: a record pointed at somewhere
+     * it cannot live is refused by the reducer with a 409 nobody reads, and the symptom is
+     * silence. A document attached to an issue id that does not exist would be worse than
+     * silence — it would be an orphan holding real bytes that nothing ever lists, so nobody
+     * would know to delete it.
+     */
+    case 'recordDocument': {
+      const bad = subjectProblem(a.subjectKind, a.subjectId)
+      if (bad) return { state, error: bad }
+
+      const subjectExists =
+        a.subjectKind === 'issue'
+          ? Boolean(state.issues[a.subjectId] && !state.issues[a.subjectId].deletedAt)
+          : a.subjectKind === 'sow'
+            ? Boolean(state.sows[a.subjectId] && !state.sows[a.subjectId].deletedAt)
+            : a.subjectKind === 'node'
+              ? Boolean(state.nodes[a.subjectId] && !state.nodes[a.subjectId].deletedAt)
+              : Boolean(state.changes[a.subjectId] && !state.changes[a.subjectId].deletedAt)
+      if (!subjectExists) {
+        return { state, error: 'That record no longer exists, so there is nothing to attach the file to.' }
+      }
+
+      const problem = uploadProblem({ name: a.name, sizeBytes: a.sizeBytes, mimeType: a.mimeType })
+      if (problem) return { state, error: problem }
+
+      /*
+       * The same bytes already attached HERE is a double-click, and refusing it keeps a record
+       * from showing one file twice. The same bytes on a different subject is two legitimate
+       * attachments — one specification against two issues — and is allowed.
+       *
+       * This refuses AFTER the store has written, which is the cost of storing first. The
+       * alternative is checking the checksum before uploading, which cannot be done without
+       * reading the whole file anyway, so nothing is saved by reordering it.
+       */
+      const already = duplicateOf(Object.values(state.documents), {
+        subjectKind: a.subjectKind,
+        subjectId: a.subjectId,
+        checksum: a.checksum,
+      })
+      if (already) {
+        return { state, error: `That exact file is already attached here as “${already.name}”.` }
+      }
+
+      const seq = state.seq + 1
+      const id = `doc-${seq}`
+      const next: DocumentRecord = {
+        id,
+        subjectKind: a.subjectKind,
+        subjectId: a.subjectId,
+        name: a.name.trim(),
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+        checksum: a.checksum,
+        locator: a.locator,
+        store: a.store,
+        note: a.note.trim(),
+        uploadedBy: by,
+        uploadedById: actor.id,
+        uploadedAt: a.now,
+        deletedAt: null,
+      }
+
+      /*
+       * Joined to an evidence row when one is being described in the same act — evidence says
+       * WHY material is attached, a document IS it, and `lib/evidence.ts` opens by explaining
+       * why those stay separate concepts. This is the join, not a merge.
+       */
+      const evidence =
+        a.evidenceId && state.evidence[a.evidenceId]
+          ? { ...state.evidence, [a.evidenceId]: { ...state.evidence[a.evidenceId], documentId: id } }
+          : state.evidence
+
+      return {
+        state: {
+          ...state,
+          seq,
+          documents: { ...state.documents, [id]: next },
+          evidence,
+          audit: log(actor, state, {
+            rowId: a.subjectId,
+            field: 'document',
+            from: null,
+            // The name and the size, and deliberately not the locator: an audit row is readable
+            // by anybody who may read history, and a storage handle is not history.
+            to: `${next.name} (${formatBytes(next.sizeBytes)})`,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: id,
+        message: `${next.name} attached.`,
+      }
+    }
+
+    /**
+     * Withdraw a file.
+     *
+     * Soft, and the bytes are deliberately NOT deleted from the store by this arm — the reducer
+     * is pure and cannot reach the network. What that means in practice is stated rather than
+     * hidden: withdrawing removes the file from every screen and from download, and the object
+     * stays in the firm's own document library where an administrator can see it. For evidence
+     * that is the right way round. A delete that reaches through to storage would make "withdraw"
+     * an irreversible act performed by a single click on a record somebody else may be relying on.
+     */
+    case 'removeDocument': {
+      const existing = state.documents[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That file is no longer attached.' }
+
+      const mineToTouch =
+        existing.uploadedById === actor.id ||
+        existing.uploadedBy.trim().toLowerCase() === by.trim().toLowerCase()
+      if (!mineToTouch) {
+        const may = can(state.model, actor, 'document.remove')
+        if (!may.allowed) {
+          return { state, error: `${may.reason ?? 'Not permitted.'} ${existing.uploadedBy} attached this.` }
+        }
+      }
+
+      /* The evidence row that pointed at it stops pointing, so nothing offers a dead link. */
+      const evidence = Object.fromEntries(
+        Object.entries(state.evidence).map(([k, e]) =>
+          e.documentId === a.id ? [k, { ...e, documentId: null }] : [k, e],
+        ),
+      )
+
+      return {
+        state: {
+          ...state,
+          documents: { ...state.documents, [a.id]: { ...existing, deletedAt: a.now } },
+          evidence,
+          audit: log(actor, state, {
+            rowId: existing.subjectId,
+            field: 'document',
+            from: existing.name,
+            to: null,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Withdrawn. The file stays in the document library.',
       }
     }
 

@@ -24,6 +24,7 @@ import type {
   PersonRate as PersonRateRow,
   ChangeRequest as ChangeRequestRow,
   PersonSkill as PersonSkillRow,
+  Document as DocumentRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -42,6 +43,8 @@ import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
 import type { ChangeRequest, ChangeStatus } from '../changeRequest'
 import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
+import type { DocumentRecord, DocumentSubject } from '../documents'
+import type { StoreKind } from '../documents'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -374,6 +377,7 @@ export function evidenceToRow(tenantId: TenantId, e: EvidenceItem): Prisma.Evide
     mimeType: e.mimeType,
     sizeBytes: e.sizeBytes,
     note: e.note,
+    documentId: e.documentId,
     origin: e.origin === 'imported' ? 'IMPORTED' : 'USER',
     addedAt: new Date(e.addedAt),
     addedBy: e.addedBy,
@@ -392,6 +396,7 @@ export function evidenceFromRow(r: EvidenceRow): EvidenceItem {
     mimeType: r.mimeType,
     sizeBytes: r.sizeBytes,
     note: r.note,
+    documentId: r.documentId,
     addedAt: r.addedAt.toISOString(),
     addedBy: r.addedBy,
     origin: r.origin === 'IMPORTED' ? 'imported' : 'user',
@@ -979,6 +984,61 @@ export function rateFromRow(r: PersonRateRow): PersonRate {
     byId: r.byId ?? undefined,
     byEmail: r.byEmail,
     reason: r.reason,
+  }
+}
+
+/* ================================================================== *
+ * Documents
+ * ================================================================== */
+
+/**
+ * `locator` is required going IN and always present coming OUT.
+ *
+ * The null it can carry in the domain type belongs to the copy that crosses the boundary, never
+ * to a stored row — the same split `PersonSkill.level` has, and refused here for the same reason:
+ * writing a redacted row back would erase the only thing that can find the bytes again, and the
+ * record would survive looking perfectly healthy.
+ */
+export function documentToRow(tenantId: TenantId, d: DocumentRecord): Prisma.DocumentUncheckedCreateInput {
+  if (!d.locator) {
+    throw new Error(`Refusing to persist document ${d.id} with no locator. The locator is stripped for reading only.`)
+  }
+  return {
+    tenantId,
+    id: d.id,
+    subjectKind: d.subjectKind,
+    subjectId: d.subjectId,
+    name: d.name,
+    mimeType: d.mimeType,
+    sizeBytes: d.sizeBytes,
+    checksum: d.checksum,
+    locator: d.locator,
+    store: d.store,
+    note: d.note,
+    uploadedBy: d.uploadedBy,
+    uploadedById: d.uploadedById ?? null,
+    uploadedAt: new Date(d.uploadedAt),
+    deletedAt: d.deletedAt ? new Date(d.deletedAt) : null,
+  }
+}
+
+export function documentFromRow(r: DocumentRow): DocumentRecord {
+  return {
+    id: r.id,
+    subjectKind: r.subjectKind as DocumentSubject,
+    subjectId: r.subjectId,
+    name: r.name,
+    mimeType: r.mimeType,
+    sizeBytes: r.sizeBytes,
+    checksum: r.checksum,
+    locator: r.locator,
+    store: r.store as StoreKind,
+    note: r.note,
+    uploadedBy: r.uploadedBy,
+    // The same asymmetry as `byId` elsewhere: the optional field has no null in it.
+    uploadedById: r.uploadedById ?? undefined,
+    uploadedAt: r.uploadedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 

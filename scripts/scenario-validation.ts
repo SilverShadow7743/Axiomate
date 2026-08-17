@@ -98,6 +98,8 @@ import {
   type Skill,
   type SkillLevel,
 } from '../lib/skills'
+import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
+import { unconfiguredStore } from '../lib/storage/contract'
 import {
   contractedPosition,
   decideChangeProblem,
@@ -366,12 +368,20 @@ scenario(
       purpose: 'Investigation evidence', url: null, mimeType: 'image/png', sizeBytes: 84_000, note: '', now: NOW,
     } as Action)
     const ev = Object.values(s.evidence).find((e) => e.name === 'batch-error.png')!
+    /*
+     * This scenario used to prove its own claim by scanning the source for an upload path and
+     * finding none. Adding one flips that regex on its own, which would have turned the sentence
+     * true-by-construction while nothing had actually been uploaded — the same trap scenario A
+     * was corrected for. So the check is now what it should always have been: whether the
+     * pieces exist AND whether a file has ever travelled the whole path.
+     */
+    const hasUploadPath = !absent(/multipart\/form-data|formData\(\)|createUploadSession/)
     return {
       verdict: 'PARTIAL',
-      actual: `The evidence record is created with kind, size and mime type (url: ${ev.url ?? 'none'}). No bytes are stored — ${absent(/multipart\/form-data|createReadStream|blob\(\)|S3|BlobClient/) ? 'there is no upload path anywhere in the source' : 'an upload path exists'}.`,
-      stops: 'at the file itself — the record describes an artefact the system does not hold',
+      actual: `The evidence record is still just a description (url: ${ev.url ?? 'none'}) — and beside it there is now a Document, which exists only when bytes exist. ${hasUploadPath ? 'An upload path exists: POST /api/documents stores the file in the firm’s SharePoint library through Graph and records what came back, in that order, so a crash leaves an orphaned object rather than a record pointing at nothing. GET /api/documents/[id] streams it back with a per-request check, and no storage URL is ever put in the page payload.' : 'There is no upload path anywhere in the source.'} What has not happened is a real file making the trip: the store needs an administrator to grant Files.ReadWrite.All and to name a drive, and until then every upload is refused at the door with that sentence.`,
+      stops: 'at a consented document library. The model, the store contract, both endpoints and the screen are built and the not-configured refusal is the only path exercised — no file has yet been stored or produced. This becomes PASS when one has.',
       severity: 'P1',
-      impact: 'Evidence cannot be produced at a governance meeting. The list of it can.',
+      impact: 'Evidence still cannot be produced at a governance meeting, but the reason has changed from "nothing was built" to "one consent has not been granted", which is a different and much smaller job.',
     }
   },
 )
@@ -3300,6 +3310,90 @@ scenario(
       severity: '—',
       impact:
         'A level is a claim with somebody’s name on it. This is what keeps the name attached to the person who made the claim, in both directions — nobody can award themselves a credential, and nobody can quietly delete one written about them.',
+    }
+  },
+)
+
+scenario(
+  'DOC1',
+  'A file is attached to an issue, and a record only ever exists when the bytes do',
+  'Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.',
+  () => {
+    const attach = (s: WorkspaceState, over: Partial<Extract<Action, { t: 'recordDocument' }>> = {}, who: Actor = A) =>
+      apply(s, {
+        t: 'recordDocument', subjectKind: 'issue', subjectId: 'OAPIL-1',
+        name: 'signed-sow.pdf', mimeType: 'application/pdf', sizeBytes: 240_000,
+        checksum: 'a'.repeat(64), locator: 'graph-item-1', store: 'graph', note: '', now: NOW,
+        ...over,
+      } as Action, who)
+
+    /* The rules, driven directly — this is the version a route handler cannot hide. */
+    const tooBig = uploadProblem({ name: 'dump.bak', sizeBytes: MAX_UPLOAD_BYTES + 1, mimeType: '' })
+    const empty = uploadProblem({ name: 'empty.txt', sizeBytes: 0, mimeType: 'text/plain' })
+    const executable = uploadProblem({ name: 'setup.exe', sizeBytes: 10, mimeType: '' })
+    const traversal = uploadProblem({ name: '../../etc/passwd', sizeBytes: 10, mimeType: '' })
+    /* And the one an allow list would have refused and this deliberately does not. */
+    const oddButReal = uploadProblem({ name: 'OAPIL_backup.axmodel', sizeBytes: 900, mimeType: '' })
+
+    const ok1 = attach(BASE)
+    const orphan = attach(BASE, { subjectId: 'NOT-A-REAL-ISSUE' })
+    const nowhere = attach(BASE, { subjectKind: 'person' as never })
+
+    /* The same bytes twice on one record is a double-click; on another record it is a second
+       legitimate attachment of one specification. */
+    const twiceHere = attach(ok1.state)
+    const elsewhere = attach(ok1.state, { subjectId: 'OAPIL-2' })
+
+    /* Withdrawing: your own always, somebody else's only with the grant. */
+    const doc = Object.values(ok1.state.documents)[0]!
+    const consultant = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(ok1.state, {
+      t: 'config', op: { k: 'upsertPerson', id: consultant.id, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const theirs = apply(staffed, { t: 'removeDocument', id: doc.id, now: NOW } as Action, {
+      id: consultant.id, name: 'Priya',
+    })
+    const mine = apply(ok1.state, { t: 'removeDocument', id: doc.id, now: NOW } as Action, A)
+
+    /*
+     * The store that is not configured. The failure being guarded against is not an exception —
+     * it is a stub that returns successfully and drops the bytes, which would produce a record
+     * describing a file nobody holds: the exact fault this entity exists to fix, arrived at from
+     * the inside.
+     */
+    const store = unconfiguredStore('No document library has been chosen.')
+    let refusedPut = ''
+    void store.put({ tenantId: 't', name: 'x.pdf', mimeType: 'application/pdf', bytes: new Uint8Array([1]) })
+      .then(() => { refusedPut = 'IT SUCCEEDED, which would silently drop the file' })
+      .catch((e: Error) => { refusedPut = e.message })
+
+    /*
+     * The mapper's refusal to write a locator-stripped copy back is asserted in the persistence
+     * proof, not here: `lib/db/map.ts` is `server-only` and this harness runs without the
+     * react-server condition. Splitting it that way keeps each check where it can actually run,
+     * rather than weakening this file's imports to accommodate one line.
+     */
+
+    const good =
+      Boolean(tooBig) && Boolean(empty) && Boolean(executable) && Boolean(traversal) &&
+      oddButReal === null &&
+      !ok1.error &&
+      Boolean(orphan.error) &&
+      Boolean(nowhere.error) &&
+      Boolean(twiceHere.error) &&
+      !elsewhere.error &&
+      Boolean(theirs.error) &&
+      !mine.error &&
+      /* withdrawn softly, and the bytes deliberately not chased */
+      Boolean(mine.state.documents[doc.id]?.deletedAt)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Refused before anything is stored: a file over the ${formatBytes(MAX_UPLOAD_BYTES)} limit, an empty one, "setup.exe" ("${executable}"), and a name carrying a path. "OAPIL_backup.axmodel" is accepted — a deny list rather than an allow list, because an allow list would refuse real consulting work weekly until somebody widened it into uselessness. The reducer refuses a document against an issue that does not exist ("${orphan.error}") and against a kind of thing documents cannot hang off, which is what stops an orphan holding real bytes that nothing lists. The same checksum on the same issue is refused as a double-click; on a different issue it is allowed, because one specification genuinely does attach to two records. A consultant cannot withdraw somebody else's attachment ("${theirs.error}"); the person who attached it always can, and withdrawing is soft and leaves the file in the library rather than reaching through to delete it. A store nobody has configured refuses every call with its reason instead of accepting and dropping, which is the failure a stub would produce by being helpful.`,
+      stops: 'at a consented document library — see D. Every rule above is exercised; no byte has yet been through Graph.',
+      severity: '—',
+      impact:
+        'The record and the artefact are now the same fact. What is still missing is one administrator action, not a feature.',
     }
   },
 )

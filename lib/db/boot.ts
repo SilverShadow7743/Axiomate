@@ -227,5 +227,20 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
         Object.entries(state.personSkills).map(([id, p]) => [id, redactPersonSkill(p, mine)]),
       )
 
-  return { ...state, rates, personSkills }
+  /*
+   * The locator, unconditionally. There is no reader who needs it — downloads go through
+   * `GET /api/documents/[id]`, which authorises the request when it is made — so this is an
+   * absolute rule rather than a grant-dependent one.
+   *
+   * Absolute on purpose. The two redactions above each depend on a permission, which means each
+   * has a path where the data legitimately travels, and each of those paths is somewhere a
+   * future change can go wrong. A rule with no exceptions is one nobody has to re-derive when
+   * they add the fourth collection to this function — and this codebase has now been caught by
+   * the payload-leak class three times.
+   */
+  const documents = Object.fromEntries(
+    Object.entries(state.documents).map(([id, d]) => [id, { ...d, locator: null }]),
+  )
+
+  return { ...state, rates, personSkills, documents }
 }

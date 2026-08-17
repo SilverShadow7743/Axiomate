@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
+import type { DocumentRecord } from '@/lib/documents'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
@@ -279,6 +280,72 @@ export default function IssueWorkspace({
     [state, notify, persist, actor, withExpectation],
   )
 
+  /**
+   * Store a file, then bring the record it produced into this browser's copy.
+   *
+   * The one write in the application that does NOT go through `dispatch`, and it is worth being
+   * explicit about why rather than letting it look like an oversight.
+   *
+   * `dispatch` applies an action locally and queues the same action to `/api/workspace`. That
+   * shape depends on the action being replayable — the server reaching the same answer from the
+   * same input. An upload is not: the input is 25 MB of bytes, the store assigns a locator that
+   * only exists once the bytes are written, and replaying it would store the file twice.
+   *
+   * So the server does it once, and hands back the record. What lands here is therefore not
+   * optimistic — it already happened — which is also why a failure is returned as a sentence for
+   * the panel to show rather than raised as a toast: the person is looking at the file they
+   * chose, and that is where the answer belongs.
+   */
+  const uploadDocument = useCallback(
+    async (
+      file: File,
+      subjectKind: 'issue' | 'sow' | 'node' | 'change',
+      subjectId: string,
+      evidenceId: string | null,
+    ): Promise<string | null> => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('subjectKind', subjectKind)
+      form.append('subjectId', subjectId)
+      form.append('note', '')
+      if (evidenceId) form.append('evidenceId', evidenceId)
+
+      let res: Response
+      try {
+        res = await fetch('/api/documents', { method: 'POST', body: form })
+      } catch {
+        return 'The file could not be sent. Check the connection and try again — nothing has been stored.'
+      }
+      const body = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; document?: DocumentRecord; evidenceId?: string | null }
+        | null
+
+      if (!res.ok || !body?.ok || !body.document?.id) {
+        return body?.error ?? `The file could not be stored (${res.status}).`
+      }
+
+      /*
+       * Merged straight into state rather than replayed through the reducer. The reducer has
+       * already run — on the server, over the real locator — and running it again here would
+       * mint a second id from this browser's counter and queue a duplicate write.
+       */
+      const doc = body.document
+      setState((s) => ({
+        ...s,
+        documents: { ...s.documents, [doc.id]: doc },
+        evidence:
+          body.evidenceId && s.evidence[body.evidenceId]
+            ? {
+                ...s.evidence,
+                [body.evidenceId]: { ...s.evidence[body.evidenceId], documentId: doc.id },
+              }
+            : s.evidence,
+      }))
+      notify(`${doc.name} stored.`)
+      return null
+    },
+    [notify],
+  )
 
   /**
    * The same funnel for a batch that has to land atomically.
@@ -1959,6 +2026,13 @@ export default function IssueWorkspace({
             dispatch({ t: 'updateEvidence', id, patch, now: new Date().toISOString() })
           }
           onRemove={(id) => dispatch({ t: 'removeEvidence', id, now: new Date().toISOString() })}
+          documents={Object.values(state.documents).filter(
+            (d) => d.subjectKind === 'issue' && d.subjectId === evidenceFor,
+          )}
+          onUpload={(file, evidenceId) => uploadDocument(file, 'issue', evidenceFor, evidenceId)}
+          onWithdrawDocument={(id) =>
+            dispatch({ t: 'removeDocument', id, now: new Date().toISOString() })
+          }
           onClose={() => setEvidenceFor(null)}
         />
       )}

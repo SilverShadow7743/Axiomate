@@ -8,6 +8,7 @@ import { NOTE_TYPES } from './notes'
 import { TIME_ACTIVITIES } from './time'
 import { COMMITMENT_KINDS } from './capacity'
 import { SKILL_ORDER, SKILL_SOURCES } from './skills'
+import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 
 /**
  * Deciding whether an action is the shape it claims to be.
@@ -678,6 +679,32 @@ const SHAPES = {
     now,
   },
   removePersonSkill: { id: req(id), now },
+  /*
+   * Reachable over the wire, and that is a deliberate decision rather than an oversight.
+   *
+   * The bytes arrive at `/api/documents`, which stores them and then calls the reducer directly
+   * — so this shape is not needed for the normal path. It is here because the browser applies
+   * every action optimistically through one queue, and an action the endpoint refuses to replay
+   * would leave the client's copy permanently ahead of the server's.
+   *
+   * What that costs: somebody could POST a `recordDocument` naming a locator nobody stored. The
+   * result is a row whose download 404s and says so — bounded, visible, and the same outcome as
+   * a file deleted in SharePoint, which is a case that has to be handled anyway.
+   */
+  recordDocument: {
+    subjectKind: req(oneOf(new Set(DOCUMENT_SUBJECTS))),
+    subjectId: req(id),
+    name: req(text),
+    mimeType: req(text),
+    sizeBytes: req(num),
+    checksum: req(text),
+    locator: req(text),
+    store: req(oneOf(new Set(STORE_KINDS))),
+    note: req(text),
+    evidenceId: opt(idOrNull),
+    now,
+  },
+  removeDocument: { id: req(id), now },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),
