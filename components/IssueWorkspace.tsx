@@ -1868,6 +1868,12 @@ export default function IssueWorkspace({
             dispatch({ t: 'addTime', issueId, ...entry, now: new Date().toISOString() })
           }
           onRemoveTime={(id) => dispatch({ t: 'removeTime', id, now: new Date().toISOString() })}
+          onSubmitWeek={(person, week) =>
+            dispatch({ t: 'submitTimesheet', person, weekStarting: week, now: new Date().toISOString() })
+          }
+          onDecideWeek={(id, decision, reason) =>
+            dispatch({ t: 'decideTimesheet', id, decision, reason, now: new Date().toISOString() })
+          }
           onAddNote={(issueId, body, noteType, pinned) =>
             dispatch({ t: 'addNote', issueId, body, noteType, pinned, now: new Date().toISOString() })
           }

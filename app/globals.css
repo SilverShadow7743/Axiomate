@@ -4591,3 +4591,16 @@ select.cell-editor {
   .auth-panel { display: none; }
   .auth-mark.compact { display: block; margin-bottom: 6px; }
 }
+
+/* The week strip's controls sit in a block that is otherwise a label/value/note stack, so it
+   needs its own flow. Wraps, because Approve, a reason and Return do not fit a narrow panel. */
+.time-week-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.time-week-actions .fld-input {
+  flex: 1 1 160px;
+  min-width: 120px;
+}

@@ -14,7 +14,15 @@ import {
   type TimeActivity,
   type TimeEntry,
 } from '@/lib/time'
-import { formatIso } from '@/lib/dates'
+import { formatIso, formatShort } from '@/lib/dates'
+import {
+  weekStarting,
+  weekLabel,
+  weekTotal,
+  sheetFor,
+  submitProblem,
+  decideProblem,
+} from '@/lib/timesheet'
 
 /**
  * Hours recorded against this issue.
@@ -37,6 +45,8 @@ export default function TimeTab({
   today,
   onAdd,
   onRemove,
+  onSubmitWeek,
+  onDecideWeek,
 }: {
   issueId: string
   state: WorkspaceState
@@ -51,9 +61,15 @@ export default function TimeTab({
     note: string
   }) => boolean
   onRemove: (id: string) => void
+  /** Present a week for approval. Returns false when the reducer refused. */
+  onSubmitWeek: (person: string, week: string) => boolean
+  /** Approve or return. `reason` is required on a return and ignored on an approval. */
+  onDecideWeek: (id: string, decision: 'approved' | 'rejected', reason?: string) => boolean
 }) {
   const may = can(state.model, actor, 'time.record')
   const mayOthers = can(state.model, actor, 'time.recordForOthers')
+  const maySubmit = can(state.model, actor, 'time.submit')
+  const mayApprove = can(state.model, actor, 'time.approve')
 
   const entries = useMemo(() => entriesFor(state.timeEntries, issueId), [state.timeEntries, issueId])
   const summary = useMemo(() => summariseTime(state.timeEntries, issueId), [state.timeEntries, issueId])
@@ -62,6 +78,12 @@ export default function TimeTab({
     [state.timeEntries, issueId, state.estimates, state.model.sizeBands],
   )
 
+  /*
+   * The week being attested to is the one containing the date in the form, not "this week".
+   * Somebody entering Friday's hours on Monday is looking at last week, and a Submit control
+   * that quietly meant a different week from the one on screen would be the worst kind of
+   * wrong — it would work.
+   */
   const [person, setPerson] = useState(actor.name)
   const [date, setDate] = useState(today)
   const [hours, setHours] = useState('')
@@ -71,6 +93,116 @@ export default function TimeTab({
 
   const parsed = Number(hours)
   const problem = hours.trim() ? checkEntry({ hours: parsed, date, person }, today) : null
+
+  /* ---------------- the week, and whether it is still theirs ---------------- */
+
+  const sheets = useMemo(() => Object.values(state.timesheets), [state.timesheets])
+  const week = weekStarting(date)
+  const sheet = sheetFor(sheets, person, week)
+  const total = useMemo(
+    () => weekTotal(Object.values(state.timeEntries), person, week),
+    [state.timeEntries, person, week],
+  )
+  const attester = {
+    name: actor.name,
+    maySubmit: maySubmit.allowed,
+    mayApprove: mayApprove.allowed,
+  }
+  const cannotSubmit = submitProblem(sheets, person, week, attester)
+  const cannotApprove = decideProblem(sheet, 'approved', undefined, attester)
+  const [returnReason, setReturnReason] = useState('')
+  const cannotReturn = decideProblem(sheet, 'rejected', returnReason, attester)
+
+  /**
+   * The week's own strip: what it totals, what state it is in, and the one action available.
+   *
+   * A control is ABSENT rather than disabled when the permission is missing. A disabled button
+   * invites somebody to find out why, and the answer is never encouraging — whereas a refusal
+   * they can act on (the week is already submitted, somebody else has to decide it) is shown as
+   * a note, because that one is temporary and theirs to resolve.
+   */
+  const sheetPanel = (
+    <section className="est-blocks" aria-label="This week">
+      <div className="est-block">
+        <span className="est-block-label">{weekLabel(week)}</span>
+        <span className="est-block-value mono">{total.hours}h</span>
+        <span className="est-block-note">
+          {total.billable === total.hours
+            ? 'all billable'
+            : `${total.billable}h billable`}
+          {person !== actor.name ? ` · ${person}` : ''}
+        </span>
+      </div>
+      <div className="est-block">
+        <span className="est-block-label">Status</span>
+        <span className="est-block-value">{sheet?.status ?? 'Open'}</span>
+        <span className="est-block-note">
+          {!sheet
+            ? 'not submitted'
+            : sheet.status === 'Submitted'
+              ? `submitted ${formatShort(sheet.submittedAt.slice(0, 10))} by ${sheet.submittedBy}`
+              : sheet.status === 'Approved'
+                ? `approved by ${sheet.decidedBy}`
+                : `returned by ${sheet.decidedBy}`}
+        </span>
+      </div>
+      <div className="est-block time-week-actions">
+        {/* Absent, not disabled, when the grant is missing. */}
+        {maySubmit.allowed && sheet?.status !== 'Approved' ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={Boolean(cannotSubmit)}
+            title={cannotSubmit ?? `Submit the ${weekLabel(week)} for approval`}
+            onClick={() => onSubmitWeek(person, week)}
+          >
+            {sheet?.status === 'Rejected' ? 'Resubmit week' : 'Submit week'}
+          </button>
+        ) : null}
+        {mayApprove.allowed && sheet?.status === 'Submitted' ? (
+          <>
+            <button
+              type="button"
+              className="btn"
+              disabled={Boolean(cannotApprove)}
+              title={cannotApprove ?? 'Approve this week'}
+              onClick={() => onDecideWeek(sheet.id, 'approved')}
+            >
+              Approve
+            </button>
+            <input
+              className="fld-input"
+              placeholder="Why it is being returned"
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              aria-label="Reason for returning the week"
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={Boolean(cannotReturn)}
+              title={cannotReturn ?? 'Return this week to be corrected'}
+              onClick={() => {
+                if (onDecideWeek(sheet.id, 'rejected', returnReason)) setReturnReason('')
+              }}
+            >
+              Return
+            </button>
+          </>
+        ) : null}
+        {/*
+         * Shown to the person whose week it is, because it is theirs to act on. Not shown when
+         * the reason is simply that they hold no grant — that is what the absent button says.
+         */}
+        {cannotSubmit && maySubmit.allowed ? (
+          <span className="est-block-note">{cannotSubmit}</span>
+        ) : null}
+        {sheet?.status === 'Rejected' && sheet.reason ? (
+          <span className="est-block-note">Returned: {sheet.reason}</span>
+        ) : null}
+      </div>
+    </section>
+  )
 
   const submit = () => {
     if (problem || !hours.trim()) return
@@ -120,6 +252,8 @@ export default function TimeTab({
           </span>
         </div>
       </section>
+
+      {sheetPanel}
 
       {!may.allowed ? (
         <div className="panel-note">{may.reason ?? 'Read only.'}</div>

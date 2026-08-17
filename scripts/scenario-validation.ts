@@ -2142,11 +2142,11 @@ scenario(
       otherPersonOpen === null
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
+      verdict: good ? 'PASS' : 'FAIL',
       actual: `A week is the Monday containing a date — 19 August resolves to ${week}. The total is computed from live entries rather than copied onto the sheet: ${total.hours}h, of which ${total.billable}h billable, correctly excluding the next week, another person, and a withdrawn entry. Submitting an open week succeeds; submitting it twice is refused with "${(again ?? '').slice(0, 60)}"; submitting somebody else's week is refused even holding the permission, because a timesheet is a personal attestation. A week that is not a Monday is refused rather than rounded. An EMPTY week submits — "I was on leave" is a claim, and refusing it strands the one person with nothing to report. Once submitted the week is frozen and the freeze reports which state it is in (${frozenNow} here, ${frozenApproved} once approved) rather than a boolean, because "awaiting approval" and "already approved" call for different next moves. The next week and another person stay open.`,
-      stops: 'at the reducer — the rules are complete and driven here, and nothing calls them yet. submitTimesheet and decideTimesheet are the next step, then the freeze on addTime',
-      severity: 'P1',
-      impact: 'Time is recorded and cannot yet be signed off, so it cannot be billed. The rules that will gate it are now provable.',
+      stops: 'nowhere in the rules. submitTimesheet calls these, U2 drives the freeze through the reducer, and the persistence proof shows a submitted week surviving a reload. What no check here opens is the screen — the Submit control is verified by construction, as the row menu is.',
+      severity: '—',
+      impact: 'Hours can now be signed off, which is what makes them billable. The rules are driven here directly, so a mistake in them is found before any caller is involved.',
     }
   },
 )
@@ -2202,11 +2202,11 @@ scenario(
       statusAfter('rejected') === 'Rejected'
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
+      verdict: good ? 'PASS' : 'FAIL',
       actual: `The person who submitted cannot decide their own week — refused with "${(selfApproval ?? '').slice(0, 70)}" — and that holds even though this actor DOES hold the approve permission, because a self-approval is not a weaker control but the absence of one. Approving needs no reason; returning needs one, refused otherwise with "${(rejectNoReason ?? '').slice(0, 60)}": "yes" is complete on its own, "no" leaves somebody guessing what to change. A returned week is editable again — isFrozen answers ${JSON.stringify(editableAgain)} — and resubmits cleanly, which is the whole correction loop. Deciding a week twice is refused and names which way it already went. The reason travels on the row, so what was returned and why is answerable later without reconstructing it.`,
-      stops: 'at the reducer, with U — the correction loop is complete as rules and has no caller, and no timesheet is stored yet, so none of this survives a reload',
-      severity: 'P1',
-      impact: 'No correction loop exists yet for the record that drives revenue, but the rule that stops a self-approval is now provable rather than asserted.',
+      stops: 'nowhere in the rules. decideTimesheet calls these, and the persistence proof shows a returned week keeping its reason and becoming editable again after a reload — both halves of the loop, not just the refusal.',
+      severity: '—',
+      impact: 'The correction loop exists for the record that drives revenue, and the rule that stops a self-approval is driven rather than asserted — through the reducer as well as here.',
     }
   },
 )

@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "27 of 27 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-17. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "30 of 30 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-17. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -457,21 +457,21 @@
       "id": "U",
       "title": "A consultant submits a timesheet",
       "expected": "The week is presented for approval, and approval freezes exactly what was approved.",
-      "verdict": "PARTIAL",
+      "verdict": "PASS",
       "actual": "A week is the Monday containing a date — 19 August resolves to 2026-08-17. The total is computed from live entries rather than copied onto the sheet: 15.5h, of which 13.5h billable, correctly excluding the next week, another person, and a withdrawn entry. Submitting an open week succeeds; submitting it twice is refused with \"The week of 17 Aug is already submitted and awaiting approva\"; submitting somebody else's week is refused even holding the permission, because a timesheet is a personal attestation. A week that is not a Monday is refused rather than rounded. An EMPTY week submits — \"I was on leave\" is a claim, and refusing it strands the one person with nothing to report. Once submitted the week is frozen and the freeze reports which state it is in (Submitted here, Approved once approved) rather than a boolean, because \"awaiting approval\" and \"already approved\" call for different next moves. The next week and another person stay open.",
-      "stops": "at the reducer — the rules are complete and driven here, and nothing calls them yet. submitTimesheet and decideTimesheet are the next step, then the freeze on addTime",
-      "severity": "P1",
-      "impact": "Time is recorded and cannot yet be signed off, so it cannot be billed. The rules that will gate it are now provable."
+      "stops": "nowhere in the rules. submitTimesheet calls these, U2 drives the freeze through the reducer, and the persistence proof shows a submitted week surviving a reload. What no check here opens is the screen — the Submit control is verified by construction, as the row menu is.",
+      "severity": "—",
+      "impact": "Hours can now be signed off, which is what makes them billable. The rules are driven here directly, so a mistake in them is found before any caller is involved."
     },
     {
       "id": "V",
       "title": "A submitted timesheet is rejected",
       "expected": "The rejection returns specific entries, says why, and the corrected resubmission is traceable.",
-      "verdict": "PARTIAL",
+      "verdict": "PASS",
       "actual": "The person who submitted cannot decide their own week — refused with \"A timesheet is decided by somebody other than the person who submitted\" — and that holds even though this actor DOES hold the approve permission, because a self-approval is not a weaker control but the absence of one. Approving needs no reason; returning needs one, refused otherwise with \"Returning a timesheet needs a reason — the person has to kno\": \"yes\" is complete on its own, \"no\" leaves somebody guessing what to change. A returned week is editable again — isFrozen answers null — and resubmits cleanly, which is the whole correction loop. Deciding a week twice is refused and names which way it already went. The reason travels on the row, so what was returned and why is answerable later without reconstructing it.",
-      "stops": "at the reducer, with U — the correction loop is complete as rules and has no caller, and no timesheet is stored yet, so none of this survives a reload",
-      "severity": "P1",
-      "impact": "No correction loop exists yet for the record that drives revenue, but the rule that stops a self-approval is now provable rather than asserted."
+      "stops": "nowhere in the rules. decideTimesheet calls these, and the persistence proof shows a returned week keeping its reason and becoming editable again after a reload — both halves of the loop, not just the refusal.",
+      "severity": "—",
+      "impact": "The correction loop exists for the record that drives revenue, and the rule that stops a self-approval is driven rather than asserted — through the reducer as well as here."
     },
     {
       "id": "U2",

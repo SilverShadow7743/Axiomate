@@ -129,6 +129,8 @@ interface Props {
     entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string },
   ) => boolean
   onRemoveTime: (id: string) => void
+  onSubmitWeek: (person: string, week: string) => boolean
+  onDecideWeek: (id: string, decision: 'approved' | 'rejected', reason?: string) => boolean
   onRequestApproval: (subjectId: string, ruleId: string, note: string) => void
   onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
   onBaselineEstimate: (issueId: string) => void
@@ -183,6 +185,8 @@ export default function DetailPanel({
   onSaveEstimate,
   onAddTime,
   onRemoveTime,
+  onSubmitWeek,
+  onDecideWeek,
   onRequestApproval,
   onDecideApproval,
   onBaselineEstimate,
@@ -399,6 +403,8 @@ export default function DetailPanel({
             today={today}
             onAdd={(entry) => onAddTime(issue.id, entry)}
             onRemove={onRemoveTime}
+            onSubmitWeek={onSubmitWeek}
+            onDecideWeek={onDecideWeek}
           />
         ) : tab === 'Notes' ? (
           <NotesTab
