@@ -554,6 +554,16 @@
       "impact": "The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered."
     },
     {
+      "id": "AU3",
+      "title": "A person signs in and is sent back to an address that exists",
+      "expected": "Sign-in and sign-out return the browser to the public address somebody typed, not to whatever this process answers on.",
+      "verdict": "PASS",
+      "actual": "A request delivered to the container at https://cd04369db00c:8080 with the proxy's own headers resolves to https://axiomate-tms.azurewebsites.net, which is where the browser came from. Two proxies deep it still takes the client's view (https://axiomate-tms.azurewebsites.net) rather than the gateway's. With no forwarded headers it falls back to the configured Entra redirect URI (https://axiomate-tms.azurewebsites.net) — trustworthy because Entra refuses an unregistered redirect, so a deployment that gets this wrong cannot sign anybody in. With neither, on a developer's machine, the request's own origin is correct and is used (http://localhost:3000). The Secure flag on the session cookie is decided from the same origin, so it is now a fact about the address the browser used rather than about an internal one.",
+      "stops": "nowhere — but only the origin is proven here; that the deployed site sends the forwarded header is a property of App Service, verified by reading a Location header from the running site",
+      "severity": "—",
+      "impact": "Sign-in and sign-out both ended on a browser error page for every user, and every check inside the process passed. A redirect is only correct relative to something outside the process, which is why this asserts against a proxied request rather than a plain one."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

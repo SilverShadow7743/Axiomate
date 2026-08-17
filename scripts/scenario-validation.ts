@@ -86,6 +86,7 @@ import { buildDailyIms } from '../lib/reports/dailyIms'
 import { effortVariance, hoursOn, summariseTime } from '../lib/time'
 import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
+import { publicOrigin } from '../lib/auth/origin'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
 
@@ -2550,6 +2551,80 @@ scenario(
       severity: 'P2',
       impact:
         'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
+    }
+  },
+)
+
+scenario(
+  'AU3',
+  'A person signs in and is sent back to an address that exists',
+  'Sign-in and sign-out return the browser to the public address somebody typed, not to whatever this process answers on.',
+  () => {
+    /*
+     * This is the check that was missing when it mattered.
+     *
+     * Sign-in worked, the token was exchanged, the session cookie was issued — and the browser
+     * was then redirected to `https://cd04369db00c:8080/`, the container's own address behind
+     * App Service. Login and logout both ended on an error page for every user, and nothing in
+     * this suite, the type system or the build noticed, because from inside the process the code
+     * was correct: `new URL('/', req.url)` is exactly right when nothing sits in front of you.
+     *
+     * It was found by reading a `Location` header from the deployed site. So the property under
+     * test is not "a redirect is produced" but "the redirect names the address the browser can
+     * actually reach", and the fixture is a request shaped the way a proxy delivers one.
+     */
+    const proxied = new Request('https://cd04369db00c:8080/api/auth/signout', {
+      method: 'POST',
+      headers: {
+        'x-forwarded-host': 'axiomate-tms.azurewebsites.net',
+        'x-forwarded-proto': 'https',
+      },
+    })
+    const behindProxy = publicOrigin(proxied)
+
+    /* Two proxies deep. The first entry is the client's own view and the only reachable one. */
+    const chained = publicOrigin(
+      new Request('https://internal:8080/api/auth/signout', {
+        method: 'POST',
+        headers: {
+          'x-forwarded-host': 'axiomate-tms.azurewebsites.net, internal-gateway',
+          'x-forwarded-proto': 'https, http',
+        },
+      }),
+    )
+
+    /*
+     * No forwarded headers. The configured Entra redirect URI is the fallback, and it is a
+     * trustworthy one: Entra refuses any redirect that is not registered, so a deployment where
+     * this is wrong cannot sign anybody in — it cannot be quietly wrong here either.
+     */
+    const before = process.env.AXIOMATE_ENTRA_REDIRECT_URI
+    process.env.AXIOMATE_ENTRA_REDIRECT_URI = 'https://axiomate-tms.azurewebsites.net/api/auth/callback'
+    const fromConfig = publicOrigin(new Request('https://cd04369db00c:8080/api/auth/signout', { method: 'POST' }))
+
+    /* And with neither, local development, where the request's own origin is correct. */
+    delete process.env.AXIOMATE_ENTRA_REDIRECT_URI
+    const local = publicOrigin(new Request('http://localhost:3000/api/auth/signout', { method: 'POST' }))
+    if (before === undefined) delete process.env.AXIOMATE_ENTRA_REDIRECT_URI
+    else process.env.AXIOMATE_ENTRA_REDIRECT_URI = before
+
+    const container = 'https://cd04369db00c:8080'
+    const good =
+      behindProxy === 'https://axiomate-tms.azurewebsites.net' &&
+      chained === 'https://axiomate-tms.azurewebsites.net' &&
+      fromConfig === 'https://axiomate-tms.azurewebsites.net' &&
+      local === 'http://localhost:3000'
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A request delivered to the container at ${container} with the proxy's own headers resolves to ${behindProxy}, which is where the browser came from. Two proxies deep it still takes the client's view (${chained}) rather than the gateway's. With no forwarded headers it falls back to the configured Entra redirect URI (${fromConfig}) — trustworthy because Entra refuses an unregistered redirect, so a deployment that gets this wrong cannot sign anybody in. With neither, on a developer's machine, the request's own origin is correct and is used (${local}). The Secure flag on the session cookie is decided from the same origin, so it is now a fact about the address the browser used rather than about an internal one.`,
+      stops: 'nowhere — but only the origin is proven here; that the deployed site sends the forwarded header is a property of App Service, verified by reading a Location header from the running site',
+      // No severity: it passes, and severity in this harness describes the cost of a gap. It
+      // was P1 while it was broken, which is the point of writing it down rather than fixing
+      // the code and moving on.
+      severity: '—',
+      impact:
+        'Sign-in and sign-out both ended on a browser error page for every user, and every check inside the process passed. A redirect is only correct relative to something outside the process, which is why this asserts against a proxied request rather than a plain one.',
     }
   },
 )

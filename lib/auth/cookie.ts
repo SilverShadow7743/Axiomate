@@ -2,6 +2,8 @@ import 'server-only'
 import { MIN_SECRET_LENGTH, open, seal, type SessionClaims } from './seal'
 import { readSecret, secretProblem } from '../secrets'
 
+export { publicOrigin } from './origin'
+
 /**
  * The session cookie, and where its key comes from.
  *

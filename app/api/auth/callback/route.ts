@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { completeSignIn, entraConfig } from '@/lib/auth/entra'
-import { SESSION_COOKIE, SESSION_SECONDS, cookieAttributes, sign } from '@/lib/auth/cookie'
+import { SESSION_COOKIE, SESSION_SECONDS, cookieAttributes, publicOrigin, sign } from '@/lib/auth/cookie'
 
 /**
  * Where Entra sends the browser back.
@@ -36,7 +36,10 @@ function back(req: Request, message: string, code = 'failed') {
   // To the sign-in page, which is where somebody who failed to sign in belongs and where the
   // notice is rendered. It was '/', which now redirects them here anyway — dropping the code on
   // the way, so the failure would have gone silent again.
-  const url = new URL('/signin', req.url)
+  // `publicOrigin`, not `req.url` — see the note on that helper. Behind App Service this was
+  // sending a failed sign-in to the container's internal address, so the one page written to
+  // explain the failure was the page nobody could reach.
+  const url = new URL('/signin', publicOrigin(req))
   url.searchParams.set('auth_error', code)
   return NextResponse.redirect(url)
 }
@@ -64,8 +67,21 @@ export async function GET(req: Request) {
 
   try {
     const { identity } = await completeSignIn(config, code, verifier, nonce)
-    const secure = url.protocol === 'https:'
-    const res = NextResponse.redirect(new URL('/', req.url))
+    /*
+     * Both of these read the PUBLIC origin rather than `req.url`, and each was wrong in its own
+     * way behind App Service.
+     *
+     * The redirect sent the browser to `https://cd04369db00c:8080/` — the container's own
+     * address — so a sign-in that had completely succeeded ended on a browser error page. That
+     * is the reported fault, and sign-out shared the same line.
+     *
+     * `secure` decided whether the session cookie carries the `Secure` flag from the protocol of
+     * that same internal URL. Getting it from the address the browser actually used is the point
+     * of the flag; deriving it from an internal one is deciding it by accident.
+     */
+    const origin = publicOrigin(req)
+    const secure = origin.startsWith('https:')
+    const res = NextResponse.redirect(new URL('/', origin))
     res.headers.append(
       'set-cookie',
       `${SESSION_COOKIE}=${sign({
