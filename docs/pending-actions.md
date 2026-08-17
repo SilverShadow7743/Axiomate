@@ -112,6 +112,32 @@ Both are committed. Both are one word from you to reverse.
 
 ---
 
+## H. How new issues arrive daily — nothing does this yet
+
+Checked against the live subscription on 17 August 2026. The resource group holds **three
+resources**: the database, the App Service plan, and the web app. Neither Logic App is deployed.
+
+Both endpoints exist, are live, and are guarded. What is missing is anything that *calls* them.
+
+| # | Piece | State | What it needs |
+|---|---|---|---|
+| H1 | `POST /api/schedule/run` — the daily pass that ages issues, raises SLA breaches and prunes idempotency keys | **Live and working.** Returns 401 without a token; `AXIOMATE_SCHEDULE_TOKEN` is set and usable (32 chars) | **Nothing calls it.** `infra/schedule.bicep` is written and undeployed — a Consumption Logic App with a recurrence trigger and one HTTP call. Deploy it, or point any scheduler at the URL with the token |
+| H2 | `POST /api/intake` — a message in, a classified work item out, under the right scope with a provenance note | **Closed.** Returns 503: `AXIOMATE_INTAKE_TOKEN` is present but **empty** (length 0) | Set a real token. The endpoint refuses to run without one by design — "an endpoint that creates records from the internet does not run without a usable shared secret" |
+| H3 | Something watching a mailbox | **Not deployed.** `infra/intake.bicep` is written and undeployed | A Consumption Logic App polling one shared mailbox and POSTing to H2. It needs an Office 365 connection **consented interactively** — until somebody does that, the workflow deploys clean, reports no errors and never runs, and an empty run history looks exactly like a quiet mailbox |
+
+**The short answer.** Today, new issues arrive only by somebody typing them in. To have them
+arrive by themselves: set the intake token, deploy the two Logic Apps, and grant the mailbox
+consent. H1 is the easy half and delivers on its own — the daily pass is what makes an issue
+raised on Monday show as overdue on Friday without anybody reopening it.
+
+**A caution on H2/H3.** Intake creates records from the internet. It applies the same transition
+graph, permissions, automation and audit trail as a person typing, and the classification it
+performs is reported as `guessed` rather than `stated` — but it is still a public write path,
+and it should be turned on deliberately rather than as a side effect of wanting a mailbox
+watched.
+
+---
+
 ## G. Gaps in the development loop itself
 
 From `docs/continuous-development.md`, repeated here because a gap in another document is a gap
