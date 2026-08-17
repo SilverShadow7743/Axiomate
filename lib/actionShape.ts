@@ -609,6 +609,32 @@ const SHAPES = {
     reason: req(text),
     now,
   },
+  upsertChangeRequest: {
+    id: req(idOrNull),
+    sowId: req(id),
+    patch: req(
+      patchOf({
+        issueId: idOrNull,
+        reference: text,
+        title: text,
+        effortHours: num,
+        value: num,
+        currency: text,
+        scope: text,
+        reason: text,
+        effectiveFrom: isoDateOrNull,
+      }),
+    ),
+    submit: opt(bool),
+    now,
+  },
+  withdrawChangeRequest: { id: req(id), now },
+  decideChangeRequest: {
+    id: req(id),
+    decision: req(oneOf(new Set(['approved', 'rejected']))),
+    note: opt(text),
+    now,
+  },
   recordRate: {
     personId: req(id),
     kind: req(oneOf(new Set(['cost', 'bill']))),

@@ -22,6 +22,7 @@ import type {
   Version as VersionRow,
   Timesheet as TimesheetRow,
   PersonRate as PersonRateRow,
+  ChangeRequest as ChangeRequestRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -38,6 +39,7 @@ import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
+import type { ChangeRequest, ChangeStatus } from '../changeRequest'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -869,6 +871,59 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     note: r.note,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Change requests
+ * ================================================================== */
+
+export function changeToRow(tenantId: TenantId, c: ChangeRequest): Prisma.ChangeRequestUncheckedCreateInput {
+  return {
+    tenantId,
+    id: c.id,
+    sowId: c.sowId,
+    issueId: c.issueId,
+    reference: c.reference,
+    title: c.title,
+    status: c.status,
+    // Signed, both of them. A descoping is negative and the column allows it.
+    effortHours: c.effortHours,
+    value: c.value,
+    currency: c.currency,
+    scope: c.scope,
+    reason: c.reason,
+    // A String date, like every other effective date here — see `Version.validFrom`.
+    effectiveFrom: c.effectiveFrom,
+    requestedBy: c.requestedBy,
+    requestedAt: new Date(c.requestedAt),
+    decidedAt: c.decidedAt ? new Date(c.decidedAt) : null,
+    decidedBy: c.decidedBy,
+    decisionNote: c.decisionNote,
+    deletedAt: c.deletedAt ? new Date(c.deletedAt) : null,
+  }
+}
+
+export function changeFromRow(r: ChangeRequestRow): ChangeRequest {
+  return {
+    id: r.id,
+    sowId: r.sowId,
+    issueId: r.issueId,
+    reference: r.reference,
+    title: r.title,
+    status: r.status as ChangeStatus,
+    effortHours: r.effortHours,
+    value: Number(r.value),
+    currency: r.currency,
+    scope: r.scope,
+    reason: r.reason,
+    effectiveFrom: r.effectiveFrom,
+    requestedBy: r.requestedBy,
+    requestedAt: r.requestedAt.toISOString(),
+    decidedBy: r.decidedBy,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    decisionNote: r.decisionNote,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

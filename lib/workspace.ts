@@ -44,6 +44,12 @@ import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
+  checkChange,
+  decideChangeProblem,
+  statusAfterDecision,
+  type ChangeRequest,
+} from './changeRequest'
+import {
   isFrozen,
   frozenMessage,
   weekStarting,
@@ -272,6 +278,8 @@ export interface WorkspaceState {
    * the single mutation funnel and an arm that bypassed it would lose the audit trail.
    */
   rates: Record<string, PersonRate>
+  /** Variations to the contracts. Deltas — the SOW baseline is never edited by one. */
+  changes: Record<string, ChangeRequest>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -529,6 +537,7 @@ export function initWorkspace(
     versions: {},
     timesheets: {},
     rates: {},
+    changes: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -682,6 +691,23 @@ export type Action =
     }
   | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
   | { t: 'removeTime'; id: string; now: string }
+  | {
+      t: 'upsertChangeRequest'
+      id: string | null
+      sowId: string
+      patch: Partial<Pick<ChangeRequest, 'issueId' | 'reference' | 'title' | 'effortHours' | 'value' | 'currency' | 'scope' | 'reason' | 'effectiveFrom'>>
+      /** Submit it for a decision in the same action. Draft otherwise. */
+      submit?: boolean
+      now: string
+    }
+  | { t: 'withdrawChangeRequest'; id: string; now: string }
+  | {
+      t: 'decideChangeRequest'
+      id: string
+      decision: ApprovalDecision
+      note?: string
+      now: string
+    }
   | {
       t: 'recordRate'
       personId: string
@@ -2828,6 +2854,138 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * identity taken from the actor rather than from the action. The differences are that the
      * value is money and that reading it needs a grant of its own.
      */
+    /**
+     * Raise or amend a variation.
+     *
+     * It does NOT touch the statement of work. `Sow.effortHours` and `Sow.value` stay as signed,
+     * and the contracted position is `baseline + sum(approved changes)` computed on read — see
+     * `contractedPosition`. Editing the SOW instead would give the same number today and destroy
+     * the ability to say what was originally agreed.
+     */
+    case 'upsertChangeRequest': {
+      const sow = state.sows[a.sowId]
+      if (!sow || sow.deletedAt) return { state, error: 'That statement of work no longer exists.' }
+
+      const existing = a.id ? state.changes[a.id] : null
+      if (a.id && !existing) return { state, error: 'That change request no longer exists.' }
+      /*
+       * An approved change is closed. Editing one after the fact would move a contracted figure
+       * with no record that it had moved — which is the exact failure this whole model exists to
+       * prevent, arrived at from the other direction.
+       */
+      if (existing && existing.status !== 'Draft' && existing.status !== 'Rejected') {
+        return { state, error: `That change request is ${existing.status.toLowerCase()} and cannot be edited. Raise another.` }
+      }
+
+      const merged: ChangeRequest = {
+        id: existing?.id ?? `cr-${state.seq + 1}`,
+        sowId: a.sowId,
+        issueId: existing?.issueId ?? null,
+        reference: existing?.reference ?? '',
+        title: existing?.title ?? '',
+        status: existing?.status ?? 'Draft',
+        effortHours: existing?.effortHours ?? 0,
+        value: existing?.value ?? 0,
+        currency: existing?.currency ?? sow.currency,
+        scope: existing?.scope ?? '',
+        reason: existing?.reason ?? '',
+        effectiveFrom: existing?.effectiveFrom ?? null,
+        requestedBy: existing?.requestedBy ?? by,
+        requestedAt: existing?.requestedAt ?? a.now,
+        decidedBy: null,
+        decidedAt: null,
+        decisionNote: null,
+        deletedAt: null,
+        ...a.patch,
+      }
+
+      const problem = checkChange(merged)
+      if (problem) return { state, error: problem.message }
+
+      if (a.submit) merged.status = 'Submitted'
+
+      const seq = existing ? state.seq : state.seq + 1
+      return {
+        state: {
+          ...state,
+          seq,
+          changes: { ...state.changes, [merged.id]: merged },
+          audit: log(actor, state, {
+            rowId: merged.id,
+            field: 'changeRequest',
+            from: existing ? `${existing.status} · ${existing.effortHours}h · ${existing.value}` : null,
+            to: `${merged.status} · ${merged.effortHours}h · ${merged.value}`,
+            at: a.now,
+            by,
+            reason: merged.reason,
+          }),
+        },
+        message: a.submit ? `${merged.title} submitted for a decision.` : `${merged.title} saved as a draft.`,
+      }
+    }
+
+    case 'withdrawChangeRequest': {
+      const change = state.changes[a.id]
+      if (!change || change.deletedAt) return { state, error: 'That change request no longer exists.' }
+      if (change.status === 'Approved') {
+        return { state, error: 'An approved change cannot be withdrawn. Raise a reversing change instead, so both movements are on record.' }
+      }
+      const next: ChangeRequest = { ...change, status: 'Withdrawn' }
+      return {
+        state: {
+          ...state,
+          changes: { ...state.changes, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: a.id, field: 'changeRequest', from: change.status, to: 'Withdrawn', at: a.now, by,
+          }),
+        },
+        message: `${change.title} withdrawn.`,
+      }
+    }
+
+    /**
+     * Approve or refuse a variation.
+     *
+     * The asker may never be the decider, and that holds whatever grant they carry. Approving is
+     * the moment the contracted position moves, so it is the one act here with its own
+     * permission rather than sharing `sow.edit`.
+     */
+    case 'decideChangeRequest': {
+      const change = state.changes[a.id] ?? null
+      const problem = decideChangeProblem(change, a.decision, a.note, {
+        name: actor.name,
+        mayApprove: can(state.model, actor, 'change.approve').allowed,
+      })
+      if (problem) return { state, error: problem }
+
+      const next: ChangeRequest = {
+        ...change!,
+        status: statusAfterDecision(a.decision),
+        decidedBy: by,
+        decidedAt: a.now,
+        decisionNote: a.decision === 'rejected' ? (a.note ?? '').trim() : (a.note?.trim() || null),
+      }
+      return {
+        state: {
+          ...state,
+          changes: { ...state.changes, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: a.id,
+            field: 'changeRequest',
+            from: 'Submitted',
+            to: `${next.status} · ${next.effortHours >= 0 ? '+' : ''}${next.effortHours}h · ${next.effortHours >= 0 ? '+' : ''}${next.value}`,
+            at: a.now,
+            by,
+            reason: next.decisionNote ?? undefined,
+          }),
+        },
+        message:
+          a.decision === 'approved'
+            ? `${next.title} approved — the contracted position has moved.`
+            : `${next.title} refused.`,
+      }
+    }
+
     case 'recordRate': {
       if (!a.reason.trim()) {
         return { state, error: 'A rate needs a reason \u2014 "what changed and why" is the whole point of dating it.' }
@@ -3257,7 +3415,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               actor,
               { ...state, audit },
               {
-                rowId: a.engagementId,
+                // The SOW, not the engagement. Filed under `engagementId` this was not a queryable
+          // history: two statements of work under one engagement interleaved into one stream,
+          // and `ScheduleAudit` is indexed on `(tenantId, rowId, at)`.
+          rowId: next.id,
                 field: `sow.${key}`,
                 from: String(existing[key]),
                 to: String(next[key]),

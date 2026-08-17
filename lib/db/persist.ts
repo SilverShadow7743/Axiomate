@@ -26,6 +26,7 @@ import {
   versionToRow,
   timesheetToRow,
   rateToRow,
+  changeToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -497,6 +498,21 @@ export async function persistSteps(
         if (before.timesheets[id] === t) continue
         const row = timesheetToRow(tenantId, t)
         await tx.timesheet.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'upsertChangeRequest':
+    case 'withdrawChangeRequest':
+    case 'decideChangeRequest': {
+      for (const [id, c] of Object.entries(after.changes)) {
+        if (before.changes[id] === c) continue
+        const row = changeToRow(tenantId, c)
+        await tx.changeRequest.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

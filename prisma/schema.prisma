@@ -142,6 +142,7 @@ model Tenant {
   versions      Version[]
   timesheets    Timesheet[]
   rates         PersonRate[]
+  changes       ChangeRequest[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -665,6 +666,8 @@ model Sow {
 
   /// Projects delivered under it.
   projects HierarchyNode[] @relation("SowDelivery")
+  /// Variations to this contract. Deltas — see `ChangeRequest`.
+  changes  ChangeRequest[]
 
   @@id([tenantId, id])
   @@index([tenantId, engagementId])
@@ -968,6 +971,67 @@ model Timesheet {
   @@id([tenantId, id])
   @@unique([tenantId, person, weekStarting])
   @@index([tenantId, status])
+}
+
+/// A change to what was contracted \u2014 a record, not a status.
+///
+/// The figures here are DELTAS, signed, and `Sow.effortHours` / `Sow.value` are never touched by
+/// one. That is the whole design: adding the movement to the SOW gives the same current total in
+/// one field instead of two and permanently destroys the answer to what a delivery review
+/// actually asks \u2014 what did we agree, what has been added since, and who approved each piece.
+/// A baseline that moves is not a baseline. The contracted position is computed on read, the same
+/// rule that keeps `duration` and `scheduleHealth` out of this schema.
+///
+/// Only an `Approved` row counts toward any total. A request that has been asked for is not a
+/// change to the contract, and showing a proposed value inside the agreed one is how a firm
+/// reports revenue it has not won.
+///
+/// `issueId` is nullable and loose on purpose: a change is often raised in the register long
+/// before anybody prices it, and requiring the link would mean inventing an issue or refusing to
+/// record a change that arrived by email.
+model ChangeRequest {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `cr-12`, minted from the durable workspace counter.
+  id    String
+  sowId String
+  /// Cascade: a change request without its statement of work is not a record of anything. The
+  /// SOW itself is soft-deleted, so this only fires if a SOW is ever truly removed.
+  sow   Sow    @relation(fields: [tenantId, sowId], references: [tenantId, id], onDelete: Cascade)
+
+  /// The issue it came from, when it came from one. No FK \u2014 see the model comment.
+  issueId String?
+
+  reference String @default("")
+  title     String
+  /// Draft | Submitted | Approved | Rejected | Withdrawn.
+  status    String
+
+  /// Signed movements. Negative is a descoping, which happens and which an unsigned column
+  /// would force somebody to record as a note.
+  effortHours Int     @default(0)
+  value       Decimal @default(0) @db.Decimal(14, 2)
+  currency    String  @default("GBP")
+
+  scope  String @db.Text
+  reason String @db.Text
+
+  /// When the change takes effect, which is not when it was approved. A change agreed in August
+  /// that applies from July is ordinary, and a position computed as at a date needs to know.
+  effectiveFrom String?
+
+  requestedBy String
+  requestedAt DateTime
+  decidedBy   String?
+  decidedAt   DateTime?
+  /// Why it was refused. Required on a rejection.
+  decisionNote String? @db.Text
+
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, sowId, status])
 }
 
 /// What a person costs, and what they are charged out at, over a period.

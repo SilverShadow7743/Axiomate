@@ -594,6 +594,16 @@
       "impact": "This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing."
     },
     {
+      "id": "CR1",
+      "title": "A change is agreed, and what was originally signed is still answerable",
+      "expected": "An approved change moves the contracted position without touching the baseline, and a pending one is reported separately rather than added in.",
+      "verdict": "PASS",
+      "actual": "Signed at 400h and GBP 1,00,000, and BOTH are still exactly that after two approved changes — the movements live on the changes, never on the statement of work, so \"what did we originally agree\" stays answerable however many variations follow. The approved movements net to 60h and 15,000, a descoping counting as the negative it is, giving 460h and 1,15,000 contracted today. A submitted change worth 60,000 is reported alongside and is NOT in that figure — a client-facing total quietly including a request nobody agreed to is the most damaging thing this could do. Refused, draft and withdrawn contribute nothing. As at a date the effective date governs, not the decision date: June sees 1000 and September sees 2000 from the same two approved changes. The person who raised it cannot decide it even holding the grant, refusing needs a reason, and a change moving neither effort nor value is refused as a clarification rather than inflating the count of variations a client is told they asked for.",
+      "stops": "at the screen and at the SOW panel — nothing raises or decides a change request from the UI yet, and sowPosition still reads the baseline rather than the contracted position",
+      "severity": "P2",
+      "impact": "Scope change is the commonest commercial event in consulting and it had nowhere to live: a work-type string on an issue, and a SOW status that said a variation happened without saying what it was worth."
+    },
+    {
       "id": "XM1",
       "title": "An issue changes owner, and eight dependent areas should follow",
       "expected": "Work, capacity, notifications, activity history, audit, reporting and AI context all reflect the new owner.",

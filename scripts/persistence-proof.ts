@@ -136,6 +136,7 @@ async function scrub() {
   await prisma.version.deleteMany({ where })
   await prisma.timesheet.deleteMany({ where })
   await prisma.personRate.deleteMany({ where })
+  await prisma.changeRequest.deleteMany({ where })
   await prisma.engagement.deleteMany({ where })
   await prisma.appliedAction.deleteMany({ where })
   await prisma.scheduleAudit.deleteMany({ where })

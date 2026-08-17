@@ -82,6 +82,11 @@ export const PERMISSIONS = [
   { key: 'capacity.allocate', label: 'Commit somebody', what: "Allocate a person to a project — a claim on time that is not yours." },
   { key: 'capacity.record', label: 'Record time off', what: 'Leave, holidays and internal commitments that come off available capacity.' },
   { key: 'sow.edit', label: 'Record a statement of work', what: 'Create or change a SOW and its agreed effort and value.' },
+  {
+    key: 'change.approve',
+    label: 'Decide a change request',
+    what: 'Approve or refuse a variation to a statement of work. Never your own \u2014 the person who raised it may not decide it, whatever they hold. Raising one is `sow.edit`.',
+  },
   { key: 'sow.attribute', label: 'Attribute work to a SOW', what: 'Say which statement of work a project is delivered under.' },
   { key: 'engagement.edit', label: 'Edit engagement detail', what: 'Commercial and governance detail on an engagement.' },
   { key: 'config.manage', label: 'Configure the platform', what: 'Terminology, roles, work types, service levels, transitions, agents, templates and routing.' },
@@ -176,7 +181,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
   ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
@@ -356,6 +361,11 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   correctRate: 'rate.edit',
   recordVersion: 'capacity.record',
   correctVersion: 'capacity.record',
+  // Raising or editing a variation is amending commercial scope, so it takes the same grant
+  // as the statement of work itself. DECIDING one is its own authority.
+  upsertChangeRequest: 'sow.edit',
+  withdrawChangeRequest: 'sow.edit',
+  decideChangeRequest: 'change.approve',
   upsertSow: 'sow.edit',
   archiveSow: 'sow.edit',
   attributeToSow: 'sow.attribute',

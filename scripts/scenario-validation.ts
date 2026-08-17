@@ -88,6 +88,14 @@ import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
+import {
+  contractedPosition,
+  decideChangeProblem,
+  describeContracted,
+  checkChange,
+  type ChangeRequest,
+  type ChangeStatus,
+} from '../lib/changeRequest'
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, isFrozen, submitProblem, decideProblem, statusAfter,
@@ -3009,6 +3017,91 @@ scenario(
       severity: '—',
       impact:
         'This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing.',
+    }
+  },
+)
+
+scenario(
+  'CR1',
+  'A change is agreed, and what was originally signed is still answerable',
+  'An approved change moves the contracted position without touching the baseline, and a pending one is reported separately rather than added in.',
+  () => {
+    const sow = { id: 'sow-1', effortHours: 400, value: 100000, currency: 'GBP' }
+    const cr = (id: string, status: ChangeStatus, hours: number, value: number, extra: Partial<ChangeRequest> = {}): ChangeRequest => ({
+      id, sowId: 'sow-1', issueId: null, reference: '', title: `Change ${id}`, status,
+      effortHours: hours, value, currency: 'GBP', scope: 'More of it', reason: 'The client asked',
+      effectiveFrom: null, requestedBy: 'Priya', requestedAt: NOW,
+      decidedBy: null, decidedAt: null, decisionNote: null, deletedAt: null, ...extra,
+    })
+
+    const changes = [
+      cr('cr-1', 'Approved', 80, 20000, { decidedBy: 'Nishant', decidedAt: NOW }),
+      cr('cr-2', 'Approved', -20, -5000, { decidedBy: 'Nishant', decidedAt: NOW }),   // a descoping
+      cr('cr-3', 'Submitted', 200, 60000),                                            // not decided
+      cr('cr-4', 'Rejected', 500, 250000, { decidedBy: 'Nishant', decidedAt: NOW }),  // refused
+      cr('cr-5', 'Draft', 999, 999999),                                               // never asked
+      cr('cr-6', 'Withdrawn', 40, 10000),
+    ]
+
+    const p = contractedPosition(sow, changes)
+
+    /* The baseline is untouched, and that is the property the whole model exists for. */
+    const baselineIntact = p.baselineHours === 400 && p.baselineValue === 100000 && sow.effortHours === 400 && sow.value === 100000
+
+    /* A descoping is a negative movement, not an absence of one. */
+    const netMovement = p.approvedHours === 60 && p.approvedValue === 15000
+
+    /* Pending is reported and NOT added in — the most damaging thing this could get wrong. */
+    const pendingSeparate = p.pendingHours === 200 && p.pendingValue === 60000 && p.contractedValue === 115000
+
+    /* Refused, draft and withdrawn contribute nothing at all. */
+    const onlyApprovedCounts = p.approvedCount === 2 && p.pendingCount === 1
+
+    /* As at a date: a change effective in August is not in a June position. */
+    const dated = [
+      cr('cr-7', 'Approved', 10, 1000, { effectiveFrom: '2026-08-01', decidedBy: 'N', decidedAt: NOW }),
+      cr('cr-8', 'Approved', 10, 1000, { effectiveFrom: '2026-05-01', decidedBy: 'N', decidedAt: NOW }),
+    ]
+    const inJune = contractedPosition(sow, dated, '2026-06-15')
+    const inSeptember = contractedPosition(sow, dated, '2026-09-15')
+
+    /* The rules around deciding. */
+    const author = { name: 'Priya', mayApprove: true }
+    const approver = { name: 'Nishant', mayApprove: true }
+    const selfApproval = decideChangeProblem(changes[2], 'approved', undefined, author)
+    const cleanApproval = decideChangeProblem(changes[2], 'approved', undefined, approver)
+    const refuseNoReason = decideChangeProblem(changes[2], 'rejected', '  ', approver)
+    const decideTwice = decideChangeProblem(changes[0], 'approved', undefined, approver)
+    const notAnApprover = decideChangeProblem(changes[2], 'approved', undefined, { ...approver, mayApprove: false })
+
+    /* A change that moves nothing is a clarification, not a variation. */
+    const empty = checkChange({ title: 'Tidy the wording', effortHours: 0, value: 0, reason: 'Client asked' })
+    const noReason = checkChange({ title: 'More work', effortHours: 10, value: 100, reason: '  ' })
+
+    const good =
+      baselineIntact &&
+      netMovement &&
+      pendingSeparate &&
+      onlyApprovedCounts &&
+      p.contractedHours === 460 &&
+      inJune.approvedValue === 1000 &&
+      inSeptember.approvedValue === 2000 &&
+      selfApproval !== null &&
+      cleanApproval === null &&
+      refuseNoReason !== null &&
+      decideTwice !== null &&
+      notAnApprover !== null &&
+      empty !== null &&
+      noReason !== null &&
+      /not included above/.test(describeContracted(p))
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Signed at ${p.baselineHours}h and ${p.currency} ${p.baselineValue.toLocaleString()}, and BOTH are still exactly that after two approved changes — the movements live on the changes, never on the statement of work, so "what did we originally agree" stays answerable however many variations follow. The approved movements net to ${p.approvedHours}h and ${p.approvedValue.toLocaleString()}, a descoping counting as the negative it is, giving ${p.contractedHours}h and ${p.contractedValue.toLocaleString()} contracted today. A submitted change worth ${p.pendingValue.toLocaleString()} is reported alongside and is NOT in that figure — a client-facing total quietly including a request nobody agreed to is the most damaging thing this could do. Refused, draft and withdrawn contribute nothing. As at a date the effective date governs, not the decision date: June sees ${inJune.approvedValue} and September sees ${inSeptember.approvedValue} from the same two approved changes. The person who raised it cannot decide it even holding the grant, refusing needs a reason, and a change moving neither effort nor value is refused as a clarification rather than inflating the count of variations a client is told they asked for.`,
+      stops: 'at the screen and at the SOW panel — nothing raises or decides a change request from the UI yet, and sowPosition still reads the baseline rather than the contracted position',
+      severity: 'P2',
+      impact:
+        'Scope change is the commonest commercial event in consulting and it had nowhere to live: a work-type string on an issue, and a SOW status that said a variation happened without saying what it was worth.',
     }
   },
 )
