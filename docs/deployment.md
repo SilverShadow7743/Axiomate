@@ -262,11 +262,11 @@ repository carries a record of a decision instead of a surprise.
 ## 5. The seed import: read this before the first production deploy
 
 On boot, `lib/db/boot.ts` calls `importWorkspace`. If the tenant has no `seededAt` in
-`WorkspaceMeta`, that function imports `data/issues.seed.json` — 179 issues from the OAPIL
+`WorkspaceMeta`, that function imports `data/issues.seed.json` — 131 issues from the OAPIL
 engagement, together with their relationships, activities, evidence and notes — into the database,
 inside one transaction, and stamps `seededAt` so it never happens again for that tenant.
 
-For a fresh production deployment this means: **the first page view writes 179 real issues into
+For a fresh production deployment this means: **the first page view writes 131 real issues into
 the firm's production database.**
 
 And on a production deployment it will not be the pipeline's page view. `boot.ts` now returns an

@@ -335,7 +335,7 @@ into "Running from the issue log. Changes are not being saved." with the raw Pos
 beside it.
 
 The window is not narrow. The import writes on the order of a thousand rows one `create` at a
-time — 258 issues plus nodes, notes, evidence and the rest — and is given a 120-second timeout
+time — 216 issues plus nodes, notes, evidence and the rest — and is given a 120-second timeout
 (`repo.ts:363`) for good reason. At a few milliseconds per round trip it is several seconds wide.
 
 **Already known from the other side, and I would still fix it.** `infra/app.bicep:54-60`
@@ -378,7 +378,7 @@ different condition return `onset: 0, seeded: 2`. The newly-ticked-condition pat
 documented; the first-run path does not.
 
 **How big it would be, measured against the shipped log.** `initWorkspace` over
-`data/issues.seed.json` plus `data/axiomate.internal.json` gives 258 issues. `observe` finds 86
+`data/issues.seed.json` plus `data/axiomate.internal.json` gives 216 issues. `observe` finds 86
 breaching conditions today and 158 at steady state, all of them `stale`. The shipped operating
 model has four enabled automation rules — on `issue.created`, `issue.overdue`, `sow.overConsumed`
 and `issue.owner` — and **none on `issue.stale`**, so `runWatch` currently plans nothing. I

@@ -44,7 +44,7 @@ or not at all.
 The database has twenty-one tables. Their contents fall into four groups, and it is the third
 and fourth that decide everything else in this paper.
 
-**Client issue logs.** The seeded data is 179 real issues across two clients, OAPIL (142) and
+**Client issue logs.** The seeded data is 131 real issues across two clients, OAPIL (94) and
 SLG (37), raised between 4 May and 13 August 2026, across twenty-three process areas from
 Inventory and Procurement to point-of-sale fulfilment and carrier integration. Each row carries
 a subject, a narrative description of what went wrong and what was done about it, the client

@@ -31,8 +31,13 @@ therefore create the tables in one database and serve the app from another.
 
 ## Where the data came from
 
-179 issues (OAPIL 142, SLG 37) were extracted from the consolidated v2 issue log embedded in
+131 issues (OAPIL 94, SLG 37) were extracted from the consolidated v2 issue log embedded in
 the Joint Resolution Board artifact, then transformed:
+
+48 OAPIL rows were later removed from the register (`scripts/remove-issues.mjs`). They were the
+two re-circulated pending-points spreadsheets — the 23 July sheet and the 29 July one — which
+restated points already carried elsewhere and named their own filename in the subject line
+rather than the issue.
 
 ```
 npm run transform    # data/issues.raw.json -> data/issues.seed.json
@@ -46,10 +51,10 @@ runtime.
 
 | Field | Coverage |
 | --- | --- |
-| `raised` | 179 / 179 |
-| `lastActivity` | 179 / 179 |
-| `evidenceDate` | 116 / 179 |
-| `committedDate`, `closedOn`, `committedOn` | **0 / 179** |
+| `raised` | 131 / 131 |
+| `lastActivity` | 131 / 131 |
+| `evidenceDate` | 68 / 131 |
+| `committedDate`, `closedOn`, `committedOn` | **0 / 131** |
 
 The three date fields that would normally supply a due date are empty in every row — they
 were runtime fields of the board this data came from, not part of the log. There is **no due
@@ -61,7 +66,7 @@ date anywhere in the source**, and nothing forward-looking: the whole range is
 Rather than invent deadlines to fill the chart, the timeline carries two distinct layers:
 
 - **Actual (solid bars, real data)** — raised date → last recorded activity, or → today for
-  an open issue. Every one of the 179 issues has this.
+  an open issue. Every one of the 131 issues has this.
 - **Planned (only when someone sets it)** — empty on import. Issues with no due date render as
   `Unscheduled`, which is a first-class health state rather than a default of "On Track".
 
@@ -670,8 +675,8 @@ confirmation* — which is what makes a screenshot auditable rather than just an
 document is a supporting artifact (Excel, PDF, spec, email export). Links are a third kind.
 Files route to a category automatically by extension; images become snapshots.
 
-**Source traceability.** Many rows name their originating file in the subject — e.g.
-`Updated sheet of current points. — ERP_Go-Live_Pending points_210726.xlsx`. That string is
+**Source traceability.** Some rows name their originating file in the subject — e.g.
+`Template for Roles and Security for OAPIL_09_AUG_2026.xlsx`. That string is
 really in the source data, so it is surfaced as the issue's source artifact. It is labelled
 **detected in the issue subject · file not held by this app**: the log has no attachment
 field, so the app must not offer to open something it does not have.

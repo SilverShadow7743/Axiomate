@@ -113,9 +113,9 @@ const FILENAME_RE = /([A-Za-z0-9][\w \-.()&]*\.(?:xlsx|xlsm|xls|csv|pdf|docx|doc
 /**
  * Find the artifact an issue was raised from.
  *
- * Many rows in this log name their originating file in the subject — e.g. "Updated sheet of
- * current points. — ERP_Go-Live_Pending points_210726.xlsx". That is a real, checkable string
- * in the source data, so surfacing it gives genuine traceability.
+ * Some rows in this log name their originating file in the subject — e.g. "Template for Roles
+ * and Security for OAPIL_09_AUG_2026.xlsx". That is a real, checkable string in the source
+ * data, so surfacing it gives genuine traceability.
  *
  * It is still *detected*, not recorded: the log has no attachment field, and we do not hold
  * the file. Callers must label it as detected and must not offer to open something that does
