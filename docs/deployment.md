@@ -128,6 +128,42 @@ Push to `main` or `master`, or run the workflow by hand from the Actions tab. Bo
 listed because the repository is on `master` and a workflow watching only `main` would fail by
 never running, which is the hardest failure to notice.
 
+> **The workflow has never run.** There is no git remote on this repository, so every release so
+> far has been made by hand from a workstation. Everything below describes what the pipeline
+> *would* do; the parts of it that have actually been exercised are the ones a manual release
+> also performs. Read section 3a before releasing by hand — two of the three obvious ways to
+> build the zip on Windows produce an archive Kudu rejects, and both fail silently.
+
+### 3a. Releasing by hand, and the two broken ways to build the zip
+
+Use `scripts/package-release.py`. Not `Compress-Archive`, and **not `tar`**:
+
+| Method | Result |
+|---|---|
+| `Compress-Archive` | Entry names carry **backslash** separators. Kudu unpacks them as files with backslashes in the name rather than as directories, so there is no `server.js` where the startup command looks. The site reports "failed to start" with no cause. Cost three deploys before it was understood. |
+| `tar -a -c -f x.zip` | Produces an archive whose central directory Python's own `zipfile` cannot open, and which Kudu rejects with **400**. It also barely compresses — the same tree was 110 MB through `tar` and 37 MB through the script. **This was previously recorded here as the fix for the row above. It is not.** |
+| `scripts/package-release.py` | Forward slashes by construction, a valid central directory that the script reads back before handing it on, and it refuses to include `.env`. This is the method that has deployed. |
+
+`zip -qry` in the workflow is Info-ZIP on Linux and is fine; none of this applies there.
+
+The full sequence from a clean checkout:
+
+    git archive HEAD | tar -x -C <build-dir>      # so uncommitted work cannot ship
+    cd <build-dir> && npm ci && npx prisma generate
+    npx tsc --noEmit && npm run build
+    python scripts/package-release.py .next/standalone <out>/release.zip         --extra .next/static=.next/static
+    az webapp deploy --name axiomate-tms --resource-group Axiomate-TMS-RG         --src-path <out>/release.zip --type zip
+
+Building from `git archive HEAD` rather than the working tree is not fussiness. It is the only
+thing that stops half-finished work reaching production, and it has already earned its place
+once: a UI change that did not typecheck was in the tree at the moment a release was cut.
+
+**There is no staging slot, because the plan is B1 Basic and slots need Standard or better.**
+Everything section 3 says about swapping is therefore aspiration. A manual release restarts the
+site, which takes roughly a minute, and the browser write queue's retry budget is about seven
+and a half seconds — so a user mid-edit during a deploy can have their queue halt. Deploy when
+nobody is working, or move the plan to Standard and use the slot.
+
 The run has two jobs.
 
 ### Verify
@@ -451,9 +487,21 @@ or this document.
    read. An `engines` field or an `.nvmrc` would make CI, App Service and a developer's machine
    agree by construction. Note that `@types/node` is on major 26 while everything else points at
    24, which is worth reconciling at the same time.
-6. **`output: 'standalone'` in `next.config.ts`** would replace the packaging step's careful
-   dance around the pruned Prisma client with a directory Next produces for exactly this purpose,
-   and would cut the upload substantially.
+6. **`output: 'standalone'` is now set** in `next.config.ts`, and the workflow's packaging step
+   has not caught up: it still prunes `node_modules` and copies the Prisma client back by hand,
+   shipping `.next node_modules data …` when `.next/standalone` already contains what is needed.
+   The manual path uses standalone and produces 37 MB. The workflow should too.
+8. **The workflow pins `NODE_VERSION: '24'` with a comment saying it must match the App Service
+   runtime. It does not** — the app runs `NODE|22-lts`. It is healthy there, because Prisma 7.9
+   wants `^20.19 || ^22.12 || >=24` and Next 16 wants `>=20.9`, both of which 22-lts satisfies.
+   So this is a correction to make deliberately, in one direction or the other, rather than an
+   incident: either move App Service to 24, or change the workflow to 22 and rewrite the comment.
+9. **Prisma 7 ships a base64 WASM query compiler for every engine it supports** — sqlserver,
+   cockroachdb, mysql, sqlite and postgresql — which is 75 MB of the build output for an
+   application that only ever speaks to PostgreSQL. Dropping the four unused ones would cut the
+   package by roughly 60 MB. Not done, because nothing here has established that Prisma does not
+   enumerate that directory at load time, and a release that boots is worth more than a smaller
+   one that might not.
 7. **`/api/health` reports reachability, not readiness.** It answers `SELECT 1`, which succeeds
    against a database whose tables were never created — deliberately, since naming a table in a
    probe makes it go stale silently. That leaves one thing this pipeline would like to assert and
