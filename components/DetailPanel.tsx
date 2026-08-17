@@ -140,6 +140,9 @@ interface Props {
   onUpsertSow: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
   onAttributeToSow: (nodeId: string, sowId: string | null) => void
   onArchiveSow: (id: string) => void
+  onRaiseChange: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
+  onDecideChange: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
+  onWithdrawChange: (id: string) => void
   onAllocate: (
     projectId: string,
     a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
@@ -184,6 +187,9 @@ export default function DetailPanel({
   onUpsertSow,
   onAttributeToSow,
   onArchiveSow,
+  onRaiseChange,
+  onDecideChange,
+  onWithdrawChange,
   onAllocate,
   onRelease,
   onRecordPattern,
@@ -421,7 +427,10 @@ export default function DetailPanel({
                 allRows={allRows}
                 onUpsert={onUpsertSow}
                 onAttribute={onAttributeToSow}
-            onArchive={onArchiveSow}
+                onArchive={onArchiveSow}
+                onRaiseChange={onRaiseChange}
+                onDecideChange={onDecideChange}
+                onWithdrawChange={onWithdrawChange}
               />
             )}
           </>

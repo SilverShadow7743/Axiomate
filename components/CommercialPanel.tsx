@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
+import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/changeRequest'
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -30,6 +31,9 @@ export default function CommercialPanel({
   onUpsert,
   onAttribute,
   onArchive,
+  onRaiseChange,
+  onDecideChange,
+  onWithdrawChange,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -39,9 +43,15 @@ export default function CommercialPanel({
   onAttribute: (nodeId: string, sowId: string | null) => void
   /** Retire a statement of work. Refused by the reducer while live projects sit under it. */
   onArchive: (id: string) => void
+  /** Raise a variation, optionally submitting it for a decision in the same act. */
+  onRaiseChange: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
+  /** Approve or refuse one. Never your own — the reducer refuses that whatever the grant. */
+  onDecideChange: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
+  onWithdrawChange: (id: string) => void
 }) {
   const mayEdit = can(state.model, actor, 'sow.edit')
   const mayAttribute = can(state.model, actor, 'sow.attribute')
+  const mayDecideChange = can(state.model, actor, 'change.approve')
   const [adding, setAdding] = useState(false)
 
   const sows = useMemo(
@@ -86,7 +96,7 @@ export default function CommercialPanel({
       const ids = projects
         .filter((p) => p.sowId === sow.id)
         .flatMap((p) => issuesUnder[p.id] ?? [])
-      return sowPosition(sow, ids, state.estimates, state.timeEntries, state.model.sizeBands)
+      return sowPosition(sow, ids, state.estimates, state.timeEntries, state.model.sizeBands, Object.values(state.changes))
     })
   }, [sows, projects, issuesUnder, state.estimates, state.timeEntries, state.model.sizeBands])
 
@@ -173,6 +183,17 @@ export default function CommercialPanel({
             <p className={`comm-position${position.forecastOverrun ? ' warn' : ''}`}>
               {describePosition(position)}
             </p>
+
+            <Changes
+              sow={sow}
+              changes={Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt)}
+              mayRaise={mayEdit.allowed}
+              mayDecide={mayDecideChange.allowed}
+              actorName={actor.name}
+              onRaise={onRaiseChange}
+              onDecide={onDecideChange}
+              onWithdraw={onWithdrawChange}
+            />
 
             {mayEdit.allowed && (
               <div className="comm-edit">
@@ -333,5 +354,220 @@ function SowForm({
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Variations to one statement of work.
+ *
+ * The figures shown are the movements, signed, and the baseline above them never moves — see
+ * `ChangeRequest`. A pending change is listed with its value and is visibly NOT in the
+ * contracted total, because a client-facing figure that quietly includes something nobody has
+ * agreed to is the worst thing this screen could do.
+ */
+function Changes({
+  sow,
+  changes,
+  mayRaise,
+  mayDecide,
+  actorName,
+  onRaise,
+  onDecide,
+  onWithdraw,
+}: {
+  sow: Sow
+  changes: ChangeRequest[]
+  mayRaise: boolean
+  mayDecide: boolean
+  actorName: string
+  onRaise: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
+  onDecide: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
+  onWithdraw: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [hours, setHours] = useState('')
+  const [value, setValue] = useState('')
+  const [reason, setReason] = useState('')
+  const [scope, setScope] = useState('')
+  const [effectiveFrom, setEffectiveFrom] = useState('')
+  const [refusing, setRefusing] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState('')
+
+  const position = contractedPosition(sow, changes)
+  const movement = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`
+
+  const ready = title.trim() !== '' && reason.trim() !== '' && (Number(hours) !== 0 || Number(value) !== 0)
+
+  return (
+    <section className="comm-changes">
+      <h5 className="est-h">Changes</h5>
+
+      {changes.length === 0 ? (
+        <p className="comm-position">
+          No changes recorded. The figures above are the contract as signed.
+        </p>
+      ) : (
+        <>
+          <p className="comm-position">{describeContracted(position)}</p>
+          <table className="cfg-table est-table">
+            <thead>
+              <tr>
+                <th>What</th>
+                <th>Effort</th>
+                <th>Value</th>
+                <th>From</th>
+                <th>Status</th>
+                <th>Why</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {changes.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.title}</td>
+                  <td className="mono">{movement(c.effortHours)}h</td>
+                  <td className="mono">
+                    {c.value < 0 ? '−' : c.value > 0 ? '+' : ''}
+                    {c.currency} {Math.abs(c.value).toLocaleString()}
+                  </td>
+                  <td className="mono">{c.effectiveFrom ?? (c.decidedAt ? c.decidedAt.slice(0, 10) : '—')}</td>
+                  <td>
+                    <span className={`comm-status st-${c.status.toLowerCase()}`}>{c.status}</span>
+                    {c.status === 'Submitted' && <span className="est-block-note"> · not in the total</span>}
+                  </td>
+                  <td>
+                    {c.reason}
+                    {c.decisionNote && <span className="est-block-note"> — {c.decisionNote}</span>}
+                  </td>
+                  <td>
+                    {c.status === 'Submitted' && mayDecide ? (
+                      c.requestedBy.trim().toLowerCase() === actorName.trim().toLowerCase() ? (
+                        <span className="est-block-note">You raised this — somebody else decides it.</span>
+                      ) : refusing === c.id ? (
+                        <>
+                          <input
+                            className="fld-input"
+                            placeholder="Why it is refused"
+                            value={refusal}
+                            onChange={(e) => setRefusal(e.target.value)}
+                            aria-label="Reason for refusing"
+                          />
+                          <button
+                            className="btn-link"
+                            disabled={!refusal.trim()}
+                            onClick={() => {
+                              if (onDecide(c.id, 'rejected', refusal)) {
+                                setRefusing(null)
+                                setRefusal('')
+                              }
+                            }}
+                          >
+                            Refuse
+                          </button>{' '}
+                          <button className="btn-link" onClick={() => setRefusing(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-link" onClick={() => onDecide(c.id, 'approved')}>
+                            Approve
+                          </button>{' '}
+                          <button className="btn-link" onClick={() => setRefusing(c.id)}>
+                            Refuse
+                          </button>
+                        </>
+                      )
+                    ) : null}
+                    {c.status !== 'Approved' && c.status !== 'Withdrawn' && mayRaise ? (
+                      <>
+                        {' '}
+                        <button className="btn-link" onClick={() => onWithdraw(c.id)}>
+                          Withdraw
+                        </button>
+                      </>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {mayRaise ? (
+        open ? (
+          <div className="time-form">
+            <div className="time-row">
+              <label className="fld time-fld-person">
+                <span className="fld-label">What changes</span>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short title" />
+              </label>
+              <label className="fld time-fld-hours">
+                <span className="fld-label">Effort ±h</span>
+                <input type="number" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0" />
+              </label>
+              <label className="fld time-fld-hours">
+                <span className="fld-label">Value ±</span>
+                <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" />
+              </label>
+              <label className="fld">
+                <span className="fld-label">Effective from</span>
+                <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+              </label>
+            </div>
+            <div className="time-row">
+              <label className="fld time-fld-note">
+                <span className="fld-label">Why</span>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What prompted it" />
+              </label>
+              <label className="fld time-fld-note">
+                <span className="fld-label">Scope</span>
+                <input value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What is being added or removed" />
+              </label>
+              {/*
+                * Two buttons rather than one with a tick. Saving a draft and asking somebody to
+                * commit the firm to it are different acts, and a checkbox makes the second one
+                * possible to do by accident.
+                */}
+              <button
+                className="btn"
+                disabled={!ready}
+                title={ready ? 'Keep working on it' : 'Needs a title, a reason, and a movement'}
+                onClick={() => {
+                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null }, false)) {
+                    setOpen(false)
+                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom('')
+                  }
+                }}
+              >
+                Save draft
+              </button>
+              <button
+                className="btn primary"
+                disabled={!ready}
+                title={ready ? 'Send it for a decision' : 'Needs a title, a reason, and a movement'}
+                onClick={() => {
+                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null }, true)) {
+                    setOpen(false)
+                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom('')
+                  }
+                }}
+              >
+                Submit for decision
+              </button>
+              <button className="btn ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn" onClick={() => setOpen(true)}>
+            Raise a change
+          </button>
+        )
+      ) : null}
+    </section>
   )
 }

@@ -2,6 +2,7 @@ import type { IssueEstimate, SizeBand } from './estimation'
 import { deriveEffort } from './estimation'
 import type { TimeEntry } from './time'
 import { hoursOn } from './time'
+import { contractedPosition, type ChangeRequest } from './changeRequest'
 
 /**
  * What has been contracted, and how much of it is left.
@@ -97,7 +98,27 @@ export interface SowPosition {
   sowId: string
   /** Work attributed to this SOW — every issue under a project that names it. */
   issueIds: string[]
+  /**
+   * What was signed, and what stays signed however many changes are approved.
+   *
+   * Kept beside the contracted figure rather than replaced by it, because "what did we
+   * originally agree" is a question a delivery review asks and an overwritten field cannot
+   * answer. See `ChangeRequest`.
+   */
   baselineHours: number
+  /** Approved movements. Signed — negative when descopings outweigh additions. */
+  approvedChangeHours: number
+  /**
+   * Baseline plus approved changes: what is actually contracted today.
+   *
+   * **Consumption is measured against this, not against the baseline.** Measuring against a
+   * figure that has been formally varied reports an overrun on work somebody agreed to pay
+   * for — an alarm that fires when nothing is wrong, and a firm that sees two of those stops
+   * reading the third.
+   */
+  contractedHours: number
+  /** Asked for and not yet decided. Reported, never counted. */
+  pendingChangeHours: number
   /** Sum of the estimates on that work. What the firm currently thinks it will take. */
   plannedHours: number
   /** Sum of the hours recorded against it. What it has taken so far. */
@@ -128,6 +149,14 @@ export function sowPosition(
   estimates: Record<string, IssueEstimate>,
   timeEntries: Record<string, TimeEntry>,
   bands: SizeBand[],
+  /**
+   * Every change request in the workspace; this filters to its own.
+   *
+   * Defaulted to none so a caller that has not been updated still compiles AND still gets the
+   * old answer rather than a wrong one — with no changes recorded, contracted equals baseline
+   * and every figure below is exactly what it was before this parameter existed.
+   */
+  changes: ChangeRequest[] = [],
 ): SowPosition {
   let plannedHours = 0
   let estimatedCount = 0
@@ -147,16 +176,29 @@ export function sowPosition(
   const actualHours = issueIds.reduce((n, id) => n + hoursOn(timeEntries, id), 0)
   const baselineHours = sow.effortHours
 
+  /*
+   * The contracted figure is what everything below is measured against.
+   *
+   * This read `sow.effortHours` directly, and that was right until change requests existed:
+   * with a formally approved variation on record, consuming against the original number
+   * reports an overrun on work the client has agreed to pay for.
+   */
+  const contracted = contractedPosition(sow, changes)
+  const contractedHours = contracted.contractedHours
+
   return {
     sowId: sow.id,
     issueIds,
     baselineHours,
+    approvedChangeHours: contracted.approvedHours,
+    contractedHours,
+    pendingChangeHours: contracted.pendingHours,
     plannedHours: round(plannedHours),
     actualHours: round(actualHours),
-    remainingHours: round(baselineHours - actualHours),
-    consumedPct: baselineHours > 0 ? round((actualHours / baselineHours) * 100) : null,
-    forecastPct: baselineHours > 0 ? round((plannedHours / baselineHours) * 100) : null,
-    forecastOverrun: baselineHours > 0 && plannedHours > baselineHours,
+    remainingHours: round(contractedHours - actualHours),
+    consumedPct: contractedHours > 0 ? round((actualHours / contractedHours) * 100) : null,
+    forecastPct: contractedHours > 0 ? round((plannedHours / contractedHours) * 100) : null,
+    forecastOverrun: contractedHours > 0 && plannedHours > contractedHours,
     estimatedCount,
     unestimatedCount,
   }
@@ -169,10 +211,19 @@ export function sowPosition(
  * reads differently in two places is a figure nobody trusts.
  */
 export function describePosition(p: SowPosition): string {
-  if (!p.baselineHours) {
+  if (!p.contractedHours) {
     return `No agreed effort recorded, so consumption cannot be measured — ${p.actualHours}h spent so far.`
   }
-  const spent = `${p.actualHours}h of ${p.baselineHours}h used (${Math.round(p.consumedPct ?? 0)}%)`
+  /*
+   * Against the CONTRACTED figure, saying so whenever the two differ. A sentence reading
+   * "320h of 400h" when 80 of those hours were formally added invites somebody to go looking
+   * for an overrun that was agreed months ago.
+   */
+  const varied =
+    p.approvedChangeHours === 0
+      ? ''
+      : ` (${p.baselineHours}h signed ${p.approvedChangeHours > 0 ? '+' : '−'} ${Math.abs(p.approvedChangeHours)}h approved)`
+  const spent = `${p.actualHours}h of ${p.contractedHours}h used${varied} (${Math.round(p.consumedPct ?? 0)}%)`
   if (p.forecastOverrun) {
     return `${spent}, and the current plan needs ${p.plannedHours}h — ${round(p.plannedHours - p.baselineHours)}h more than was agreed.`
   }

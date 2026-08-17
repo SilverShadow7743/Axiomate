@@ -1084,9 +1084,10 @@ scenario(
     return {
       verdict: 'PARTIAL',
       actual: `A CR can be raised as a work item of type "${made.type}"${existing ? '' : ' — the type is configuration and had to be added first'}, linked to the issue that prompted it, and it cannot start until somebody with the authority approves it (scenario P). What it still carries is no value of its own: approving it does not move the agreed effort or value on the statement of work, so a firm sees the overrun rather than the amendment.`,
-      stops: 'at valuation — approval is built, and an approved change still does not amend the SOW it changes',
-      severity: 'P1',
-      impact: 'A CR is a note about money, not a control over it.',
+      stops: 'at the join — a change request is now a priced record with an approval and an effective date (CR1), and this issue-shaped one is not linked to it. `ChangeRequest.issueId` exists and nothing sets it, so the register and the contract still describe the same change twice.',
+      severity: 'P2',
+      impact:
+        'The valuation gap this described is closed: an approved change moves the contracted position without touching the baseline. What is left is that the issue somebody raises and the variation somebody prices are two records, and only a person knows they are the same change.',
     }
   },
 )
@@ -1177,8 +1178,8 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `Unapproved, the CR cannot start: "${unapproved.error}" The consultant who asked cannot answer — "${selfApproved.error}" — and neither can an analyst, because the rule names the sponsor: "${wrongRole.error}" Once the sponsor approves, the work starts. A rejection blocks the same move and stays on the record: "${blockedAfterRejection.error}"`,
-      stops: 'at the commercial consequence — approving a change does not move a SOW value, because there is no SOW',
-      severity: 'P1',
+      stops: 'at this issue-shaped change only. Approving a `ChangeRequest` DOES move the contracted position now — baseline plus approved movements, computed on read (CR1) — and the two paths are not yet joined: this scenario approves a work item, not a variation.',
+      severity: 'P2',
       impact: 'A change can no longer be delivered without somebody with authority agreeing to it. What it is worth is still not recorded anywhere.',
     }
   },

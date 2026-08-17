@@ -1856,6 +1856,15 @@ export default function IssueWorkspace({
             dispatch({ t: 'upsertSow', id, engagementId, patch, now: new Date().toISOString() })
           }
           onArchiveSow={(id) => dispatch({ t: 'archiveSow', id, now: new Date().toISOString() })}
+          onRaiseChange={(sowId, c, submit) =>
+            dispatch({ t: 'upsertChangeRequest', id: null, sowId, patch: c, submit, now: new Date().toISOString() })
+          }
+          onDecideChange={(id, decision, note) =>
+            dispatch({ t: 'decideChangeRequest', id, decision, note, now: new Date().toISOString() })
+          }
+          onWithdrawChange={(id) =>
+            dispatch({ t: 'withdrawChangeRequest', id, now: new Date().toISOString() })
+          }
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
           }

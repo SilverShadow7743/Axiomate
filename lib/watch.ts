@@ -202,7 +202,7 @@ export function observe(
     if (sow.deletedAt || !sow.effortHours) continue
     const projects = Object.values(state.nodes).filter((n) => n.sowId === sow.id && !n.deletedAt)
     const ids = projects.flatMap((p) => issuesUnder(state, p.id))
-    const position = sowPosition(sow, ids, state.estimates, state.timeEntries, state.model.sizeBands)
+    const position = sowPosition(sow, ids, state.estimates, state.timeEntries, state.model.sizeBands, Object.values(state.changes))
     if (position.remainingHours < 0) {
       add(
         sow.id,

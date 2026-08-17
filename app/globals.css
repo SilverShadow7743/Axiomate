@@ -4604,3 +4604,20 @@ select.cell-editor {
   flex: 1 1 160px;
   min-width: 120px;
 }
+
+/* Variations under a statement of work. The table can be wide — a title, two signed movements,
+   a date, a status and a reason — so it scrolls inside its own box rather than the panel. */
+.comm-changes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.comm-changes table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.comm-status.st-submitted { color: var(--warn, #b26a00); }
+.comm-status.st-approved { color: var(--ok, #1a7f37); }
+.comm-status.st-rejected,
+.comm-status.st-withdrawn { color: var(--text-faint); }
