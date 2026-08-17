@@ -418,7 +418,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (13 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (14 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."

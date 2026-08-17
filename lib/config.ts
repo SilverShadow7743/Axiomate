@@ -723,6 +723,16 @@ const SEED_AGENTS: SeedAgent[] = [
   { id: 'AGENT_ISSUE_SUMMARY', name: 'Issue Summary', family: 'Issue & Delivery', description: 'States what happened, what has been done, what is blocked and what happens next.', priority: 'backlog', runtime: 'declared', maxAutonomy: 'suggest' },
   { id: 'AGENT_ESCALATION', name: 'Escalation', family: 'Issue & Delivery', description: 'Watches severity, age, SLA, client impact and dependencies, and recommends escalation.', priority: 'P0', runtime: 'declared', maxAutonomy: 'propose' },
   { id: 'AGENT_RESOLUTION_VERIFY', name: 'Resolution Verification', family: 'Issue & Delivery', description: 'Checks that a resolution is described, evidenced, tested and confirmed before closure is allowed.', priority: 'backlog', runtime: 'declared', maxAutonomy: 'propose' },
+  /*
+   * `runtime: 'live'` — it is one of two agents in this build that actually runs. The rest are
+   * declared: the registry describes the intended estate so the configuration screen is honest
+   * about what exists, and a declared agent does nothing however it is configured.
+   *
+   * `maxAutonomy: 'propose'` is a ceiling, not a preference. It scores complexity by reading
+   * words, and words are a proxy for the work; the estimate it writes is never baselined, so
+   * nothing downstream can mistake it for one a person agreed. See lib/estimator.ts.
+   */
+  { id: 'AGENT_ESTIMATION', name: 'Estimation', family: 'Issue & Delivery', description: 'Proposes complexity scores for an issue by reading it against known delivery patterns for the product. Sizes and hours are derived from those scores by the firm\'s own calibration, exactly as they are for a person\'s estimate. Never agreed, never baselined — a starting point for a conversation.', priority: 'P1', runtime: 'live', maxAutonomy: 'propose' },
 
   /* -- Project Management -- */
   { id: 'AGENT_PROJECT_HEALTH', name: 'Project Health', family: 'Project Management', description: 'Derives project health from milestones, issues, risks, dependencies, capacity, budget and client communication.', priority: 'P1', runtime: 'declared', maxAutonomy: 'suggest' },

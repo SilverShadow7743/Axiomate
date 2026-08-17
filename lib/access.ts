@@ -140,7 +140,21 @@ const DELIVERY_CORE: PermissionKey[] = [
  */
 export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   [ADMIN_ROLE_ID]: ALL,
-  [MACHINE_ROLE_ID]: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'approval.request'],
+  /*
+   * `estimate.edit` is here and `estimate.agree` deliberately is not, and that pair is the whole
+   * control on what an agent may do to an estimate.
+   *
+   * The comment on MACHINE_ROLE_ID says a machine cannot "agree an estimate". It still cannot:
+   * agreeing is baselining, `estimate.agree` gates it, and nothing automated holds it. What the
+   * estimation agent does is *propose* — write complexity scores and the reasoning behind them
+   * into an estimate nobody has committed to — which is exactly what `maxAutonomy: 'propose'`
+   * means everywhere else in the registry, and what the whole agent architecture is built to do.
+   *
+   * Granting it was a deliberate widening rather than a fix for an inconvenient refusal. Without
+   * it the agent cannot write anything, and an estimation agent that cannot record an estimate
+   * is the "declared, with no runtime" pattern this codebase keeps deleting.
+   */
+  [MACHINE_ROLE_ID]: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'approval.request', 'estimate.edit'],
   ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
   ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],

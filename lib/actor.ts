@@ -53,6 +53,15 @@ export interface Actor {
  */
 export const INTAKE_ACTOR: Actor = { id: 'machine:intake', name: 'Intake' }
 export const SCHEDULE_ACTOR: Actor = { id: 'machine:schedule', name: 'Scheduled pass' }
+/**
+ * The estimation agent, and the `machine:` prefix is load-bearing rather than decorative.
+ *
+ * Without it `rolesFor` looks the id up in the people directory, finds nobody, and falls through
+ * to the fallback role — which is empty, so the agent silently held no permissions at all. The
+ * refusal that produced was correct and its message was about the wrong thing: "no role has been
+ * assigned to Estimation agent" reads like a directory problem rather than a naming one.
+ */
+export const ESTIMATION_ACTOR: Actor = { id: 'machine:estimation', name: 'Estimation agent' }
 
 /** Whether an actor is one of the above. Prefix-matched so a third does not need a new check. */
 export function isMachineActor(actor: Actor): boolean {
