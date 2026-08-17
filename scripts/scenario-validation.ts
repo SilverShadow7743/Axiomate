@@ -262,9 +262,9 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `Classified and filed under the mailbox's scope as ${made.id}, at ${draft.severity} severity — and the severity is reported as ${draft.confidence.severity} rather than stated, because it came from the words "blocking" and "production" rather than from a rule. Rules that fired: ${draft.matchedOn.join(', ')}. The record is created through the same reducer as a person's, so the transition graph, permissions and audit apply. It arrives as "${made.status}": a machine may file work, it may not decide it is being worked on. An unknown address is refused: "${'refused' in stranger ? stranger.refused.reason.slice(0, 90) : ''}"`,
-      stops: 'at the first mile — nothing fetches mail. Something has to receive it and POST it to /api/intake, which is a connector rather than an application feature',
+      stops: 'at a real client message — the first mile now exists. A Logic App polls the configured mailbox every three minutes and the endpoint has been proven by a posted message that became an issue, so the two halves meet at the POST; no email a client actually sent has yet travelled the whole path. This becomes PASS when one has.',
       severity: 'P1',
-      impact: 'The pipeline a firm configures now runs. Connecting it to a real mailbox is a forwarding rule and a token, not a build.',
+      impact: 'The gap changed shape today rather than closing. It was "no connector exists"; it is now "the connector is deployed and polling and nobody has watched a real message arrive" — a verification, not a build.',
     }
   },
 )
@@ -1537,9 +1537,10 @@ scenario(
     return {
       verdict: built && cookieHolds ? 'PARTIAL' : 'FAIL',
       actual: `Entra ID sign-in is built: authorisation-code flow with PKCE, the id token verified against the published keys for issuer, audience and expiry, and the nonce checked against the one this server generated. The session cookie is signed and driven here rather than read — a valid one round-trips, a tampered one and one signed with another key are both refused, and an expired one reports "${'reason' in stale ? stale.reason : ''}" rather than being quietly accepted. With a provider configured the write endpoint refuses an unverified request; with none configured the application runs as the single operator exactly as before, because a deployment without credentials should work rather than show a login it cannot satisfy.`,
-      stops: 'at a tenant — the flow cannot be driven end to end without a real Entra registration, so the redirect and callback are verified by construction rather than by running them',
+      stops:
+        'at the harness, not at the tenant. There IS a real registration now and real people sign in against it — and running it found what constructing it could not: the callback redirected to the internal container address, so a completed sign-in ended on a browser error page. Verified-by-construction is precisely what missed that. AU3 now covers the redirect; the provider handshake itself still cannot be driven here, because that needs a test tenant.',
       severity: 'P1',
-      impact: 'Grants now rest on a proven identity wherever a firm supplies one. Until the four environment values are set, this deployment is still one operator on trust.',
+      impact: 'The four environment values are set and grants rest on a proven identity. What remains is that no check in this suite exercises the round trip through a real provider, which is the one class of auth fault that has actually reached production.',
     }
   },
 )
