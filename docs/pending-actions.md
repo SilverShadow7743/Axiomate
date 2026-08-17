@@ -154,14 +154,36 @@ nobody schedules.
 
 ---
 
+## I. Since this document was written
+
+Section H is **superseded**: both Logic Apps went live on 17 August. The daily pass was proven by
+running it, and intake end to end by posting one message. Three entities were added after the
+audit — `PersonRate`, `ChangeRequest`, and `Skill` + `PersonSkill` — each wired through to a
+screen before the next was started.
+
+What that leaves open, in the order it blocks things:
+
+| # | Action | Note |
+|---|---|---|
+| I1 | **Nothing has been opened in a browser** | The row menu, inline status editing, the Capacity tab, the leave form, the timesheet Submit, the Rates tab, the Changes UI and now the Skills tab are all in production and **none has been rendered in a browser** — the workspace is behind Entra and I cannot sign in. This is the largest single piece of unverified work |
+| I2 | **The skill catalogue is empty** | Deliberately — the product ships no default skills, because a firm's skill list is its own. Until somebody adds entries, the Skills tab has a form and nothing to record against. Adding the ten or fifteen that matter for OAPIL and SLG is a ten-minute job for somebody who knows the work |
+| I3 | **Nothing states what a deliverable requires** | `candidatesFor` answers "who could do this" and the requirement has to be typed rather than read off a work item. That is the remaining half of skill matching, and it is a modelling decision, not a screen |
+| I4 | `ChangeRequest.issueId` exists and nothing sets it | The register and the contract still describe the same change twice. Scenarios O and P name this |
+| I5 | `setResourceProfile` and `setWorkflowEnabled` | Recommended for **removal**, not wiring — see the audit. Both are reachable arms whose behaviour is now supplied by something better |
+
+---
+
 ## Current state, for reference
+
+*Updated 17 August 2026, after the release adding `Skill` + `PersonSkill`.*
 
     production   https://axiomate-tms.azurewebsites.net   healthy, database connected
                  anonymous GET / → 307 → /signin, no data in the response
-                 B1 Basic, Central India, NODE|22-lts, 4 migrations applied
+                 B1 Basic, Central India, NODE|22-lts, 9 migrations applied
 
     register     131 issues (OAPIL 94, SLG 37) + 85 internal = 216
-    directory    25 people, 5 allocated, 5 with a stated working pattern
-    suite        56 scenarios — 26 PASS, 25 PARTIAL, 4 NOT IMPLEMENTED, 1 NOT TESTABLE
-                 0 P0, 11 P1
-    proofs       persistence 27/27, attribution 3/3, tenancy PASS
+    directory    26 people, 5 allocated, 5 with a stated working pattern
+    suite        63 scenarios — 35 PASS, 25 PARTIAL, 2 NOT IMPLEMENTED, 1 NOT TESTABLE
+                 0 P0, 7 P1 (A, C, D, ST2b, RP2, AI1, W)
+    proofs       persistence 38/38, attribution 3/3, tenancy PASS (87 calls)
+    access       34 permissions, 0 held by no stored role

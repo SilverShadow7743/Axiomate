@@ -3254,8 +3254,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         assessedBy: source === 'assessed' ? (assessedBy?.trim() || by) : null,
         lastUsedOn: a.patch.lastUsedOn === undefined ? existing.lastUsedOn : a.patch.lastUsedOn,
         note: a.patch.note === undefined ? existing.note : a.patch.note.trim(),
-        recordedBy: by,
-        recordedAt: a.now,
+        /*
+         * `recordedBy` and `recordedAt` are NOT touched, matching `correctRate`.
+         *
+         * They say who wrote this down and when, and a correction does not change that — a PM
+         * fixing a date on an assessment Nishant made must not turn it into a row recorded by
+         * the PM. This is the distinction the identity work flagged as the one to get right:
+         * a field that identifies WHO SOMEBODY IS moves on a rename, and a field recording WHAT
+         * WAS WRITTEN AT THE TIME is never rewritten. These are the second kind.
+         *
+         * Who made the correction is in the audit trail below, which is where it belongs.
+         */
       }
       return {
         state: {

@@ -2020,6 +2020,9 @@ export default function IssueWorkspace({
           onRecordSkill={(r) =>
             dispatch({ t: 'recordPersonSkill', ...r, now: new Date().toISOString() })
           }
+          onCorrectSkill={(id, patch) =>
+            dispatch({ t: 'correctPersonSkill', id, patch, now: new Date().toISOString() })
+          }
           onRemoveSkill={(id) =>
             dispatch({ t: 'removePersonSkill', id, now: new Date().toISOString() })
           }

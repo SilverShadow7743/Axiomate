@@ -126,11 +126,12 @@ interface Props {
    * work type — is not the authority that should carry one.
    */
   onRecordSkill: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
+  onCorrectSkill: (id: string, patch: { level?: SkillLevel; source?: SkillSource; assessedBy?: string | null; lastUsedOn?: string | null; note?: string }) => boolean
   onRemoveSkill: (id: string) => boolean
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onRecordSkill, onRemoveSkill, onClose }: Props) {
+export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -244,7 +245,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
-          {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onRemove={onRemoveSkill} />}
+          {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onCorrect={onCorrectSkill} onRemove={onRemoveSkill} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
@@ -3362,12 +3363,14 @@ function Skills({
   actor,
   onConfig,
   onRecord,
+  onCorrect,
   onRemove,
 }: {
   state: WorkspaceState
   actor: Actor
   onConfig: (op: ConfigOp) => boolean
   onRecord: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
+  onCorrect: (id: string, patch: { level?: SkillLevel; source?: SkillSource; assessedBy?: string | null; lastUsedOn?: string | null; note?: string }) => boolean
   onRemove: (id: string) => boolean
 }) {
   const mayConfigure = can(state.model, actor, 'config.manage')
@@ -3393,6 +3396,11 @@ function Skills({
   const [assessedBy, setAssessedBy] = useState('')
   const [lastUsedOn, setLastUsedOn] = useState('')
   const [note, setNote] = useState('')
+
+  /* One row at a time, like the Rates tab. */
+  const [fixing, setFixing] = useState<string | null>(null)
+  const [fixLevel, setFixLevel] = useState<SkillLevel>('working')
+  const [fixUsed, setFixUsed] = useState('')
 
   const nameOf = (personId: string) => state.model.people[personId]?.name ?? personId
   const ready = who && skillId && (source !== 'assessed' || assessedBy.trim() !== '')
@@ -3526,10 +3534,10 @@ function Skills({
             {rows
               .slice()
               .sort((a, b) => nameOf(a.personId).localeCompare(nameOf(b.personId)) || a.skillId.localeCompare(b.skillId))
-              .map((r) => {
+              .flatMap((r) => {
                 const stale = isStale(r.lastUsedOn, new Date().toISOString().slice(0, 10))
                 const mineToTouch = me?.id === r.personId
-                return (
+                return [
                   <tr key={r.id}>
                     <td>{nameOf(r.personId)}</td>
                     <td>{skillName(state.model, r.skillId)}</td>
@@ -3556,13 +3564,75 @@ function Skills({
                     </td>
                     <td>
                       {(mineToTouch || mayAssess.allowed) && (
-                        <button className="btn-link" onClick={() => onRemove(r.id)}>
-                          Withdraw
-                        </button>
+                        <>
+                          {/*
+                            * Offered only where the level is readable. Correcting a level you
+                            * cannot see would mean overwriting a value blind, and the form has
+                            * nothing honest to prefill the control with.
+                            */}
+                          {r.level !== null && (
+                            <>
+                              <button
+                                className="btn-link"
+                                onClick={() => {
+                                  setFixing(fixing === r.id ? null : r.id)
+                                  setFixLevel(r.level ?? 'working')
+                                  setFixUsed(r.lastUsedOn ?? '')
+                                }}
+                              >
+                                {fixing === r.id ? 'Cancel' : 'Correct'}
+                              </button>{' '}
+                            </>
+                          )}
+                          <button className="btn-link" onClick={() => onRemove(r.id)}>
+                            Withdraw
+                          </button>
+                        </>
                       )}
                     </td>
-                  </tr>
-                )
+                  </tr>,
+                  fixing === r.id ? (
+                    <tr key={`${r.id}-fix`}>
+                      <td colSpan={6}>
+                        <div className="time-row">
+                          <label className="fld">
+                            <span className="fld-label">Level</span>
+                            <select value={fixLevel} onChange={(e) => setFixLevel(e.target.value as SkillLevel)}>
+                              {SKILL_LEVELS.map((l) => (
+                                <option key={l.key} value={l.key}>
+                                  {l.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="fld">
+                            <span className="fld-label">Last used</span>
+                            <input type="date" value={fixUsed} onChange={(e) => setFixUsed(e.target.value)} />
+                          </label>
+                          {/*
+                            * `source` is not offered here. Changing self-rated to assessed is
+                            * not a correction, it is a different claim by a different person,
+                            * and it should be recorded as one rather than edited in place.
+                            */}
+                          <span className="est-block-note">
+                            Who says so does not change here &mdash; withdraw and record it again
+                            if the claim itself is different.
+                          </span>
+                          <button
+                            className="btn"
+                            onClick={() => {
+                              if (onCorrect(r.id, { level: fixLevel, lastUsedOn: fixUsed || null })) {
+                                setFixing(null)
+                              }
+                            }}
+                          >
+                            Correct
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null,
+                ]
               })}
           </tbody>
         </table>

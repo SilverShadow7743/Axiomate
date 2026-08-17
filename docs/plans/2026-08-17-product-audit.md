@@ -238,6 +238,13 @@ Cost rate blocks margin. Location blocks onshore/offshore. Employment type block
 invoicing. Building any of domains 8, 10 or 12 without them produces a screen that cannot be
 populated.
 
+> **Since the audit (17 August).** Three of these were built and are live: `PersonRate`
+> (effective-dated cost and charge-out), `ChangeRequest` (a signed delta against a SOW baseline),
+> and `Skill` + `PersonSkill` (named levels, provenance, and when the skill was last used). The
+> paragraph above stands for what remains — location, employment type, certifications, industry
+> and past experience are all still absent. The entries below are annotated where they have
+> changed; anything unannotated is still true.
+
 ### 2. Resource and people — **partial**
 
 **Observed.** Core profile: name, email, roleIds, grade, track — 9 fields. Delivery profile:
@@ -390,8 +397,8 @@ mutation goes through one reducer with one permission check. That is the right f
 | Email Intake | **Live in effect** | mailbox message | routing rules | classified issue | provenance `guessed` | keep |
 | Timesheet Intelligence | declared | entries, weeks | timesheets ✓ | missing time, wrong coding | required | **P2 — now feasible** |
 | SOW Intelligence | declared | SOW document | **file storage — absent** | structured scope | required | P3 — blocked |
-| Resource Allocation / Skill Match | declared | demand, skills | **skills — absent** | recommended allocation | required | P3 — blocked |
-| Margin Protection | declared | revenue, cost, hours | **rates — absent** | threshold breach | required | P3 — blocked |
+| Resource Allocation / Skill Match | declared | demand, skills | skills ✓ · **demand — absent** | recommended allocation | required | **P2 — half unblocked.** `candidatesFor` answers "who could do this" from recorded skill and returns candidates, never a ranking. Nothing yet states what a deliverable *needs*, so the requirement has to be typed rather than read |
+| Margin Protection | declared | revenue, cost, hours | rates ✓ | threshold breach | required | **P2 — unblocked.** `costOf` prices each hour at the rate in force on its own date, and reports the whole total as absent rather than short when any hour is unrated |
 | Milestone Risk | declared | milestones | **project milestones — absent** | forecast | required | P3 — blocked |
 | Duplicate Detection | declared | inbound issue | issues ✓ | is this new? | `suggest` | **P2 — feasible now** |
 | Issue Triage / Routing | declared | new issue | routing rules ✓, skills ✗ | severity, owner | required | P2 partial |
@@ -467,9 +474,9 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 
 | Entity | Why | Priority |
 |---|---|---|
-| `RateCard` / `PersonRate` (effective-dated) | Unblocks cost, margin, billing, three agents | **P0 for the commercial vision** |
-| `ChangeRequest` | Commercial change is currently a string | **P1** |
-| `Skill`, `PersonSkill` (with proficiency) | Unblocks allocation intelligence and two agents | **P1** |
+| ~~`RateCard` / `PersonRate` (effective-dated)~~ | Unblocks cost, margin, billing, three agents | **BUILT** — `lib/rates.ts`, withheld whole from anybody without `rate.view` |
+| ~~`ChangeRequest`~~ | Commercial change is currently a string | **BUILT** — a signed delta; the SOW baseline is never edited |
+| ~~`Skill`, `PersonSkill` (with proficiency)~~ | Unblocks allocation intelligence and two agents | **BUILT** — named levels not numbers, provenance (`self`/`assessed`/`certified`), and `lastUsedOn` so a lapsed skill reads as lapsed. Catalogue in the model, levels in a table, judgement fields redacted at the boundary |
 | `Document` / file storage | Unblocks SOW intelligence and deliverable evidence | **P1** |
 | `Milestone` as a first-class record at project/SOW level | Unblocks outcomes, milestone billing, two agents | **P1** |
 | `HolidayCalendar` + `CalendarDay` | A holiday is currently N person-rows; Mon–Fri is hardcoded | **P2** |
@@ -498,7 +505,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | **Issue vs Risk vs Action** | Action is a work type; Risk and Decision are **note types** | `Issue` + type | Promote Risk and Decision to work types, not modules |
 | **Notification vs Alert** | One `Notification` model, channel-typed | `Notification` | Keep |
 | **Workflow vs Automation** | `WorkflowRecord` (unexecuted) and `automationRules` (executed) — **two mechanisms for one idea** | `automationRules`, which runs | Fold workflows into automation, or delete the unexecuted one |
-| **Skill vs Capability** | Neither exists | — | Add once, as `Skill` |
+| **Skill vs Capability** | ~~Neither exists~~ **Added once, as `Skill`** | `Skill` + `PersonSkill` | Done. "Capability" is not a second concept and should not become one |
 | **Timesheet outcome vs Work item** | Time links to an issue; no outcome concept | Decide before building outcome codes | See validation questions |
 | **SOW scope vs Project scope** | `Sow.scope` free text; project scope is the issue tree | Ambiguous — this is the SOW intelligence gap | Structure SOW scope items |
 | **CR vs Project change** | CR is a work type; `Sow.status='Varied'` is the only commercial trace | `ChangeRequest` entity | **Add it** |
@@ -517,7 +524,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | Change Request entity | | | ✓ | **P1** | SOW ✓ | Model with scope, effort, value, approval, dates |
 | Milestone as a first-class record | | ✓ | | **P1** | — | Project/SOW level, with acceptance and evidence |
 | File storage | | | ✓ | **P1** | Azure Blob | Upload → store → link to Evidence/SOW |
-| Skills + proficiency | | | ✓ | **P1** | people table | `Skill`, `PersonSkill` |
+| ~~Skills + proficiency~~ | | | ✓ | **DONE** | people table | `Skill`, `PersonSkill` — reachable: catalogue, record, correct, withdraw |
 | Notification transport | | ✓ | | **P1** | Graph/SMTP | Email first; Teams second |
 | Use the SOW module | ✓ | | | **P1** | — | Enter the real OAPIL/SLG contracts |
 | Validate what was built today | | ✓ | | **P1** | — | Click the row menu, timesheet, capacity tab |
@@ -568,7 +575,7 @@ rest possible.*
 
 | Feature | Dependencies | Size |
 |---|---|---|
-| Skills + proficiency, and skill→deliverable matching | people table | **L** |
+| Skills + proficiency ✓, and skill→deliverable matching (**the half still missing**) | people table | **M** — matching exists and is driven by SK1; what is absent is anything that states what a deliverable requires |
 | Utilisation: planned vs actual, against `billableTargetPct` | rates, timesheets in use | **M** |
 | Cost of allocation; margin by project / engagement / resource | rates | **L** |
 | Invoicing: T&M, fixed price, retainer, milestone | rates, CR, milestones | **XL** |
