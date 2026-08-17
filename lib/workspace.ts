@@ -774,7 +774,17 @@ export type ConfigOp =
       confirmed?: boolean
     }
   | { k: 'setWatch'; patch: Partial<WatchPolicy> }
-  | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[]; email?: string }
+  | {
+      k: 'upsertPerson'
+      id: string | null
+      name: string
+      roleIds: string[]
+      email?: string
+      /** Seniority and specialism. See `Person` — deliberately not the same thing as a role. */
+      grade?: string
+      track?: string
+      developingToward?: string
+    }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
   | { k: 'deleteResponsibility'; id: string }
@@ -3415,6 +3425,41 @@ function withOverride(
   return { ...model, overrides: { ...model.overrides, [scopeId]: fn({ ...current }) } }
 }
 
+/**
+ * The career fields on a person, merged the way the address is: absent means unrecorded.
+ *
+ * Split out of `upsertPerson` because the merge has three cases per field and doing it inline
+ * three times is how one of them ends up different from the others. A field the caller did not
+ * mention keeps what was there; a field the caller sent keeps the new value; a field the caller
+ * cleared to an empty string is removed rather than stored empty.
+ *
+ * `source: 'stated'` is set when any of them is present, because this arm is only reached when
+ * somebody said something. It is never set to `'default'` here — a default is what the shipped
+ * fallback is, and claiming it for a person nobody described would be exactly the fabrication
+ * `ResourceProfile.source` was added to prevent, when the seeder stamped `'stated'` on profiles
+ * nobody had stated.
+ */
+function career(
+  op: { grade?: string; track?: string; developingToward?: string },
+  existing?: Person,
+): Partial<Person> {
+  const pick = (sent: string | undefined, had: string | undefined) => {
+    if (sent === undefined) return had
+    const t = sent.trim()
+    return t ? t : undefined
+  }
+  const grade = pick(op.grade, existing?.grade)
+  const track = pick(op.track, existing?.track)
+  const developingToward = pick(op.developingToward, existing?.developingToward)
+  const any = grade || track || developingToward
+  return {
+    ...(grade ? { grade } : {}),
+    ...(track ? { track } : {}),
+    ...(developingToward ? { developingToward } : {}),
+    ...(any ? { source: 'stated' as const } : {}),
+  }
+}
+
 function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Actor): OpResult {
   const by = actor.name
   const m = state.model
@@ -3738,6 +3783,20 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
     case 'upsertPerson': {
       const name = op.name.trim()
       if (!name) return { state, error: 'A person needs a name.' }
+      /*
+       * `CONFIG_OPS` checks that `op.k` names a real operation and stops there — the fields
+       * inside an op are not shape-checked at the boundary, by an explicit decision recorded in
+       * actionShape.ts. That is survivable for fields the arm only ever compares, and not for
+       * these three, which are trimmed: `grade: 123` would reach `.trim()` and throw a
+       * TypeError out of a pure reducer, which surfaces as a 500 rather than as a refusal
+       * naming the field.
+       */
+      for (const f of ['grade', 'track', 'developingToward'] as const) {
+        const v = op[f]
+        if (v !== undefined && typeof v !== 'string') {
+          return { state, error: `${f} must be text.` }
+        }
+      }
       const id = op.id ?? `PERSON_${m.seq}`
       const existing = m.people[id]
       const clash = Object.values(m.people).find((p) => p.id !== id && p.name === name)
@@ -3758,6 +3817,17 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         // Undefined when cleared rather than an empty string, so "no address recorded" is one
         // state rather than two that compare unequal.
         ...(email ? { email } : existing?.email && op.email === undefined ? { email: existing.email } : {}),
+        /*
+         * Grade, track and target follow the same absent-versus-empty rule as the address, and
+         * for the same reason: `undefined` means nothing was recorded, `''` would mean somebody
+         * recorded emptiness, and a directory that cannot tell those apart cannot answer "who
+         * have we never described".
+         *
+         * `source` is only ever written alongside them, and only as `stated` — this arm is
+         * reached because a person said something. Nothing here mints `default`; that is what
+         * the shipped fallback means and it is not a claim this action is entitled to make.
+         */
+        ...career(op, existing),
       }
       const roleNames = person.roleIds.map((r) => m.roles[r].label).join(', ') || 'no role'
       return done(

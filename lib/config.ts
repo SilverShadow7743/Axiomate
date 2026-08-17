@@ -193,6 +193,46 @@ export interface Person {
   email?: string
   /** People discovered in the imported log rather than entered here. */
   fromSource: boolean
+
+  /**
+   * Seniority, and the specialism the person is deployed on — "Senior Technical Consultant" on
+   * the "X++" track, "Senior Functional Consultant" on "SCM / manufacturing".
+   *
+   * **Kept apart from `roleIds`, and that separation is the whole point of these fields.**
+   * A role here grants permissions; a grade describes a career. Folding one into the other means
+   * either that promoting somebody silently widens what they can do, or that granting an
+   * administrator permission implies a seniority nobody awarded. Both are wrong, and both are
+   * the kind of wrong that is discovered long after the fact.
+   *
+   * Free text rather than an enum. Grades and tracks are a firm's own vocabulary and they change
+   * — a firm that opens a data-engineering track should not need a release to say so. The cost
+   * is that two spellings of the same grade will not match; that is a reporting problem, and it
+   * is smaller than a list nobody can extend.
+   */
+  grade?: string
+  track?: string
+
+  /**
+   * What the person is working toward, when that is not what they are.
+   *
+   * An intern preparing for an analyst role has a grade of "Intern" and a target of "Analyst".
+   * Recording "Analyst" in `grade` would be the plainest kind of false statement this directory
+   * could make — it would put somebody at a seniority they have not reached, and every capacity
+   * and staffing view downstream would read it as fact.
+   */
+  developingToward?: string
+
+  /**
+   * Where the three fields above came from.
+   *
+   * `stated` means somebody said so. `default` means the shipped fallback was used. Absent means
+   * nothing has been recorded either way, which is different again — and is the honest answer
+   * for the twenty people in this directory nobody has described.
+   *
+   * The same vocabulary as `lib/intake.ts` and `ResourceProfile.source`, on purpose: a reader
+   * who has learned it once should not have to learn it again per field.
+   */
+  source?: 'stated' | 'default'
 }
 
 /**
