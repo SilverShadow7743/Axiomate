@@ -2799,6 +2799,15 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       if (!a.reason.trim()) {
         return { state, error: 'A version needs a reason — a record that cannot explain itself later is most of the point thrown away.' }
       }
+      /*
+       * A version records what was true. Null records nothing, and storing it would produce a
+       * row that reads as an answer — `valueAt` would return it, and the caller would take it
+       * for a working pattern rather than for the absence of one. Absence is already expressed,
+       * by there being no version covering the date.
+       */
+      if (a.value === null || a.value === undefined) {
+        return { state, error: 'A version needs a value. Nothing recorded is said by there being no version, not by an empty one.' }
+      }
       const candidate = {
         subjectKind: a.subjectKind,
         subjectId: a.subjectId,
@@ -2845,6 +2854,11 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const existing = state.versions[a.id]
       if (!existing) return { state, error: 'That version no longer exists.' }
       if (!a.reason.trim()) return { state, error: 'A correction needs a reason.' }
+      // `undefined` means "not part of this patch" and leaves the value alone; an explicit null
+      // would be emptying it, which `recordVersion` refuses and a correction cannot smuggle in.
+      if (a.patch.value === null) {
+        return { state, error: 'A version needs a value. Nothing recorded is said by there being no version, not by an empty one.' }
+      }
 
       const candidate = {
         id: existing.id,

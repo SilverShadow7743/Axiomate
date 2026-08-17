@@ -139,6 +139,7 @@ model Tenant {
   revisions     EstimateRevision[]
   audit         ScheduleAudit[]
   appliedActions AppliedAction[]
+  versions      Version[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -907,4 +908,51 @@ model AppliedAction {
 
   @@id([tenantId, key])
   @@index([tenantId, at])
+}
+
+/// What was true about something, from when, and why it changed.
+///
+/// One row is one period. `validFrom` is inclusive and `validTo` is **exclusive**, which is what
+/// lets two periods abut without overlapping: a pattern ending `2026-07-01` does not cover 1 July,
+/// and the one starting that day does. `validTo` null means "still true". Overlaps are refused by
+/// the reducer before a row is ever built — see `overlapProblem` in `lib/versioning.ts`.
+///
+/// **The dates are `String`, against this schema's own convention, deliberately.** Everywhere else
+/// the app holds `YYYY-MM-DD` and the column is a `DateTime` pinned to midnight UTC. Here the
+/// comparison itself is a string comparison — `validFrom <= on` — so a `DateTime` column would
+/// have to round-trip through `fromDate`, which returns `string | null`, into a non-null field.
+/// The only conversion that typechecks is `fromDateOrEmpty`, and `'' <= on` is true for every
+/// date, which would make every version cover all of time. A `String` column makes the round trip
+/// the identity function and the boundary arithmetic exact.
+///
+/// `value` is JSON typed by `subjectKind` — a working pattern today. The kind is a closed
+/// vocabulary checked at the route boundary, which is what keeps an unvalidated payload from
+/// being a hole: an unrecognised subject never reaches here.
+///
+/// `by` / `byId` / `byEmail` are stamped from the actor, exactly as an audit entry is, and never
+/// from the incoming action — there is nothing here for a client to forge.
+model Version {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `ver-12`, minted from the durable workspace counter in `WorkspaceMeta`.
+  id String
+
+  subjectKind String
+  subjectId   String
+
+  validFrom String
+  validTo   String?
+
+  value Json
+
+  recordedAt DateTime
+  by         String
+  byId       String?
+  byEmail    String?
+  reason     String  @db.Text
+
+  @@id([tenantId, id])
+  /// Ordered as the queries ask: every read is "the periods for this subject", oldest first.
+  @@index([tenantId, subjectKind, subjectId, validFrom])
 }

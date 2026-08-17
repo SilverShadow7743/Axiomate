@@ -23,6 +23,7 @@ import {
   sowToRow,
   allocationToRow,
   commitmentToRow,
+  versionToRow,
   revisionToRow,
   relationshipToRow,
 } from './map'
@@ -445,6 +446,30 @@ export async function persistSteps(
      * one, which is a column on the node. Sharing the arm keeps the two halves of the same
      * commercial thought together, and each loop writes only what its own action moved.
      */
+    /**
+     * Recording a period and correcting one write the same row, so they share an arm. The loop
+     * compares by identity — both reducer arms build a fresh object for whatever they touched
+     * and leave everything else alone — so a correction writes one row and a record writes one
+     * row, never the whole timeline.
+     *
+     * Nothing is ever deleted here. A version that was wrong is corrected in place and the
+     * correction is audited with both sides; removing the row instead would take the only
+     * record of what the workspace used to believe.
+     */
+    case 'recordVersion':
+    case 'correctVersion': {
+      for (const [id, v] of Object.entries(after.versions)) {
+        if (before.versions[id] === v) continue
+        const row = versionToRow(tenantId, v)
+        await tx.version.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
     case 'upsertSow':
     case 'archiveSow':
     case 'attributeToSow': {

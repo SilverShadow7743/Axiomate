@@ -17,6 +17,9 @@ import type {
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
   ScheduleAudit as AuditRow,
+  // Aliased because `Version` is also the domain type one import below, and the two are not
+  // the same shape — the row holds `null` where the domain holds `undefined`.
+  Version as VersionRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -30,6 +33,7 @@ import type { Approval, ApprovalDecision } from '../approval'
 import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
+import type { Version } from '../versioning'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -860,5 +864,70 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Versions
+ * ================================================================== */
+
+/**
+ * The one pair in this file that does **not** send its dates through `toDate`/`fromDate`, and
+ * the exception is deliberate rather than an oversight — see the note on `model Version`.
+ *
+ * `validFrom` and `validTo` are compared as strings by `covers()` in `lib/versioning.ts`, and
+ * the column is `String` so this round trip is the identity function. Converting them to
+ * `DateTime` would force `validFrom` through `fromDateOrEmpty` — `fromDate` returns
+ * `string | null` and the field is non-null — and `''` compares less than every date, so every
+ * version would cover all of time. The exclusive `validTo` boundary would go with it.
+ *
+ * Do not "tidy" these two lines into `toDate()`.
+ */
+export function versionToRow(tenantId: TenantId, v: Version): Prisma.VersionUncheckedCreateInput {
+  return {
+    tenantId,
+    id: v.id,
+    subjectKind: v.subjectKind,
+    subjectId: v.subjectId,
+    validFrom: v.validFrom,
+    validTo: v.validTo,
+    /*
+     * JSON typed by `subjectKind`, which the route boundary checks against a closed list, so
+     * the payload can only belong to something this build understands.
+     *
+     * The cast is safe because the column is non-nullable and the reducer refuses a version
+     * whose value is null or undefined — at the funnel, not only at the route, so a script
+     * calling `apply` directly cannot produce a row this mapper would have to invent a value
+     * for. A `?? JsonNull` fallback here would have written "the value was JSON null" and
+     * called it a record.
+     */
+    value: v.value as Prisma.InputJsonValue,
+    recordedAt: new Date(v.recordedAt),
+    by: v.by,
+    // Nullable rather than defaulted, exactly as the audit trail is: a machine actor has an id
+    // and no mailbox, and inventing either would attribute a record to somebody who did not
+    // make it.
+    byId: v.byId ?? null,
+    byEmail: v.byEmail ?? null,
+    reason: v.reason,
+  }
+}
+
+export function versionFromRow(r: VersionRow): Version {
+  return {
+    id: r.id,
+    subjectKind: r.subjectKind,
+    subjectId: r.subjectId,
+    validFrom: r.validFrom,
+    // `null`, never `undefined`: null means "still true", and `covers()` tests for it by identity.
+    validTo: r.validTo,
+    value: r.value,
+    recordedAt: r.recordedAt.toISOString(),
+    by: r.by,
+    // Asymmetric on purpose, matching `auditFromRow` and the two field types: `byId?: string`
+    // has no null in it, `byEmail?: string | null` does.
+    byId: r.byId ?? undefined,
+    byEmail: r.byEmail,
+    reason: r.reason,
   }
 }

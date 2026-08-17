@@ -9,6 +9,7 @@ import {
   activityFromRow,
   activityToRow,
   auditFromRow,
+  versionFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -123,6 +124,7 @@ type Reader = Pick<
   | 'scheduleAudit'
   | 'workspaceMeta'
   | 'operatingModel'
+  | 'version'
 >
 
 /**
@@ -148,7 +150,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -194,6 +196,13 @@ export async function loadWorkspace(
       }),
       db.workspaceMeta.findUnique({ where: { tenantId } }),
       db.operatingModel.findUnique({ where: { tenantId } }),
+      /*
+       * Appended at the end of both lists rather than slotted in beside the other capacity
+       * reads. This is a nineteen-element positional destructure, and two similarly shaped
+       * `findMany` results swapped mid-array typecheck perfectly well while returning each
+       * other's rows.
+       */
+      db.version.findMany({ where: { tenantId }, orderBy: { validFrom: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -214,9 +223,7 @@ export async function loadWorkspace(
     sows: Object.fromEntries(sows.map((s) => [s.id, sowFromRow(s)])),
     allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),
-    // Loaded from its own table in the storage step. Empty here so the in-memory shape is
-    // complete from the first commit rather than half-existing across two.
-    versions: {},
+    versions: Object.fromEntries(versions.map((v) => [v.id, versionFromRow(v)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
