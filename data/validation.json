@@ -508,7 +508,7 @@
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "No outbound integration exists. The only network call the product makes is to the model behind the chat route; no DevOps, SharePoint or Teams client appears in source.",
+      "actual": "No outbound integration exists. The only network call the product makes is to the model behind the chat route; an integration client exists.",
       "stops": "at the integration",
       "severity": "P2",
       "impact": "Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4."

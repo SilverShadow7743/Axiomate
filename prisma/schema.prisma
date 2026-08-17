@@ -214,6 +214,23 @@ model Issue {
   /// records created here — they were never classified as anything else.
   sourceType String @default("")
 
+  /// Which discipline resolves this — a `Discipline` id from the operating model, or empty.
+  ///
+  /// A THIRD classification axis, independent of `type` and `module`, and the independence is
+  /// the point: a Technical issue can be a Defect or a Change Request, and can sit in any
+  /// module. Folding it into `type` would make "the technical defects" unaskable.
+  ///
+  /// A String rather than an enum, and not a foreign key, for the same reason `type` and
+  /// `accountable` are strings: the vocabulary is configurable, and an enum here would reject a
+  /// discipline a firm adds until a migration caught up. `disciplineLabel()` resolves an id that
+  /// no longer exists to the id itself rather than to blank, so a deleted discipline leaves a
+  /// visible trace instead of silently unclassifying a hundred issues.
+  ///
+  /// **Empty means unclassified, and every imported issue is empty.** Nothing infers this from
+  /// the module or the subject — an inference would be right often enough to be trusted and
+  /// wrong invisibly, which is the objection.
+  discipline String @default("")
+
   severity    Severity
   /// Free text rather than an enum: the seven statuses come from the source log, and the
   /// transform is the only thing entitled to interpret them.

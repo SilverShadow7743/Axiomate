@@ -203,6 +203,19 @@ export interface ScheduleRow {
    */
   type: string
 
+  /**
+   * Which discipline resolves this, as the **label** — "Technical", not `DISC_TECHNICAL`.
+   *
+   * Display and sort only, like `type` above. The stored id lives on `issue.discipline` and is
+   * what `matchesFilters` compares, so renaming a discipline changes what is shown without
+   * changing what matches.
+   *
+   * Null on rows that are not issues. A structural tier does not have a discipline: an
+   * engagement is resolved by everybody, and rolling one up would produce whichever discipline
+   * happened to be commonest among its children, presented as a fact about the tier.
+   */
+  discipline: string | null
+
   status: IssueStatus | null
   severity: Severity | null
   owner: string | null
@@ -271,6 +284,8 @@ export interface IssueDetail {
   type: string
   /** What the source log called this, when `type` was mapped onto another taxonomy. */
   sourceType: string
+  /** A `Discipline` id, or empty for unclassified. Independent of `type` and `module`. */
+  discipline: string
   severity: Severity
   status: IssueStatus
   owner: string
@@ -319,6 +334,11 @@ export interface FilterState {
   client: string
   /** Work type — the discriminator that keeps issues and change requests in one table. */
   type: string
+  /**
+   * Discipline — who resolves it, which is a different question from what kind of thing it is.
+   * Filtering both at once is the point: "the technical defects" needs two axes, not one.
+   */
+  discipline: string
   module: string
   status: string
   severity: string
@@ -332,6 +352,7 @@ export const EMPTY_FILTERS: FilterState = {
   showCompleted: false,
   client: 'All',
   type: 'All',
+  discipline: 'All',
   module: 'All',
   status: 'All',
   severity: 'All',

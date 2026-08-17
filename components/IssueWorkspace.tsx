@@ -1691,6 +1691,7 @@ export default function IssueWorkspace({
 
       <FilterBar
         actor={actor}
+        model={state.model}
         filters={filters}
         setFilters={setFilters}
         facets={facets}

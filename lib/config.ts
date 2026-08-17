@@ -277,6 +277,84 @@ export function workTypeId(label: string): string {
 }
 
 /**
+ * Which discipline resolves a piece of work — a **third** classification axis, and the reason it
+ * is a third rather than a replacement is the whole design.
+ *
+ *     type        Defect | Change Request | Limitation | Request | Task | Action
+ *     module      Finance | Production | Procurement | Inventory | Reporting | …
+ *     discipline  Technical | Functional | Integration | Data | Compliance | …
+ *
+ * These vary independently. A **Technical** issue can be a Defect or a Change Request; an
+ * **Integration** issue can sit in the Procurement module. Folding discipline into `type` — the
+ * obvious shortcut, since both are dropdowns of similar length — makes "the technical defects"
+ * an unaskable question, which is the one question the axis exists to answer.
+ *
+ * `ownerRoleId` is a **suggestion**, not an assignment. It records which role usually resolves
+ * this kind of work so that routing has something to propose; nothing here sets an owner, and a
+ * discipline whose usual owner is on leave must not stop the work being assigned to somebody
+ * else. See `model.routingRules` for the mechanism that acts on it.
+ */
+export interface Discipline {
+  /** Stable system key. Seeded ones keep theirs forever; ones added here get `DISC_<n>`. */
+  id: string
+  label: string
+  description: string
+  /** The role that usually resolves this. A proposal for routing, never an assignment. */
+  ownerRoleId: string
+  /** Seeded disciplines cannot be deleted, only relabelled — routing rules reference them. */
+  seeded: boolean
+  deletedAt: string | null
+}
+
+/**
+ * The fourteen this firm works in, stated by the operating partner on 17 August 2026.
+ *
+ * `ownerRoleId` is mapped onto the eleven roles that actually exist, and where the stated owner
+ * has no matching role the nearest one that does is used rather than a role being invented:
+ * QA, DevOps, Security Administrator, Integration Consultant, Technical Architect and Account
+ * Manager are all named in the source and none of them is a role in this workspace. Those rows
+ * point at the closest real role and say so in the description, because a routing rule aimed at
+ * a role nobody holds proposes nothing and looks like it is working.
+ */
+export const SEED_DISCIPLINES: readonly Omit<Discipline, 'seeded' | 'deletedAt'>[] = [
+  { id: 'DISC_BUSINESS', label: 'Business', ownerRoleId: 'ROLE_FUNCTIONAL', description: 'Process unclear, business rule missing. Usually a business analyst or functional consultant.' },
+  { id: 'DISC_FUNCTIONAL', label: 'Functional', ownerRoleId: 'ROLE_FUNCTIONAL', description: 'ERP setup or module behaviour incorrect.' },
+  { id: 'DISC_TECHNICAL', label: 'Technical', ownerRoleId: 'ROLE_TECHNICAL', description: 'Code, extension or customisation error.' },
+  { id: 'DISC_INTEGRATION', label: 'Integration', ownerRoleId: 'ROLE_TECHNICAL', description: 'API, interface or middleware failure. Stated owner is an integration consultant; this workspace has no such role, so it points at Technical Consultant.' },
+  { id: 'DISC_DATA', label: 'Data', ownerRoleId: 'ROLE_FUNCTIONAL', description: 'Migration, master data, reconciliation. Stated owner is a data consultant; nearest real role is Functional Consultant.' },
+  { id: 'DISC_CONFIGURATION', label: 'Configuration', ownerRoleId: 'ROLE_FUNCTIONAL', description: 'Parameters, workflows, posting setup.' },
+  { id: 'DISC_TESTING', label: 'Testing', ownerRoleId: 'ROLE_SUPPORT', description: 'Test failure, test environment, test coverage. Stated owner is QA or a test analyst; nearest real role is Support Analyst.' },
+  { id: 'DISC_ENVIRONMENT', label: 'Environment', ownerRoleId: 'ROLE_ADMIN', description: 'DEV, UAT, PROD or deployment issue. Stated owner is DevOps or a system administrator; nearest real role is Platform Administrator.' },
+  { id: 'DISC_SECURITY', label: 'Security & access', ownerRoleId: 'ROLE_ADMIN', description: 'Roles, permissions, authentication. Stated owner is a security administrator; nearest real role is Platform Administrator.' },
+  { id: 'DISC_PERFORMANCE', label: 'Performance', ownerRoleId: 'ROLE_PRINCIPAL', description: 'Slow transactions, batch performance. Stated owner is a technical architect; nearest real role is Principal Consultant.' },
+  { id: 'DISC_DELIVERY', label: 'Project / delivery', ownerRoleId: 'ROLE_PROJECT_MANAGER', description: 'Timeline, resource, dependency, coordination.' },
+  { id: 'DISC_GOVERNANCE', label: 'Decision / governance', ownerRoleId: 'ROLE_ENGAGEMENT_LEAD', description: 'Pending decision, approval, escalation.' },
+  { id: 'DISC_COMMERCIAL', label: 'Commercial / scope', ownerRoleId: 'ROLE_ENGAGEMENT_LEAD', description: 'Out-of-scope work, SOW ambiguity, change request. Stated owner is an engagement or account manager.' },
+  { id: 'DISC_COMPLIANCE', label: 'Compliance', ownerRoleId: 'ROLE_FUNCTIONAL', description: 'Tax, statutory, audit or policy requirement. Stated owner is a compliance or functional lead.' },
+]
+
+/** The disciplines on offer, in the order they were seeded rather than alphabetically. */
+export function liveDisciplines(model: OperatingModel): Discipline[] {
+  // `?? {}` because this can be reached with a model parsed from storage that predates the key.
+  const all = Object.values(model.disciplines ?? {}).filter((d) => !d.deletedAt)
+  const order = new Map(SEED_DISCIPLINES.map((d, i) => [d.id, i]))
+  // Seeded first, in their stated order, because that order is the firm's own escalation shape —
+  // business through technical through delivery through governance. Custom ones sort after, by
+  // name, since nothing establishes where they belong in that sequence.
+  return all.sort((a, b) => {
+    const ai = order.get(a.id) ?? Number.MAX_SAFE_INTEGER
+    const bi = order.get(b.id) ?? Number.MAX_SAFE_INTEGER
+    return ai === bi ? a.label.localeCompare(b.label) : ai - bi
+  })
+}
+
+/** The label to show for a stored discipline id, or the id itself if it no longer resolves. */
+export function disciplineLabel(model: OperatingModel, id: string): string {
+  if (!id) return ''
+  return model.disciplines?.[id]?.label ?? id
+}
+
+/**
  * What a responsibility can be filled with.
  *  - `person` resolves against the directory (Owner, Raised By)
  *  - `party`  resolves against the accountable-party vocabulary (an organisation, not a human)
@@ -459,6 +537,8 @@ export interface OperatingModel {
   responsibilities: Record<string, ResponsibilityType>
   /** What kind of work an item is — the discriminator that keeps this one table. */
   workTypes: Record<string, WorkType>
+  /** Which discipline resolves it. Independent of `workTypes` — see `Discipline`. */
+  disciplines: Record<string, Discipline>
   /**
    * How long each severity is allowed, in working days from the raised date.
    *
@@ -803,6 +883,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     workTypes[id] = { id, label: clean, description: '', fromSource: true, deletedAt: null }
   }
 
+  const disciplines: Record<string, Discipline> = {}
+  for (const s of SEED_DISCIPLINES) disciplines[s.id] = { ...s, seeded: true, deletedAt: null }
+
   const agents: Record<string, AgentRecord> = {}
   for (const a of SEED_AGENTS) agents[a.id] = seedAgent(a)
 
@@ -818,6 +901,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     people,
     responsibilities,
     workTypes,
+    disciplines,
     sla: { ...DEFAULT_SLA },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
@@ -1054,6 +1138,9 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     people: { ...seed.people, ...(stored.people ?? {}) },
     responsibilities: { ...seed.responsibilities, ...(stored.responsibilities ?? {}) },
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
+    // Seed first so a build that adds a discipline gives it to every existing workspace, and
+    // stored second so a relabelled one keeps the firm's wording rather than reverting on load.
+    disciplines: { ...seed.disciplines, ...(stored.disciplines ?? {}) },
     // Explicit, like every other key: a model stored before this existed has no `sla`, and the
     // spread above would set it to undefined — which is not a missing policy, it is a crash
     // the next time anything reads a severity from it.

@@ -44,6 +44,16 @@ export const COLUMNS: ColumnDef[] = [
   },
   { key: 'type', label: 'Type', width: 120, minWidth: 70, sortable: true, sortValue: (r) => r.type },
   {
+    key: 'discipline',
+    label: 'Discipline',
+    width: 132,
+    minWidth: 80,
+    sortable: true,
+    // Sorted on the stored id rather than the label, deliberately: the id is stable and the
+    // label is a firm's wording, which can be edited under a sort the user is looking at.
+    sortValue: (r) => r.discipline ?? '',
+  },
+  {
     key: 'status',
     labelKey: 'FIELD_STATUS',
     label: 'Status',

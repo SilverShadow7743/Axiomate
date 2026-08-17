@@ -119,6 +119,8 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteRole',
   'upsertWorkType',
   'deleteWorkType',
+  'upsertDiscipline',
+  'deleteDiscipline',
   'setSla',
   'setSizeBands',
   'setStatusPolicy',
@@ -446,7 +448,7 @@ const SHAPES = {
     patch: req(
       patchOf({
         parentId: idOrNull, client: text, module: text, subject: text, description: text,
-        type: text, sourceType: text, severity: text, status: text, owner: text,
+        type: text, sourceType: text, discipline: text, severity: text, status: text, owner: text,
         raisedBy: text, accountable: text, raised: textOrNull, lastActivity: textOrNull,
         actualEnd: textOrNull, age: num, daysSinceActivity: num, nextAction: text,
         evidence: text, evidenceDate: textOrNull, verification: text, source: text,

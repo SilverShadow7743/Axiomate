@@ -15,7 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
-import { kindLabel, liveWorkTypes } from '@/lib/config'
+import { kindLabel, liveDisciplines, liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
 
 export type DialogState =
@@ -172,6 +172,7 @@ function AddForm({
   // Read from the operating model, so a type or party added in configuration is selectable
   // here without a code change — which is the entire premise of the configuration plane.
   const workTypes = liveWorkTypes(state.model).map((t) => t.label)
+  const disciplines = liveDisciplines(state.model)
   const parties = state.model.parties
 
   return (
@@ -226,6 +227,20 @@ function AddForm({
               <select value={f.type ?? workTypes[0] ?? ''} onChange={(e) => set('type', e.target.value)}>
                 {workTypes.map((t) => (
                   <option key={t}>{t}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Discipline">
+              {/* Blank first, and it is the default — unlike Type, which falls back to the first
+                  configured value. Type is something every record has; discipline answers "who
+                  resolves this", which is frequently not known when a client reports something.
+                  Preselecting one would route work on the strength of list order. */}
+              <select value={f.discipline ?? ''} onChange={(e) => set('discipline', e.target.value)}>
+                <option value="">Not yet classified</option>
+                {disciplines.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.label}
+                  </option>
                 ))}
               </select>
             </Field>

@@ -827,6 +827,16 @@ function Cell({
     case 'type':
       return <span style={{ color: 'var(--text-muted)' }}>{row.type}</span>
 
+    case 'discipline':
+      // An em dash for a tier, which has none, and for an issue nobody has classified. They
+      // read the same because they mean the same thing to somebody scanning the column:
+      // there is no answer here. The difference is recoverable from the row's kind.
+      return row.discipline ? (
+        <span style={{ color: 'var(--text-muted)' }}>{row.discipline}</span>
+      ) : (
+        <span style={{ color: 'var(--text-faint)' }}>—</span>
+      )
+
     case 'status':
       return row.status ? <span>{row.status}</span> : <span style={{ color: 'var(--text-faint)' }}>—</span>
 

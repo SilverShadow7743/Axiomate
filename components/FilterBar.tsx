@@ -7,6 +7,8 @@ import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
 import type { Actor } from '@/lib/actor'
 import { useLabels } from './labels'
+import { liveDisciplines } from '@/lib/config'
+import type { OperatingModel } from '@/lib/config'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
 
@@ -26,7 +28,13 @@ function FilterDropdown({
 }: {
   label: string
   name: keyof FilterState
-  options: string[]
+  /**
+   * Plain strings where the stored value *is* what the user reads, and value/label pairs where
+   * it is not. Discipline is the second kind: the row stores `DISC_TECHNICAL` and the person
+   * needs to see "Technical". Filtering on the label instead would look identical and break
+   * the moment a firm renames one.
+   */
+  options: readonly (string | { value: string; label: string })[]
   value: string
   onChange: (k: keyof FilterState, v: string) => void
 }) {
@@ -54,11 +62,15 @@ function FilterDropdown({
         className={value !== 'All' ? 'on' : ''}
       >
         <option value="All">{label}: All</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
+        {options.map((o) => {
+          const value = typeof o === 'string' ? o : o.value
+          const text = typeof o === 'string' ? o : o.label
+          return (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          )
+        })}
       </select>
     </div>
   )
@@ -67,11 +79,15 @@ function FilterDropdown({
 interface Props {
   /** Who is operating, for the header chip. Resolved on the server; see lib/identity.ts. */
   actor: Actor
+  /** For the discipline names. The facet carries ids; only the model knows what they are called. */
+  model: OperatingModel
   filters: FilterState
   setFilters: (f: FilterState) => void
   facets: {
     clients: string[]
     types: string[]
+    /** Discipline **ids**, not labels — see `FilterDropdown`'s options. */
+    disciplines: string[]
     modules: string[]
     statuses: string[]
     severities: string[]
@@ -111,6 +127,7 @@ interface Props {
 
 export default function FilterBar({
   actor,
+  model,
   filters,
   setFilters,
   facets,
@@ -134,6 +151,19 @@ export default function FilterBar({
   onPlanSla,
 }: Props) {
   const labels = useLabels()
+  /*
+   * Every configured discipline, plus an explicit "Not yet classified" — and NOT
+   * `facets.disciplines`, which lists only the ids already in use.
+   *
+   * The other facets describe the data, so listing what exists is right for them. This one
+   * describes a vocabulary somebody is working through: with 216 records unclassified, the
+   * useful selections are the fourteen that nothing is filed under yet and the "None" that
+   * finds all 216. A facet built from the data would offer neither.
+   */
+  const disciplineOptions = [
+    { value: 'None', label: 'Not yet classified' },
+    ...liveDisciplines(model).map((d) => ({ value: d.id, label: d.label })),
+  ]
   const [colMenu, setColMenu] = useState(false)
   const menuWrap = useRef<HTMLDivElement>(null)
   const [moreMenu, setMoreMenu] = useState(false)
@@ -187,6 +217,19 @@ export default function FilterBar({
           somewhere the user cannot see. */}
       <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
       <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
+      <FilterDropdown
+        label="Discipline"
+        name="discipline"
+        /*
+         * Every configured discipline, not only the ones already in use, plus an explicit
+         * "Not yet classified". The other facets list what exists because they are describing
+         * the data; this one is describing a vocabulary somebody is working *through*, and a
+         * discipline nobody has used yet is exactly the one they need to find nothing under.
+         */
+        options={disciplineOptions}
+        value={filters.discipline}
+        onChange={set}
+      />
       <FilterDropdown label={labels.FIELD_STATUS} name="status" options={facets.statuses} value={filters.status} onChange={set} />
       <FilterDropdown label={labels.FIELD_SCHEDULE_HEALTH} name="health" options={facets.healths} value={filters.health} onChange={set} />
 

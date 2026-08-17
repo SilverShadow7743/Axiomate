@@ -107,6 +107,8 @@ import {
   emptyOverride,
   initModel,
   liveWorkTypes,
+  liveDisciplines,
+  type Discipline,
   type WorkType,
   resolveLabel,
   type Autonomy,
@@ -158,6 +160,20 @@ export interface IssueRecord {
    * taxonomy. Empty for records this workspace created — they were never anything else.
    */
   sourceType: string
+  /**
+   * Which discipline resolves this — a `Discipline` id, or empty.
+   *
+   * A THIRD axis, independent of `type` and `module`: a Technical issue can be a Defect or a
+   * Change Request, and can sit in any module. See `Discipline` in lib/config.ts.
+   *
+   * **Empty means unclassified, and every imported issue is empty.** Nothing infers a discipline
+   * from the module, the subject or the owner. The inference would often be right and would be
+   * indistinguishable from a person's judgement when it was wrong, which is the whole objection:
+   * a register that cannot tell a classification from a guess cannot be used to decide who works
+   * on what. Classifying the back catalogue is a person's job, or a proposal carrying its own
+   * provenance — never a default.
+   */
+  discipline: string
   severity: Severity
   status: IssueStatus
   owner: string
@@ -352,6 +368,8 @@ export interface SeedIssueInput {
   type: string
   /** What the source log called this, when the imported type was mapped onto another taxonomy. */
   sourceType?: string
+  /** A `Discipline` id. Absent in every seed, because nothing in the log records one. */
+  discipline?: string
   severity: Severity
   status: IssueStatus
   owner: string
@@ -462,6 +480,8 @@ export function initWorkspace(
       ...i,
       parentId: mId,
       sourceType: i.sourceType ?? '',
+      // Empty, not guessed. The imported log has no discipline column and never had one.
+      discipline: i.discipline ?? '',
       plannedStart: null,
       plannedEnd: null,
       percentOverride: null,
@@ -752,6 +772,8 @@ export type ConfigOp =
   | { k: 'deleteRole'; id: string }
   | { k: 'upsertWorkType'; id: string | null; label: string; description: string }
   | { k: 'deleteWorkType'; id: string }
+  | { k: 'upsertDiscipline'; id: string | null; label: string; description: string; ownerRoleId: string }
+  | { k: 'deleteDiscipline'; id: string }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
@@ -1099,6 +1121,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           type: a.draft.type || liveWorkTypes(state.model)[0]?.label || '',
           // Created here, so there is no earlier classification to preserve.
           sourceType: '',
+          /*
+           * Unclassified unless the person creating it said otherwise, and NOT defaulted to the
+           * first configured discipline the way `type` is above.
+           *
+           * The two look symmetrical and are not. Every issue has a type — the register cannot
+           * describe a record without one, so falling back to the first is choosing a starting
+           * point. Discipline answers "who resolves this", which is frequently not known at the
+           * moment a client reports something, and defaulting it would route work to a team on
+           * the strength of an alphabetical accident.
+           */
+          discipline: a.draft.discipline || '',
           severity: (a.draft.severity as Severity) || 'Medium',
           status,
           owner: a.draft.owner || 'Unassigned',
@@ -1272,6 +1305,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         subject: original.subject,
         description: original.description,
         type: original.type,
+        // Carried, like type and severity: a copy is the same kind of work, resolved by the same
+        // discipline. It is the *progress* of the original that must not come with it, not its
+        // description.
+        discipline: original.discipline,
         // Created here, so there is no earlier classification to preserve — as in `create`.
         sourceType: '',
         severity: original.severity,
@@ -3756,6 +3793,66 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, workTypes: { ...m.workTypes, [id]: workType }, seq: m.seq + (op.id ? 0 : 1) },
         { rowId: id, field: 'workType', from: existing?.label ?? null, to: label, at: now, by },
         existing ? `Work type "${label}" updated.` : `Work type "${label}" added.`,
+      )
+    }
+
+    case 'upsertDiscipline': {
+      const label = op.label.trim()
+      if (!label) return { state, error: 'A discipline needs a name.' }
+      const id = op.id ?? `DISC_${m.seq}`
+      const existing = m.disciplines?.[id]
+      // The name is what must stay unique, not just the key — two disciplines sharing one makes
+      // the filter ambiguous and a routing rule's target arbitrary.
+      const clash = liveDisciplines(m).find(
+        (d) => d.id !== id && d.label.toLowerCase() === label.toLowerCase(),
+      )
+      if (clash) return { state, error: `A discipline called "${clash.label}" already exists.` }
+      /*
+       * The suggested owner must be a role that exists and is live. A routing rule aimed at an
+       * archived role proposes nothing and looks like it is working — the same silent-nothing
+       * failure that the empty fallback role was introduced to stop.
+       *
+       * Empty is allowed: a discipline whose usual owner the firm has not settled is a real
+       * state, and better recorded as blank than as a guess.
+       */
+      if (op.ownerRoleId && !(m.roles[op.ownerRoleId] && !m.roles[op.ownerRoleId].deletedAt)) {
+        return { state, error: 'That role does not exist, so nothing would ever be routed to it.' }
+      }
+      const discipline: Discipline = {
+        id,
+        label,
+        description: op.description.trim(),
+        ownerRoleId: op.ownerRoleId,
+        // Seeded-ness is a property of where a discipline came from, so it survives an edit.
+        seeded: existing?.seeded ?? false,
+        deletedAt: null,
+      }
+      return done(
+        { ...m, disciplines: { ...m.disciplines, [id]: discipline }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'discipline', from: existing?.label ?? null, to: label, at: now, by },
+        existing ? `Discipline "${label}" updated.` : `Discipline "${label}" added.`,
+      )
+    }
+
+    case 'deleteDiscipline': {
+      const discipline = m.disciplines?.[op.id]
+      if (!discipline) return { state, error: 'Discipline not found.' }
+      if (discipline.seeded) {
+        return { state, error: `"${discipline.label}" is one of the standard disciplines. It can be renamed, not removed.` }
+      }
+      // Same refusal as a work type, and for the same reason: archiving one that records still
+      // carry leaves those records classified as something the workspace no longer offers.
+      const used = Object.values(state.issues).filter((i) => !i.deletedAt && i.discipline === op.id)
+      if (used.length) {
+        return {
+          state,
+          error: `${used.length} ${used.length === 1 ? 'record is' : 'records are'} in "${discipline.label}". Reclassify them first.`,
+        }
+      }
+      return done(
+        { ...m, disciplines: { ...m.disciplines, [op.id]: { ...discipline, deletedAt: now } } },
+        { rowId: op.id, field: 'discipline', from: discipline.label, to: '(archived)', at: now, by },
+        `Discipline "${discipline.label}" archived.`,
       )
     }
 

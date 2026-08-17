@@ -1,6 +1,6 @@
 import type { FilterState, ScheduleRow } from './types'
 import { isGroupRow } from './types'
-import { kindLabel, resolveLabels } from './config'
+import { disciplineLabel, kindLabel, resolveLabels } from './config'
 import type { IssueRecord, WorkspaceState } from './workspace'
 import { computeDurations, computeHealth, isTerminal, rollUp, STATUS_PROGRESS } from './schedule'
 import { maxIso, minIso } from './dates'
@@ -124,6 +124,16 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
       // place still ignoring.
       type: kindLabel(terms, state.issues[issue.parentId] ? 'sub-issue' : 'issue'),
     })
+    /*
+     * The row carries the LABEL and `row.issue` keeps the id — the same split `type` already
+     * uses, and it is what lets the grid render "Technical" while the filter compares
+     * `DISC_TECHNICAL`. Renaming a discipline then changes what is shown without breaking what
+     * matches, which is the whole reason the column stores an id.
+     *
+     * `disciplineLabel` returns the id when it no longer resolves, so an archived discipline
+     * leaves a visible `DISC_OLD` in the grid rather than silently blanking a hundred rows.
+     */
+    row.discipline = disciplineLabel(state.model, issue.discipline)
     row.status = issue.status
     row.severity = issue.severity
     row.owner = issue.owner
@@ -177,6 +187,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
       description: issue.description,
       type: issue.type,
       sourceType: issue.sourceType,
+      discipline: issue.discipline,
       severity: issue.severity,
       status: issue.status,
       owner: issue.owner,
@@ -295,6 +306,9 @@ function blank(
     status: null,
     severity: null,
     owner: null,
+    // Null, not rolled up. A tier is resolved by whoever its children need; taking the
+    // commonest discipline among them would present an average as a fact about the tier.
+    discipline: null,
     accountable: null,
     scheduleMode: 'AUTO',
     plannedStartDate: null,
@@ -326,6 +340,9 @@ export function facetsOf(state: WorkspaceState) {
   return {
     clients: uniq(live.map((i) => i.client)),
     types: uniq(live.map((i) => i.type)),
+    // Ids, not labels: the filter compares against what is stored, and a discipline renamed
+    // mid-session would otherwise stop matching the records that carry it.
+    disciplines: uniq(live.map((i) => i.discipline)),
     modules: uniq(live.map((i) => i.module)),
     statuses: uniq(live.map((i) => i.status)),
     severities: ['High', 'Medium', 'Low'],
@@ -343,6 +360,12 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   if (!f.showCompleted && isTerminal(i.status)) return false
   if (f.client !== 'All' && i.client !== f.client) return false
   if (f.type !== 'All' && i.type !== f.type) return false
+  /*
+   * 'None' is a real choice, not the absence of one. "Everything nobody has classified yet" is
+   * the question somebody asks when they sit down to classify a back catalogue of 216, and a
+   * filter offering only the fourteen disciplines cannot express it.
+   */
+  if (f.discipline === 'None' ? Boolean(i.discipline) : f.discipline !== 'All' && i.discipline !== f.discipline) return false
   if (f.module !== 'All' && i.module !== f.module) return false
   if (f.status !== 'All' && i.status !== f.status) return false
   if (f.severity !== 'All' && i.severity !== f.severity) return false
