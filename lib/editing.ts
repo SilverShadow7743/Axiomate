@@ -56,7 +56,21 @@ export function editorFor(
 
   switch (colKey) {
     case 'name':
-      return { kind: 'text', value: row.name, placeholder: 'Name' }
+      /**
+       * An issue's subject is NOT edited in the grid, and that is the second tier of the
+       * inline-editing rule (work-management design §6).
+       *
+       * Owner, dates, severity and status are fields; a subject is the sentence a client reads
+       * and it is written next to the description, which has no cell to be typed into. Editing
+       * it through a 392px cell with the description out of sight is how the two stop agreeing
+       * with each other. Double-clicking the cell opens the full editor instead, so the route
+       * is still one action from the row.
+       *
+       * Nodes and activities keep the inline editor: a process area's name and a lifecycle
+       * phase are labels, not a client-facing statement, and there is no second field they
+       * have to stay consistent with.
+       */
+      return isIssue ? null : { kind: 'text', value: row.name, placeholder: 'Name' }
 
     case 'owner':
       return {

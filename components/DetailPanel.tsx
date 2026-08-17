@@ -44,7 +44,7 @@ import {
  * "Overview" rather than "Details" keeps that split unambiguous — otherwise "Details" here
  * and the "Edit Issue" form there look like two routes to the same thing.
  */
-type Tab =
+export type Tab =
   | 'Overview'
   | 'Notes'
   | 'Estimation'
@@ -70,6 +70,15 @@ interface Props {
   onResize: (px: number) => void
   onSetPanel: (s: PanelState) => void
   onTabChange: (tab: string) => void
+  /**
+   * A tab the workspace is asking for — the row menu's Log time lands on Time.
+   *
+   * A request rather than a controlled value: the tab belongs to this panel, and taking it
+   * over would mean every click on a tab had to travel up and come back. Cleared through
+   * `onTabRequestHandled` so asking for the same tab twice still moves the panel.
+   */
+  requestTab?: Tab | null
+  onTabRequestHandled?: () => void
   onBuildLifecycle: (id: string) => void
   onClearLifecycle: (id: string) => void
   onAcceptProposal: (id: string) => void
@@ -145,6 +154,8 @@ export default function DetailPanel({
   onResize,
   onSetPanel,
   onTabChange,
+  requestTab,
+  onTabRequestHandled,
   onBuildLifecycle,
   onClearLifecycle,
   onAcceptProposal,
@@ -179,6 +190,20 @@ export default function DetailPanel({
   const labels = useLabels()
   const [tab, setTab] = useState<Tab>('Overview')
   const [resizing, setResizing] = useState(false)
+
+  /**
+   * Honour a tab the workspace asked for.
+   *
+   * `onTabChange` is called as well as `setTab`, and that is the load-bearing half: it is what
+   * opens a collapsed pane. Without it, Log time on a workspace with the details hidden would
+   * switch to a tab nobody can see and look like it had done nothing at all.
+   */
+  useEffect(() => {
+    if (!requestTab) return
+    setTab(requestTab)
+    onTabChange(requestTab)
+    onTabRequestHandled?.()
+  }, [requestTab, onTabChange, onTabRequestHandled])
 
   useEffect(() => {
     if (!resizing) return

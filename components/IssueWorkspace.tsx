@@ -23,6 +23,7 @@ import {
   kindOf,
   moduleNodeId,
   scopeChainOf,
+  CREATE_MENU,
   type Action,
   type CreatableKind,
   type IssueRecord,
@@ -53,8 +54,9 @@ import { planSlaDates, slaReason } from '@/lib/sla'
 import SlaPlanPanel from './SlaPlanPanel'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
+import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
-import DetailPanel from './DetailPanel'
+import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
 import Inbox from './Inbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
@@ -445,20 +447,34 @@ export default function IssueWorkspace({
    * their behalf.
    *
    * Re-selecting the row already open is always allowed — that is not leaving anything.
+   *
+   * Reports whether the selection actually moved, so a caller that was going to do something
+   * *to* the newly selected row — the row menu's Log time opens the Time tab on it — does not
+   * do it to the row the person chose to stay on.
    */
   const requestSelect = useCallback(
-    (id: string | null) => {
+    (id: string | null): boolean => {
       if (dirty && id !== selectedId) {
         const go = window.confirm(
           'This issue has unsaved changes. Leaving it will discard them.\n\nLeave anyway?',
         )
-        if (!go) return
+        if (!go) return false
         setDirty(false)
       }
       setSelectedId(id)
+      return true
     },
     [dirty, selectedId],
   )
+
+  /**
+   * A detail-pane tab the workspace has asked for, cleared as soon as the pane has taken it.
+   *
+   * Set by the row menu's Log time, which opens the Time tab on the issue rather than growing
+   * a second time-entry form: the one on that tab already defaults to today and to the person
+   * using it, and two forms writing `addTime` would be two sets of rules about the same hours.
+   */
+  const [requestTab, setRequestTab] = useState<DetailTab | null>(null)
 
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
   /**
@@ -856,9 +872,11 @@ export default function IssueWorkspace({
    * identical validation and audit entry — the grid is a faster way to reach an operation,
    * not a way around it. Date edits additionally go through `commitDrag` so dependency and
    * parent-constraint checks apply exactly as they do when dragging a bar.
+   *
+   * `reason` is supplied for status alone, and is required there — see the case below.
    */
   const commitCell = useCallback(
-    (rowId: string, colKey: string, raw: string): boolean => {
+    (rowId: string, colKey: string, raw: string, reason?: string): boolean => {
       const now = new Date().toISOString()
       const row = sortedRows.find((r) => r.id === rowId)
       if (!row) return false
@@ -921,8 +939,34 @@ export default function IssueWorkspace({
           return false
         }
 
-        case 'status':
-          return dispatch({ t: 'updateIssue', id: rowId, patch: { status: value as never }, now })
+        /**
+         * A status change carries a reason, and the check is here rather than only in the
+         * editor that collects it.
+         *
+         * The popover disables its own Save until something has been typed, which is the
+         * courteous half. This is the half that holds: `commitCell` is the funnel every inline
+         * edit passes through, so a caller that forgot — a later screen, a keyboard path
+         * nobody thought about — is refused rather than quietly writing a status change with
+         * nothing behind it. Nothing is dispatched with an empty reason, because the reducer
+         * stamps it onto the audit entry and a blank one there reads as an answered question.
+         */
+        case 'status': {
+          const why = reason?.trim()
+          if (!why) {
+            notify(
+              'A status change needs a short reason — it is what this record is read for later.',
+              true,
+            )
+            return false
+          }
+          return dispatch({
+            t: 'updateIssue',
+            id: rowId,
+            patch: { status: value as never },
+            now,
+            reason: why,
+          })
+        }
 
         case 'severity':
           return dispatch({ t: 'updateIssue', id: rowId, patch: { severity: value as never }, now })
@@ -999,6 +1043,90 @@ export default function IssueWorkspace({
       }
     },
     [sortedRows, state, dispatch, notify, commitDrag],
+  )
+
+  /* ---------------- row verbs, shared by the toolbar and the ⋮ menu ---------------- */
+
+  /**
+   * One implementation of each verb, for both surfaces that offer it.
+   *
+   * `SelectionToolbar` reaches these through its own props — one-line adapters that supply the
+   * selected row — and `TreeGrid` hands the object straight to the `⋮` menu. That is the whole
+   * arrangement: "Add a child" is one function, called from two places, so the toolbar and the
+   * row menu cannot drift into doing different things under the same word. Copying the
+   * handlers into the grid would have been half a day shorter and is precisely the failure
+   * being avoided — two paths that agree on the day they are written and not afterwards.
+   *
+   * Nothing here selects the row first. The menu is opened *on* a row and every verb is told
+   * which one, so acting on it does not have to disturb a selection somebody set deliberately.
+   * The two that are about the selection — Schedule, and Log time's detail pane — say so.
+   */
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      childKinds: (row) => CREATE_MENU[row.kind] ?? [],
+      /**
+       * A sibling is the same `create` arm with the parent of the selection, so what may be
+       * created beside a row is whatever may be created under its parent — read off the parent
+       * row rather than recomputed, so the two menus cannot disagree.
+       */
+      siblingKinds: (row) => {
+        if (!row.parentId) return []
+        const parent = sortedRows.find((r) => r.id === row.parentId)
+        return parent ? (CREATE_MENU[parent.kind] ?? []) : []
+      },
+      addChild: (row, kind) => setDialog({ t: 'add', parentId: row.id, kind }),
+      addSibling: (row, kind) => {
+        if (!row.parentId) return
+        setDialog({ t: 'add', parentId: row.parentId, kind })
+      },
+      edit: (row) => setDialog({ t: 'edit', id: row.id }),
+      move: (row) => setDialog({ t: 'move', id: row.id }),
+      link: (row) => setDialog({ t: 'link', issueId: row.id }),
+      archive: (row) => setDialog({ t: 'delete', id: row.id }),
+      /**
+       * Duplicate mints the copy AND the `DUPLICATE_OF` back to the original — that is the
+       * arm's own guarantee (design §5), not something this menu arranges, which is why there
+       * is no relationship type to choose here and no way to skip it.
+       *
+       * `note` is the note carried on that relationship, and the arm states plainly that an
+       * empty one is legitimate. It is not a reason for anything, so an empty string here is
+       * not a blank standing in for an answer.
+       */
+      duplicate: (row) =>
+        dispatch({ t: 'duplicate', issueId: row.id, note: '', now: new Date().toISOString() }),
+      logTime: (row) => {
+        // Activities report under their issue; hours belong to the issue either way.
+        const issueId = row.kind === 'issue' ? row.id : (row.parentId ?? '')
+        if (!state.issues[issueId]) {
+          notify('Time is recorded against an issue.', true)
+          return
+        }
+        if (requestSelect(issueId)) setRequestTab('Time')
+      },
+      /**
+       * Schedule is a *view* verb: it selects the row, which is what the timeline highlights,
+       * and brings its window into sight. Selecting a bar that sits three months off the left
+       * edge looks exactly like nothing having happened.
+       */
+      schedule: (row) => {
+        if (!requestSelect(row.id)) return
+        const start = row.plannedStartDate ?? row.actualStartDate
+        const g = ganttBodyRef.current
+        if (g && start) g.scrollLeft = Math.max(0, scale.x(start) - g.clientWidth / 3)
+      },
+      convertTypes: (row) => {
+        const issue = state.issues[row.id]
+        if (!issue) return []
+        return liveWorkTypes(state.model)
+          .map((t) => t.label)
+          .filter((label) => label !== issue.type)
+      },
+      // The existing `updateIssue` arm, so a reclassification is audited field-by-field like
+      // any other change rather than being a second way to write the same record.
+      convert: (row, type) =>
+        dispatch({ t: 'updateIssue', id: row.id, patch: { type }, now: new Date().toISOString() }),
+    }),
+    [sortedRows, state, dispatch, notify, requestSelect, scale],
   )
 
   /** Which pending dialog is an issue form, and therefore opens in full-page focus mode. */
@@ -1451,18 +1579,19 @@ export default function IssueWorkspace({
 
         <span className="sep" />
 
+        {/* Every verb below is `rowActions` applied to the selected row — the same functions
+            the ⋮ menu calls, not a second copy of them. Only `onDependency` and
+            `onMarkComplete` are the toolbar's alone: neither is on the row menu. */}
         <SelectionToolbar
         row={selected}
         hasLifecycle={selected?.kind === 'issue' ? hasLifecycle(selected.id) : false}
-        onAdd={(kind: CreatableKind) =>
-          selected && setDialog({ t: 'add', parentId: selected.id, kind })
-        }
-        onEdit={() => selected && setDialog({ t: 'edit', id: selected.id })}
-        onMove={() => selected && setDialog({ t: 'move', id: selected.id })}
-        onLink={() => selected && setDialog({ t: 'link', issueId: selected.id })}
+        onAdd={(kind: CreatableKind) => selected && rowActions.addChild(selected, kind)}
+        onEdit={() => selected && rowActions.edit(selected)}
+        onMove={() => selected && rowActions.move(selected)}
+        onLink={() => selected && rowActions.link(selected)}
         onDependency={() => selected && setDialog({ t: 'dependency', activityId: selected.id })}
         onMarkComplete={markComplete}
-        onDelete={() => selected && setDialog({ t: 'delete', id: selected.id })}
+        onDelete={() => selected && rowActions.archive(selected)}
         onBuildLifecycle={() => selected && toggleLifecycle(selected.id)}
         onNewIssue={() =>
           defaultParentId
@@ -1609,6 +1738,7 @@ export default function IssueWorkspace({
             onCellCommit={commitCell}
             ownerOptions={facets.owners}
           statusPolicy={state.model.statusPolicy}
+          actions={rowActions}
           />
         </div>
 
@@ -1660,6 +1790,8 @@ export default function IssueWorkspace({
           onResize={onPanelResize}
           onSetPanel={setPanel}
           onTabChange={onTabChange}
+          requestTab={requestTab}
+          onTabRequestHandled={() => setRequestTab(null)}
           onBuildLifecycle={buildLifecycle}
           onClearLifecycle={(id) =>
             dispatch({ t: 'clearLifecycle', issueId: id, now: new Date().toISOString() })

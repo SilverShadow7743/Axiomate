@@ -8,6 +8,8 @@ import { formatIso } from '@/lib/dates'
 import { ROW_H } from '@/lib/layout'
 import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
 import type { StatusPolicy } from '@/lib/statusPolicy'
+import RowMenu, { type RowActions } from './RowMenu'
+import StatusCellEditor from './StatusCellEditor'
 
 interface Props {
   rows: ScheduleRow[]
@@ -28,11 +30,24 @@ interface Props {
   headRef: RefObject<HTMLDivElement | null>
   onScroll: () => void
   criticalIds: Set<string>
-  /** Commit an in-place cell edit. Returns false if the change was rejected. */
-  onCellCommit: (rowId: string, colKey: string, value: string) => boolean
+  /**
+   * Commit an in-place cell edit. Returns false if the change was rejected.
+   *
+   * `reason` is carried for the one field that demands one — status — and is left undefined
+   * everywhere else rather than defaulted to an empty string, because the reducer writes it
+   * onto the audit entry and a blank reason there reads as a question that was answered.
+   */
+  onCellCommit: (rowId: string, colKey: string, value: string, reason?: string) => boolean
   /** Known owner names, offered as suggestions when editing an owner cell. */
   ownerOptions: string[]
   statusPolicy: StatusPolicy
+  /**
+   * The row verbs, shared with `SelectionToolbar`.
+   *
+   * The same object reaches both surfaces, so the `⋮` menu and the toolbar cannot end up
+   * doing different things under the same word — see `RowActions`.
+   */
+  actions: RowActions
 }
 
 export default function TreeGrid({
@@ -57,6 +72,7 @@ export default function TreeGrid({
   onCellCommit,
   ownerOptions,
   statusPolicy,
+  actions,
 }: Props) {
   const widthOf = useCallback((c: ColumnDef) => colWidths[c.key] ?? c.width, [colWidths])
 
@@ -72,6 +88,19 @@ export default function TreeGrid({
     if (selectedId && rows.some((r) => r.id === selectedId)) return selectedId
     return rows[0]?.id ?? null
   }, [selectedId, rows])
+
+  /**
+   * Which column carries the `⋮`.
+   *
+   * The name column, because it is `required` and therefore always on screen, and because a
+   * trigger that moves about as columns are shown and hidden is one people stop looking for.
+   * `columns[0]` is the fallback for the same reason the tab stop has one: the column set is
+   * user-configurable and this must not depend on a particular key existing.
+   */
+  const anchorKey = useMemo(
+    () => (columns.some((c) => c.key === 'name') ? 'name' : (columns[0]?.key ?? null)),
+    [columns],
+  )
 
   /* ---- inline cell editing ---- */
   const [editing, setEditing] = useState<{ rowId: string; colKey: string } | null>(null)
@@ -111,6 +140,50 @@ export default function TreeGrid({
       ensureColumnVisible(colKey)
     },
     [ownerOptions, statusPolicy, ensureColumnVisible],
+  )
+
+  /* ---- the ⋮ row menu ---- */
+
+  /**
+   * Which row's menu is open, and where the menu goes.
+   *
+   * Viewport coordinates, taken from the trigger when it is pressed. They are held in state
+   * rather than recomputed on render because the background goes `inert` while the menu is up,
+   * so nothing can scroll underneath it and there is nothing to re-measure against.
+   */
+  const [menu, setMenu] = useState<{ rowId: string; top: number; left: number } | null>(null)
+  const menuRow = useMemo(
+    () => (menu ? (rows.find((r) => r.id === menu.rowId) ?? null) : null),
+    [menu, rows],
+  )
+
+  const openMenu = useCallback((rowId: string, anchor: HTMLElement) => {
+    const r = anchor.getBoundingClientRect()
+    // Clamped here rather than in the menu, because this is the side that knows the trigger.
+    setMenu({
+      rowId,
+      top: Math.max(8, Math.min(r.bottom + 2, window.innerHeight - 320)),
+      left: Math.max(8, Math.min(r.left, window.innerWidth - 248)),
+    })
+  }, [])
+
+  /**
+   * "Close…" is a status change, so it goes through the editor that asks for a reason rather
+   * than writing a terminal status straight to the record. One route to a closure, and it is
+   * the one that collects the sentence somebody will be asked for months later.
+   */
+  const closeRow = useCallback(
+    (row: ScheduleRow) => {
+      const hasStatusColumn = columns.some((c) => c.key === 'status')
+      if (hasStatusColumn && editorFor(row, 'status', ownerOptions, statusPolicy)) {
+        beginEdit(row, 'status')
+        return
+      }
+      // The status column is hidden, so there is no cell to open. The full editor is the other
+      // route to the same field, and its own rules decide what it asks for.
+      actions.edit(row)
+    },
+    [columns, ownerOptions, statusPolicy, beginEdit, actions],
   )
 
   /**
@@ -195,6 +268,26 @@ export default function TreeGrid({
           onSelect(rows[idx].id)
           return
         }
+        /**
+         * The row menu, from the keyboard.
+         *
+         * `ContextMenu` and Shift+F10 are the two keys that already mean "act on this thing"
+         * everywhere else, so they are what a keyboard user tries first. The `⋮` is reachable
+         * by Tab as well — it shares the row's roving tab stop — but that only works while the
+         * row happens to be the tab stop, and this works from wherever the selection is.
+         */
+        case 'ContextMenu':
+        case 'F10': {
+          if (e.key === 'F10' && !e.shiftKey) return
+          if (idx < 0) return
+          const el = bodyRef.current?.querySelector<HTMLElement>(
+            `[data-row-id="${CSS.escape(rows[idx].id)}"]`,
+          )
+          if (!el) return
+          e.preventDefault()
+          openMenu(rows[idx].id, el)
+          return
+        }
       }
     },
     [
@@ -208,6 +301,8 @@ export default function TreeGrid({
       columns,
       ownerOptions,
       beginEdit,
+      openMenu,
+      bodyRef,
     ],
   )
 
@@ -236,6 +331,24 @@ export default function TreeGrid({
       return true
     },
     [onCellCommit, columns, ownerOptions, ensureColumnVisible, focusRow],
+  )
+
+  /**
+   * Commit a status change and its reason.
+   *
+   * Separate from `finishEdit` because status does not Tab onwards: the reason belongs to the
+   * status that was just picked, so stepping into the next cell mid-edit would carry a
+   * sentence typed about one field into a commit about another.
+   */
+  const finishStatus = useCallback(
+    (row: ScheduleRow, status: string, reason: string): boolean => {
+      const ok = onCellCommit(row.id, 'status', status, reason)
+      if (!ok) return false // refused — the popover stays open with the typed reason intact
+      setEditing(null)
+      focusRow(row.id)
+      return true
+    },
+    [onCellCommit, focusRow],
   )
 
   /** Left offset for each frozen column, so they stack correctly while scrolling. */
@@ -377,12 +490,20 @@ export default function TreeGrid({
                   const frozen = i < frozenCount
                   const spec = editorFor(r, c.key, ownerOptions, statusPolicy)
                   const isEditing = editing?.rowId === r.id && editing.colKey === c.key
+                  /**
+                   * The second tier of §6: a cell with no inline editor that still has a way in.
+                   *
+                   * An issue's subject is edited in the full editor beside its description, so
+                   * the double-click that opens an editor everywhere else opens *that* here
+                   * rather than doing nothing — a cell that ignores the gesture reads as broken.
+                   */
+                  const opensEditor = !spec && c.key === 'name' && r.kind === 'issue'
                   return (
                     <div
                       key={c.key}
                       role="gridcell"
                       aria-colindex={i + 1}
-                      className={`gc${frozen ? ' sticky-col' : ''}${spec ? ' editable' : ''}${isEditing ? ' editing' : ''}`}
+                      className={`gc${frozen ? ' sticky-col' : ''}${spec || opensEditor ? ' editable' : ''}${isEditing ? ' editing' : ''}`}
                       style={{
                         width: widthOf(c),
                         ...(frozen ? { position: 'sticky', left: stickyLeft[c.key] } : {}),
@@ -394,13 +515,36 @@ export default function TreeGrid({
                             : 'flex-end',
                       }}
                       onDoubleClick={(e) => {
+                        if (opensEditor) {
+                          e.stopPropagation()
+                          actions.edit(r)
+                          return
+                        }
                         if (!spec) return
                         e.stopPropagation()
                         beginEdit(r, c.key)
                       }}
-                      title={spec && !isEditing ? 'Double-click to edit' : undefined}
+                      title={
+                        isEditing
+                          ? undefined
+                          : opensEditor
+                            ? 'Double-click to open the editor'
+                            : spec
+                              ? 'Double-click to edit'
+                              : undefined
+                      }
                     >
-                      {isEditing && spec ? (
+                      {isEditing && spec && c.key === 'status' ? (
+                        <StatusCellEditor
+                          options={spec.options ?? []}
+                          value={spec.value}
+                          onCommit={(status, reason) => finishStatus(r, status, reason)}
+                          onCancel={() => {
+                            setEditing(null)
+                            focusRow(r.id)
+                          }}
+                        />
+                      ) : isEditing && spec ? (
                         <CellEditor
                           spec={spec}
                           onCommit={(v, advance) => finishEdit(r, c.key, v, advance)}
@@ -411,14 +555,40 @@ export default function TreeGrid({
                           }}
                         />
                       ) : (
-                        <Cell
-                          col={c.key}
-                          row={r}
-                          collapsed={collapsed}
-                          hasChildren={hasChildren}
-                          onToggle={onToggle}
-                          critical={criticalIds.has(r.id)}
-                        />
+                        <>
+                          <Cell
+                            col={c.key}
+                            row={r}
+                            collapsed={collapsed}
+                            hasChildren={hasChildren}
+                            onToggle={onToggle}
+                            critical={criticalIds.has(r.id)}
+                          />
+                          {c.key === anchorKey && (
+                            <button
+                              type="button"
+                              className="row-actions"
+                              // Shares the row's roving tab stop rather than adding one per
+                              // row: a grid of two hundred lines would otherwise be two
+                              // hundred Tab presses deep.
+                              tabIndex={r.id === tabStopId ? 0 : -1}
+                              aria-haspopup="menu"
+                              aria-expanded={menu?.rowId === r.id}
+                              aria-label={`Actions for ${r.displayId || r.name}`}
+                              title="Row actions"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onDoubleClick={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                // The cell would start an edit and the row would change the
+                                // selection; opening a menu is neither.
+                                e.stopPropagation()
+                                openMenu(r.id, e.currentTarget)
+                              }}
+                            >
+                              ⋮
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   )
@@ -428,6 +598,18 @@ export default function TreeGrid({
           </div>
         )}
       </div>
+
+      {/* Rendered from the grid rather than from each row: one menu can be open at a time, and
+          a row that scrolls out from under an open menu takes the menu with it. */}
+      {menu && menuRow && (
+        <RowMenu
+          row={menuRow}
+          at={{ top: menu.top, left: menu.left }}
+          actions={actions}
+          onCloseRow={closeRow}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </>
   )
 }

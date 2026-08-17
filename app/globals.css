@@ -1264,6 +1264,100 @@ select.cell-editor {
   color: var(--text-faint);
   padding: 5px 7px;
 }
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
+/* ---------- the ⋮ on every tree line, and what it opens ----------
+   Both the menu and the status editor are portaled to the body and positioned in viewport
+   coordinates. The grid body scrolls in both directions and clips its own children, so a menu
+   opened on the last visible row would otherwise be cut off at the fold — which is exactly the
+   row somebody has just scrolled to in order to act on it.
+
+   The scrim is what makes a click outside dismiss them: `useOverlay` marks the app shell
+   `inert` while either is up, so without it a click out there lands on nothing at all. */
+.row-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+.row-menu {
+  position: fixed;
+  min-width: 232px;
+}
+
+/* Quiet at rest — a grid this dense cannot carry two hundred visible buttons — and present
+   the moment the row is under the pointer, selected, or holding focus. */
+.row-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 0 3px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-faint);
+  opacity: 0;
+}
+.grid-row:hover .row-actions,
+.grid-row.selected .row-actions,
+.row-actions:focus,
+.row-actions[aria-expanded='true'] {
+  opacity: 1;
+}
+.row-actions:hover {
+  color: var(--text);
+}
+/* The name cell now shares its column with the ⋮, so it takes the space that is left and
+   gives it back when the column is tight. Sized to its content instead, a deeply indented row
+   pushed the trigger past the cell's hidden overflow and out of reach. */
+.gc .name-cell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.status-editor {
+  position: fixed;
+  width: 300px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.status-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.status-editor-field .menu-title {
+  padding: 0;
+}
+.status-editor-field select,
+.status-editor-field input {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+}
+.status-editor-note {
+  margin: 0;
+  line-height: 1.4;
+}
+.status-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+/* The cell keeps showing the value still in force while the popover is open: the change has
+   not happened yet, and a cell that shows the new one would be claiming otherwise. */
+.status-editor-anchor {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .toast {
   position: fixed;
