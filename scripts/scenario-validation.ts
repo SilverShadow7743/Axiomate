@@ -2300,7 +2300,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `Once the ${weekLabel(week)} is submitted, all three time arms refuse inside it: "${(addInside.error ?? '').slice(0, 74)}". Moving an entry OUT of the week is refused too — the check reads the stored date and, when a patch moves it, the destination as well, so an hour cannot walk out of a week somebody has attested to by editing the one field the freeze exists to hold. Everything else stays open: the next week, another person, and the same entry once the week is returned. Approved freezes again and says so differently ("${(editAfterApproval.error ?? '').slice(0, 52)}"), because "awaiting approval" and "already approved" call for different next moves. A rejection carries its reason on the row, and the person who submitted cannot approve their own week even holding the grant.`,
-      stops: 'nowhere in the rules — but no timesheet is stored yet, so a submitted week does not survive a reload. That is the next step',
+      stops: 'nowhere in the rules, and nowhere in storage either — the Timesheet table landed in the commit after this scenario was written, and the persistence proof drives a submitted week through Postgres and finds the freeze still holding. What no check here opens is the screen.',
       severity: '—',
       impact:
         'The freeze is the point of the feature: without it an approver signs off a number that can change underneath them. Both directions are asserted, because a guard that only refuses is indistinguishable from a broken feature.',

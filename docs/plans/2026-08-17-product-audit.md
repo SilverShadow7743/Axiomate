@@ -134,6 +134,69 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 
 ---
 
+## B2. Built, but with no way in
+
+**This is the single most actionable section of the audit**, and it answers the vision's
+questions 3 and 4 directly. These are not gaps in the model — the reducer arm exists, the
+permission exists, the persist arm exists, the table exists. There is simply no screen that
+dispatches it.
+
+### Reducer arms with no UI dispatcher (11)
+
+| Action | Consequence today | Action |
+|---|---|---|
+| `upsertCommitment` / `removeCommitment` | **This is why `Commitment` has 0 rows.** Nobody can record leave or a public holiday, so capacity subtracts nothing and every availability figure is optimistic. `CapacityPanel` *reads* commitments it gives no way to create | **P1 — a form** |
+| `updateTime` | An hour can be logged and withdrawn but **not corrected**. The reducer arm, the API allowlist entry and the persist arm all exist | **P1 — an edit control** |
+| `correctVersion` | A working pattern can be recorded and never corrected — half the effective-dating mechanism is unreachable | **P2** |
+| `archiveSow` | A SOW can be created and never retired | P2 |
+| `setResourceProfile` | The stored working pattern cannot be edited from any screen | P2 |
+| `upsertDiscipline` / `deleteDiscipline` | The 14 disciplines cannot be renamed or extended by a firm | P2 |
+| `deletePerson` | Somebody can be added to the directory and never removed | P3 |
+| `setWorkflowEnabled` | **Doubly unreachable**: nothing dispatches it, and the arm refuses anyway because both seeded workflows are `declared` | Remove or implement |
+| `notify` | Unreachable **by design** — excluded from the API allowlist because client and server run the same planner, so a `notify` over the wire could only be one the client invented | Keep as is |
+
+### Rendered, but with no way through
+
+- **`EvidencePanel` persists a dead URL.** A picked file becomes `URL.createObjectURL(file)` — a
+  handle into one browser session — and the reducer stores that `blob:` string **in the Evidence
+  table as text**. It is dead on the next page load. The footer says so honestly, but the row is
+  written either way. *(Note: `lib/db/map.ts` nulls a `blob:` URL on the way to Postgres, so the
+  damage is contained — but the in-memory record and the mirror still carry it.)*
+- **`lib/timeWindow.ts` — 441 lines, imported by exactly one file: the validation script.** The
+  overrun warning, the closed-issue window, the derived opening date and the daily cap are all
+  built and none of it is consulted by `addTime`. This is Phase 5 of the plan and it is the
+  largest single piece of finished-but-unwired code in the repo.
+- **`AGENT_ESTIMATION` is not reachable from the application.** `lib/estimator.ts` is imported
+  only by `scripts/estimate-backlog.ts`, a CLI. So of 39 registry entries, **exactly one —
+  the workspace assistant — changes anything a user can see.**
+- **`AgentRecord.requireApproval` is inert.** It is stored, rendered, and audited when changed.
+  It is never read in a conditional.
+
+### Corrections to my own earlier statements and to the repo's documentation
+
+Recorded because a stale map is worse than no map, and this audit found four instances:
+
+1. `lib/config.ts` says "38 entries… exactly one of which has a runtime." There are **39**, and
+   **two** are `live` — contradicted 34 lines later in the same file.
+2. Scenario `AI1` says autonomy fields are "registry fields with no runtime that reads them".
+   `resolveAutonomy` **is** read, in `IssueWorkspace.tsx`, to gate what the assistant may do.
+   The unread field is `requireApproval`.
+3. Scenario `U2` said "no timesheet is stored yet" — **written by me this morning and left stale
+   by my own commit that afternoon.** Corrected.
+4. `lib/time.ts` predicts a timesheet "will name exactly which entries it covered". The timesheet
+   that shipped deliberately does not, and argues why.
+
+**`data/validation.json` contains 59 findings, not 57** — two carry an alias (`ST4`/`AB`,
+`AI1`/`X`), which is the likely origin of the figure quoted everywhere including this document.
+
+### One unauthenticated route
+
+`GET /api/health` returns `{status, database, checkedAt}` with no auth. It leaks only whether a
+database is reachable. **Observed, not flagged as a risk** — this is normal for a liveness probe
+and the App Service warm-up depends on it.
+
+---
+
 ## C. Missing and incomplete, by capability domain
 
 ### 1. Organisation master data — **minimal**
