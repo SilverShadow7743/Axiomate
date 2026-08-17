@@ -83,10 +83,14 @@ import { buildTree } from '../lib/tree'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
-import { effortVariance, hoursOn, summariseTime } from '../lib/time'
+import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
 import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
+import {
+  weekStarting, weekLabel, weekTotal, isFrozen, submitProblem, decideProblem, statusAfter,
+  type Timesheet, type Attester,
+} from '../lib/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
 
@@ -2064,26 +2068,243 @@ scenario(
   'U',
   'A consultant submits a timesheet',
   'The week is presented for approval, and approval freezes exactly what was approved.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `Entries exist and are the record, and approvals exist and gate transitions — but nothing gathers entries into a period to be approved ${absent(/submitPeriod|TimePeriod|interface Timesheet/) ? '(no such type in source)' : '(a type exists)'}. The two halves are built; the join is not. The entry-as-record decision is what makes that join non-trivial: an approval will have to name the entries it covered, or an edit afterwards silently changes an approved total.`,
-    stops: 'at the period — approval itself now exists and gates transitions; nothing gathers a week of entries to put in front of it',
-    severity: 'P1',
-    impact: 'Time is recorded and cannot yet be signed off, so it cannot be billed.',
-  }),
+  () => {
+    /*
+     * Driven against lib/timesheet.ts directly, before anything calls it. If the rules are wrong
+     * this is where it costs nothing to find out — which is the reason the plan puts the
+     * scenarios before the reducer arms rather than after them.
+     */
+    const me: Attester = { name: 'Priya', maySubmit: true, mayApprove: false }
+    const week = weekStarting('2026-08-19') // a Wednesday
+    const entry = (date: string, hours: number, billable = true): TimeEntry => ({
+      id: `time-${date}-${hours}`, issueId: 'OAPIL-1', person: 'Priya', date, hours,
+      activity: 'Investigation', billable, note: '', createdBy: 'Priya', createdAt: NOW,
+      updatedBy: null, updatedAt: null, deletedAt: null,
+    })
+
+    const entries = [
+      entry('2026-08-17', 7.5),
+      entry('2026-08-19', 6),
+      entry('2026-08-21', 2, false),
+      entry('2026-08-24', 8),                                  // the NEXT week
+      { ...entry('2026-08-18', 4), person: 'Sam' },            // somebody else
+      { ...entry('2026-08-20', 3), deletedAt: NOW },           // withdrawn
+    ]
+
+    /* The week is Monday-based, and a mid-week date resolves to its Monday. */
+    const monday = week === '2026-08-17'
+    const total = weekTotal(entries, 'Priya', week)
+
+    /* Nothing is submitted yet, so nothing is frozen. */
+    const openBefore = isFrozen([], 'Priya', '2026-08-19')
+
+    const clean = submitProblem([], 'Priya', week, me)
+
+    const submitted: Timesheet = {
+      id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
+      submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+    }
+
+    /* Twice is refused, and says which state it is already in. */
+    const again = submitProblem([submitted], 'Priya', week, me)
+    /* Somebody else's week is refused even though this actor holds the permission. */
+    const notMine = submitProblem([], 'Sam', week, me)
+    /* And without the permission at all. */
+    const notAllowed = submitProblem([], 'Priya', week, { ...me, maySubmit: false })
+    /* A week that is not a Monday is refused rather than silently rounded. */
+    const notAMonday = submitProblem([], 'Priya', '2026-08-19', me)
+
+    /* An empty week submits. "I was on leave" is a claim somebody is entitled to make. */
+    const emptyWeek = submitProblem([], 'Priya', weekStarting('2026-09-07'), me)
+
+    /* Once submitted, the week is frozen — and the refusal names which of the two states. */
+    const frozenNow = isFrozen([submitted], 'Priya', '2026-08-19')
+    const nextWeekStillOpen = isFrozen([submitted], 'Priya', '2026-08-24')
+    const otherPersonOpen = isFrozen([submitted], 'Sam', '2026-08-19')
+    const approvedSheet: Timesheet = { ...submitted, status: 'Approved', decidedBy: 'Nishant', decidedAt: NOW }
+    const frozenApproved = isFrozen([approvedSheet], 'Priya', '2026-08-19')
+
+    const good =
+      monday &&
+      total.hours === 15.5 &&
+      total.billable === 13.5 &&
+      openBefore === null &&
+      clean === null &&
+      again !== null &&
+      /already submitted/.test(again ?? '') &&
+      notMine !== null &&
+      notAllowed !== null &&
+      notAMonday !== null &&
+      emptyWeek === null &&
+      frozenNow === 'Submitted' &&
+      frozenApproved === 'Approved' &&
+      nextWeekStillOpen === null &&
+      otherPersonOpen === null
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `A week is the Monday containing a date — 19 August resolves to ${week}. The total is computed from live entries rather than copied onto the sheet: ${total.hours}h, of which ${total.billable}h billable, correctly excluding the next week, another person, and a withdrawn entry. Submitting an open week succeeds; submitting it twice is refused with "${(again ?? '').slice(0, 60)}"; submitting somebody else's week is refused even holding the permission, because a timesheet is a personal attestation. A week that is not a Monday is refused rather than rounded. An EMPTY week submits — "I was on leave" is a claim, and refusing it strands the one person with nothing to report. Once submitted the week is frozen and the freeze reports which state it is in (${frozenNow} here, ${frozenApproved} once approved) rather than a boolean, because "awaiting approval" and "already approved" call for different next moves. The next week and another person stay open.`,
+      stops: 'at the reducer — the rules are complete and driven here, and nothing calls them yet. submitTimesheet and decideTimesheet are the next step, then the freeze on addTime',
+      severity: 'P1',
+      impact: 'Time is recorded and cannot yet be signed off, so it cannot be billed. The rules that will gate it are now provable.',
+    }
+  },
 )
 
 scenario(
   'V',
   'A submitted timesheet is rejected',
   'The rejection returns specific entries, says why, and the corrected resubmission is traceable.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: 'Requires U. The nearest existing mechanism is the estimate revision log, which refuses to let an agreed number move without a reason — the same shape this needs, applied to a different record.',
-    stops: 'at the same missing approval',
-    severity: 'P1',
-    impact: 'No correction loop exists for the record that drives revenue.',
-  }),
+  () => {
+    const approver: Attester = { name: 'Nishant', maySubmit: true, mayApprove: true }
+    const author: Attester = { name: 'Priya', maySubmit: true, mayApprove: true }
+    const week = weekStarting('2026-08-19')
+    const submitted: Timesheet = {
+      id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
+      submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+    }
+
+    /* The rule that has no configuration switch: the asker may never be the decider. */
+    const selfApproval = decideProblem(submitted, 'approved', undefined, author)
+    /* Even though `author` holds the approve permission — it is not a permission question. */
+    const holdsPermission = author.mayApprove
+
+    /* Approving needs no reason. Returning does. */
+    const approveClean = decideProblem(submitted, 'approved', undefined, approver)
+    const rejectNoReason = decideProblem(submitted, 'rejected', '   ', approver)
+    const rejectWithReason = decideProblem(submitted, 'rejected', 'Thursday is booked to the wrong issue.', approver)
+    const notAnApprover = decideProblem(submitted, 'approved', undefined, { ...approver, mayApprove: false })
+
+    /* A returned week is editable again — that is what returning it is for. */
+    const returned: Timesheet = {
+      ...submitted, status: 'Rejected', decidedAt: NOW, decidedBy: 'Nishant',
+      reason: 'Thursday is booked to the wrong issue.',
+    }
+    const editableAgain = isFrozen([returned], 'Priya', '2026-08-19')
+    /* And it can be resubmitted, unlike one that is submitted or approved. */
+    const resubmit = submitProblem([returned], 'Priya', week, { name: 'Priya', maySubmit: true, mayApprove: false })
+    /* Deciding one that was already decided is refused, and says which way. */
+    const decideTwice = decideProblem({ ...submitted, status: 'Approved' }, 'rejected', 'no', approver)
+    const decideReturned = decideProblem(returned, 'approved', undefined, approver)
+
+    const good =
+      selfApproval !== null &&
+      holdsPermission &&
+      approveClean === null &&
+      rejectNoReason !== null &&
+      rejectWithReason === null &&
+      notAnApprover !== null &&
+      editableAgain === null &&
+      resubmit === null &&
+      decideTwice !== null &&
+      decideReturned !== null &&
+      statusAfter('approved') === 'Approved' &&
+      statusAfter('rejected') === 'Rejected'
+
+    return {
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `The person who submitted cannot decide their own week — refused with "${(selfApproval ?? '').slice(0, 70)}" — and that holds even though this actor DOES hold the approve permission, because a self-approval is not a weaker control but the absence of one. Approving needs no reason; returning needs one, refused otherwise with "${(rejectNoReason ?? '').slice(0, 60)}": "yes" is complete on its own, "no" leaves somebody guessing what to change. A returned week is editable again — isFrozen answers ${JSON.stringify(editableAgain)} — and resubmits cleanly, which is the whole correction loop. Deciding a week twice is refused and names which way it already went. The reason travels on the row, so what was returned and why is answerable later without reconstructing it.`,
+      stops: 'at the reducer, with U — the correction loop is complete as rules and has no caller, and no timesheet is stored yet, so none of this survives a reload',
+      severity: 'P1',
+      impact: 'No correction loop exists yet for the record that drives revenue, but the rule that stops a self-approval is now provable rather than asserted.',
+    }
+  },
+)
+
+scenario(
+  'U2',
+  'A submitted week refuses edits, and every other week does not',
+  'Hours inside a submitted week cannot be added, changed or withdrawn — and nothing else is affected.',
+  () => {
+    /*
+     * The step the plan names as carrying the most regression risk, and this is the check that
+     * earns it. A guard that only ever refuses is indistinguishable from a broken feature, so
+     * both directions are asserted: refused inside the week, still allowed everywhere else.
+     */
+    const priya: Actor = { id: 'u-priya', name: 'Priya' }
+    const lead: Actor = { id: 'u-lead', name: 'Nishant' }
+    // Actor-aware, because who is asking is the whole subject here: the shared `ok`/`act`
+    // helpers pin one actor, and a self-approval cannot be tested with a single identity.
+    const actAs = (st: WorkspaceState, a: Action, who: Actor) => apply(st, a, who)
+    const okAs = (st: WorkspaceState, a: Action, who: Actor): WorkspaceState => {
+      const r = actAs(st, a, who)
+      if (r.error) throw new Error(`${a.t} refused: ${r.error}`)
+      return r.state
+    }
+    /*
+     * Entirely in the past. The harness clock is 2026-08-15 and `checkEntry` refuses a day that
+     * has not happened — so a fixture set in the future fails on the entry rather than on the
+     * freeze, which is the wrong thing to be testing.
+     */
+    const week = weekStarting('2026-08-05')
+
+    const withHours = okAs(
+      BASE,
+      { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW } as Action,
+      priya,
+    )
+    const entryId = Object.values(withHours.timeEntries).find((e) => e.date === '2026-08-05')!.id
+
+    const submittedState = okAs(
+      withHours,
+      { t: 'submitTimesheet', person: 'Priya', weekStarting: week, now: NOW } as Action,
+      priya,
+    )
+
+    /* Inside the week: all three arms refuse, and the message names the week and the way out. */
+    const addInside = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-06', hours: 2, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, priya)
+    const editInside = actAs(submittedState, { t: 'updateTime', id: entryId, patch: { hours: 6 }, now: NOW } as Action, priya)
+    const removeInside = actAs(submittedState, { t: 'removeTime', id: entryId, now: NOW } as Action, priya)
+
+    /* The trap the plan names: escaping the week by moving the date out of it. */
+    const escapeByDate = actAs(submittedState, { t: 'updateTime', id: entryId, patch: { date: '2026-08-12' }, now: NOW } as Action, priya)
+
+    /* Outside the week, another person, and another week: all still open. */
+    const addNextWeek = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-12', hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, priya)
+    const addOtherPerson = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Nishant', date: '2026-08-05', hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, lead)
+
+    /* And after the week is returned, the person can fix it — the whole point of returning it. */
+    const sheetId = Object.values(submittedState.timesheets)[0]!.id
+    const returned = okAs(
+      submittedState,
+      { t: 'decideTimesheet', id: sheetId, decision: 'rejected', reason: 'Thursday is on the wrong issue.', now: NOW } as Action,
+      lead,
+    )
+    const editAfterReturn = actAs(returned, { t: 'updateTime', id: entryId, patch: { hours: 6 }, now: NOW } as Action, priya)
+
+    /* Approved is frozen too, and says so differently. */
+    const resubmitted = okAs(returned, { t: 'submitTimesheet', person: 'Priya', weekStarting: week, now: NOW } as Action, priya)
+    const approved = okAs(resubmitted, { t: 'decideTimesheet', id: sheetId, decision: 'approved', now: NOW } as Action, lead)
+    const editAfterApproval = actAs(approved, { t: 'updateTime', id: entryId, patch: { hours: 7 }, now: NOW } as Action, priya)
+
+    /* Self-approval is refused through the reducer, not only in the pure rule. */
+    const selfDecide = actAs(resubmitted, { t: 'decideTimesheet', id: sheetId, decision: 'approved', now: NOW } as Action, priya)
+
+    const refused = (r: { error?: string }) => Boolean(r.error)
+    const good =
+      refused(addInside) &&
+      refused(editInside) &&
+      refused(removeInside) &&
+      refused(escapeByDate) &&
+      !refused(addNextWeek) &&
+      !refused(addOtherPerson) &&
+      !refused(editAfterReturn) &&
+      refused(editAfterApproval) &&
+      refused(selfDecide) &&
+      /awaiting approval/.test(addInside.error ?? '') &&
+      /approved/.test(editAfterApproval.error ?? '') &&
+      approved.timesheets[sheetId]!.status === 'Approved' &&
+      returned.timesheets[sheetId]!.reason === 'Thursday is on the wrong issue.'
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Once the ${weekLabel(week)} is submitted, all three time arms refuse inside it: "${(addInside.error ?? '').slice(0, 74)}". Moving an entry OUT of the week is refused too — the check reads the stored date and, when a patch moves it, the destination as well, so an hour cannot walk out of a week somebody has attested to by editing the one field the freeze exists to hold. Everything else stays open: the next week, another person, and the same entry once the week is returned. Approved freezes again and says so differently ("${(editAfterApproval.error ?? '').slice(0, 52)}"), because "awaiting approval" and "already approved" call for different next moves. A rejection carries its reason on the row, and the person who submitted cannot approve their own week even holding the grant.`,
+      stops: 'nowhere in the rules — but no timesheet is stored yet, so a submitted week does not survive a reload. That is the next step',
+      severity: '—',
+      impact:
+        'The freeze is the point of the feature: without it an approver signs off a number that can change underneath them. Both directions are asserted, because a guard that only refuses is indistinguishable from a broken feature.',
+    }
+  },
 )
 
 scenario(

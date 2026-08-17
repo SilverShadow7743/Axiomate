@@ -200,6 +200,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       commitments: parsed.commitments ?? {},
       // `?? {}` because a mirror written before versions existed has no such key.
       versions: parsed.versions ?? {},
+      // `?? {}` because a mirror written before timesheets existed has no such key.
+      timesheets: parsed.timesheets ?? {},
       engagements: { ...seed.engagements, ...(parsed.engagements ?? {}) },
       // Merged, not taken whole. The mirror's model predates every operating-model key added
       // since it was written, and adopting it verbatim made those keys `undefined` — which is

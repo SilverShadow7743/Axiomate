@@ -62,6 +62,8 @@ export const PERMISSIONS = [
   { key: 'evidence.remove', label: 'Remove evidence', what: 'Withdraw an attachment. Imported evidence can never be removed.' },
   { key: 'time.record', label: 'Record time', what: 'Log hours against work. Your own time — see the next one for anybody else\u2019s.' },
   { key: 'time.recordForOthers', label: "Record others' time", what: "Log or correct hours on somebody else's behalf." },
+  { key: 'time.submit', label: 'Submit a timesheet', what: 'Present your own week for approval. Covers your weeks only — the reducer compares the actor to the person on the sheet, so holding this is not enough to submit somebody else’s.' },
+  { key: 'time.approve', label: 'Decide a timesheet', what: 'Approve a submitted week, or return it with a reason. Never your own: the person who submitted may not decide it, whatever they hold.' },
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
@@ -124,6 +126,9 @@ const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 const DELIVERY_CORE: PermissionKey[] = [
   'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link',
   'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request',
+  // Submitting is part of doing the work: anybody who records time has a week to attest to.
+  // Approving is not here — it is added to the two roles below that already decide things.
+  'time.submit',
 ]
 
 /**
@@ -155,12 +160,12 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is the "declared, with no runtime" pattern this codebase keeps deleting.
    */
   [MACHINE_ROLE_ID]: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'approval.request', 'estimate.edit'],
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'config.manage'],
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
-  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record'],
+  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit'],
   // The one client role that decides anything: a sponsor is the person a change order is
   // actually put to, and a rule that names them is worthless if the grant does not.
   ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide'],

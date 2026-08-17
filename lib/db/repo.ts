@@ -224,6 +224,9 @@ export async function loadWorkspace(
     allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),
     versions: Object.fromEntries(versions.map((v) => [v.id, versionFromRow(v)])),
+    // Loaded from its own table in the storage step. Empty here so the in-memory shape is
+    // complete from the first commit rather than half-existing across two.
+    timesheets: {},
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),

@@ -609,6 +609,19 @@ const SHAPES = {
     reason: req(text),
     now,
   },
+  submitTimesheet: {
+    person: req(id),
+    weekStarting: req(isoDate),
+    now,
+  },
+  decideTimesheet: {
+    id: req(id),
+    // The two the reducer acts on. `oneOf` echoes the allowed values back, which is safe
+    // because they are ours.
+    decision: req(oneOf(new Set(['approved', 'rejected']))),
+    reason: opt(text),
+    now,
+  },
   setAssignment: {
     issueId: req(id), responsibilityId: req(id), values: req(strings), now,
     acceptUnavailable: opt(bool),

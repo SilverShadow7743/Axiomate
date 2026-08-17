@@ -42,6 +42,19 @@ export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import {
+  isFrozen,
+  frozenMessage,
+  weekStarting,
+  weekLabel,
+  weekTotal,
+  sheetFor,
+  submitProblem,
+  decideProblem,
+  statusAfter,
+  type Attester,
+  type Timesheet,
+} from './timesheet'
 import { canEditNote } from './permissions'
 import {
   checkTransition,
@@ -247,6 +260,8 @@ export interface WorkspaceState {
   estimateRevisions: Record<string, EstimateRevision>
   /** Hours spent, against the work they were spent on. See `./time`. */
   timeEntries: Record<string, TimeEntry>
+  /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/timesheet.ts. */
+  timesheets: Record<string, Timesheet>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -502,6 +517,7 @@ export function initWorkspace(
     dependencies: [],
     // A fresh workspace has no history yet — the first version is recorded, never seeded.
     versions: {},
+    timesheets: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -655,6 +671,15 @@ export type Action =
     }
   | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
   | { t: 'removeTime'; id: string; now: string }
+  | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
+  | {
+      t: 'decideTimesheet'
+      id: string
+      decision: ApprovalDecision
+      /** Required on a rejection, ignored on an approval. See `decideProblem`. */
+      reason?: string
+      now: string
+    }
   /* ---- APPROVAL ---- */
   | { t: 'requestApproval'; subjectId: string; ruleId: string; note: string; now: string }
   | { t: 'decideApproval'; id: string; decision: ApprovalDecision; note: string; now: string }
@@ -972,6 +997,34 @@ export function descendantsOf(state: WorkspaceState, id: string): string[] {
  * keys. Returns undefined rather than a default, so `capacityFor` is the single place that
  * decides what an unknown person's week looks like.
  */
+/**
+ * Whether this person's hours on this date are still theirs to change, as a refusal or null.
+ *
+ * One implementation, three call sites — `addTime`, `updateTime` and `removeTime`. Three copies
+ * of a rule are three chances to disagree about it, and the disagreement would show up as a
+ * consultant who can delete an hour out of a submitted week but not edit it.
+ */
+function frozenProblem(state: WorkspaceState, person: string, date: string): string | null {
+  const status = isFrozen(Object.values(state.timesheets), person, date)
+  return status ? frozenMessage(status, weekStarting(date)) : null
+}
+
+/**
+ * What the timesheet rules need to know about whoever is asking.
+ *
+ * The permissions are resolved here and passed in, so `lib/timesheet.ts` stays pure and can be
+ * driven from a scenario without an operating model. `name` is the display name, because that is
+ * what `TimeEntry.person` and `Timesheet.person` hold — the same name join the rest of the
+ * product uses until people have keys.
+ */
+function attesterFor(state: WorkspaceState, actor: Actor): Attester {
+  return {
+    name: actor.name,
+    maySubmit: can(state.model, actor, 'time.submit').allowed,
+    mayApprove: can(state.model, actor, 'time.approve').allowed,
+  }
+}
+
 function profileFor(state: WorkspaceState, person: string): ResourceProfile | undefined {
   const key = person.trim().toLowerCase()
   const match = Object.values(state.model.people).find((p) => p.name.toLowerCase() === key)
@@ -2560,6 +2613,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const problem = checkEntry({ hours: a.hours, date: a.date, person: a.person }, today)
       if (problem) return { state, error: problem.message }
 
+      const frozen = frozenProblem(state, a.person, a.date)
+      if (frozen) return { state, error: frozen }
+
       if (a.person.trim().toLowerCase() !== by.toLowerCase()) {
         const may = can(state.model, actor, 'time.recordForOthers')
         if (!may.allowed) {
@@ -2633,6 +2689,21 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       )
       if (problem) return { state, error: problem.message }
 
+      /*
+       * The STORED date first, and then the new one if the patch moves it.
+       *
+       * Checking only the incoming date would let an entry walk out of a frozen week by editing
+       * the very field the freeze exists to hold: move Thursday to next Monday, and a submitted
+       * week silently loses an hour it was attested with. Both ends have to be open, and for the
+       * same reason the person on the entry is read from the stored row rather than the patch.
+       */
+      const frozenFrom = frozenProblem(state, entry.person, entry.date)
+      if (frozenFrom) return { state, error: frozenFrom }
+      if (next.date !== entry.date || next.person !== entry.person) {
+        const frozenTo = frozenProblem(state, next.person, next.date)
+        if (frozenTo) return { state, error: frozenTo }
+      }
+
       const changed = (Object.keys(a.patch) as (keyof TimeEntry)[]).filter((k) => entry[k] !== next[k])
       if (!changed.length) return { state, message: 'Nothing changed.' }
 
@@ -2669,6 +2740,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           return { state, error: `Recorded by ${entry.person}. Removing somebody else's hours needs the grant for it.` }
         }
       }
+      // The stored date, as in `updateTime`. Withdrawing an hour from a submitted week changes
+      // the total somebody attested to just as surely as editing it does.
+      const frozenHere = frozenProblem(state, entry.person, entry.date)
+      if (frozenHere) return { state, error: frozenHere }
       return {
         state: {
           ...state,
@@ -2683,6 +2758,103 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Entry removed.',
+      }
+    }
+
+    /**
+     * Present a week for approval.
+     *
+     * The sheet carries no hours. It says a person claims their week is complete, and the freeze
+     * below is what stops the entries moving underneath that claim — see lib/timesheet.ts for why
+     * copying the lines onto the sheet was turned down.
+     *
+     * Resubmission reuses the same row rather than minting a second: a week has one timesheet,
+     * and the trail of what happened to it is the audit trail, not a pile of superseded rows.
+     */
+    case 'submitTimesheet': {
+      const attester = attesterFor(state, actor)
+      const problem = submitProblem(
+        Object.values(state.timesheets),
+        a.person,
+        a.weekStarting,
+        attester,
+      )
+      if (problem) return { state, error: problem }
+
+      const existing = sheetFor(Object.values(state.timesheets), a.person, a.weekStarting)
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `ts-${seq}`
+      const total = weekTotal(Object.values(state.timeEntries), a.person, a.weekStarting)
+      const sheet: Timesheet = {
+        id,
+        person: a.person.trim(),
+        weekStarting: a.weekStarting,
+        status: 'Submitted',
+        submittedAt: a.now,
+        submittedBy: by,
+        // Cleared on resubmission. The previous decision is in the trail; leaving it on the row
+        // would show a returned reason against a week that has since been sent back for review.
+        decidedAt: null,
+        decidedBy: null,
+        reason: null,
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          timesheets: { ...state.timesheets, [id]: sheet },
+          audit: log(actor, state, {
+            rowId: id,
+            field: 'timesheet',
+            from: existing ? existing.status : null,
+            to: `Submitted · ${total.hours}h`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${weekLabel(a.weekStarting)} submitted — ${total.hours}h.`,
+      }
+    }
+
+    /**
+     * Approve a week, or return it.
+     *
+     * The decision lives on the timesheet row rather than in an `Approval`. `ApprovalRule` gates
+     * entry into an issue status for a work type, and a timesheet has neither — so what is reused
+     * from that module is the `ApprovalDecision` type and the asker-is-not-the-decider rule,
+     * which `decideProblem` restates.
+     */
+    case 'decideTimesheet': {
+      const sheet = state.timesheets[a.id] ?? null
+      const attester = attesterFor(state, actor)
+      const problem = decideProblem(sheet, a.decision, a.reason, attester)
+      if (problem) return { state, error: problem }
+
+      const next: Timesheet = {
+        ...sheet!,
+        status: statusAfter(a.decision),
+        decidedAt: a.now,
+        decidedBy: by,
+        reason: a.decision === 'rejected' ? (a.reason ?? '').trim() : null,
+      }
+      return {
+        state: {
+          ...state,
+          timesheets: { ...state.timesheets, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: a.id,
+            field: 'timesheet',
+            from: sheet!.status,
+            to: next.status,
+            at: a.now,
+            by,
+            reason: next.reason ?? undefined,
+          }),
+        },
+        message:
+          a.decision === 'approved'
+            ? `${weekLabel(next.weekStarting)} approved.`
+            : `${weekLabel(next.weekStarting)} returned to ${next.person}.`,
       }
     }
 
