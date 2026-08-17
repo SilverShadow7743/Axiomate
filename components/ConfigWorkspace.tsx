@@ -407,6 +407,8 @@ function RolesAndPeople({
   const [newRole, setNewRole] = useState('')
   const [newParty, setNewParty] = useState('')
   const [personFilter, setPersonFilter] = useState('')
+  const [newPerson, setNewPerson] = useState('')
+  const [newPersonEmail, setNewPersonEmail] = useState('')
 
   const people = useMemo(() => {
     const all = Object.values(model.people).sort((a, b) => a.name.localeCompare(b.name))
@@ -559,7 +561,8 @@ function RolesAndPeople({
           Seeded from the names already in the imported log, with no roles attached — the log
           records who worked an issue, never what they are. Eligibility rules apply only to
           people who have been given a role, so the directory tightens as it is filled in rather
-          than blocking work while it is empty.
+          than blocking work while it is empty. Anyone the log never mentions — a joiner, or
+          somebody who has yet to touch an issue — is added at the bottom of this list.
         </p>
         <div className="cfg-inline">
           <input
@@ -654,6 +657,60 @@ function RolesAndPeople({
           </tbody>
         </table>
         {!people.length && <div className="cfg-empty">Nobody matches that filter.</div>}
+
+        {/* The directory could only ever be read here, so the one column that already says
+            "entered here" had no way of ever being true: every name had to arrive through the
+            imported log, and a new joiner could not be given a role or be made assignable until
+            they had worked an issue. `id: null` is what mints one — the same call the row
+            fields make, with the same duplicate-name and duplicate-address checks, so nothing
+            about validation lives out here.
+
+            Name only, because a role is attached in the row above like everybody else's and
+            duplicating that select would give two places to look. The address is offered
+            because it is the field a signed-in person is matched on, and adding someone in
+            order to sign them in is the case this exists for. */}
+        <div className="cfg-inline">
+          <input
+            value={newPerson}
+            placeholder="Add a person — full name"
+            aria-label="New person's name"
+            onChange={(e) => setNewPerson(e.target.value)}
+          />
+          <input
+            type="email"
+            value={newPersonEmail}
+            placeholder="Work address — optional"
+            aria-label="New person's work address"
+            onChange={(e) => setNewPersonEmail(e.target.value)}
+          />
+          <button
+            className="btn primary"
+            disabled={!newPerson.trim()}
+            onClick={() => {
+              // Cleared only on success, so a refused name — one already in the directory, or
+              // an address somebody else holds — is still in the box to correct rather than
+              // retyped from memory. The reason itself arrives as a toast from the reducer.
+              const email = newPersonEmail.trim()
+              if (
+                onConfig({
+                  k: 'upsertPerson',
+                  id: null,
+                  name: newPerson,
+                  roleIds: [],
+                  ...(email ? { email } : {}),
+                })
+              ) {
+                setNewPerson('')
+                setNewPersonEmail('')
+                // The list above is filtered, and a name that does not match the filter would
+                // be added to a table it is not in — indistinguishable from nothing happening.
+                setPersonFilter('')
+              }
+            }}
+          >
+            Add person
+          </button>
+        </div>
       </section>
     </>
   )

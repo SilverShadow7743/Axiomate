@@ -255,6 +255,30 @@ button {
   background: var(--surface-2);
 }
 
+/* ---------- sign-in failure notice ----------
+   A shell row rather than an overlay, so it pushes the workspace down instead of covering the
+   first rows of it — the grid stays fully readable while the message is up. Built from the
+   same parts as the bars above and below it (surface fill, one-pixel bottom rule, 7px/14px
+   padding); the only addition is the left rule, in the failure colour `.toast.error` and
+   `.persist-tag.error` already use, so nothing new is introduced to say "this went wrong". */
+.authbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--h-overdue);
+}
+.authbar p {
+  margin: 0;
+  max-width: 90ch;
+}
+
 /* ---------- filter bar ---------- */
 .filterbar {
   display: flex;

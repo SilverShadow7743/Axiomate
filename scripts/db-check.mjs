@@ -129,8 +129,25 @@ try {
     console.log('  Then run this check again.')
   } else if (code === '3D000') {
     say(false, `The database "${parsed.pathname.slice(1)}" does not exist`, 'psql -U postgres -f scripts/db-setup.sql creates it.')
-  } else if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT') {
+  } else if (code === 'ECONNREFUSED') {
     say(false, `Nothing is listening on ${parsed.hostname}:${parsed.port || 5432}`, 'The service is stopped, or the host and port are wrong.')
+  } else if (code === 'ETIMEDOUT' || /timeout expired|timed out/i.test(err.message ?? '')) {
+    /**
+     * A managed Postgres drops a connection from an address its firewall does not know rather
+     * than refusing it, so a blocked client waits out its own timeout and reports the server as
+     * unreachable. The commonest cause by far is a home connection whose address moved since
+     * the rule was written — which reads as "the database is down" and is nothing of the kind.
+     */
+    say(false, `No answer from ${parsed.hostname}:${parsed.port || 5432} within the timeout`)
+    console.log('')
+    console.log('  A managed Postgres silently drops connections from addresses its firewall')
+    console.log('  does not list, so a blocked client looks exactly like a stopped server. If')
+    console.log('  this worked yesterday, check whether this machine\'s address has changed:')
+    console.log('')
+    console.log('      curl https://api.ipify.org')
+    console.log('      az postgres flexible-server firewall-rule list \\')
+    console.log('        --resource-group <rg> --server-name <server> --output table')
+    console.log('')
   } else {
     say(false, 'The connection failed', `${code} ${err.message}`)
   }

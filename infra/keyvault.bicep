@@ -137,7 +137,16 @@ param logAnalyticsWorkspaceId string = ''
 
   Every name is prefixed, including the Anthropic key which is not Axiomate's own. A vault that
   is later shared with a second workload should not have to be renamed to stay legible.
+
+  Exported as well as output. The output is for a caller that has deployed this module and can
+  wait on it; the export is for one that cannot. `main.bicep` builds the app's Key Vault
+  references before this module is deployed — that is how the app-and-vault ordering cycle is
+  broken — so it needs the mapping at compile time, from the file, rather than at deployment
+  time, from the module. An import creates no dependency edge, which is exactly the property
+  that makes it usable there; restating the six names in main.bicep instead would put the
+  contract in two files and let them drift a rename at a time.
 */
+@export()
 var secretNames = {
   DATABASE_URL: 'axiomate-database-url'
   AXIOMATE_ENTRA_CLIENT_SECRET: 'axiomate-entra-client-secret'
@@ -366,10 +375,30 @@ output secretNames object = secretNames
 */
 @description('Environment variable name to a Key Vault reference string, for use as an App Service app setting value.')
 output secretReferences object = {
-  DATABASE_URL: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.DATABASE_URL})'
-  AXIOMATE_ENTRA_CLIENT_SECRET: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.AXIOMATE_ENTRA_CLIENT_SECRET})'
-  AXIOMATE_SESSION_SECRET: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.AXIOMATE_SESSION_SECRET})'
-  AXIOMATE_INTAKE_TOKEN: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.AXIOMATE_INTAKE_TOKEN})'
-  AXIOMATE_SCHEDULE_TOKEN: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.AXIOMATE_SCHEDULE_TOKEN})'
-  ANTHROPIC_API_KEY: '@Microsoft.KeyVault(VaultName=${vault.name};SecretName=${secretNames.ANTHROPIC_API_KEY})'
+  DATABASE_URL: secretReference(vault.name, secretNames.DATABASE_URL)
+  AXIOMATE_ENTRA_CLIENT_SECRET: secretReference(vault.name, secretNames.AXIOMATE_ENTRA_CLIENT_SECRET)
+  AXIOMATE_SESSION_SECRET: secretReference(vault.name, secretNames.AXIOMATE_SESSION_SECRET)
+  AXIOMATE_INTAKE_TOKEN: secretReference(vault.name, secretNames.AXIOMATE_INTAKE_TOKEN)
+  AXIOMATE_SCHEDULE_TOKEN: secretReference(vault.name, secretNames.AXIOMATE_SCHEDULE_TOKEN)
+  ANTHROPIC_API_KEY: secretReference(vault.name, secretNames.ANTHROPIC_API_KEY)
 }
+
+/*
+  The reference format itself, factored out of the output above and exported for the same reason
+  the mapping is.
+
+  It reads as a needless wrapper around one interpolation, and it is not: it is the only place in
+  the repository that spells `@Microsoft.KeyVault(...)`. `main.bicep` has to build these strings
+  without waiting for this module to deploy, so without this function the format would be typed
+  out a second time there, and the two copies would agree right up until somebody moved to the
+  `SecretUri=` form and changed only one of them. A caller that already holds the vault takes the
+  output; a caller that is still deciding what to deploy takes the function.
+
+  `VaultName=` rather than `SecretUri=` deliberately: the URI form pins the vault's DNS name and,
+  if a version is appended, the version with it, and it requires the vault to exist before the
+  string can be written. The name is enough for App Service to resolve against, and the name is
+  the one thing about this vault that main.bicep knows before anything is deployed.
+*/
+@export()
+func secretReference(vaultName string, secretName string) string =>
+  '@Microsoft.KeyVault(VaultName=${vaultName};SecretName=${secretName})'

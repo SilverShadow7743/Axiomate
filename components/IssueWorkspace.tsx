@@ -32,6 +32,7 @@ import {
 import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
 import { sortTree } from '@/lib/sort'
+import { availabilityForAssignment, refusesAssignment } from '@/lib/availability'
 import { addDays, maxIso, minIso } from '@/lib/dates'
 import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'
 import { DOMAIN_PAD_DAYS, ROW_H } from '@/lib/layout'
@@ -54,6 +55,7 @@ import TreeGrid from './TreeGrid'
 import GanttChart from './GanttChart'
 import DetailPanel from './DetailPanel'
 import Inbox from './Inbox'
+import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import Dialogs, { type DialogState } from './Dialogs'
 import IssueFocus from './IssueFocus'
@@ -101,6 +103,13 @@ interface Props {
   signInRequired?: boolean
   /** True only when an identity provider verified the actor. */
   verified?: boolean
+  /**
+   * The `auth_error` code the sign-in callback redirected with, when it refused.
+   *
+   * A code, never a message: the wording belongs to `AuthNotice`, because this value comes off
+   * the URL and anything on the URL was written by whoever last edited it.
+   */
+  authError?: string
   meta: {
     source: string
     issueCount: number
@@ -123,6 +132,7 @@ export default function IssueWorkspace({
   actor,
   signInRequired,
   verified,
+  authError,
   meta,
   today,
 }: Props) {
@@ -159,6 +169,8 @@ export default function IssueWorkspace({
   // Track the timer so a second message gets its own full duration instead of inheriting
   // the first one's remaining time, and so nothing fires after unmount.
   const toastTimer = useRef<number | null>(null)
+  /** The owner change awaiting a second press. See the owner case in the cell editor. */
+  const pendingAssign = useRef<{ rowId: string; owner: string } | null>(null)
   const notify = useCallback((msg: string, error = false) => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
     setToast({ msg, error })
@@ -869,8 +881,40 @@ export default function IssueWorkspace({
 
         case 'owner': {
           if (isNode) return dispatch({ t: 'updateNode', id: rowId, patch: { owner: value || null }, now })
-          if (isIssue)
-            return dispatch({ t: 'updateIssue', id: rowId, patch: { owner: value || 'Unassigned' }, now })
+          if (isIssue) {
+            /**
+             * Ask before the reducer refuses, so the refusal has a way through.
+             *
+             * The reducer declines to name an owner who is away for the whole window, and its
+             * message says to assign anyway if that is the decision — but `acceptUnavailable`
+             * is the only way to say so, and nothing could set it. A veto with no override is
+             * worse than no veto: it does not prevent the assignment, it prevents the person
+             * recording what they have already decided, and they route around the system.
+             *
+             * Confirmed by repeating rather than by a dialog, because this app has no modal and
+             * a browser `confirm()` blocks everything. The same pure function the reducer uses
+             * decides, so the two cannot drift into disagreeing about who is available.
+             */
+            const owner = value || 'Unassigned'
+            const issue = state.issues[rowId]
+            const verdict = issue
+              ? availabilityForAssignment(state, issue, owner, now)
+              : null
+            if (verdict && refusesAssignment(verdict)) {
+              const again = pendingAssign.current
+              if (!again || again.rowId !== rowId || again.owner !== owner) {
+                pendingAssign.current = { rowId, owner }
+                notify(`${verdict.message} Set the same owner again to assign anyway — it will be recorded as a decision.`, true)
+                return false
+              }
+              pendingAssign.current = null
+              return dispatch({
+                t: 'updateIssue', id: rowId, patch: { owner }, now, acceptUnavailable: true,
+              })
+            }
+            pendingAssign.current = null
+            return dispatch({ t: 'updateIssue', id: rowId, patch: { owner }, now })
+          }
           if (act)
             return dispatch({ t: 'updateActivity', id: rowId, patch: { owner: value || 'Unassigned' }, now })
           return false
@@ -1506,6 +1550,13 @@ export default function IssueWorkspace({
           {panelState === 'compact' ? 'Show details' : 'Hide details'}
         </button>
       </div>
+
+      {/* Below the topbar rather than over the grid, because it is about this page and not
+          about a record — and directly under the Sign in button it is telling people to press
+          again. Not shown to a verified session: a signed-in workspace reporting that the
+          sign-in failed would be contradicting itself, and a stale `?auth_error=` on a
+          bookmarked or forwarded address is enough to produce exactly that. */}
+      {!verified && <AuthNotice code={authError} />}
 
       <FilterBar
         actor={actor}

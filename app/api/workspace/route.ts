@@ -15,6 +15,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import type { Action } from '@/lib/workspace'
 import { keyProblem, type SubmittedAction } from '@/lib/idempotency'
+import { batchProblem } from '@/lib/actionShape'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -95,6 +96,30 @@ export async function POST(req: Request) {
   if (!list.every((a) => a && typeof a === 'object' && KINDS.has((a as Action).t))) {
     return NextResponse.json({ ok: false, error: 'Unrecognised action.' }, { status: 400 })
   }
+
+  /**
+   * The kind check above says which reducer arm will run. It says nothing about what that arm
+   * will be handed.
+   *
+   * `Action` is a TypeScript union, and TypeScript is not present at runtime — the cast on the
+   * line above is a promise the compiler made about our own code, not one the network made to
+   * the server. Several reducer arms build their record with `{ ...existing, ...a.patch }`, so
+   * an undeclared key does not bounce off: it is copied into stored state and saved back out.
+   * A declared field that never arrived is the same problem read backwards — `a.now.slice(0, 10)`
+   * on `undefined` answers a client's malformed request with a 500 about the server.
+   *
+   * So the payload is checked against the shape its kind declares: every required field present
+   * and of the right type, and no field the union has never heard of. `lib/actionShape.ts` holds
+   * that table and is pure, which is what lets the rule be driven from the scenario harness with
+   * hand-built hostile objects rather than inferred from this file's source.
+   *
+   * Placed here, before the idempotency key is examined and well before the database is
+   * considered, for the reason given at the top of this function: a malformed body is a client
+   * bug whether or not a database exists, and it stays reachable — and therefore testable — on a
+   * deployment that has none.
+   */
+  const shape = batchProblem(list)
+  if (shape) return NextResponse.json({ ok: false, error: shape }, { status: 400 })
 
   /**
    * The idempotency key is client-supplied and becomes half of a primary key, so it is

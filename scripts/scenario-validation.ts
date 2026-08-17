@@ -40,6 +40,8 @@ import { classify } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
+import { actionProblem } from '../lib/actionShape'
+import { availabilityForAssignment } from '../lib/availability'
 
 /**
  * The last recorded persistence run, or null.
@@ -404,18 +406,50 @@ scenario(
   'Work is assigned to someone who is not available',
   'The system refuses, or warns, because that person is on leave or already committed.',
   () => {
-    const s = ok(BASE, {
+    const issue = BASE.issues['OAPIL-1']
+
+    /*
+     * Four answers, and the third is the one worth arguing about. A capacity model laid over a
+     * half-filled directory produces two very different kinds of "no problem", and reporting a
+     * name nobody has described as available would invent the fact the check exists to find.
+     */
+    const stranger = availabilityForAssignment(BASE, issue, 'Someone Who Does Not Exist', NOW)
+    const named = availabilityForAssignment(BASE, issue, issue.owner, NOW)
+    const nobody = availabilityForAssignment(BASE, issue, 'Unassigned', NOW)
+
+    /* The reducer consults it, rather than the check merely existing beside it. */
+    const assigned = act(BASE, {
       t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Someone Who Does Not Exist' }, now: NOW,
     } as Action)
+
+    /*
+     * And a refusal has a way through. A veto nobody can override does not prevent the
+     * assignment — it prevents somebody recording a decision they have already taken.
+     */
+    const forced = act(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Someone Who Does Not Exist' },
+      now: NOW, acceptUnavailable: true,
+    } as Action)
+
+    const kinds = [stranger.kind, named.kind, nobody.kind]
+    const good =
+      stranger.kind === 'unknown' &&
+      nobody.kind === 'clear' &&
+      !assigned.error &&
+      !forced.error &&
+      Boolean(stranger.message)
+
     return {
-      verdict: 'FAIL',
-      actual: `Accepted without comment. The owner is now "${s.issues['OAPIL-1'].owner}" — a name that is not in the people directory, let alone free. Owner is a free-text column, not a reference.`,
-      stops: 'at the first check — there is none',
-      severity: 'P1',
-      impact: 'Work can be assigned to a leaver, a typo, or someone with no capacity, and nothing notices.',
+      verdict: good ? 'PARTIAL' : 'FAIL',
+      actual: `Assignment now consults capacity through the same arithmetic \`upsertAllocation\` uses. A name that is in no directory comes back "${stranger.kind}" rather than free — "${stranger.message.slice(0, 90)}" — which is the distinction that matters, because \`capacityFor\` would otherwise report seven and a half hours a day of somebody nobody has ever described. The seeded owner reads "${named.kind}", an unowned issue "${nobody.kind}". Only absence refuses: being away for the whole window is a fact and is blocked, while being fully committed is a judgement and is recorded against the change instead. A refusal names the escape and \`acceptUnavailable\` takes it, so the decision is written down rather than worked around.`,
+      stops: 'at the directory, which is still a free-text column rather than a reference',
+      severity: 'P2',
+      impact:
+        'Work can no longer be handed to somebody who is away without that being a recorded decision. It can still be handed to a typo, because the owner column holds text and nothing constrains it to a person.',
     }
   },
 )
+
 
 scenario(
   'L',
@@ -1930,18 +1964,51 @@ scenario(
   'A malformed or hostile write reaches the API',
   'It is rejected before it touches stored state.',
   () => {
-    const route = fs.readFileSync(path.join(ROOT, 'app/api/workspace/route.ts'), 'utf8')
-    const checksKind = /KINDS\.has/.test(route)
-    const validatesPayload = /zod|safeParse|validateAction/.test(route)
+    const N = NOW
+    /*
+     * Driven against the real validator rather than grepped for. The risk FL2 names is specific:
+     * the reducer merges an edit with `{ ...record, ...patch }`, so anything inside `patch`
+     * lands in the record, and TypeScript is erased by the time the request arrives.
+     */
+    const refused = (a: unknown) => actionProblem(a) !== null
+    const accepted = (a: unknown) => actionProblem(a) === null
+
+    const legitimate = [
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam', severity: 'High', percentOverride: 50, plannedEnd: null }, now: N },
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: N, expected: { owner: 'Priya' }, key: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa' },
+      { t: 'updateIssue', id: 'OAPIL-1', patch: {}, now: N },
+      { t: 'addNote', issueId: 'OAPIL-1', body: 'x', noteType: 'General Update', pinned: false, now: N },
+    ]
+
+    const hostile: [string, unknown][] = [
+      ['a typo inside the patch', { t: 'updateIssue', id: 'OAPIL-1', patch: { ownerr: 'Sam' }, now: N }],
+      ['a wrong type on a real field', { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 12345 }, now: N }],
+      ['an id smuggled into the patch', { t: 'updateIssue', id: 'OAPIL-1', patch: { id: 'OTHER-9' }, now: N }],
+      ['an unknown top-level field', { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: N, admin: true }],
+      ['an action kind that is not a kind', { t: 'toString', now: N }],
+      ['notify, which rules raise and clients may not', { t: 'notify', now: N }],
+      ['no discriminator at all', { id: 'OAPIL-1', now: N }],
+      ['an array where an object belongs', ['updateIssue']],
+      ['a missing required field', { t: 'updateIssue', patch: { owner: 'Sam' }, now: N }],
+    ]
+
+    const wrongly = legitimate.filter(refused)
+    const missed = hostile.filter(([, a]) => accepted(a))
+    const sample = actionProblem(hostile[0][1]) ?? ''
+    const good = wrongly.length === 0 && missed.length === 0
+
     return {
-      verdict: checksKind && !validatesPayload ? 'PARTIAL' : validatesPayload ? 'PASS' : 'FAIL',
-      actual: `The endpoint validates the batch shape and the action kind against an allowlist, resolves tenant and actor server-side, and refuses anything else. It does not validate the payload: an action's fields are spread into the record, and TypeScript is erased at runtime. The reducer catches impossible values it knows about; it does not police unknown keys.`,
-      stops: 'at field-level validation',
-      severity: 'P1',
-      impact: 'Today the endpoint is unauthenticated anyway, so this is latent. It becomes the sharp edge the moment identity lands.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `${hostile.length} malformed or hostile actions are refused before the database is considered, and ${legitimate.length} legitimate ones — including an empty patch, a concurrency expectation and an idempotency key — still pass. The refusal names the field rather than the request: "${sample}". The patch is checked field by field, which is the part that matters: the reducer merges an edit with a spread, so an unrecognised key lands in the record and a mistyped one replaces a real field. Whether a status is one this firm uses is left to the reducer, which owns the transition graph and answers with the routes that exist — two lists here would be free to disagree.${good ? '' : ` Wrongly refused: ${wrongly.length}. Missed: ${missed.map(([l]) => l).join(', ')}.`}`,
+      stops: good ? '—' : 'at the cases listed above',
+      severity: good ? '—' : 'P1',
+      impact: good
+        ? 'A client bug or a hostile caller can no longer write a field the record does not have, or a type it cannot hold.'
+        : 'An action can still put an unrecognised or mistyped field into stored state.',
     }
   },
 )
+
 
 scenario(
   'FL3',

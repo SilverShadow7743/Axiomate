@@ -75,11 +75,11 @@
       "id": "G",
       "title": "Work is assigned to someone who is not available",
       "expected": "The system refuses, or warns, because that person is on leave or already committed.",
-      "verdict": "FAIL",
-      "actual": "Accepted without comment. The owner is now \"Someone Who Does Not Exist\" — a name that is not in the people directory, let alone free. Owner is a free-text column, not a reference.",
-      "stops": "at the first check — there is none",
-      "severity": "P1",
-      "impact": "Work can be assigned to a leaver, a typo, or someone with no capacity, and nothing notices."
+      "verdict": "PARTIAL",
+      "actual": "Assignment now consults capacity through the same arithmetic `upsertAllocation` uses. A name that is in no directory comes back \"unknown\" rather than free — \"“Someone Who Does Not Exist” is not in the people directory, so nothing can be checked abo\" — which is the distinction that matters, because `capacityFor` would otherwise report seven and a half hours a day of somebody nobody has ever described. The seeded owner reads \"unknown\", an unowned issue \"clear\". Only absence refuses: being away for the whole window is a fact and is blocked, while being fully committed is a judgement and is recorded against the change instead. A refusal names the escape and `acceptUnavailable` takes it, so the decision is written down rather than worked around.",
+      "stops": "at the directory, which is still a free-text column rather than a reference",
+      "severity": "P2",
+      "impact": "Work can no longer be handed to somebody who is away without that being a recorded decision. It can still be handed to a typo, because the owner column holds text and nothing constrains it to a person."
     },
     {
       "id": "L",
@@ -437,18 +437,18 @@
       "id": "FL2",
       "title": "A malformed or hostile write reaches the API",
       "expected": "It is rejected before it touches stored state.",
-      "verdict": "PARTIAL",
-      "actual": "The endpoint validates the batch shape and the action kind against an allowlist, resolves tenant and actor server-side, and refuses anything else. It does not validate the payload: an action's fields are spread into the record, and TypeScript is erased at runtime. The reducer catches impossible values it knows about; it does not police unknown keys.",
-      "stops": "at field-level validation",
-      "severity": "P1",
-      "impact": "Today the endpoint is unauthenticated anyway, so this is latent. It becomes the sharp edge the moment identity lands."
+      "verdict": "PASS",
+      "actual": "9 malformed or hostile actions are refused before the database is considered, and 4 legitimate ones — including an empty patch, a concurrency expectation and an idempotency key — still pass. The refusal names the field rather than the request: \"Field 'patch' on updateIssue carries unrecognised field 'ownerr'.\". The patch is checked field by field, which is the part that matters: the reducer merges an edit with a spread, so an unrecognised key lands in the record and a mistyped one replaces a real field. Whether a status is one this firm uses is left to the reducer, which owns the transition graph and answers with the routes that exist — two lists here would be free to disagree.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A client bug or a hostile caller can no longer write a field the record does not have, or a type it cannot hold."
     },
     {
       "id": "FL3",
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "24 of 24 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-16. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "26 of 26 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-16. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
