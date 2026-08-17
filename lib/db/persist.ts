@@ -310,6 +310,34 @@ export async function persistSteps(
       return
     }
 
+    /**
+     * Two rows, and both or neither.
+     *
+     * The copy and the record that it *is* a copy are one fact split across two tables. Writing
+     * the issue alone would leave a duplicate in Postgres with nothing saying what it duplicates
+     * — which is the state the 48 deleted rows were in, reproduced by the feature meant to
+     * prevent it. Both writes sit inside the batch transaction, so a failure on the second takes
+     * the first with it.
+     *
+     * Each half is written the way its own arm writes it: the issue as `create` does, down to
+     * the sub-issue flag; the relationship as `link` does, found by id-diff because the reducer
+     * is the only thing that knows which one it just minted.
+     */
+    case 'duplicate': {
+      const id = findCreatedId(before, after)
+      if (id && after.issues[id]) {
+        const issue = after.issues[id]
+        await tx.issue.create({
+          data: issueToRow(tenantId, issue, Boolean(after.issues[issue.parentId])),
+        })
+      }
+      const rel = after.relationships.find(
+        (r) => !before.relationships.some((b) => b.id === r.id),
+      )
+      if (rel) await tx.issueRelationship.create({ data: relationshipToRow(tenantId, rel) })
+      return
+    }
+
     case 'updateNode':
       return void (await upsertNode(tx, tenantId, after, action.id))
 

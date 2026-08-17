@@ -427,6 +427,15 @@ const patchOf = (fields: Record<string, Check>): Check => {
 const SHAPES = {
   /* ---- CRUD ---- */
   create: { parentId: req(id), kind: req(oneOf(CREATABLE_KINDS)), draft: req(draft), now },
+  /**
+   * Four fields, and none of them is the relationship.
+   *
+   * The `DUPLICATE_OF` is minted by the reducer and cannot be named, retyped or turned off from
+   * the wire — so there is deliberately no `relationshipType` here to be widened later, and no
+   * boolean an over-helpful client could send as false. `note` rides on the relationship, as it
+   * does on `link`, and empty is a legitimate thing for a person to send.
+   */
+  duplicate: { issueId: req(id), note: req(text), now },
   updateNode: { id: req(id), patch: req(plainObject), now },
   updateIssue: {
     id: req(id),

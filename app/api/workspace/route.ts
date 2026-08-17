@@ -26,6 +26,7 @@ const MAX_BATCH = 200
 /** Action kinds the endpoint will replay. Anything else is refused rather than guessed at. */
 const KINDS = new Set([
   'create',
+  'duplicate',
   'updateNode',
   'updateIssue',
   'updateActivity',

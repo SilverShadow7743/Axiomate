@@ -241,12 +241,34 @@ export function can(model: OperatingModel, actor: Actor, key: PermissionKey): De
  *
  * One table rather than a check inside each of the reducer's arms. Twenty-odd scattered checks
  * is twenty-odd chances to forget one, and a forgotten check is invisible: the action keeps
- * working and nobody notices it was never guarded. Here, an action added without a permission
- * is a compile-time hole in a `Record`, and an action that genuinely needs no permission has to
- * say so with `null` rather than by omission.
+ * working and nobody notices it was never guarded.
+ *
+ * This comment used to claim that an action added without a permission was "a compile-time hole
+ * in a `Record`". It was not, and the claim was the dangerous part — it read as a guarantee and
+ * stopped anybody checking. The map is keyed by `string`, so a missing action resolved to
+ * `null` and `apply` skipped the permission check entirely. `recordVersion` and
+ * `correctVersion` shipped that way: anyone who could reach the endpoint could rewrite a
+ * person's working-pattern history, and nothing anywhere would have said so.
+ *
+ * The key cannot be narrowed here, because `Action` lives in `workspace.ts` and `workspace.ts`
+ * imports this module — narrowing it would be a cycle. The assertion is made from the other
+ * side instead: `workspace.ts` carries
+ *
+ *     ACTION_PERMISSIONS satisfies Record<Action['t'], PermissionKey | null>
+ *
+ * which is where both types are visible. Adding an action without a line here now fails the
+ * build, which is what this paragraph originally promised.
+ *
+ * An action that genuinely needs no permission says so with `null` and a reason. Omission is
+ * not a way of saying anything.
  */
 export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   create: 'work.create',
+  // Duplicating mints an issue *and* a relationship, and this table has room for one key. The
+  // second grant — `work.link` — is asked for in the arm itself, because the relationship is not
+  // optional there. Omitting this line would not have failed the build: the map is keyed by
+  // `string`, so a missing action resolves to `null` and the funnel skips the check entirely.
+  duplicate: 'work.create',
   updateNode: 'work.edit',
   updateIssue: 'work.edit',
   updateActivity: 'work.edit',
@@ -282,11 +304,35 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeAllocation: 'capacity.allocate',
   upsertCommitment: 'capacity.record',
   removeCommitment: 'capacity.record',
+  /*
+   * A working pattern is a fact about somebody's capacity, so it sits with the commitments
+   * rather than with configuration.
+   *
+   * Correcting takes the same grant as recording, deliberately. The tempting alternative — a
+   * higher bar for corrections, because they rewrite history — reads well and does not survive
+   * contact: it makes the person who mistyped a date unable to fix it, so they record a second
+   * overlapping period instead, which the reducer refuses, and the eventual workaround is worse
+   * than the typo. A correction is already audited with both sides and a required reason, which
+   * is the control that actually applies here.
+   */
+  recordVersion: 'capacity.record',
+  correctVersion: 'capacity.record',
   upsertSow: 'sow.edit',
   archiveSow: 'sow.edit',
   attributeToSow: 'sow.attribute',
   updateEngagement: 'engagement.edit',
   config: 'config.manage',
+  /*
+   * The two that genuinely take no grant, said out loud rather than left out.
+   *
+   * `notify` is raised by rules and the scheduled pass, not by a person choosing to send
+   * something — gating it on a human permission would mean the watch stops raising anything
+   * the moment it runs as a machine actor. `markNotificationRead` acts on the reader's own
+   * notification and grants nothing; requiring a permission to dismiss your own message is a
+   * control with no risk behind it.
+   */
+  notify: null,
+  markNotificationRead: null,
 }
 
 /**

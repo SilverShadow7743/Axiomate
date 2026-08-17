@@ -41,7 +41,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, accessProblems, can, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { canEditNote } from './permissions'
 import {
   checkTransition,
@@ -545,6 +545,14 @@ export function scopeChainOf(state: WorkspaceState, id: string | null): string[]
 export type Action =
   /* ---- CRUD ---- */
   | { t: 'create'; parentId: string; kind: CreatableKind; draft: Record<string, string>; now: string }
+  /**
+   * Copy an issue, and record that the copy is a copy.
+   *
+   * There is no `relationshipType` here and no flag to suppress it: the `DUPLICATE_OF` is minted
+   * by the reducer, always, and a caller has no say in it. `note` is the note that rides on the
+   * relationship — the same field `link` carries, and empty is a legitimate thing to send.
+   */
+  | { t: 'duplicate'; issueId: string; note: string; now: string }
   | { t: 'updateNode'; id: string; patch: Partial<HierarchyNode>; now: string }
   | {
       t: 'updateIssue'
@@ -976,6 +984,19 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     }
   }
 
+  /*
+   * The check above is only as complete as the table behind it, and until now nothing made the
+   * table complete. `ACTION_PERMISSIONS` is keyed by `string` — it has to be, because narrowing
+   * it inside `access.ts` would mean importing `Action` from this file, which already imports
+   * that one — so an action missing from it resolved to `null` and simply skipped the check.
+   * `recordVersion` and `correctVersion` shipped unguarded that way.
+   *
+   * The assertion belongs here, where both `Action` and the table are in scope. It costs nothing
+   * at runtime and turns the next omission into a build failure naming the action, which is the
+   * guarantee `access.ts` had been claiming for itself all along.
+   */
+  void (ACTION_PERMISSIONS satisfies Record<Action['t'], PermissionKey | null>)
+
   // Who gets recorded against everything this action touches.
   //
   // A parameter, not a module constant and not a field of `Action`. As a constant it made
@@ -1154,6 +1175,170 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         },
         createdId: id,
         message: `${isMilestone ? 'Milestone' : a.kind} added to ${issueId}.`,
+      }
+    }
+
+    /* ---------------- CRUD: duplicate ---------------- */
+    /**
+     * A copy of an issue, and a `DUPLICATE_OF` relationship from the copy to the original.
+     *
+     * Always. There is no field on the action to suppress the relationship and no branch below
+     * that can skip it, because the relationship is the reason this arm exists rather than a
+     * courtesy it performs. This register carried 48 issues that were the same client points
+     * re-circulated on two spreadsheets, and they were deleted in a3ecd95 because nothing
+     * recorded that they were copies — so the only way to tell the register the truth was to
+     * throw the rows away. A copy that does not know what it copied is how a register grows a
+     * second version of the truth.
+     *
+     * WHAT IS CARRIED — the description of the work. Where it sits, who it is for, what kind of
+     * thing it is, how bad it is, who is on it, what it does to the client. Those are properties
+     * of the point being raised, and a copy raised against the same point has the same ones.
+     *
+     * WHAT IS DROPPED — everything that is a record of what happened to the *original*:
+     *
+     *   status            starts at 'Open'. Inheriting "Awaiting client confirmation" would have
+     *                     the copy claim a client had been asked something about a record that
+     *                     did not exist when they were asked.
+     *   dates, progress   raised and lastActivity are today; planned dates, percentOverride,
+     *                     actualEnd and nextAction are empty. The copy has not been scheduled,
+     *                     has not progressed, and has no agreed next step yet.
+     *   raisedBy          the actor, not the original's raiser. This record was raised now, by
+     *                     whoever ran this. Who raised the underlying point is one hop away
+     *                     through the relationship, which is exactly what the relationship is
+     *                     for — a copy does not need to restate what it can point at.
+     *   reference         an external reference names one row in somebody else's system, and two
+     *                     of our records claiming it is the same second-version-of-the-truth
+     *                     problem read from the other end.
+     *   evidence, verification
+     *                     what was checked was checked on the original.
+     *   time entries, approvals, the estimate, notes, evidence items, lifecycle activities,
+     *   dependencies, and every other relationship
+     *                     not copied and not re-pointed. A duplicate that arrives with somebody
+     *                     else's logged hours — or with their approval already granted, or their
+     *                     agreed estimate — is worse than no duplicate feature: it invents
+     *                     attested work, and attested work is the thing this workspace is least
+     *                     free to invent. Anyone who wants the original's hours can follow the
+     *                     `DUPLICATE_OF` to them.
+     *   the audit trail   the original's history belongs to the original. The copy's history
+     *                     starts with the two entries below.
+     *
+     * The record is written out field by field rather than as `{ ...original, ... }`, so that
+     * list is enforced by the compiler rather than by this comment: a field added to
+     * `IssueRecord` later fails to compile here until somebody decides whether a copy carries
+     * it. A spread would answer "yes" on their behalf, silently, which is how a copy quietly
+     * starts carrying somebody else's hours again.
+     */
+    case 'duplicate': {
+      const original = state.issues[a.issueId]
+      if (!original) return { state, error: 'The issue being copied no longer exists.' }
+      if (original.deletedAt) {
+        return {
+          state,
+          error: 'An archived issue cannot be copied. Restore it first, so the copy points at something the register still shows.',
+        }
+      }
+
+      /*
+       * The funnel at the top of `apply` asked one question — `work.create`, because this mints
+       * an issue. This arm does two things and the second one is the point, so the second grant
+       * is asked for here. A role that can raise work but not relate it — the client roles, as
+       * shipped — cannot duplicate. That is the intended answer, not a gap to be closed by
+       * loosening this: the copy such a role could make would be a copy with no `DUPLICATE_OF`,
+       * which is the defect.
+       */
+      const relate = can(state.model, actor, 'work.link')
+      if (!relate.allowed) return { state, error: relate.reason ?? 'Not permitted.' }
+
+      const seq = state.seq + 1
+      // The issue's own id comes from the client series, like every other issue — `nextIssueId`
+      // already walks past anything taken. `seq` is spent on the relationship below.
+      const id = nextIssueId(state, original.client)
+
+      const copy: IssueRecord = {
+        id,
+        parentId: original.parentId,
+        client: original.client,
+        module: original.module,
+        subject: original.subject,
+        description: original.description,
+        type: original.type,
+        // Created here, so there is no earlier classification to preserve — as in `create`.
+        sourceType: '',
+        severity: original.severity,
+        status: 'Open',
+        owner: original.owner,
+        raisedBy: by,
+        accountable: original.accountable,
+        raised: a.now.slice(0, 10),
+        lastActivity: a.now.slice(0, 10),
+        actualEnd: null,
+        age: 0,
+        daysSinceActivity: 0,
+        nextAction: '',
+        evidence: '',
+        evidenceDate: '',
+        verification: 'Entered in Axiomate',
+        source: 'Axiomate',
+        reference: '',
+        clientImpact: original.clientImpact,
+        plannedStart: null,
+        plannedEnd: null,
+        percentOverride: null,
+        scheduleMode: 'AUTO',
+        // A fresh object rather than the original's. Two records sharing one nested value alias
+        // each other's edits, and the write path decides what to persist by object identity.
+        assignments: { ...original.assignments },
+        deletedAt: null,
+      }
+
+      /*
+       * The same record `link` builds — same id scheme, same fields, same store — rather than a
+       * second way of saying the same thing. `link` remains the description of what a
+       * relationship is; this arm is only the place one is minted without anybody asking.
+       */
+      const rel: IssueRelationship = {
+        id: `rel-${seq}`,
+        sourceIssueId: id,
+        targetIssueId: original.id,
+        relationshipType: 'DUPLICATE_OF',
+        note: a.note,
+      }
+
+      /*
+       * `logAll`, not two calls to `log`. `log` reads `state.audit` and returns a new array, so
+       * a second call against the same state drops the first entry — and the entry it would drop
+       * is the one saying this is a copy, which is the entry that matters.
+       */
+      return {
+        state: {
+          ...state,
+          seq,
+          issues: { ...state.issues, [id]: copy },
+          relationships: [...state.relationships, rel],
+          audit: logAll(actor, state, [
+            {
+              rowId: id,
+              field: 'created',
+              from: null,
+              to: `Copy of ${original.id} under ${nameOf(state, original.parentId)}`,
+              at: a.now,
+              by,
+            },
+            {
+              rowId: id,
+              field: 'relationship',
+              from: null,
+              to: `duplicate of ${original.id}`,
+              at: a.now,
+              by,
+              reason:
+                a.note.trim() ||
+                'Recorded with the copy, so it can never be read as a second report of the same point.',
+            },
+          ]),
+        },
+        createdId: id,
+        message: `${id} created as a duplicate of ${original.id}.`,
       }
     }
 
