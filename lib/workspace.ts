@@ -3746,7 +3746,16 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
        * moving one that HAS been signed off would retroactively change what the client agreed to
        * pay for work they have already accepted.
        */
-      const contracted = contractedPosition(state.sows[existing.sowId], Object.values(state.changes))
+      /*
+       * Guarded, unlike the first version of this arm. `contractedPosition` dereferences the SOW,
+       * so an archived one would throw from inside the reducer rather than return an `OpResult` —
+       * and "the reducer always returns a result" is the invariant the whole funnel rests on.
+       * `upsertMilestone` checks this; this arm did not, which is exactly how one path gets a
+       * guard and its sibling does not.
+       */
+      const parent = state.sows[existing.sowId]
+      if (!parent) return { state, error: 'That statement of work no longer exists.' }
+      const contracted = contractedPosition(parent, Object.values(state.changes))
       const frozen = a.decision === 'Accepted' ? milestoneValue(existing, contracted) : null
 
       const next: Milestone = {

@@ -651,6 +651,11 @@ function Milestones({
   const [planned, setPlanned] = useState('')
   const [returning, setReturning] = useState<string | null>(null)
   const [why, setWhy] = useState('')
+  /* One row at a time, like the Rates tab's correction row. */
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editPct, setEditPct] = useState('')
+  const [editDue, setEditDue] = useState('')
 
   const position = milestonePosition(sow.id, milestones, contracted)
   const gap = scheduleProblem(position)
@@ -677,12 +682,12 @@ function Milestones({
             </tr>
           </thead>
           <tbody>
-            {ordered.map((m) => {
+            {ordered.flatMap((m) => {
               const value = milestoneValue(m, contracted)
               /* The deliverer cannot accept — the reducer refuses it, so the control is not
                  offered either. A button that can never succeed is worse than no button. */
               const theirs = m.deliveredBy?.trim().toLowerCase() === actorName.trim().toLowerCase()
-              return (
+              return [
                 <tr key={m.id} title={describeMilestone(m, value)}>
                   <td className="mono">{m.sequence}</td>
                   <td>{m.name}</td>
@@ -752,13 +757,81 @@ function Milestones({
                       <span className="est-block-note">You recorded this delivered — somebody else accepts it.</span>
                     )}
                     {mayEdit && m.acceptance !== 'Accepted' && (
-                      <button className="btn-link" onClick={() => onRemove(m.id)}>
-                        Remove
-                      </button>
+                      <>
+                        {/*
+                          * The edit path. Without it `upsertMilestone`'s whole existing-record
+                          * branch is unreachable and a typo in a milestone name is permanent —
+                          * the "built, but no way in" fault the audit calls its most actionable
+                          * finding.
+                          *
+                          * Not offered on an accepted milestone, because the reducer refuses it:
+                          * the value was frozen and the client signed against this name.
+                          */}
+                        <button
+                          className="btn-link"
+                          onClick={() => {
+                            setEditing(editing === m.id ? null : m.id)
+                            setEditName(m.name)
+                            setEditPct(m.percentage === null ? '' : String(m.percentage))
+                            setEditDue(m.plannedDate ?? '')
+                          }}
+                        >
+                          {editing === m.id ? 'Cancel' : 'Edit'}
+                        </button>{' '}
+                        <button className="btn-link" onClick={() => onRemove(m.id)}>
+                          Remove
+                        </button>
+                      </>
                     )}
                   </td>
-                </tr>
-              )
+                </tr>,
+                editing === m.id ? (
+                  <tr key={`${m.id}-edit`}>
+                    <td colSpan={7}>
+                      <div className="time-row">
+                        <label className="fld time-fld-person">
+                          <span className="fld-label">Milestone</span>
+                          <input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                        </label>
+                        <label className="fld time-fld-hours">
+                          <span className="fld-label">% of contract</span>
+                          <input type="number" min={0} max={100} step="0.001" value={editPct} onChange={(e) => setEditPct(e.target.value)} />
+                        </label>
+                        <label className="fld">
+                          <span className="fld-label">Due</span>
+                          <input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} />
+                        </label>
+                        {/*
+                          * `billOn` is deliberately not editable here. When a milestone becomes
+                          * billable is a term somebody negotiated, and changing it on a live
+                          * schedule is a commercial amendment rather than a correction — that is
+                          * what a change request is for.
+                          */}
+                        <span className="est-block-note">
+                          Billable on {m.billOn}. Changing that is an amendment, not a correction.
+                        </span>
+                        <button
+                          className="btn"
+                          disabled={!editName.trim() || !(Number(editPct) > 0 && Number(editPct) <= 100)}
+                          onClick={() => {
+                            if (
+                              onUpsert(sow.id, m.id, {
+                                name: editName,
+                                percentage: Number(editPct),
+                                plannedDate: editDue || null,
+                              })
+                            ) {
+                              setEditing(null)
+                            }
+                          }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null,
+              ]
             })}
           </tbody>
         </table>

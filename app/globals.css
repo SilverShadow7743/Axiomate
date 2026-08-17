@@ -4643,6 +4643,13 @@ select.cell-editor {
   overflow-x: auto;
   max-width: 100%;
 }
+/* Milestones carry two independent states, so both sets of pills need colours. Delivery is
+   progress and reads neutral until it lands; acceptance is money and reads like a decision. */
+.comm-status.st-planned { color: var(--text-faint); }
+.comm-status.st-inprogress { color: var(--warn, #b26a00); }
+.comm-status.st-delivered { color: var(--accent); }
+.comm-status.st-pending { color: var(--text-muted); }
+.comm-status.st-accepted { color: var(--ok, #1a7f37); }
 .comm-status.st-submitted { color: var(--warn, #b26a00); }
 .comm-status.st-approved { color: var(--ok, #1a7f37); }
 .comm-status.st-rejected,
