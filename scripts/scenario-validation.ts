@@ -101,6 +101,14 @@ import {
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { unconfiguredStore } from '../lib/storage/contract'
 import {
+  describeMilestones,
+  isBillable,
+  milestonePosition,
+  milestoneValue,
+  scheduleProblem,
+  type Milestone,
+} from '../lib/milestone'
+import {
   contractedPosition,
   decideChangeProblem,
   describeContracted,
@@ -3394,6 +3402,95 @@ scenario(
       severity: '—',
       impact:
         'The record and the artefact are now the same fact. What is still missing is one administrator action, not a feature.',
+    }
+  },
+)
+
+scenario(
+  'MS1',
+  'A milestone is delivered, accepted, and worth what it was worth on the day it was signed',
+  'Delivery and acceptance are separate answers, an approved change moves a pending milestone and never an accepted one, and a schedule that does not add up says so instead of being refused.',
+  () => {
+    const sowId = 'sow-ms'
+    const sow = { id: sowId, effortHours: 400, value: 100_000, currency: 'GBP' }
+    const ms = (id: string, pct: number, over: Partial<Milestone> = {}): Milestone => ({
+      id, sowId, name: `Milestone ${id}`, description: '', sequence: Number(id.slice(-1)),
+      basis: 'percentage', percentage: pct, amount: null, currency: 'GBP', billOn: 'acceptance',
+      plannedDate: null, delivery: 'Planned', deliveredAt: null, deliveredBy: null,
+      acceptance: 'Pending', acceptedAt: null, acceptedBy: null, rejectionNote: null,
+      acceptedValue: null, evidenceDocumentId: null,
+      recordedBy: 'Operator', recordedAt: NOW, deletedAt: null, ...over,
+    })
+
+    /* The firm's own shape, read off its pricing model: 25/35/25/15. */
+    const schedule = [
+      ms('ms-1', 25, { delivery: 'Delivered', deliveredAt: NOW, deliveredBy: 'Priya', acceptance: 'Accepted', acceptedAt: NOW, acceptedBy: 'Client Sponsor', acceptedValue: 25_000 }),
+      ms('ms-2', 35, { delivery: 'Delivered', deliveredAt: NOW, deliveredBy: 'Priya' }),
+      ms('ms-3', 25),
+      ms('ms-4', 15),
+    ]
+
+    /* A £20k change is approved AFTER milestone 1 was accepted. */
+    const change: ChangeRequest = {
+      id: 'cr-ms', sowId, issueId: null, reference: '', title: 'More scope', status: 'Approved',
+      effortHours: 80, value: 20_000, currency: 'GBP', scope: '', reason: 'The client asked',
+      effectiveFrom: null, requestedBy: 'Priya', requestedAt: NOW,
+      decidedBy: 'Nishant', decidedAt: NOW, decisionNote: null, deletedAt: null,
+    }
+    const contracted = contractedPosition(sow, [change])
+
+    const accepted = schedule[0]
+    const pending = schedule[2]
+    const acceptedWorth = milestoneValue(accepted, contracted)
+    const pendingWorth = milestoneValue(pending, contracted)
+
+    const position = milestonePosition(sowId, schedule, contracted)
+
+    /* A retainer: no milestones at all, which is a fact about the contract and not a gap. */
+    const retainer = milestonePosition('sow-retainer', [], contractedPosition({ id: 'sow-retainer', effortHours: 0, value: 60_000, currency: 'GBP' }, []))
+
+    /* A half-entered schedule. Reported, never refused — see scheduleProblem. */
+    const halfEntered = milestonePosition(sowId, [schedule[0], schedule[1]], contracted)
+    const over = milestonePosition(sowId, [...schedule, ms('ms-5', 30)], contracted)
+
+    /* The upfront shape: billable before anything is delivered. */
+    const upfront = ms('ms-u', 50, { billOn: 'signature' })
+
+    const good =
+      /* the accepted one keeps what it was signed at; the pending one follows the contract */
+      acceptedWorth === 25_000 &&
+      pendingWorth === 30_000 &&
+      /* delivered-but-not-accepted is answerable, which is the gap this closes */
+      position.awaitingAcceptance === 1 &&
+      position.accepted === 1 &&
+      position.delivered === 2 &&
+      /* billable is the acceptance trigger, so only milestone 1 counts */
+      position.billableValue === 25_000 &&
+      /*
+       * One, not zero. Accepting without a signed certificate is ALLOWED and reported — the
+       * document library needs a consent that has not been granted yet, and a milestone that
+       * could not be accepted without an artefact would be unusable for as long as that takes.
+       * What the product owes is to say which ones lack it, which is what this counts.
+       */
+      position.acceptedWithoutEvidence === 1 &&
+      /* a retainer is not 0% billed, it is not billed this way */
+      retainer.notMilestoneBilled === true &&
+      describeMilestones(retainer).includes('normal for a retainer') &&
+      /* an incomplete schedule reports the shortfall; an over-allocated one is called out harder */
+      scheduleProblem(halfEntered)?.includes('not yet allocated') === true &&
+      scheduleProblem(over)?.includes('more than there is to bill') === true &&
+      scheduleProblem(position) === null &&
+      /* and an upfront milestone is billable with nothing delivered */
+      isBillable(upfront) === true &&
+      isBillable(schedule[1]) === false
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A 25/35/25/15 schedule on a £100k contract. Milestone 1 was accepted before a £20k change was approved, and it is still worth £${acceptedWorth?.toLocaleString()} — the figure was fixed at acceptance, because moving it would retroactively change what the client already signed off. Milestone 3 has not been accepted, so it follows the contracted position and is now worth £${pendingWorth?.toLocaleString()} rather than £25,000. ${position.delivered} milestones are delivered and ${position.awaitingAcceptance} is delivered and awaiting acceptance — the pair the audit records as unanswerable. £${position.billableValue.toLocaleString()} is billable, which is the accepted one only: delivery does not make money owed unless the contract says it does, and the firm's own "50% upfront" shape proves the reverse case, where signature does. Milestone 1 was accepted with no signed certificate on file, which is allowed and counted rather than blocked — the document library is one consent short, and a milestone that could not be accepted without an artefact would be unusable until that landed. A retainer with no milestones reports "${describeMilestones(retainer).slice(0, 60)}…" rather than 0% billed. A half-entered schedule reports what is unallocated instead of being refused, because a firm typing four milestones passes through 25, 60 and 85 on the way to 100.`,
+      stops: 'at the invoice. A milestone can now say it is billable and nothing raises an invoice from it — `Invoice` and `InvoiceLine` are the next entity, and the audit sequences them after rates, which now exist.',
+      severity: '—',
+      impact:
+        'The commercial spine can answer what is owed and why. It could previously answer only what was contracted in total.',
     }
   },
 )

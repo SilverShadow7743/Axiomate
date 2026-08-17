@@ -4,6 +4,17 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/changeRequest'
+import {
+  BILLING_TRIGGERS,
+  describeMilestone,
+  describeMilestones,
+  isBillable,
+  milestonePosition,
+  milestoneValue,
+  scheduleProblem,
+  type BillingTrigger,
+  type Milestone,
+} from '@/lib/milestone'
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -34,6 +45,10 @@ export default function CommercialPanel({
   onRaiseChange,
   onDecideChange,
   onWithdrawChange,
+  onUpsertMilestone,
+  onRemoveMilestone,
+  onDeliverMilestone,
+  onDecideMilestone,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -48,10 +63,18 @@ export default function CommercialPanel({
   /** Approve or refuse one. Never your own — the reducer refuses that whatever the grant. */
   onDecideChange: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
   onWithdrawChange: (id: string) => void
+  /** Add or amend a line on the payment schedule. */
+  onUpsertMilestone: (sowId: string, id: string | null, patch: Partial<Milestone>) => boolean
+  onRemoveMilestone: (id: string) => void
+  /** Say the work landed. Separate from accepting it — see lib/milestone.ts. */
+  onDeliverMilestone: (id: string) => boolean
+  onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
 }) {
   const mayEdit = can(state.model, actor, 'sow.edit')
   const mayAttribute = can(state.model, actor, 'sow.attribute')
   const mayDecideChange = can(state.model, actor, 'change.approve')
+  const mayEditMilestone = can(state.model, actor, 'milestone.edit')
+  const mayAcceptMilestone = can(state.model, actor, 'milestone.accept')
   const [adding, setAdding] = useState(false)
 
   const sows = useMemo(
@@ -183,6 +206,19 @@ export default function CommercialPanel({
             <p className={`comm-position${position.forecastOverrun ? ' warn' : ''}`}>
               {describePosition(position)}
             </p>
+
+            <Milestones
+              sow={sow}
+              milestones={Object.values(state.milestones).filter((m) => m.sowId === sow.id && !m.deletedAt)}
+              contracted={contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt))}
+              mayEdit={mayEditMilestone.allowed}
+              mayAccept={mayAcceptMilestone.allowed}
+              actorName={actor.name}
+              onUpsert={onUpsertMilestone}
+              onRemove={onRemoveMilestone}
+              onDeliver={onDeliverMilestone}
+              onDecide={onDecideMilestone}
+            />
 
             <Changes
               sow={sow}
@@ -565,6 +601,231 @@ function Changes({
         ) : (
           <button className="btn" onClick={() => setOpen(true)}>
             Raise a change
+          </button>
+        )
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * The payment schedule.
+ *
+ * Two columns for state rather than one, because delivery and acceptance are two axes — this
+ * firm sells "50% upfront, 50% credited vs implementation" alongside "4 milestones
+ * (25/35/25/15)", and one lane cannot hold the first. It is also what makes "delivered but not
+ * accepted" a question the screen can answer, which the audit records as one the product could
+ * not ask.
+ *
+ * A statement of work with no milestones is not shown as 0% billed. Six of the firm's services
+ * are monthly retainers and legitimately have none, and reporting a fault that is not there is
+ * how a screen stops being read.
+ */
+function Milestones({
+  sow,
+  milestones,
+  contracted,
+  mayEdit,
+  mayAccept,
+  actorName,
+  onUpsert,
+  onRemove,
+  onDeliver,
+  onDecide,
+}: {
+  sow: Sow
+  milestones: Milestone[]
+  contracted: ReturnType<typeof contractedPosition>
+  mayEdit: boolean
+  mayAccept: boolean
+  actorName: string
+  onUpsert: (sowId: string, id: string | null, patch: Partial<Milestone>) => boolean
+  onRemove: (id: string) => void
+  onDeliver: (id: string) => boolean
+  onDecide: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [pct, setPct] = useState('')
+  const [billOn, setBillOn] = useState<BillingTrigger>('acceptance')
+  const [planned, setPlanned] = useState('')
+  const [returning, setReturning] = useState<string | null>(null)
+  const [why, setWhy] = useState('')
+
+  const position = milestonePosition(sow.id, milestones, contracted)
+  const gap = scheduleProblem(position)
+  const ordered = milestones.slice().sort((a, b) => a.sequence - b.sequence)
+  const ready = name.trim() !== '' && Number(pct) > 0 && Number(pct) <= 100
+
+  return (
+    <section className="comm-changes">
+      <h5 className="est-h">Payment schedule</h5>
+      <p className="comm-position">{describeMilestones(position)}</p>
+      {gap && <p className="comm-position warn">{gap}</p>}
+
+      {ordered.length > 0 && (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Milestone</th>
+              <th>Worth</th>
+              <th>Due</th>
+              <th>Delivery</th>
+              <th>Acceptance</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((m) => {
+              const value = milestoneValue(m, contracted)
+              /* The deliverer cannot accept — the reducer refuses it, so the control is not
+                 offered either. A button that can never succeed is worse than no button. */
+              const theirs = m.deliveredBy?.trim().toLowerCase() === actorName.trim().toLowerCase()
+              return (
+                <tr key={m.id} title={describeMilestone(m, value)}>
+                  <td className="mono">{m.sequence}</td>
+                  <td>{m.name}</td>
+                  <td className="mono">
+                    {value === null ? '—' : `${m.currency} ${Math.round(value).toLocaleString()}`}
+                    {m.basis === 'percentage' && <span className="est-block-note"> {m.percentage}%</span>}
+                    {m.acceptedValue !== null && <span className="est-block-note"> · fixed at acceptance</span>}
+                  </td>
+                  <td className="mono">{m.plannedDate ?? '—'}</td>
+                  <td>
+                    <span className={`comm-status st-${m.delivery.toLowerCase()}`}>{m.delivery}</span>
+                  </td>
+                  <td>
+                    <span className={`comm-status st-${m.acceptance.toLowerCase()}`}>{m.acceptance}</span>
+                    {isBillable(m) && <span className="est-block-note"> · billable</span>}
+                    {m.acceptance === 'Accepted' && !m.evidenceDocumentId && (
+                      <span className="est-block-note"> · no signed acceptance held</span>
+                    )}
+                    {m.rejectionNote && <span className="est-block-note"> — {m.rejectionNote}</span>}
+                  </td>
+                  <td>
+                    {mayEdit && m.delivery !== 'Delivered' && m.acceptance !== 'Accepted' && (
+                      <>
+                        <button className="btn-link" onClick={() => onDeliver(m.id)}>
+                          Delivered
+                        </button>{' '}
+                      </>
+                    )}
+                    {mayAccept && m.acceptance !== 'Accepted' && !theirs && (m.delivery === 'Delivered' || m.billOn === 'signature') && (
+                      returning === m.id ? (
+                        <>
+                          <input
+                            className="fld-input"
+                            placeholder="What has to change"
+                            value={why}
+                            onChange={(e) => setWhy(e.target.value)}
+                            aria-label="Reason for returning"
+                          />
+                          <button
+                            className="btn-link"
+                            disabled={!why.trim()}
+                            onClick={() => {
+                              if (onDecide(m.id, 'Rejected', why)) {
+                                setReturning(null)
+                                setWhy('')
+                              }
+                            }}
+                          >
+                            Return
+                          </button>{' '}
+                          <button className="btn-link" onClick={() => setReturning(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-link" onClick={() => onDecide(m.id, 'Accepted')}>
+                            Accept
+                          </button>{' '}
+                          <button className="btn-link" onClick={() => setReturning(m.id)}>
+                            Return
+                          </button>{' '}
+                        </>
+                      )
+                    )}
+                    {mayAccept && theirs && m.acceptance !== 'Accepted' && (
+                      <span className="est-block-note">You recorded this delivered — somebody else accepts it.</span>
+                    )}
+                    {mayEdit && m.acceptance !== 'Accepted' && (
+                      <button className="btn-link" onClick={() => onRemove(m.id)}>
+                        Remove
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {mayEdit ? (
+        open ? (
+          <div className="time-form">
+            <div className="time-row">
+              <label className="fld time-fld-person">
+                <span className="fld-label">Milestone</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Design sign-off" />
+              </label>
+              <label className="fld time-fld-hours">
+                <span className="fld-label">% of contract</span>
+                <input type="number" min={0} max={100} step="0.001" value={pct} onChange={(e) => setPct(e.target.value)} />
+              </label>
+              <label className="fld">
+                <span className="fld-label">Billable on</span>
+                <select value={billOn} onChange={(e) => setBillOn(e.target.value as BillingTrigger)}>
+                  {BILLING_TRIGGERS.map((b) => (
+                    <option key={b} value={b}>
+                      {b === 'acceptance' ? 'Acceptance' : b === 'signature' ? 'Signature (upfront)' : 'Delivery'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fld">
+                <span className="fld-label">Due</span>
+                <input type="date" value={planned} onChange={(e) => setPlanned(e.target.value)} />
+              </label>
+              {/*
+                * Percentage only on this form. A fixed-amount milestone is supported by the model
+                * and is the rarer shape; offering both here would make the common case a choice
+                * before it is an entry. The total is reported above, never enforced — a schedule
+                * is half-finished for as long as somebody is typing it.
+                */}
+              <button
+                className="btn"
+                disabled={!ready}
+                title={ready ? 'Add it' : 'Needs a name and a percentage between 0 and 100'}
+                onClick={() => {
+                  if (
+                    onUpsert(sow.id, null, {
+                      name,
+                      basis: 'percentage',
+                      percentage: Number(pct),
+                      billOn,
+                      plannedDate: planned || null,
+                      description: '',
+                    })
+                  ) {
+                    setOpen(false)
+                    setName(''); setPct(''); setPlanned('')
+                  }
+                }}
+              >
+                Add
+              </button>
+              <button className="btn ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn" onClick={() => setOpen(true)}>
+            Add a milestone
           </button>
         )
       ) : null}

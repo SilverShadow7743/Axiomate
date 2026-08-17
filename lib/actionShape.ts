@@ -9,6 +9,7 @@ import { TIME_ACTIVITIES } from './time'
 import { COMMITMENT_KINDS } from './capacity'
 import { SKILL_ORDER, SKILL_SOURCES } from './skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
+import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
 
 /**
  * Deciding whether an action is the shape it claims to be.
@@ -705,6 +706,36 @@ const SHAPES = {
     now,
   },
   removeDocument: { id: req(id), now },
+  upsertMilestone: {
+    id: req(idOrNull),
+    sowId: req(id),
+    patch: req(
+      patchOf({
+        name: text,
+        description: text,
+        sequence: num,
+        basis: oneOf(new Set(MILESTONE_BASES)),
+        percentage: num,
+        amount: num,
+        currency: text,
+        billOn: oneOf(new Set(BILLING_TRIGGERS)),
+        plannedDate: isoDateOrNull,
+        delivery: oneOf(new Set(DELIVERY_STATES)),
+      }),
+    ),
+    now,
+  },
+  removeMilestone: { id: req(id), now },
+  deliverMilestone: { id: req(id), now },
+  decideMilestone: {
+    id: req(id),
+    // `Pending` is deliberately not on the wire. Un-deciding a milestone is not a decision, and
+    // a returned one comes back through `deliverMilestone` when it is presented again.
+    decision: req(oneOf(new Set(['Accepted', 'Rejected']))),
+    note: opt(text),
+    evidenceDocumentId: opt(idOrNull),
+    now,
+  },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),

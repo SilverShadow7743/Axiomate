@@ -1932,6 +1932,18 @@ export default function IssueWorkspace({
           onWithdrawChange={(id) =>
             dispatch({ t: 'withdrawChangeRequest', id, now: new Date().toISOString() })
           }
+          onUpsertMilestone={(sowId, id, patch) =>
+            dispatch({ t: 'upsertMilestone', id, sowId, patch, now: new Date().toISOString() })
+          }
+          onRemoveMilestone={(id) =>
+            dispatch({ t: 'removeMilestone', id, now: new Date().toISOString() })
+          }
+          onDeliverMilestone={(id) =>
+            dispatch({ t: 'deliverMilestone', id, now: new Date().toISOString() })
+          }
+          onDecideMilestone={(id, decision, note) =>
+            dispatch({ t: 'decideMilestone', id, decision, note, now: new Date().toISOString() })
+          }
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
           }

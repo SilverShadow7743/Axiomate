@@ -145,6 +145,7 @@ model Tenant {
   changes       ChangeRequest[]
   personSkills  PersonSkill[]
   documents     Document[]
+  milestones    Milestone[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -678,7 +679,8 @@ model Sow {
   /// Projects delivered under it.
   projects HierarchyNode[] @relation("SowDelivery")
   /// Variations to this contract. Deltas — see `ChangeRequest`.
-  changes  ChangeRequest[]
+  changes    ChangeRequest[]
+  milestones Milestone[]
 
   @@id([tenantId, id])
   @@index([tenantId, engagementId])
@@ -1188,6 +1190,74 @@ model Document {
   @@index([tenantId, subjectKind, subjectId])
   /// And the duplicate check, which is per subject and never across the tenant.
   @@index([tenantId, checksum])
+}
+
+/// What was promised against a statement of work, when it lands, and what it is worth.
+///
+/// **Delivery and acceptance are two columns, not one status.** The firm sells "fixed fee — 50%
+/// upfront, 50% credited vs implementation" alongside "fixed fee — 4 milestones (25/35/25/15)",
+/// and the first bills before anything is delivered. One lane cannot hold that, and collapsing
+/// the two also destroys the question the product was built to answer: delivered but not
+/// accepted. See `lib/milestone.ts`.
+///
+/// A statement of work legitimately has NO milestones — six of this firm's services are monthly
+/// retainers — so the absence of rows here is a fact about the contract, not a gap in the data.
+model Milestone {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `ms-12`, minted from the durable workspace counter.
+  id    String
+  sowId String
+  sow   Sow    @relation(fields: [tenantId, sowId], references: [tenantId, id], onDelete: Restrict)
+
+  name        String
+  description String @db.Text
+  /// Presentation order and the order a payment schedule reads in. Not a dependency.
+  sequence    Int
+
+  /// percentage | amount.
+  basis      String
+  /// Of the CONTRACTED value — baseline plus approved changes — not of the baseline.
+  /// Decimal, because a 33.33% milestone is a real term and rounding it moves money.
+  percentage Decimal? @db.Decimal(6, 3)
+  amount     Decimal? @db.Decimal(14, 2)
+  currency   String   @default("GBP")
+  /// acceptance | signature | delivery. A negotiated commercial term, never inferred from state.
+  billOn     String
+
+  /// A String date, like every other effective date here — see `Version.validFrom`.
+  plannedDate String?
+
+  /// Planned | InProgress | Delivered.
+  delivery    String
+  deliveredAt DateTime?
+  deliveredBy String?
+
+  /// Pending | Accepted | Rejected.
+  acceptance    String
+  acceptedAt    DateTime?
+  acceptedBy    String?
+  /// Required by the reducer on a rejection: what has to change before it is presented again.
+  rejectionNote String?   @db.Text
+
+  /// What it was worth when it was accepted.
+  ///
+  /// A derived value deliberately stored, and the exception is argued in `lib/milestone.ts`:
+  /// a later approved change request must not retroactively move what a client already signed
+  /// off. Null until accepted, and null forever on one that never is.
+  acceptedValue Decimal? @db.Decimal(14, 2)
+
+  /// The signed acceptance certificate, when one is held. No foreign key, like
+  /// `Evidence.documentId` and for the same reasons.
+  evidenceDocumentId String?
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, sowId, sequence])
 }
 
 /// What was true about something, from when, and why it changed.

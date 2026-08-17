@@ -71,6 +71,10 @@ const KINDS = new Set([
   'removePersonSkill',
   'recordDocument',
   'removeDocument',
+  'upsertMilestone',
+  'removeMilestone',
+  'deliverMilestone',
+  'decideMilestone',
   'submitTimesheet',
   'decideTimesheet',
   // `notify` is deliberately absent. Notifications are raised by rules, and the server plans

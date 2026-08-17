@@ -231,6 +231,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
        * documents existed has no such key.
        */
       documents: parsed.documents ?? {},
+      // `?? {}` because a mirror written before milestones existed has no such key.
+      milestones: parsed.milestones ?? {},
       personSkills: {
         ...(seed.personSkills ?? {}),
         ...Object.fromEntries(

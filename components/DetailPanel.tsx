@@ -25,6 +25,7 @@ import type { TimeActivity } from '@/lib/time'
 import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
+import type { Milestone } from '@/lib/milestone'
 import type { IssueNote, NoteType } from '@/lib/notes'
 import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
@@ -143,6 +144,10 @@ interface Props {
   onRaiseChange: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
   onDecideChange: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
   onWithdrawChange: (id: string) => void
+  onUpsertMilestone: (sowId: string, id: string | null, patch: Partial<Milestone>) => boolean
+  onRemoveMilestone: (id: string) => void
+  onDeliverMilestone: (id: string) => boolean
+  onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
   onAllocate: (
     projectId: string,
     a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
@@ -190,6 +195,10 @@ export default function DetailPanel({
   onRaiseChange,
   onDecideChange,
   onWithdrawChange,
+  onUpsertMilestone,
+  onRemoveMilestone,
+  onDeliverMilestone,
+  onDecideMilestone,
   onAllocate,
   onRelease,
   onRecordPattern,
@@ -431,6 +440,10 @@ export default function DetailPanel({
                 onRaiseChange={onRaiseChange}
                 onDecideChange={onDecideChange}
                 onWithdrawChange={onWithdrawChange}
+                onUpsertMilestone={onUpsertMilestone}
+                onRemoveMilestone={onRemoveMilestone}
+                onDeliverMilestone={onDeliverMilestone}
+                onDecideMilestone={onDecideMilestone}
               />
             )}
           </>

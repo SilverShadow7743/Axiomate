@@ -400,7 +400,7 @@ mutation goes through one reducer with one permission check. That is the right f
 | SOW Intelligence | declared | SOW document | file storage ✓ (pending one consent) | structured scope | required | **P2 — unblocked once the library is consented.** `SowScopeItem` is the next piece, and the audit's own instruction was not to build it before this existed |
 | Resource Allocation / Skill Match | declared | demand, skills | skills ✓ · **demand — absent** | recommended allocation | required | **P2 — half unblocked.** `candidatesFor` answers "who could do this" from recorded skill and returns candidates, never a ranking. Nothing yet states what a deliverable *needs*, so the requirement has to be typed rather than read |
 | Margin Protection | declared | revenue, cost, hours | rates ✓ | threshold breach | required | **P2 — unblocked.** `costOf` prices each hour at the rate in force on its own date, and reports the whole total as absent rather than short when any hour is unrated |
-| Milestone Risk | declared | milestones | **project milestones — absent** | forecast | required | P3 — blocked |
+| Milestone Risk | declared | milestones | milestones ✓ | forecast | required | **P2 — unblocked.** A milestone carries a planned date, a delivery state and a value, which is what a forecast needs |
 | Duplicate Detection | declared | inbound issue | issues ✓ | is this new? | `suggest` | **P2 — feasible now** |
 | Issue Triage / Routing | declared | new issue | routing rules ✓, skills ✗ | severity, owner | required | P2 partial |
 
@@ -479,10 +479,10 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | ~~`ChangeRequest`~~ | Commercial change is currently a string | **BUILT** — a signed delta; the SOW baseline is never edited |
 | ~~`Skill`, `PersonSkill` (with proficiency)~~ | Unblocks allocation intelligence and two agents | **BUILT** — named levels not numbers, provenance (`self`/`assessed`/`certified`), and `lastUsedOn` so a lapsed skill reads as lapsed. Catalogue in the model, levels in a table, judgement fields redacted at the boundary |
 | ~~`Document` / file storage~~ | Unblocks SOW intelligence and deliverable evidence | **BUILT** — SharePoint via Graph, not Blob. A row exists only when the bytes do; the locator never leaves the server. **One admin action outstanding**: grant `Files.ReadWrite.All` and name a drive |
-| `Milestone` as a first-class record at project/SOW level | Unblocks outcomes, milestone billing, two agents | **P1** |
+| ~~`Milestone` as a first-class record at project/SOW level~~ | Unblocks outcomes, milestone billing, two agents | **BUILT** — at SOW level, where the money is. Delivery and acceptance are two axes, not one status; a percentage milestone follows the contracted position until it is accepted and is frozen at that figure afterwards |
 | `HolidayCalendar` + `CalendarDay` | A holiday is currently N person-rows; Mon–Fri is hardcoded | **P2** |
 | `Location`, `BusinessUnit`, `Practice` | Org master data; onshore/offshore | **P2** |
-| `Invoice`, `InvoiceLine` | After rates | **P2** |
+| `Invoice`, `InvoiceLine` | After rates ✓ and milestones ✓ | **P2 — both dependencies now exist.** A milestone can say it is billable and nothing raises an invoice from it |
 | `Lead` / `Opportunity` | Only if pre-sale is in scope | **P3** |
 
 ### Remove
@@ -523,7 +523,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 | Rate card (cost + bill), effective-dated | | | ✓ | **P0** | `Version` ✓ | Model rates; protect with a new permission |
 | Master data out of JSON | | ✓ | | **P0** | — | Start with people; then roles, profiles |
 | Change Request entity | | | ✓ | **P1** | SOW ✓ | Model with scope, effort, value, approval, dates |
-| Milestone as a first-class record | | ✓ | | **P1** | — | Project/SOW level, with acceptance and evidence |
+| ~~Milestone as a first-class record~~ | | ✓ | | **DONE** | — | SOW level, with acceptance and an optional signed certificate. Reachable: add, deliver, accept, return, remove |
 | ~~File storage~~ | | | ✓ | **DONE** | ~~Azure Blob~~ SharePoint/Graph | Upload → store → link to Evidence. Reachable: attach, download, withdraw, and attach-to-an-evidence-row |
 | ~~Skills + proficiency~~ | | | ✓ | **DONE** | people table | `Skill`, `PersonSkill` — reachable: catalogue, record, correct, withdraw |
 | Notification transport | | ✓ | | **P1** | Graph/SMTP | Email first; Teams second |
@@ -565,7 +565,7 @@ rest possible.*
 | Use the SOW module for real contracts | The commercial spine has zero rows | — | **S** | Validate |
 | `ChangeRequest` entity | Scope change is a string with no value or approval | SOW | **M** | Build |
 | Milestone as a record at project/SOW level | Cannot answer "which milestone is at risk" | — | **M** | Build |
-| Acceptance state on deliverables | Cannot answer "delivered but not accepted" | milestone | **M** | Build |
+| ~~Acceptance state on deliverables~~ | ~~Cannot answer "delivered but not accepted"~~ | milestone ✓ | **M** | **Answerable at milestone level** — `milestonePosition.awaitingAcceptance`. Per-deliverable acceptance still needs `SowScopeItem` |
 | ~~File storage + upload~~ | No evidence, no SOW document | ~~Azure Blob~~ SharePoint/Graph | **M** | **Built — grant the consent** |
 | Email notification transport | Nothing leaves the app | Graph | **S** | Build |
 | RAID as work types | Governance without four new modules | — | **S** | Build |
@@ -613,7 +613,7 @@ blocked on data that does not exist. Building them now produces screens that can
 7. **Model `ChangeRequest` as an entity.** Scope change is the most common commercial event in
    consulting and it currently has nowhere to live.
 8. ~~**Add file storage.**~~ **Built.** One administrator action stands between it and working — see `.env.example`, *Attached files*.
-9. **Promote Milestone to a record at project level**, with acceptance criteria and evidence.
+9. ~~**Promote Milestone to a record at project level**~~ **Built, at SOW level** — that is where a payment schedule lives, and the firm's own pricing model expresses milestones as percentages of a fee.
 10. **Decide on row-level security.** Identity now exists, which was the stated blocker. Either
     commit to real multi-tenancy or write down that this is a single-firm deployment.
 

@@ -25,6 +25,7 @@ import type {
   ChangeRequest as ChangeRequestRow,
   PersonSkill as PersonSkillRow,
   Document as DocumentRow,
+  Milestone as MilestoneRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -45,6 +46,13 @@ import type { ChangeRequest, ChangeStatus } from '../changeRequest'
 import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
+import type {
+  AcceptanceState,
+  BillingTrigger,
+  DeliveryState,
+  Milestone,
+  MilestoneBasis,
+} from '../milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
 
@@ -984,6 +992,78 @@ export function rateFromRow(r: PersonRateRow): PersonRate {
     byId: r.byId ?? undefined,
     byEmail: r.byEmail,
     reason: r.reason,
+  }
+}
+
+/* ================================================================== *
+ * Milestones
+ * ================================================================== */
+
+/**
+ * Three `Decimal` columns, and the same caution as `PersonRate.amount`.
+ *
+ * `Number()` on a Prisma `Decimal` is exact for every figure a contract will carry — 14,2 for
+ * money and 6,3 for a percentage are hundredths and thousandths well inside a double's integer
+ * range. `percentage` is 6,3 rather than an integer because a three-way split is 33.333% and
+ * rounding that to 33 loses money on every invoice.
+ */
+export function milestoneToRow(tenantId: TenantId, m: Milestone): Prisma.MilestoneUncheckedCreateInput {
+  return {
+    tenantId,
+    id: m.id,
+    sowId: m.sowId,
+    name: m.name,
+    description: m.description,
+    sequence: m.sequence,
+    basis: m.basis,
+    percentage: m.percentage,
+    amount: m.amount,
+    currency: m.currency,
+    billOn: m.billOn,
+    // A String date, like `Version.validFrom`, so the round trip is the identity function.
+    plannedDate: m.plannedDate,
+    delivery: m.delivery,
+    deliveredAt: m.deliveredAt ? new Date(m.deliveredAt) : null,
+    deliveredBy: m.deliveredBy,
+    acceptance: m.acceptance,
+    acceptedAt: m.acceptedAt ? new Date(m.acceptedAt) : null,
+    acceptedBy: m.acceptedBy,
+    rejectionNote: m.rejectionNote,
+    acceptedValue: m.acceptedValue,
+    evidenceDocumentId: m.evidenceDocumentId,
+    recordedBy: m.recordedBy,
+    recordedAt: new Date(m.recordedAt),
+    deletedAt: m.deletedAt ? new Date(m.deletedAt) : null,
+  }
+}
+
+export function milestoneFromRow(r: MilestoneRow): Milestone {
+  return {
+    id: r.id,
+    sowId: r.sowId,
+    name: r.name,
+    description: r.description,
+    sequence: r.sequence,
+    basis: r.basis as MilestoneBasis,
+    // Null stays null. Zero would be a percentage somebody chose, and these two fields are
+    // mutually exclusive by design — the unused one must not come back as 0.
+    percentage: r.percentage === null ? null : Number(r.percentage),
+    amount: r.amount === null ? null : Number(r.amount),
+    currency: r.currency,
+    billOn: r.billOn as BillingTrigger,
+    plannedDate: r.plannedDate,
+    delivery: r.delivery as DeliveryState,
+    deliveredAt: r.deliveredAt ? r.deliveredAt.toISOString() : null,
+    deliveredBy: r.deliveredBy,
+    acceptance: r.acceptance as AcceptanceState,
+    acceptedAt: r.acceptedAt ? r.acceptedAt.toISOString() : null,
+    acceptedBy: r.acceptedBy,
+    rejectionNote: r.rejectionNote,
+    acceptedValue: r.acceptedValue === null ? null : Number(r.acceptedValue),
+    evidenceDocumentId: r.evidenceDocumentId,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 

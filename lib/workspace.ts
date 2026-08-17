@@ -54,7 +54,17 @@ import {
 } from './documents'
 import type { StoreKind } from './documents'
 import {
+  acceptProblem,
+  checkMilestone,
+  deliverProblem,
+  milestoneValue,
+  nextSequence,
+  type AcceptanceState,
+  type Milestone,
+} from './milestone'
+import {
   checkChange,
+  contractedPosition,
   decideChangeProblem,
   statusAfterDecision,
   type ChangeRequest,
@@ -313,6 +323,13 @@ export interface WorkspaceState {
    * somebody asks for is usually an old one.
    */
   documents: Record<string, DocumentRecord>
+  /**
+   * What was promised, when it lands, and what it is worth. See `./milestone`.
+   *
+   * A statement of work legitimately has none — a monthly retainer is billed by the month — and
+   * `milestonePosition` reports that as a different thing from having made no progress.
+   */
+  milestones: Record<string, Milestone>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -573,6 +590,7 @@ export function initWorkspace(
     changes: {},
     personSkills: {},
     documents: {},
+    milestones: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -820,6 +838,40 @@ export type Action =
       now: string
     }
   | { t: 'removeDocument'; id: string; now: string }
+  /* ---- MILESTONES ---- */
+  | {
+      t: 'upsertMilestone'
+      id: string | null
+      sowId: string
+      patch: Partial<
+        Pick<
+          Milestone,
+          | 'name'
+          | 'description'
+          | 'sequence'
+          | 'basis'
+          | 'percentage'
+          | 'amount'
+          | 'currency'
+          | 'billOn'
+          | 'plannedDate'
+          | 'delivery'
+        >
+      >
+      now: string
+    }
+  | { t: 'removeMilestone'; id: string; now: string }
+  /** Say the work has landed. Deliberately separate from accepting it — see `lib/milestone.ts`. */
+  | { t: 'deliverMilestone'; id: string; now: string }
+  | {
+      t: 'decideMilestone'
+      id: string
+      decision: AcceptanceState
+      note?: string
+      /** The signed acceptance, when one has been stored. Absence is normal and allowed. */
+      evidenceDocumentId?: string | null
+      now: string
+    }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -3538,6 +3590,192 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Withdrawn. The file stays in the document library.',
+      }
+    }
+
+    case 'upsertMilestone': {
+      const sow = state.sows[a.sowId]
+      if (!sow || sow.deletedAt) return { state, error: 'That statement of work no longer exists.' }
+
+      const existing = a.id ? state.milestones[a.id] : null
+      if (a.id && !existing) return { state, error: 'That milestone no longer exists.' }
+      /*
+       * An accepted milestone is not editable. Its value was frozen at acceptance and the client
+       * has signed against a name and a description; changing either afterwards would alter what
+       * was accepted without anybody deciding to. Withdraw it and record a new one, which leaves
+       * both on the trail.
+       */
+      if (existing?.acceptance === 'Accepted') {
+        return { state, error: 'That milestone has been accepted. Record a new one rather than changing what was signed off.' }
+      }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `ms-${seq}`
+      const merged: Milestone = {
+        id,
+        sowId: a.sowId,
+        name: a.patch.name ?? existing?.name ?? '',
+        description: a.patch.description ?? existing?.description ?? '',
+        sequence: a.patch.sequence ?? existing?.sequence ?? nextSequence(state.milestones, a.sowId),
+        basis: a.patch.basis ?? existing?.basis ?? 'percentage',
+        // Read from the merged basis rather than the patch, so switching basis clears the other
+        // side instead of leaving a stale amount behind a percentage.
+        percentage: null,
+        amount: null,
+        currency: a.patch.currency ?? existing?.currency ?? sow.currency,
+        billOn: a.patch.billOn ?? existing?.billOn ?? 'acceptance',
+        plannedDate: a.patch.plannedDate === undefined ? (existing?.plannedDate ?? null) : a.patch.plannedDate,
+        delivery: a.patch.delivery ?? existing?.delivery ?? 'Planned',
+        deliveredAt: existing?.deliveredAt ?? null,
+        deliveredBy: existing?.deliveredBy ?? null,
+        acceptance: existing?.acceptance ?? 'Pending',
+        acceptedAt: existing?.acceptedAt ?? null,
+        acceptedBy: existing?.acceptedBy ?? null,
+        rejectionNote: existing?.rejectionNote ?? null,
+        acceptedValue: existing?.acceptedValue ?? null,
+        evidenceDocumentId: existing?.evidenceDocumentId ?? null,
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+      if (merged.basis === 'percentage') {
+        merged.percentage = a.patch.percentage ?? existing?.percentage ?? null
+      } else {
+        merged.amount = a.patch.amount ?? existing?.amount ?? null
+      }
+
+      const problem = checkMilestone(merged)
+      if (problem) return { state, error: problem }
+
+      /*
+       * The SET's total is deliberately NOT checked here. A firm entering four milestones passes
+       * through 25, 60 and 85 on the way to 100, and refusing any set that does not total 100
+       * would make the second one impossible to save. `scheduleProblem` reports it beside the
+       * schedule instead — the same shape `describeCapacity` uses for an assumed working pattern.
+       */
+      return {
+        state: {
+          ...state,
+          seq,
+          milestones: { ...state.milestones, [id]: merged },
+          audit: log(actor, state, {
+            rowId: a.sowId,
+            field: 'milestone',
+            from: existing?.name ?? null,
+            to: merged.name,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? `${merged.name} updated.` : `${merged.name} added to the schedule.`,
+      }
+    }
+
+    case 'removeMilestone': {
+      const existing = state.milestones[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That milestone no longer exists.' }
+      if (existing.acceptance === 'Accepted') {
+        return { state, error: 'That milestone has been accepted. Removing it would delete a record the client signed against.' }
+      }
+      return {
+        state: {
+          ...state,
+          milestones: { ...state.milestones, [a.id]: { ...existing, deletedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: existing.sowId, field: 'milestone', from: existing.name, to: null, at: a.now, by,
+          }),
+        },
+        message: `${existing.name} removed from the schedule.`,
+      }
+    }
+
+    /**
+     * Say the work has landed.
+     *
+     * Its own arm rather than a `delivery` patch through `upsertMilestone`, because this is the
+     * act the acceptance rule is measured against: `deliveredBy` is what stops the same person
+     * accepting it. Buried inside a general patch, that name would be set by whoever last edited
+     * any field.
+     */
+    case 'deliverMilestone': {
+      const existing = state.milestones[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That milestone no longer exists.' }
+      const problem = deliverProblem(existing)
+      if (problem) return { state, error: problem }
+
+      const next: Milestone = {
+        ...existing,
+        delivery: 'Delivered',
+        deliveredAt: a.now,
+        deliveredBy: by,
+        // A returned milestone presented again is Pending once more, not still Rejected.
+        acceptance: existing.acceptance === 'Rejected' ? 'Pending' : existing.acceptance,
+      }
+      return {
+        state: {
+          ...state,
+          milestones: { ...state.milestones, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.sowId,
+            field: 'milestone.delivery',
+            from: existing.delivery,
+            to: 'Delivered',
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${existing.name} recorded as delivered. It is not billable until it is accepted.`,
+      }
+    }
+
+    case 'decideMilestone': {
+      const existing = state.milestones[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That milestone no longer exists.' }
+      const problem = acceptProblem(existing, a.decision, a.note, by)
+      if (problem) return { state, error: problem }
+
+      if (a.evidenceDocumentId && !state.documents[a.evidenceDocumentId]) {
+        return { state, error: 'That acceptance document is not held here.' }
+      }
+
+      /*
+       * The value is frozen at acceptance, and this is the one place a derived figure becomes a
+       * recorded fact in this entity. The argument is in `Milestone.acceptedValue`: an approved
+       * change request correctly moves a percentage milestone that has not been signed off, and
+       * moving one that HAS been signed off would retroactively change what the client agreed to
+       * pay for work they have already accepted.
+       */
+      const contracted = contractedPosition(state.sows[existing.sowId], Object.values(state.changes))
+      const frozen = a.decision === 'Accepted' ? milestoneValue(existing, contracted) : null
+
+      const next: Milestone = {
+        ...existing,
+        acceptance: a.decision,
+        acceptedAt: a.now,
+        acceptedBy: by,
+        rejectionNote: a.decision === 'Rejected' ? (a.note?.trim() ?? '') : null,
+        acceptedValue: frozen,
+        evidenceDocumentId: a.evidenceDocumentId ?? existing.evidenceDocumentId,
+      }
+      return {
+        state: {
+          ...state,
+          milestones: { ...state.milestones, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.sowId,
+            field: 'milestone.acceptance',
+            from: existing.acceptance,
+            to: a.decision,
+            at: a.now,
+            by,
+            reason: a.note?.trim() || undefined,
+          }),
+        },
+        message:
+          a.decision === 'Accepted'
+            ? `${existing.name} accepted${frozen === null ? '' : ` at ${next.currency} ${frozen.toLocaleString()}`}.`
+            : `${existing.name} returned.`,
       }
     }
 

@@ -28,6 +28,7 @@ import {
   rateToRow,
   personSkillToRow,
   documentToRow,
+  milestoneToRow,
   changeToRow,
   revisionToRow,
   relationshipToRow,
@@ -558,6 +559,22 @@ export async function persistSteps(
      * at the withdrawn file — persisting only the document would leave the database holding a
      * pointer the reducer had already cleared.
      */
+    case 'upsertMilestone':
+    case 'removeMilestone':
+    case 'deliverMilestone':
+    case 'decideMilestone': {
+      for (const [id, m] of Object.entries(after.milestones)) {
+        if (before.milestones[id] === m) continue
+        const row = milestoneToRow(tenantId, m)
+        await tx.milestone.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
     case 'recordDocument':
     case 'removeDocument': {
       for (const [id, d] of Object.entries(after.documents)) {

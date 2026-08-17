@@ -75,13 +75,14 @@ export const PERMISSIONS = [
   },
   { key: 'time.approve', label: 'Decide a timesheet', what: 'Approve a submitted week, or return it with a reason. Never your own: the person who submitted may not decide it, whatever they hold.' },
   /*
-   * Three keys rather than one, on the same split as `time.record` / `time.recordForOthers`.
-   *
-   * A skills directory that only a lead can fill in stays empty, so recording your own is part
-   * of doing the work. Saying how good somebody ELSE is, or attaching the word "assessed" to a
-   * level, is a judgement about a colleague and takes its own grant. Reading other people's
-   * levels is a third thing again — see the boundary note in `lib/skills.ts`.
+   * Two keys, split on the axis that matters commercially. Recording a payment schedule and
+   * saying the work has landed are both delivery acts and share `milestone.edit`. Saying the
+   * work is ACCEPTABLE is the client's judgement, and it is what makes money owed — so it is its
+   * own grant, held by the client sponsor and the engagement leader, and the reducer refuses it
+   * to whoever recorded the delivery whatever they hold.
    */
+  { key: 'milestone.edit', label: 'Plan a milestone', what: 'Set out the payment schedule against a statement of work, and record when a milestone is delivered.' },
+  { key: 'milestone.accept', label: 'Accept a milestone', what: 'Sign a milestone off, or return it with a reason. Never one you recorded as delivered yourself — acceptance is somebody else’s judgement, and it is what makes a milestone billable.' },
   /*
    * Two keys, not three. There is deliberately no `document.view`.
    *
@@ -98,6 +99,14 @@ export const PERMISSIONS = [
    */
   { key: 'document.upload', label: 'Attach a file', what: 'Upload a document against an issue, a statement of work, a project or a change. The file is stored, not just described.' },
   { key: 'document.remove', label: "Withdraw somebody else's file", what: 'Withdraw a file another person attached. Your own can always be withdrawn by you.' },
+  /*
+   * Three keys rather than one, on the same split as `time.record` / `time.recordForOthers`.
+   *
+   * A skills directory that only a lead can fill in stays empty, so recording your own is part
+   * of doing the work. Saying how good somebody ELSE is, or attaching the word "assessed" to a
+   * level, is a judgement about a colleague and takes its own grant. Reading other people's
+   * levels is a third thing again — see the boundary note in `lib/skills.ts`.
+   */
   { key: 'skill.record', label: 'Record your own skills', what: 'Say what you can do and at what level. Your own only, and self-rated — see the next two.' },
   { key: 'skill.assess', label: "Assess somebody's skill", what: "Record a level against another person, or mark any level as assessed or certified rather than self-rated." },
   {
@@ -218,14 +227,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
@@ -234,7 +243,9 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record', 'document.upload'],
   // The one client role that decides anything: a sponsor is the person a change order is
   // actually put to, and a rule that names them is worthless if the grant does not.
-  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide'],
+  // The one client role that decides anything, and milestone acceptance is the decision that
+  // most belongs to a client: it is what turns delivered work into money owed.
+  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide', 'milestone.accept'],
   ROLE_CLIENT_LEAD: ['work.create', 'note.add', 'evidence.add'],
   ROLE_CLIENT_USER: ['work.create', 'note.add'],
 }
@@ -437,6 +448,10 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
    * enforced only here would mean storing a file for somebody who was never allowed to attach
    * one, and then refusing to write the row that would let anybody find it again.
    */
+  upsertMilestone: 'milestone.edit',
+  removeMilestone: 'milestone.edit',
+  deliverMilestone: 'milestone.edit',
+  decideMilestone: 'milestone.accept',
   recordDocument: 'document.upload',
   // The floor. Withdrawing somebody ELSE's attachment additionally needs `document.remove`,
   // checked in the arm — the same shape as time and skills.

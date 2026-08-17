@@ -139,6 +139,7 @@ async function scrub() {
   await prisma.timesheet.deleteMany({ where })
   await prisma.personRate.deleteMany({ where })
   await prisma.personSkill.deleteMany({ where })
+  await prisma.milestone.deleteMany({ where })
   await prisma.document.deleteMany({ where })
   await prisma.changeRequest.deleteMany({ where })
   await prisma.engagement.deleteMany({ where })
@@ -648,6 +649,61 @@ async function main() {
       withdrawn.ok && Boolean(after.state.documents[doc!.id]?.deletedAt),
       `deletedAt ${after.state.documents[doc!.id]?.deletedAt ?? 'null — it vanished, which is wrong'}`,
     )
+  }
+
+  /* ---------------- a milestone, and the value frozen at acceptance ---------------- */
+  {
+    const before = await loadWorkspace(TENANT)
+    const sow = Object.values(before.state.sows)[0]
+    if (!sow) {
+      check('a milestone survives a trip through Postgres', false, 'the proof tenant has no statement of work to hang one off')
+    } else {
+      const written = await persistActions(TENANT, A, [
+        {
+          t: 'upsertMilestone', id: null, sowId: sow.id,
+          patch: { name: 'Design sign-off', percentage: 33.333, basis: 'percentage', billOn: 'acceptance', plannedDate: '2026-09-30' },
+          now: NOW,
+        } as Action,
+      ])
+      const created = written.createdId!
+      await persistActions(TENANT, A, [{ t: 'deliverMilestone', id: created, now: NOW } as Action])
+
+      const mid = await loadWorkspace(TENANT)
+      const delivered = mid.state.milestones[created]
+      check(
+        'a milestone comes back out of Postgres with a fractional percentage intact',
+        written.ok && delivered?.percentage === 33.333 && delivered?.delivery === 'Delivered' && delivered?.acceptance === 'Pending',
+        delivered
+          ? `${delivered.name} · ${delivered.percentage}% · ${delivered.delivery}/${delivered.acceptance} · due ${delivered.plannedDate}`
+          : `nothing stored — ${written.error ?? written.message}`,
+      )
+      /*
+       * 33.333 is the assertion that matters here. A three-way split is a real contract term and
+       * an integer column would round it to 33, losing a third of a percent of the fee on every
+       * invoice — silently, and only visibly at the end of a project.
+       */
+
+      /* Delivered by the proof actor, so the proof actor cannot accept it. */
+      const selfAccept = await persistActions(TENANT, A, [
+        { t: 'decideMilestone', id: created, decision: 'Accepted', now: NOW } as Action,
+      ])
+      const other: Actor = { id: 'proof-sponsor', name: 'Proof Sponsor' }
+      const accepted = await persistActions(TENANT, other, [
+        { t: 'decideMilestone', id: created, decision: 'Accepted', now: NOW } as Action,
+      ])
+      const after = await loadWorkspace(TENANT)
+      const row = after.state.milestones[created]
+      check(
+        'the person who recorded delivery cannot accept it, and somebody else can',
+        !selfAccept.ok && accepted.ok && row?.acceptance === 'Accepted' && row?.acceptedBy === 'Proof Sponsor',
+        `self: ${selfAccept.error ?? 'ALLOWED, which is wrong'} | other: accepted by ${row?.acceptedBy}`,
+      )
+      check(
+        'and the value is frozen at acceptance, so a later change cannot move what was signed',
+        typeof row?.acceptedValue === 'number' && row.acceptedValue > 0,
+        `acceptedValue ${row?.acceptedValue ?? 'null — it was never frozen, which is wrong'}`,
+      )
+    }
   }
 
   /* ---------------- an effective-dated timeline, and a correction ---------------- */

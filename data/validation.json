@@ -634,11 +634,21 @@
       "impact": "The record and the artefact are now the same fact. What is still missing is one administrator action, not a feature."
     },
     {
+      "id": "MS1",
+      "title": "A milestone is delivered, accepted, and worth what it was worth on the day it was signed",
+      "expected": "Delivery and acceptance are separate answers, an approved change moves a pending milestone and never an accepted one, and a schedule that does not add up says so instead of being refused.",
+      "verdict": "PASS",
+      "actual": "A 25/35/25/15 schedule on a £100k contract. Milestone 1 was accepted before a £20k change was approved, and it is still worth £25,000 — the figure was fixed at acceptance, because moving it would retroactively change what the client already signed off. Milestone 3 has not been accepted, so it follows the contracted position and is now worth £30,000 rather than £25,000. 2 milestones are delivered and 1 is delivered and awaiting acceptance — the pair the audit records as unanswerable. £25,000 is billable, which is the accepted one only: delivery does not make money owed unless the contract says it does, and the firm's own \"50% upfront\" shape proves the reverse case, where signature does. Milestone 1 was accepted with no signed certificate on file, which is allowed and counted rather than blocked — the document library is one consent short, and a milestone that could not be accepted without an artefact would be unusable until that landed. A retainer with no milestones reports \"No milestones are recorded against this statement of work. T…\" rather than 0% billed. A half-entered schedule reports what is unallocated instead of being refused, because a firm typing four milestones passes through 25, 60 and 85 on the way to 100.",
+      "stops": "at the invoice. A milestone can now say it is billable and nothing raises an invoice from it — `Invoice` and `InvoiceLine` are the next entity, and the audit sequences them after rates, which now exist.",
+      "severity": "—",
+      "impact": "The commercial spine can answer what is owed and why. It could previously answer only what was contracted in total."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 36 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 38 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."

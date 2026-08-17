@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-17T15:02:09.029Z",
+  "at": "2026-08-17T16:08:29.161Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 41,
+  "passed": 44,
   "failed": 0,
   "checks": [
     {
@@ -155,24 +155,39 @@
       "detail": "deletedAt 2026-08-17T09:00:00.000Z"
     },
     {
+      "what": "a milestone comes back out of Postgres with a fractional percentage intact",
+      "ok": true,
+      "detail": "Design sign-off · 33.333% · Delivered/Pending · due 2026-09-30"
+    },
+    {
+      "what": "the person who recorded delivery cannot accept it, and somebody else can",
+      "ok": true,
+      "detail": "self: Persistence Proof recorded this as delivered, so somebody else decides whether it is accepted. (action 1 of 1; 0 saved) | other: accepted by Proof Sponsor"
+    },
+    {
+      "what": "and the value is frozen at acceptance, so a later change cannot move what was signed",
+      "ok": true,
+      "detail": "acceptedValue 4115.18"
+    },
+    {
       "what": "a timeline comes back out of Postgres with its boundaries and reasons intact",
       "ok": true,
-      "detail": "ver-19 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-20 2026-07-01→open \"Moved to a four-day week\" by proof"
+      "detail": "ver-20 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-21 2026-07-01→open \"Moved to a four-day week\" by proof"
     },
     {
       "what": "and the exclusive boundary survives it — 30 June is the old week, 1 July the new",
       "ok": true,
-      "detail": "30 Jun → ver-19, 1 Jul → ver-20, before any period → null"
+      "detail": "30 Jun → ver-20, 1 Jul → ver-21, before any period → null"
     },
     {
       "what": "a correction moves the timeline and does not move a stamp",
       "ok": true,
-      "detail": "the period now starts 2025-12-01 and December resolves to ver-19; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-19. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
+      "detail": "the period now starts 2025-12-01 and December resolves to ver-20; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-20. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
     },
     {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 20, state seq 14"
+      "detail": "stored seq 21, state seq 14"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",
@@ -207,7 +222,7 @@
     {
       "what": "the proof tenant owns only its own rows",
       "ok": true,
-      "detail": "2 of 237 issue rows"
+      "detail": "2 of 238 issue rows"
     }
   ]
 }
