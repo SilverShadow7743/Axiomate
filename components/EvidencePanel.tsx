@@ -17,6 +17,7 @@ import {
 } from '@/lib/evidence'
 import { formatIso } from '@/lib/dates'
 import { formatBytes as formatDocBytes, type DocumentRecord } from '@/lib/documents'
+import type { Decision } from '@/lib/access'
 import type { IssueRecord } from '@/lib/workspace'
 
 /**
@@ -43,6 +44,19 @@ interface Props {
   onAdd: (input: AddEvidenceInput) => void
   onUpdate: (id: string, patch: Partial<EvidenceItem>) => void
   onRemove: (id: string) => void
+  /**
+   * What this actor may do, decided by the caller.
+   *
+   * Passed in rather than computed here, and the reason is proportion: this drawer takes neither
+   * `state` nor `actor`, and widening it to take both so it could call `can()` three times would
+   * be a larger change than the fault deserves. `Decision` carries the reason string, so a
+   * disabled control still explains itself — which is the point of the fix. Every control below
+   * was previously ungated on screen and refused only at dispatch, unlike Rates, Time, Capacity
+   * and Commercial, which disable up front.
+   */
+  mayAttach: Decision
+  mayAddEvidence: Decision
+  mayRemove: Decision
   /** Files this app actually holds against the issue. */
   documents: DocumentRecord[]
   /**
@@ -66,6 +80,9 @@ export default function EvidencePanel({
   onAdd,
   onUpdate,
   onRemove,
+  mayAttach,
+  mayAddEvidence,
+  mayRemove,
   documents,
   onUpload,
   onWithdrawDocument,
@@ -195,7 +212,8 @@ export default function EvidencePanel({
         <div className="evi-actions">
           <button
             className="btn primary"
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || !mayAttach.allowed}
+            title={mayAttach.allowed ? 'Store a file against this record' : mayAttach.reason}
             onClick={() => {
               setAttachTo(null)
               fileInput.current?.click()
@@ -203,7 +221,12 @@ export default function EvidencePanel({
           >
             {busy ? `Storing ${busy}\u2026` : '+ Attach files'}
           </button>
-          <button className="btn" onClick={() => setLinkOpen((v) => !v)}>
+          <button
+            className="btn"
+            disabled={!mayAddEvidence.allowed}
+            title={mayAddEvidence.allowed ? 'Describe something held elsewhere' : mayAddEvidence.reason}
+            onClick={() => setLinkOpen((v) => !v)}
+          >
             + Link
           </button>
           <input
@@ -388,12 +411,12 @@ export default function EvidencePanel({
                   {!item.documentId && item.kind !== 'link' && (
                     <button
                       className="btn ghost"
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || !mayAttach.allowed}
                       onClick={() => {
                         setAttachTo(item.id)
                         fileInput.current?.click()
                       }}
-                      title="Attach the actual file to this record"
+                      title={mayAttach.allowed ? 'Attach the actual file to this record' : mayAttach.reason}
                     >
                       ⤒
                     </button>
@@ -423,14 +446,24 @@ export default function EvidencePanel({
                       ↗
                     </a>
                   )}
-                  <button
-                    className="btn ghost"
-                    onClick={() => onRemove(item.id)}
-                    aria-label={`Remove ${item.name}`}
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
+                  {/*
+                    * Imported evidence is never removable — the reducer refuses it outright,
+                    * because it describes material reconstructed from the issue log rather than
+                    * anything somebody attached. Hidden rather than disabled, because no grant
+                    * would ever make it possible and a permanently grey button invites somebody
+                    * to go looking for the permission that would ungrey it.
+                    */}
+                  {item.origin !== 'imported' && (
+                    <button
+                      className="btn ghost"
+                      disabled={!mayRemove.allowed}
+                      onClick={() => onRemove(item.id)}
+                      aria-label={`Remove ${item.name}`}
+                      title={mayRemove.allowed ? 'Remove' : mayRemove.reason}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))

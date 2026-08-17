@@ -225,13 +225,45 @@ export default function DetailPanel({
   const [tab, setTab] = useState<Tab>('Overview')
   const [resizing, setResizing] = useState(false)
 
+  // The issue that owns the selection: an activity row reports under its parent issue.
+  const issueRow =
+    row?.kind === 'issue'
+      ? row
+      : row?.parentId
+        ? (allRows.find((r) => r.id === row.parentId && r.kind === 'issue') ?? null)
+        : null
+  const issue = issueRow?.issue ?? null
+
   /**
-   * Honour a tab the workspace asked for.
+   * The tabs this row actually has, rather than a fixed list.
    *
-   * `onTabChange` is called as well as `setTab`, and that is the load-bearing half: it is what
-   * opens a collapsed pane. Without it, Log time on a workspace with the details hidden would
-   * switch to a tab nobody can see and look like it had done nothing at all.
+   * It was fixed, and it was misleading in a way that made a whole panel unfindable. A project
+   * row shows the capacity panel for EVERY tab except two, so the bar offered Notes, Estimation
+   * and Time on a project and showed capacity whichever you picked — and somebody looking for
+   * capacity had no reason to think clicking the row was the way to it. There is no affordance
+   * for "this tab does nothing here"; the honest fix is not to offer it.
+   *
+   * Issues keep the full set. Structural rows get what they have: Capacity for a project,
+   * History everywhere (they are audited like everything else), and Data Source always.
    */
+  const TABS: Tab[] = issue
+    ? [
+        'Overview',
+        'Notes',
+        'Estimation',
+        'Time',
+        'Schedule',
+        'Lifecycle',
+        'Relationships',
+        'Resolution Path',
+        'Evidence',
+        'History',
+        'Data Source',
+      ]
+    : row?.kind === 'project'
+      ? ['Capacity', 'History', 'Data Source']
+      : ['Overview', 'History', 'Data Source']
+
   /**
    * Land on a tab this row actually has.
    *
@@ -239,22 +271,35 @@ export default function DetailPanel({
    * not offer. The body fell through to the capacity panel anyway, so nothing looked broken —
    * and the active tab was one the bar no longer contained, which is how a control ends up
    * highlighted and unreachable.
+   *
+   * It reads `TABS` above rather than building its own list. It used to build one from
+   * `row.issue` — the row's OWN field, which an activity row never has (see `lib/tree.ts`) —
+   * while the bar was built from the RESOLVED issue, which walks an activity up to its parent.
+   * So an activity showed eleven tabs and bounced off eight of them: click Time, and this
+   * effect put you straight back on Overview.
+   *
+   * Eleven was the right answer. Every tab body already renders against `issue.id`, so they
+   * all work for an activity — the parent's time, the parent's evidence. Only this list
+   * disagreed. Deriving both from one constant is the fix; correcting either copy on its own
+   * would have left the pair free to drift apart again.
    */
   useEffect(() => {
     if (!row) return
-    const available: Tab[] = row.issue
-      ? [
-          'Overview', 'Notes', 'Estimation', 'Time', 'Schedule', 'Lifecycle',
-          'Relationships', 'Resolution Path', 'Evidence', 'History', 'Data Source',
-        ]
-      : row.kind === 'project'
-        ? ['Capacity', 'History', 'Data Source']
-        : ['Overview', 'History', 'Data Source']
     // Both directions. Moving from a project back to an issue while on Capacity would otherwise
     // leave the body with no branch to take, which renders as an empty panel.
-    if (!available.includes(tab)) setTab(available[0])
-  }, [row, tab])
+    if (!TABS.includes(tab)) setTab(TABS[0])
+    // Keyed on the list's CONTENT, not its identity: `TABS` is a fresh array every render, so
+    // depending on it directly would re-run this on every keystroke elsewhere in the panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [TABS.join('|'), tab, row])
 
+  /**
+   * Honour a tab the workspace asked for.
+   *
+   * `onTabChange` is called as well as `setTab`, and that is the load-bearing half: it is what
+   * opens a collapsed pane. Without it, Log time on a workspace with the details hidden would
+   * switch to a tab nobody can see and look like it had done nothing at all.
+   */
   useEffect(() => {
     if (!requestTab) return
     setTab(requestTab)
@@ -274,14 +319,6 @@ export default function DetailPanel({
     }
   }, [resizing, onResize])
 
-  // The issue that owns the selection: an activity row reports under its parent issue.
-  const issueRow =
-    row?.kind === 'issue'
-      ? row
-      : row?.parentId
-        ? (allRows.find((r) => r.id === row.parentId && r.kind === 'issue') ?? null)
-        : null
-  const issue = issueRow?.issue ?? null
 
   /**
    * Responsibility types that are NOT one of the three bound to a column.
@@ -314,35 +351,6 @@ export default function DetailPanel({
         }))
     : []
 
-  /**
-   * The tabs this row actually has, rather than a fixed list.
-   *
-   * It was fixed, and it was misleading in a way that made a whole panel unfindable. A project
-   * row shows the capacity panel for EVERY tab except two, so the bar offered Notes, Estimation
-   * and Time on a project and showed capacity whichever you picked — and somebody looking for
-   * capacity had no reason to think clicking the row was the way to it. There is no affordance
-   * for "this tab does nothing here"; the honest fix is not to offer it.
-   *
-   * Issues keep the full set. Structural rows get what they have: Capacity for a project,
-   * History everywhere (they are audited like everything else), and Data Source always.
-   */
-  const TABS: Tab[] = issue
-    ? [
-        'Overview',
-        'Notes',
-        'Estimation',
-        'Time',
-        'Schedule',
-        'Lifecycle',
-        'Relationships',
-        'Resolution Path',
-        'Evidence',
-        'History',
-        'Data Source',
-      ]
-    : row?.kind === 'project'
-      ? ['Capacity', 'History', 'Data Source']
-      : ['Overview', 'History', 'Data Source']
 
   return (
     <div className="detail" style={{ height }}>
@@ -406,7 +414,10 @@ export default function DetailPanel({
           <div className="detail-body">
             <div className="panel-note">
               The detail pane is collapsed. Use ▲ above, or drag the handle, to see{' '}
-              {row.issue ? 'this issue' : row.kind === 'project' ? 'capacity for this project' : 'this row'}.
+              {/* `issue`, not `row.issue` — the same resolution the pane itself uses, so an
+                  activity row says "this issue" rather than "this row" about a pane that is
+                  about to show its parent issue. */}
+              {issue ? 'this issue' : row.kind === 'project' ? 'capacity for this project' : 'this row'}.
             </div>
           </div>
         ) : null

@@ -2714,6 +2714,19 @@ select.cell-editor {
   min-width: 0;
 }
 
+/* Stated once at the top of Configuration rather than by disabling twenty forms. Full width and
+   above the rail, so it is read before anything is typed rather than after it is refused. */
+.cfg-readonly {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--warn, #b26a00);
+  background: var(--warn-bg, rgba(178, 106, 0, 0.09));
+  border-bottom: 1px solid var(--border);
+}
+
 /* min-height:0 on both the row and its children, or nothing scrolls: `body` is
    overflow:hidden app-wide and a flex child defaults to min-height:auto. */
 .cfg-body {

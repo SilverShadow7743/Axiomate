@@ -199,6 +199,32 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
         </button>
       </header>
 
+      {/*
+        * Said once, at the top, rather than twenty times.
+        *
+        * This workspace has twenty-one sections and — until today — exactly one of them
+        * (Skills) asked whether the actor may configure anything. The other twenty rendered
+        * live forms to everybody and refused at dispatch, which is the "opens, then refuses"
+        * shape that Rates, Time, Capacity and Commercial deliberately avoid.
+        *
+        * Disabling twenty forms individually is the thorough fix and the wrong-sized one: it is
+        * a large change to twenty components to restate a single fact that is true of all of
+        * them. So the fact is stated once, up front, where it removes the surprise — and the
+        * per-section gating that already exists keeps working underneath.
+        *
+        * The button that opens this is deliberately NOT hidden. Looking up what a work type or
+        * a service level means is useful to everybody, and the one genuinely sensitive section
+        * — Rates — is already absent from the rail without `rate.view`.
+        */}
+      {!can(state.model, actor, 'config.manage').allowed && (
+        <p className="cfg-readonly" role="status">
+          <strong>Read only.</strong>{' '}
+          {can(state.model, actor, 'config.manage').reason ??
+            'You do not hold the grant to change the operating model.'}{' '}
+          You can look at anything here; saving will be refused.
+        </p>
+      )}
+
       <div className="cfg-body">
         <nav className="cfg-rail" aria-label="Configuration sections">
           {['Operating model', 'Automation', 'Governance'].map((group) => (

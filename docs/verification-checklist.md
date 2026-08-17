@@ -228,17 +228,29 @@ with a working download, and `⤒` on an evidence row should attach a file to th
 
 ---
 
-## 10 · Two defects already known before you start
+## 10 · Two defects, now fixed — worth confirming
 
-Found by reading the code, not by clicking. Neither is from today's work.
+Both were found by reading the code and both are fixed. These two steps check the fixes.
 
-| | What happens | Why |
-|---|---|---|
-| **Activity rows bounce off most tabs** | Select an activity or milestone row in the grid: eleven tabs render, but clicking `Time`, `Evidence` or `Estimation` snaps straight back to `Overview` | The tab bar is built from the *parent* issue; what is *allowed* is built from the row's own `issue` field, which activity rows never get |
-| **Configuration and the evidence drawer open for anybody** | Both open regardless of grant, then refuse the write | Rates, Time, Capacity and Commercial hide or disable the control up front. These two do not — so they refuse late instead of early |
+**10a — activity rows keep the parent's tabs.** Select an **activity** row (a phase under an
+issue). Click `Time`, then `Evidence`, then `Estimation`.
 
-Neither is dangerous; both are inconsistencies worth deciding about. Tell me if you want either
-fixed and I will.
+> **Expect them to stay put** and show the parent issue's content. Before the fix, each click
+> snapped straight back to `Overview` — the tab bar was built from the resolved parent issue while
+> the guard was built from the row's own field, which an activity never has. Both now read one
+> list, so they cannot disagree again.
+
+**10b — Configuration says so up front.** This one needs somebody *without* `config.manage`.
+
+> **Expect a banner** across the top of the Configuration workspace reading
+> *"Read only. …"* with the reason. The button that opens it is deliberately still there:
+> looking up what a work type or a service level means is useful to everybody, and the one
+> genuinely sensitive section — Rates — is already absent from the rail without `rate.view`.
+
+**10c — the evidence drawer disables rather than refuses.** Also needs a second, less-privileged
+person. `+ Attach files`, `+ Link` and the per-item `✕` are now disabled with the reason in the
+tooltip. Imported evidence has no `✕` at all — no grant makes it removable, so a permanently grey
+button would only invite somebody to hunt for the permission that would ungrey it.
 
 ---
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
+import { can } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
@@ -2041,6 +2042,9 @@ export default function IssueWorkspace({
           documents={Object.values(state.documents).filter(
             (d) => d.subjectKind === 'issue' && d.subjectId === evidenceFor,
           )}
+          mayAttach={can(state.model, actor, 'document.upload')}
+          mayAddEvidence={can(state.model, actor, 'evidence.add')}
+          mayRemove={can(state.model, actor, 'evidence.remove')}
           onUpload={(file, evidenceId) => uploadDocument(file, 'issue', evidenceFor, evidenceId)}
           onWithdrawDocument={(id) =>
             dispatch({ t: 'removeDocument', id, now: new Date().toISOString() })
