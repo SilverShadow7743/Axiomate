@@ -78,7 +78,31 @@ export async function boot(): Promise<Boot> {
    */
   if (identityEstablished() && !session.verified) {
     return {
-      seed: { ...seed, issues: [], relationships: [] },
+      /**
+       * `meta` is emptied alongside the issues, and it was not.
+       *
+       * The gate withheld the records and shipped the summary of them: `clients` naming every
+       * firm in the log, `issueCount`, the source description and the date range — to anyone
+       * who loaded the page. That is a smaller disclosure than the issues themselves and it is
+       * the same kind, and it is worse for being invisible: the screen correctly said "Sign in
+       * to see this workspace" while the payload underneath it answered how many issues there
+       * are, for whom, and since when.
+       *
+       * Found by reading what an anonymous request actually returns rather than by trusting
+       * that emptying the two obvious collections was the whole job.
+       */
+      seed: {
+        ...seed,
+        issues: [],
+        relationships: [],
+        meta: {
+          source: '',
+          issueCount: 0,
+          clients: [],
+          dateRange: { earliestRaised: '', latestActivity: '' },
+          provenance: { recordedDates: [], absentFromSource: [], derived: {}, notGenerated: [] },
+        },
+      },
       state: null,
       tenantId,
       actor,
