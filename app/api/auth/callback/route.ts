@@ -33,7 +33,10 @@ function cookie(req: Request, name: string): string | undefined {
  */
 function back(req: Request, message: string, code = 'failed') {
   console.warn('[auth] sign-in failed:', message)
-  const url = new URL('/', req.url)
+  // To the sign-in page, which is where somebody who failed to sign in belongs and where the
+  // notice is rendered. It was '/', which now redirects them here anyway — dropping the code on
+  // the way, so the failure would have gone silent again.
+  const url = new URL('/signin', req.url)
   url.searchParams.set('auth_error', code)
   return NextResponse.redirect(url)
 }

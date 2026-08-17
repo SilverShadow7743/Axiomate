@@ -4,25 +4,26 @@ import { getSessionFromCookies } from '@/lib/principal'
 import AuthNotice from '@/components/AuthNotice'
 
 /**
- * The front door.
+ * The front door, and the only page an unauthenticated visitor can reach.
  *
- * Until now `Sign in` went straight to `/api/auth/signin`, which bounces to Microsoft without
- * the application ever showing a page of its own. That works, and it means the first thing
- * anybody sees of Axiomate is a Microsoft prompt naming an application they have not been told
- * anything about — which is exactly the shape of a phishing page, and teaches people to click
- * through prompts they arrived at sideways.
+ * `/` redirects here when a provider is configured and nobody has signed in, so this is not a
+ * courtesy screen in front of an otherwise-open application — it is the boundary. Everything
+ * behind it is a client's issue log, their contracted values, their people and their hours.
  *
- * This page exists so the round trip starts somewhere that says who is asking, and so a failed
- * sign-in has somewhere to land that is not a workspace it cannot show.
+ * Two things it deliberately does not do.
  *
- * Server-rendered on purpose. Whether a provider is configured is a fact about the deployment,
- * not about the browser, and asking the client to discover it would mean shipping a page that
- * offers a button it may have to withdraw.
+ * It does not bounce straight to Microsoft. That was the previous behaviour and it meant the
+ * first thing anybody saw of this application was a Microsoft prompt naming an application
+ * nobody had introduced — the shape of a phishing page, and a habit worth not teaching.
+ *
+ * It does not describe the workspace. No client names, no counts, no "264 issues across three
+ * engagements". A sign-in page is read by everyone who finds the URL, and what it says about
+ * the data behind it is said to all of them.
  */
 export const dynamic = 'force-dynamic'
 
 export const metadata = {
-  title: 'Sign in — Axiomate TMS',
+  title: 'Sign in — Axiomate',
 }
 
 export default async function SignInPage({
@@ -38,65 +39,95 @@ export default async function SignInPage({
   const hasProvider = configured()
 
   /**
-   * Somebody already signed in has no business here, and sending them on is better than
-   * showing a sign-in button that would start a second round trip to the same place.
+   * Somebody already signed in has no business here, and sending them on beats showing a
+   * button that would start a second round trip to the same place.
    *
-   * Only when there is a provider: without one, `verified` is false for everybody forever, and
-   * redirecting on it would be redirecting on a flag that never changes.
+   * Only when there is a provider: without one `verified` is false for everybody forever, and
+   * redirecting on it would redirect on a flag that never changes.
    */
   if (hasProvider && session.verified) redirect('/')
 
   return (
-    <main className="signin-page">
-      <div className="signin-card">
-        <div className="signin-brand">
-          <span className="signin-mark">axiomate.</span>
+    <main className="auth">
+      {/* The left half carries the product; the right half carries the one action. On a narrow
+          screen the panel collapses away rather than stacking into a scroll — somebody signing
+          in on a phone wants the button, not the prose. */}
+      <section className="auth-panel" aria-hidden="true">
+        <div className="auth-panel-inner">
+          <span className="auth-mark">
+            axiomate<i>.</i>
+          </span>
+          <p className="auth-claim">
+            Delivery management for consulting practices.
+          </p>
+          <ul className="auth-points">
+            <li>
+              <strong>One record of the work</strong>
+              <span>Issues, dependencies and the schedule they drive, in one tree.</span>
+            </li>
+            <li>
+              <strong>Capacity that reflects reality</strong>
+              <span>Allocations, leave and working patterns, against what was committed.</span>
+            </li>
+            <li>
+              <strong>An answer you can trace</strong>
+              <span>Every change attributed, every derived figure recomputed, never stored as fact.</span>
+            </li>
+          </ul>
         </div>
+      </section>
 
-        {/* The product name is the heading. Naming the firm here told the reader something they
-            already knew, and naming the page told them what they were about to see rather than
-            what they had to do next. */}
-        <h1>Sign in</h1>
-        <p className="signin-lede">
-          Delivery management for a consulting practice — the work, the schedule, and the
-          capacity behind them.
-        </p>
+      <section className="auth-form">
+        <div className="auth-form-inner">
+          <span className="auth-mark compact">
+            axiomate<i>.</i>
+          </span>
 
-        {authError && <AuthNotice code={authError} />}
+          <h1>Sign in</h1>
+          <p className="auth-sub">
+            {hasProvider
+              ? 'Use your work account to continue.'
+              : 'This deployment has no sign-in configured.'}
+          </p>
 
-        {hasProvider ? (
-          <>
-            {/* A link rather than a form: starting a sign-in is a read, it is idempotent, and
-                the route sets the one-time values that tie the round trip to this browser. */}
-            <a className="btn primary signin-action" href="/api/auth/signin">
-              Sign in with Microsoft
-            </a>
-            <p className="signin-foot">
-              Uses your Axiocloud work account. You will be returned here afterwards.
-            </p>
-          </>
-        ) : (
-          /**
-           * No provider, and this page says so rather than offering a button that cannot work.
-           *
-           * A deployment without Entra configured has one operator by design and the workspace
-           * is open — so the honest thing is to send them to it, and to be clear that no
-           * sign-in happened rather than letting an unlabelled session look like one.
-           */
-          <>
-            <div className="signin-none">
-              <strong>No sign-in is configured on this deployment.</strong>
-              <span>
-                Everyone who opens it works as the same operator, and every change is recorded
-                under that name. An administrator sets the four Entra values to change that.
-              </span>
-            </div>
-            <a className="btn primary signin-action" href="/">
-              Continue to the workspace
-            </a>
-          </>
-        )}
-      </div>
+          {authError && <AuthNotice code={authError} />}
+
+          {hasProvider ? (
+            <>
+              {/* A link rather than a form: starting a sign-in is a read, it is idempotent, and
+                  the route is what sets the one-time values tying the round trip to this
+                  browser. */}
+              <a className="auth-action" href="/api/auth/signin">
+                <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
+                  <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+                  <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+                  <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+                  <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+                </svg>
+                Continue with Microsoft
+              </a>
+              <p className="auth-fine">
+                You will be returned here once Microsoft has confirmed who you are. Nothing in
+                this workspace is visible until then.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="auth-none">
+                <strong>No identity provider is configured.</strong>
+                <span>
+                  Everyone who opens this deployment works as the same operator, and every
+                  change is recorded under that name. An administrator sets the Entra tenant,
+                  client, secret and redirect URI to change that.
+                </span>
+              </div>
+              <a className="auth-action plain" href="/">
+                Continue to the workspace
+              </a>
+            </>
+          )}
+        </div>
+      </section>
     </main>
   )
 }

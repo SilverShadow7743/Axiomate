@@ -1429,7 +1429,7 @@ select.cell-editor {
 .progress-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
 }
 .progress-auto {
@@ -4383,52 +4383,106 @@ select.cell-editor {
 .user-panel form { margin: 0; }
 .user-panel .menu-item { width: 100%; text-align: left; }
 
-/* ---------------- the sign-in page ---------------- */
 
-.signin-page {
+/* ==================================================================
+ * The sign-in page
+ *
+ * The boundary of the application rather than a courtesy screen: `/` redirects here whenever a
+ * provider is configured and nobody has signed in, so this is what an unauthenticated visitor
+ * sees and the only thing they see.
+ *
+ * Built from the existing tokens. The left panel is the only place in the product that carries
+ * any weight of its own, because it is the one screen with nothing else on it — and it collapses
+ * entirely below 860px rather than stacking, since somebody signing in on a phone wants the
+ * button and not the prose.
+ * ================================================================== */
+
+.auth {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--surface);
-}
-
-.signin-card {
-  width: 100%;
-  max-width: 440px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 28px;
+  grid-template-columns: 1.1fr 1fr;
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
 }
 
-.signin-brand { display: flex; align-items: baseline; gap: 8px; }
-.signin-mark { font-weight: 700; letter-spacing: -0.02em; }
-.signin-org { font-size: 12px; color: var(--text-muted); }
-
-.signin-card h1 {
-  margin: 0;
-  font-size: 19px;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-.signin-lede { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
-
-.signin-action {
-  align-self: flex-start;
-  margin-top: 4px;
-  text-decoration: none;
-}
-.signin-foot { margin: 0; font-size: 11px; color: var(--text-muted); }
-
-.signin-none {
+.auth-panel {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 12px;
+  justify-content: space-between;
+  padding: 48px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+
+.auth-panel-inner { display: flex; flex-direction: column; gap: 28px; max-width: 420px; }
+
+.auth-mark {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+/* The full stop is the wordmark's only flourish, and it is the accent's only appearance here. */
+.auth-mark i { color: var(--accent); font-style: normal; }
+.auth-mark.compact { font-size: 18px; display: none; }
+
+.auth-claim {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  max-width: 15ch;
+}
+
+.auth-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 18px; }
+.auth-points li { display: flex; flex-direction: column; gap: 3px; }
+.auth-points strong { font-size: 13px; font-weight: 600; }
+.auth-points span { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+
+
+.auth-form { display: grid; place-items: center; padding: 40px 32px; }
+.auth-form-inner { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 14px; }
+
+.auth-form-inner h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.auth-sub { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+.auth-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 11px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.auth-action:hover { background: var(--surface-2); border-color: var(--text-muted); }
+.auth-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The Microsoft mark carries the colour, so the button does not compete with it. The
+   no-provider variant has no mark and takes the accent instead. */
+.auth-action.plain {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.auth-action.plain:hover { filter: brightness(1.08); }
+
+.auth-fine { margin: 2px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--text-muted); }
+
+.auth-none {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
   font-size: 12px;
   line-height: 1.55;
   color: var(--text-muted);
@@ -4436,4 +4490,10 @@ select.cell-editor {
   border-left: 2px solid var(--border-strong);
   border-radius: 3px;
 }
-.signin-none strong { color: var(--text); }
+.auth-none strong { color: var(--text); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth-panel { display: none; }
+  .auth-mark.compact { display: block; margin-bottom: 6px; }
+}

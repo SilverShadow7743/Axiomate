@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { boot } from '@/lib/db/boot'
 import IssueWorkspace from '@/components/IssueWorkspace'
 
@@ -9,6 +10,24 @@ export default async function Page({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { seed, state, persistence, tenantId, actor, signInRequired, verified } = await boot()
+
+  /**
+   * Nobody signed in sees this page at all.
+   *
+   * `boot()` already withholds the workspace by emptying what it returns, and that is defence
+   * by omission — it protects exactly the fields somebody remembered to empty. It missed one
+   * this morning: `meta` went out carrying the client list, the issue count and the date range,
+   * underneath a screen that correctly said "Sign in to see this workspace".
+   *
+   * Redirecting makes the guarantee structural instead. The workspace component is never
+   * rendered, so no field of it can reach the payload whether or not anybody thought to empty
+   * it. The emptying stays as well: a deployment is safer for having two independent reasons
+   * to be right rather than one clever one.
+   *
+   * Only when a provider exists. Without one this deployment has a single operator and there is
+   * nothing to sign in to, so redirecting would be an unbreakable loop.
+   */
+  if (signInRequired) redirect('/signin')
   // Resolved on the server so the Today marker and health calculations agree between
   // the initial render and hydration.
   const today = new Date().toISOString().slice(0, 10)
