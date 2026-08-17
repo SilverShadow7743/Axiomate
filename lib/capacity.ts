@@ -45,10 +45,50 @@ export interface ResourceProfile {
    * choosing to have every overrun become an overtime problem, and should do so deliberately.
    */
   billableTargetPct: number
+  /**
+   * Whether these numbers came from a person or from the shipped default.
+   *
+   * Every profile carries values from the day it exists, so `capacityFor` never has to guess —
+   * and that is exactly why this field is needed. A stored row reading 7.5 hours over 5 days at
+   * 80% that nobody has ever opened is still a default, and once it is stored it *looks* stated.
+   * Utilisation computed from it is quoted in reviews as though somebody had confirmed the
+   * working pattern behind it.
+   *
+   * So the numbers are always usable and their provenance travels with them, which is the rule
+   * this codebase already keeps twice over: `lib/intake.ts` marks a classified field
+   * `stated | guessed | default`, and `availabilityOf` answers `unknown` rather than `clear`
+   * for somebody nobody has described.
+   */
+  source: 'stated' | 'default'
 }
 
 export function defaultProfile(personId: string): ResourceProfile {
-  return { personId, hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80 }
+  return { personId, hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: 'default' }
+}
+
+/**
+ * How much of a set of profiles is actually known.
+ *
+ * For anything that reports utilisation. A figure derived from assumed working patterns is not
+ * wrong, but it is a different claim from one derived from confirmed ones, and the difference
+ * belongs beside the number rather than in a footnote nobody reads.
+ */
+export function profileConfidence(
+  profiles: Record<string, ResourceProfile>,
+  peopleCount: number,
+): { stated: number; assumed: number; of: number; note: string } {
+  const all = Object.values(profiles)
+  const stated = all.filter((p) => p.source === 'stated').length
+  const assumed = peopleCount - stated
+  return {
+    stated,
+    assumed,
+    of: peopleCount,
+    note:
+      assumed === 0
+        ? 'Every working pattern has been confirmed.'
+        : `Based on an assumed working pattern for ${assumed} of ${peopleCount} people.`,
+  }
 }
 
 export const COMMITMENT_KINDS = ['Leave', 'Public holiday', 'Internal', 'Training'] as const

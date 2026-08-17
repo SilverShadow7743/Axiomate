@@ -710,7 +710,21 @@ export type ConfigOp =
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
-  | { k: 'setResourceProfile'; personId: string; patch: Partial<ResourceProfile> }
+  | {
+      k: 'setResourceProfile'
+      personId: string
+      patch: Partial<ResourceProfile>
+      /**
+       * Whether a person chose these numbers, or a seeding pass supplied the shipped default.
+       *
+       * Absent means yes, because every edit through the interface is somebody choosing. It
+       * sits on the operation rather than in the patch deliberately: `source` is not a field
+       * anybody edits, and a patch able to carry it would let a caller declare its own guesses
+       * confirmed. A caller can still understate its confidence by passing false, which is the
+       * safe direction to be wrong in.
+       */
+      confirmed?: boolean
+    }
   | { k: 'setWatch'; patch: Partial<WatchPolicy> }
   | { k: 'upsertPerson'; id: string | null; name: string; roleIds: string[]; email?: string }
   | { k: 'deletePerson'; id: string }
@@ -3204,6 +3218,15 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         ...op.patch,
         // Last, because a patch describes a week rather than whose it is.
         personId: op.personId,
+        /**
+         * Somebody edited it, so it is no longer the shipped default — even when they set it
+         * to exactly the default numbers, because choosing 7.5 hours is a different fact from
+         * never having been asked.
+         *
+         * Taken from the action rather than the patch: `source` is not a field anybody edits,
+         * and letting a patch carry it would let a client declare its guesses confirmed.
+         */
+        source: op.confirmed === false ? 'default' : 'stated',
       }
       if (next.hoursPerDay <= 0 || next.hoursPerDay > 24) {
         return { state, error: 'A working day is between 0 and 24 hours.' }
