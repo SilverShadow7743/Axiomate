@@ -120,3 +120,33 @@ produce a broken timesheet; it produces a consultant who cannot record time and 
 why. The guard is therefore a single pure function called in three places rather than three
 implementations of the same idea, and the scenario coverage asserts both directions: refused
 inside a submitted week, and allowed everywhere else.
+
+---
+
+## Addendum, 17 August 2026 — the agent layer above this
+
+Recorded after approval, because a proposal for a Timesheet Agent raised one question this
+design had to answer and several it did not.
+
+**The eight-level hierarchy is a reporting rollup, not storage.** A proposed agent design
+described `Timesheet Week → Daily Entry → Project → Billing Bucket → Deliverable → Work Package
+→ Work Item → Outcome`. Read as storage that contradicts this design directly, and three of its
+tiers do not exist. Read as a rollup — an hour must be *traceable* to an outcome, by query — it
+is compatible, and that is the reading confirmed. Nothing here changes: a timesheet remains a
+query over a period, entries remain owned by their issue, nothing is copied.
+
+**The agents are already declared.** `AGENT_TIMESHEET`, `AGENT_EFFORT_VARIANCE`,
+`AGENT_UTILIZATION`, `AGENT_CAPACITY_ACTUAL` and `AGENT_BILLING_READY` exist in `SEED_AGENTS`
+with `runtime: 'declared'` and `maxAutonomy: 'suggest'` — which is issue AXM-027, thirty-seven
+registered agents with no implementation. Anything built above this design implements entries
+that exist rather than adding new ones, and inherits two constraints already written down: the
+autonomy ceiling, and `AGENT_TIMESHEET`'s stated purpose — *"for accuracy and governance, not
+for pressing people to book more hours."*
+
+**The build order is the reverse of the user's order.** An agent flow reads Draft → Classify →
+Validate → Submit. Submission is the foundation and is what this design covers; the validation
+engines largely exist already and lack only a caller (`planCheck` in `lib/capacity.ts`,
+`effortVariance` in `lib/time.ts`, `sowPosition` and `describePosition` in `lib/sow.ts`);
+classification should reuse the `stated | guessed | default` vocabulary from `lib/intake.ts`
+rather than invent a confidence percentage; and drafting is last because it is the only part
+that needs capabilities this system does not have — natural language capture and a calendar.
