@@ -58,9 +58,19 @@ const ID = flag('--id')
 const NAME = flag('--name')
 const EMAIL = flag('--email')
 const ROLE = flag('--role')
+const REPLACE = argv.includes('--replace-roles')
+/**
+ * Move name-keyed records to a DIFFERENT person's name, without renaming this one.
+ *
+ * For the duplicate case rather than the rename case: two directory entries exist for one human
+ * — one created from an allocation carrying only a first name, one created properly with an
+ * address — and the records are on the wrong one. A rename cannot fix that, because the target
+ * name is already taken by the entry that should keep it.
+ */
+const RECORDS_TO = flag('--records-to')
 
 if (!ID) {
-  console.error('Usage: --id PERSON_n [--name "New Name"] [--email a@b.com] [--role ROLE_X] [--apply]')
+  console.error('Usage: --id PERSON_n [--name "New Name"] [--email a@b.com] [--role ROLE_X] [--replace-roles] [--apply]')
   process.exit(1)
 }
 
@@ -74,18 +84,54 @@ async function main() {
 
   const newName = NAME ?? person.name
   const newEmail = EMAIL ?? person.email
-  const roles = ROLE ? [...new Set([...person.roleIds, ROLE])] : person.roleIds
+  /*
+   * `--role` ADDS; `--replace-roles` REPLACES. Two flags rather than one, because the difference
+   * is the difference between granting somebody a second hat and taking their first one off, and
+   * a script that guessed which was meant would sooner or later take one off by accident.
+   *
+   * Adding is the default because it is the safe direction: a role too many is visible and
+   * revocable, a role too few locks somebody out — and, if the role removed was the last
+   * `config.manage`, locks everybody out of the configuration screen that would fix it.
+   */
+  const roles = ROLE
+    ? REPLACE
+      ? [ROLE]
+      : [...new Set([...person.roleIds, ROLE])]
+    : person.roleIds
 
   if (ROLE && !(state.model.roles[ROLE] && !state.model.roles[ROLE].deletedAt)) {
     console.error(`Role "${ROLE}" does not exist, so granting it would grant nothing.`)
     process.exit(1)
   }
 
+  /*
+   * Removing a role can take away the last `config.manage` in the workspace, and the screen that
+   * would put it back is the screen it locks. `accessProblems()` refuses that configuration when
+   * it is entered through the UI; nothing stopped a script doing it, so this does.
+   */
+  if (REPLACE) {
+    const grantsOf = (ids: string[]) =>
+      new Set(ids.flatMap((r) => state.model.access.grants[r] ?? []))
+    const losing = grantsOf(person.roleIds).has('config.manage') && !grantsOf(roles).has('config.manage')
+    if (losing) {
+      const others = Object.values(state.model.people ?? {}).filter(
+        (p) => p.id !== ID && grantsOf(p.roleIds).has('config.manage'),
+      )
+      console.log(`\n  ${person.name} currently holds config.manage and would lose it.`)
+      console.log(`  Others who would still hold it: ${others.map((p) => p.name).join(', ') || 'NOBODY'}`)
+      if (!others.length) {
+        console.error('\n  Refusing. This would leave nobody able to configure the platform, and')
+        console.error('  the configuration screen is what would be needed to undo it.')
+        process.exit(1)
+      }
+    }
+  }
+
   console.log('AXIOMATE — PERSON IDENTITY\n')
   console.log(`  ${ID}`)
   console.log(`  name  : ${person.name}${newName !== person.name ? `  ->  ${newName}` : '  (unchanged)'}`)
   console.log(`  email : ${person.email ?? '(none)'}${newEmail !== person.email ? `  ->  ${newEmail}` : '  (unchanged)'}`)
-  console.log(`  roles : ${person.roleIds.join(', ') || '(none)'}${ROLE ? `  ->  ${roles.join(', ')}` : '  (unchanged)'}`)
+  console.log(`  roles : ${person.roleIds.join(', ') || '(none)'}${ROLE ? `  ->  ${roles.join(', ')}${REPLACE ? '   (replaced)' : '   (added)'}` : '  (unchanged)'}`)
 
   const actions: Action[] = [
     {
@@ -101,13 +147,23 @@ async function main() {
    * are exactly the ones nobody thinks of as referring to a person.
    */
   const renames: string[] = []
-  if (newName !== person.name) {
+  // Records follow a rename, or go to a named other person. Never both at once.
+  const recordTarget = RECORDS_TO ?? (newName !== person.name ? newName : null)
+  if (RECORDS_TO && NAME) {
+    console.error('--name and --records-to together are ambiguous. Pick one.')
+    process.exit(1)
+  }
+  if (RECORDS_TO && !Object.values(state.model.people ?? {}).some((p) => p.name === RECORDS_TO)) {
+    console.error(`Nobody in the directory is called "${RECORDS_TO}", so the records would point at nobody.`)
+    process.exit(1)
+  }
+  if (recordTarget) {
     for (const a of Object.values(state.allocations ?? {})) {
       if (a.deletedAt || a.person !== person.name) continue
       actions.push({
         t: 'upsertAllocation',
         id: a.id,
-        person: newName,
+        person: recordTarget,
         projectId: a.projectId,
         percentage: a.percentage,
         startDate: a.startDate,
@@ -122,7 +178,7 @@ async function main() {
       actions.push({
         t: 'upsertCommitment',
         id: c.id,
-        person: newName,
+        person: recordTarget,
         kind: c.kind,
         startDate: c.startDate,
         endDate: c.endDate,
