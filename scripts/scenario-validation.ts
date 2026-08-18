@@ -3496,6 +3496,63 @@ scenario(
 )
 
 scenario(
+  'HV3',
+  'A version recorded against the wrong person can be withdrawn — and only then',
+  'Removing a version is refused while its subject is still in the directory, so the one gap in effective dating is closed without opening a way to erase somebody’s history.',
+  () => {
+    const P = 'PERSON_HV3'
+    const withVersion = ok(BASE, {
+      t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: P,
+      validFrom: '2026-01-01', validTo: null, value: { hoursPerDay: 7.5, daysPerWeek: 5 },
+      reason: 'Recorded for the test', now: NOW,
+    } as Action)
+    const v = Object.values(withVersion.versions).find((x) => x.subjectId === P)!
+
+    /* A real person in the directory: their history is theirs, and this must refuse. */
+    const real = Object.values(BASE.model.people)[0]!
+    const theirs = ok(withVersion, {
+      t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: real.id,
+      validFrom: '2026-01-01', validTo: null, value: { hoursPerDay: 8, daysPerWeek: 5 },
+      reason: 'Recorded for the test', now: NOW,
+    } as Action)
+    const theirVersion = Object.values(theirs.versions).find((x) => x.subjectId === real.id)!
+    const refusedLive = apply(theirs, { t: 'removeVersion', id: theirVersion.id, now: NOW } as Action, A)
+
+    /* An unrecognised subject kind is refused rather than waved through. */
+    const odd = ok(withVersion, {
+      t: 'recordVersion', subjectKind: 'sow.value', subjectId: 'sow-x',
+      validFrom: '2026-01-01', validTo: null, value: { amount: 1 },
+      reason: 'Recorded for the test', now: NOW,
+    } as Action)
+    const oddVersion = Object.values(odd.versions).find((x) => x.subjectKind === 'sow.value')!
+    const refusedKind = apply(odd, { t: 'removeVersion', id: oddVersion.id, now: NOW } as Action, A)
+
+    /* PERSON_HV3 is in no directory, so its version is orphaned and removable. */
+    const removed = apply(withVersion, { t: 'removeVersion', id: v.id, now: NOW } as Action, A)
+    const gone = removed.state.versions[v.id] === undefined
+    const stillThere = valueAt(Object.values(removed.state.versions), 'person.workingPattern', P, '2026-06-01')
+
+    const good =
+      Boolean(refusedLive.error) &&
+      Boolean(refusedKind.error) &&
+      !removed.error &&
+      gone &&
+      stillThere === null &&
+      /* and the other person's version is untouched by any of it */
+      Object.values(removed.state.versions).some((x) => x.subjectId === real.id) === false
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A version whose subject is not in the directory can be withdrawn, and after it is, ${'valueAt'} answers null for that person on every date. One whose subject IS in the directory is refused — "${refusedLive.error}" — which is the guard that keeps this from being a way to erase somebody's dated history: a working pattern deleted quietly would change what capacity answered for past weeks with nothing left to say why. A subject kind the rule does not recognise is refused too ("${refusedKind.error}") rather than waved through, because subjectKind is open by design and a guard that permitted everything unfamiliar would grow into the general delete this is not.`,
+      stops: 'at a UI. There is no screen for this — it exists for cleaning up after a directory record is removed, which is a script-shaped job today. `correctVersion` is in the same position and the audit records both.',
+      severity: '—',
+      impact:
+        'Effective dating could record and correct, and never withdraw. A version recorded against the wrong person was permanent, which made the identity cleanup impossible to finish.',
+    }
+  },
+)
+
+scenario(
   'AC1',
   'A permission is added to the product and somebody can actually use it',
   'Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.',

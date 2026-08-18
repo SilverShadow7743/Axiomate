@@ -32,12 +32,16 @@ The sample contract is on **Test**, never under OAPIL or SLG. Its figures are th
 from `Axiocloud_Pricing_Estimation_Model.xlsx`, which that workbook marks illustrative on its own
 front page.
 
-### Two steps need a second person
+### Who else you need signed in
 
-The seed ran as you, and the reducer refuses to let the person who raised a change decide it, or
-the person who recorded a delivery accept it. That refusal **is** the thing to verify in steps
-7c and 8c. Completing them needs somebody else signed in — Tarun still holds no role (pending
-action A2), so granting him one is the quickest route.
+The seed ran as you, and the reducer refuses to let whoever raised a change decide it, or whoever
+recorded a delivery accept it. That refusal **is** the thing to verify in 7c and 8c — but
+completing them needs somebody else, and two different somebodies are needed overall:
+
+| For | Who | Why |
+|---|---|---|
+| **7c, 8c** | **M Tarun Kumar** (kumart@axiocloudsolutions.com) | Made a second **Engagement Leader** on 18 Aug, so he holds `change.approve` and `milestone.accept`. Before that the firm had one engagement leader and every change request you raised was undecidable by anyone but an administrator |
+| **10b, 10c** | Anyone *without* `config.manage` — **Amolak**, **Dharmendra**, **Jaya** or **Michael** all work | Those steps check that a restricted surface says so up front. Tarun no longer qualifies: Engagement Leader carries all 38 permissions |
 
 ---
 

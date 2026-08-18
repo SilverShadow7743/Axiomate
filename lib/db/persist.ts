@@ -598,6 +598,19 @@ export async function persistSteps(
       return
     }
 
+    /*
+     * A hard delete, matching the reducer. Everything else in this file upserts what changed;
+     * this is the one arm that removes a row, so it compares the two sets rather than iterating
+     * `after` — a row that is gone cannot be found by walking what remains.
+     */
+    case 'removeVersion': {
+      for (const id of Object.keys(before.versions)) {
+        if (after.versions[id]) continue
+        await tx.version.deleteMany({ where: { tenantId, id } })
+      }
+      return
+    }
+
     case 'recordVersion':
     case 'correctVersion': {
       for (const [id, v] of Object.entries(after.versions)) {

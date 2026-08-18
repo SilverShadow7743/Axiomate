@@ -458,6 +458,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeDocument: 'document.upload',
   recordVersion: 'capacity.record',
   correctVersion: 'capacity.record',
+  // Same grant as recording one. Withdrawing a version whose subject has left the directory is
+  // the tail end of the same job, and the reducer's own guard is what keeps it narrow.
+  removeVersion: 'capacity.record',
   // Raising or editing a variation is amending commercial scope, so it takes the same grant
   // as the statement of work itself. DECIDING one is its own authority.
   upsertChangeRequest: 'sow.edit',

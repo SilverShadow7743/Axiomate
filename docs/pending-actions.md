@@ -14,7 +14,7 @@ Nothing below can move without a decision or an action that is yours.
 | # | Action | Why it needs you |
 |---|---|---|
 | A1 | **`gh auth login`** — run it as `! gh auth login` in the session | GitHub CLI 2.97.0 is installed and unauthenticated. Signing in is not something I can do on your behalf. Then the repo is one command: `gh repo create axiomate-tms --private --source=. --push` |
-| A2 | **Tarun's permission role** | He is in the directory (`PERSON_61`), allocated 100% to Axio-Growth, and holds **no role**. The fallback role is empty, so he can sign in and see nothing |
+| ~~A2~~ | ~~**Tarun's permission role**~~ | **Done, 18 Aug.** This entry was stale well before it was closed: the August identity fix created a NEW record (`PERSON_63`) rather than correcting `PERSON_61`, so he had held `ROLE_PROJECT_MANAGER` and been able to sign in for some time, while a stub carrying his grade sat beside it as a second "Tarun" in every dropdown. Consolidated onto `PERSON_63`, `PERSON_61` removed, its orphaned working pattern `ver-19` withdrawn, and the role raised to **Engagement Leader** — see G7 for why that was more than Project Manager |
 | A3 | **Confirm or overrule two design reversals** | Both are committed in `2026-08-17-work-management-design.md` and both go against what you asked for. See section E |
 | A4 | **Client filter default** | Requested and not yet built — see D1. It needs one answer: what "project stakeholder" resolves to. Allocation? Engagement membership? Named on the SOW? |
 | A5 | **Issue-type taxonomy** | Requested and not yet built — see D2. There is a modelling question in it worth five minutes of your time before anybody writes code |
@@ -152,6 +152,7 @@ nobody schedules.
 | G4 | Scenarios and designs are not linked | A `design:` field per scenario makes "which designs are unproven" a query |
 | G5 | **11 P1 gaps and 25 PARTIAL verdicts, with nothing scheduling work against them** | One P1 per cycle, chosen *before* new work is planned |
 | G6 | `tsx` is in neither `dependencies` nor `devDependencies`, yet five scripts run `npx tsx` | Every CI run fetches an unpinned version to execute code that gates deployments. One line |
+| G7 | **Segregation of duties had nobody on the other side of it** | The reducer refuses to let whoever raised a change request decide it, or whoever recorded a delivery accept it. With one engagement leader that rule had no counterparty: every change request Nishant raised was undecidable by anyone but an administrator. Resolved 18 Aug by making Tarun a second Engagement Leader — **and the cost is that the role carries all 38 permissions**, the same set as Platform Administrator, including `config.manage` and `rate.view`. The narrower alternative, still open, is to add `change.approve` to Project Manager and leave milestone acceptance with a real client sponsor |
 
 ---
 

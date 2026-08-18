@@ -606,6 +606,7 @@ const SHAPES = {
     reason: req(text),
     now,
   },
+  removeVersion: { id: req(id), now },
   correctVersion: {
     id: req(id),
     patch: req(

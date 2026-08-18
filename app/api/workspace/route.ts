@@ -61,6 +61,7 @@ const KINDS = new Set([
   'removeCommitment',
   'recordVersion',
   'correctVersion',
+  'removeVersion',
   'upsertChangeRequest',
   'withdrawChangeRequest',
   'decideChangeRequest',

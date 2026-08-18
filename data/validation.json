@@ -644,6 +644,16 @@
       "impact": "The commercial spine can answer what is owed and why. It could previously answer only what was contracted in total."
     },
     {
+      "id": "HV3",
+      "title": "A version recorded against the wrong person can be withdrawn — and only then",
+      "expected": "Removing a version is refused while its subject is still in the directory, so the one gap in effective dating is closed without opening a way to erase somebody’s history.",
+      "verdict": "PASS",
+      "actual": "A version whose subject is not in the directory can be withdrawn, and after it is, valueAt answers null for that person on every date. One whose subject IS in the directory is refused — \"Priya is still in the directory, so this is part of their history. Correct it rather than removing it.\" — which is the guard that keeps this from being a way to erase somebody's dated history: a working pattern deleted quietly would change what capacity answered for past weeks with nothing left to say why. A subject kind the rule does not recognise is refused too (\"Only a person's versions can be withdrawn this way, and this one is “sow.value”.\") rather than waved through, because subjectKind is open by design and a guard that permitted everything unfamiliar would grow into the general delete this is not.",
+      "stops": "at a UI. There is no screen for this — it exists for cleaning up after a directory record is removed, which is a script-shaped job today. `correctVersion` is in the same position and the audit records both.",
+      "severity": "—",
+      "impact": "Effective dating could record and correct, and never withdraw. A version recorded against the wrong person was permanent, which made the identity cleanup impossible to finish."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",

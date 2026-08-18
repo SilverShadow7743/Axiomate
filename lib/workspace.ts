@@ -956,6 +956,22 @@ export type Action =
       reason: string
       now: string
     }
+  /**
+   * Withdraw a version whose subject no longer exists.
+   *
+   * Deliberately narrow, and the narrowness is the whole design. There was no way to remove a
+   * version at all, which is a real gap — a working pattern recorded against the wrong person
+   * could never be undone — but a general delete would be a footgun: erasing a live person's
+   * dated history would change what `valueAt` answers for past dates with nothing left to say
+   * why. So this refuses unless the subject is already gone from the directory, which confines
+   * it to exactly the case it exists for: cleaning up after a person record was removed.
+   *
+   * A hard delete rather than a soft one. `Version` has no `deletedAt`, and adding one would
+   * mean filtering it inside `valueAt`, `timelineOf` and `overlapProblem` — the proven boundary
+   * arithmetic — to withdraw rows that by definition nothing can look up any more. The audit
+   * entry is the record that it happened.
+   */
+  | { t: 'removeVersion'; id: string; now: string }
   | { t: 'removeAllocation'; id: string; now: string }
   | {
       t: 'upsertCommitment'
@@ -4321,6 +4337,53 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Corrected.',
+      }
+    }
+
+    /**
+     * Withdraw a version whose subject is gone. See the note on the action.
+     *
+     * The guard is the feature. Without it this is a way to erase somebody's dated history —
+     * with it, the only rows it can touch are ones nothing is able to look up, because every
+     * consumer resolves a version through a subject id that no longer resolves to anybody.
+     */
+    case 'removeVersion': {
+      const existing = state.versions[a.id]
+      if (!existing) return { state, error: 'That version no longer exists.' }
+
+      if (!existing.subjectKind.startsWith('person.')) {
+        /*
+         * Refused rather than allowed, for a subject kind this rule cannot check. `subjectKind`
+         * is open by design — roles and rates were named as future users of it — and a guard
+         * that silently permitted everything it did not recognise would grow into the general
+         * delete this deliberately is not.
+         */
+        return { state, error: `Only a person's versions can be withdrawn this way, and this one is “${existing.subjectKind}”.` }
+      }
+      if (state.model.people[existing.subjectId]) {
+        return {
+          state,
+          error: `${state.model.people[existing.subjectId].name} is still in the directory, so this is part of their history. Correct it rather than removing it.`,
+        }
+      }
+
+      const versions = { ...state.versions }
+      delete versions[a.id]
+      return {
+        state: {
+          ...state,
+          versions,
+          audit: log(actor, state, {
+            rowId: existing.subjectId,
+            field: existing.subjectKind,
+            from: `from ${existing.validFrom}`,
+            to: null,
+            at: a.now,
+            by,
+            reason: 'The subject is no longer in the directory.',
+          }),
+        },
+        message: 'Withdrawn.',
       }
     }
 
