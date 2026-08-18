@@ -21,9 +21,11 @@ import type { WorkspaceState } from '@/lib/workspace'
  * alongside the tree, not instead of it — somebody scans it, picks a row, and lands back in the
  * workspace on that record.
  *
- * **Grouped by why, never scored.** The reasoning is in `lib/mywork.ts` and the screen carries it
- * rather than hiding it: each group states what it means, so the order is arguable by whoever
- * reads it. A single number would not be.
+ * **Ranked, and the rank is visible.** Reason, then severity, then age — see `lib/mywork.ts`,
+ * which also records that this file once claimed to have no scoring function and was wrong about
+ * it. The screen carries the reasoning rather than hiding it: each group states what it means and
+ * each row shows the two components that placed it, so the order is arguable by whoever reads it.
+ * A single blended number would not be.
  */
 export default function MyWorkPanel({
   state,
@@ -111,8 +113,10 @@ export default function MyWorkPanel({
         </div>
 
         <footer className="evi-foot">
-          Grouped by why each thing wants you, and ordered oldest first inside each group. There is
-          deliberately no priority score: a blended number is a judgement nobody can argue with.
+          Ranked by three things in order: why it wants you, then how severe it is, then how long
+          it has waited. Every row shows the last two, so the order explains itself. No blended
+          number is shown or stored — a bare score is a judgement nobody can argue with, but
+          pretending there is no judgement at all is how severity ended up weighted at zero.
         </footer>
       </aside>
     </>

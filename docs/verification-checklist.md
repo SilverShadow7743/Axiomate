@@ -63,9 +63,11 @@ New, 18 August. **`My work`** in the toolbar, left of `Configuration`, with a co
 anything blocked, your own unsubmitted hours, what is coming up, and the rest — grouped by *why*
 each thing wants you, with the reason spelled out under each group heading.
 
-> **There is deliberately no priority score.** If you see a number ranking rows, that is a fault.
-> The order is: decisions first (they are the only rows holding up another person), then overdue,
-> blocked, your hours, due, open. Oldest first inside each group.
+> **The rank is three parts, and all three should be visible.** Reason first — decisions are the
+> only rows holding up another person — then **severity**, then age. So a High issue three days
+> late must sort above a Medium one ten days late, and each row shows its severity and its date.
+> If you see a bare number ranking rows, that is a fault; if you see High sorting below Medium
+> inside a group, that is also a fault.
 
 Two things to check specifically:
 

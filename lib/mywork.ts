@@ -17,17 +17,36 @@
  * exists.
  *
  * ---------------------------------------------------------------------------
- * There is deliberately no priority score
+ * The ranking, and a correction to how this file used to describe it
  *
- * The obvious design is a number per item — severity times lateness plus a nudge for blocked —
- * and it is the wrong one twice over. A blended score is a derived value presented as a fact,
- * which is the thing this codebase most consistently refuses; and it is unarguable, because two
- * people looking at 73 have no way to disagree about it. Somebody's judgement then quietly
- * becomes the product's.
+ * This said "there is deliberately no priority score", and that was two claims: one right and
+ * one false.
  *
- * Instead: items are grouped by **why they are in front of you**, the groups are ordered, and
- * every row says its reason in words. Within a group the order is the date — oldest first,
- * because the thing that has waited longest has usually waited long enough.
+ * **Right:** no score is stored, and no bare number is shown. A blended figure kept as a column
+ * is a derived value presented as fact, and `73` on a row is opaque — two people looking at it
+ * have no way to disagree, so one person's weighting quietly becomes the product's.
+ *
+ * **False:** that this had no scoring function. It has one and always did — a lexicographic sort
+ * over (reason, date), which is a score whose weights happen to be `reason` dominating absolutely
+ * and `date` breaking ties. Describing that as "no score" hid the weights instead of removing
+ * them, and hid one weight in particular: **severity was zero.** A Low-severity issue ten days
+ * late outranked a High one three days late, and in the open group a High and a Low sorted
+ * identically. That is not a philosophical position, it is a defect, and the framing is what
+ * concealed it.
+ *
+ * So the rank is now written down rather than implied, and it is three parts in order:
+ *
+ *   1. **reason** — why this wants you at all. Still dominant, because a decision holding up
+ *      another person outranks anything only you are waiting on.
+ *   2. **severity** — High before Medium before Low, within a reason. The field existed the whole
+ *      time and was being ignored.
+ *   3. **date** — oldest first, breaking the tie.
+ *
+ * Every row shows the two components that placed it, so the ordering is legible on the screen and
+ * not only in this comment. That is the actual difference from a score: not that no judgement is
+ * made, but that the judgement is decomposed and visible. `scheduleHealth` in `lib/schedule.ts`
+ * already does exactly this — it blends dates, status and dependencies into one of six words,
+ * recomputed and explained rather than stored — and it is the precedent this now follows.
  *
  * The group order is itself an argument rather than a preference:
  *
@@ -60,6 +79,7 @@ import { can, directoryPersonFor, rolesFor } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
 import { weekStarting } from './timesheet'
 import type { Actor } from './actor'
+import type { Severity } from './types'
 import type { WorkspaceState } from './workspace'
 
 export const REASON_ORDER = ['decide', 'overdue', 'blocked', 'attest', 'due', 'open'] as const
@@ -87,6 +107,14 @@ export interface WorkItem {
   /** Stable within a list, so a screen can key on it. */
   key: string
   reason: WorkReason
+  /**
+   * The second component of the rank, and null where the record has no severity.
+   *
+   * Null sorts last within its reason rather than first: an approval carries no severity, and
+   * treating "not applicable" as "most urgent" would put every decision above every High issue
+   * for a reason nobody chose.
+   */
+  severity: Severity | null
   /** What to select when this is clicked, when there is something to select. */
   subjectId: string | null
   title: string
@@ -108,6 +136,10 @@ export interface WorkList {
   /** The name that was matched on, so a screen can say what it looked for. */
   matchedName: string
 }
+
+/** High before Medium before Low; anything without one sorts after all three. */
+const SEVERITY_RANK: Record<Severity, number> = { High: 0, Medium: 1, Low: 2 }
+const severityRank = (s: Severity | null) => (s ? SEVERITY_RANK[s] : 3)
 
 function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000)
@@ -141,6 +173,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
     items.push({
       key: `appr:${a.id}`,
       reason: 'decide',
+      severity: null,
       subjectId: a.subjectId,
       title: a.question || 'Approval',
       why: `${a.requestedBy} asked on ${a.requestedAt.slice(0, 10)}.`,
@@ -154,6 +187,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `ts:${t.id}`,
         reason: 'decide',
+        severity: null,
         subjectId: null,
         title: `${t.person}'s week of ${t.weekStarting}`,
         why: 'Submitted and awaiting approval. Hours are frozen until it is decided.',
@@ -171,6 +205,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `ms:${m.id}`,
         reason: 'decide',
+        severity: null,
         subjectId: m.sowId,
         title: `Milestone: ${m.name}`,
         why: `Delivered on ${m.deliveredAt?.slice(0, 10) ?? 'an unrecorded date'} and not billable until accepted.`,
@@ -185,6 +220,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `cr:${c.id}`,
         reason: 'decide',
+        severity: null,
         subjectId: c.sowId,
         title: `Change: ${c.title}`,
         why: `${c.requestedBy} raised it. ${c.effortHours > 0 ? '+' : ''}${c.effortHours}h, and not in the contracted total until decided.`,
@@ -203,6 +239,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `scope:${sowId}`,
         reason: 'decide',
+        severity: null,
         subjectId: sowId,
         title: `${n} line${n === 1 ? '' : 's'} of scope to agree`,
         why: 'Recorded and not yet agreed, so the hours are left out of the scope total.',
@@ -220,9 +257,10 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `issue:${issue.id}`,
         reason: 'blocked',
+        severity: issue.severity,
         subjectId: issue.id,
         title: `${issue.id} ${issue.subject}`,
-        why: `“${issue.status}” since ${issue.lastActivity}.`,
+        why: `${issue.severity} · “${issue.status}” since ${issue.lastActivity}.`,
         when: issue.lastActivity,
       })
       continue
@@ -234,9 +272,11 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `issue:${issue.id}`,
         reason: 'overdue',
+        severity: issue.severity,
         subjectId: issue.id,
         title: `${issue.id} ${issue.subject}`,
-        why: `Due ${due} — ${late} day${late === 1 ? '' : 's'} ago.`,
+        // Both components of the rank, so the order on screen explains itself.
+        why: `${issue.severity} · due ${due}, ${late} day${late === 1 ? '' : 's'} ago.`,
         when: due,
       })
       continue
@@ -245,9 +285,10 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `issue:${issue.id}`,
         reason: 'due',
+        severity: issue.severity,
         subjectId: issue.id,
         title: `${issue.id} ${issue.subject}`,
-        why: `Due ${due}.`,
+        why: `${issue.severity} · due ${due}.`,
         when: due,
       })
       continue
@@ -255,9 +296,10 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
     items.push({
       key: `issue:${issue.id}`,
       reason: 'open',
+      severity: issue.severity,
       subjectId: issue.id,
       title: `${issue.id} ${issue.subject}`,
-      why: due ? `Due ${due}.` : `${issue.severity}, no date set.`,
+      why: due ? `${issue.severity} · due ${due}.` : `${issue.severity} · no date set.`,
       when: due,
     })
   }
@@ -279,6 +321,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       items.push({
         key: `week:${week}`,
         reason: 'attest',
+        severity: null,
         subjectId: null,
         title: `Your week of ${week}`,
         why: sheet ? `Returned: ${sheet.reason ?? 'no reason recorded'}.` : 'Recorded and not submitted.',
@@ -292,8 +335,12 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
   const rank = (r: WorkReason) => REASON_ORDER.indexOf(r)
   items.sort(
     (a, b) =>
+      // 1. Why it wants you.
       rank(a.reason) - rank(b.reason) ||
-      // Oldest first inside a group. A null date sorts last: it is the one with no claim to urgency.
+      // 2. How bad it is. This was missing, and its absence was the defect the old "no score"
+      //    framing concealed — severity is the field a delivery firm ranks by first.
+      severityRank(a.severity) - severityRank(b.severity) ||
+      // 3. How long it has waited. A null date sorts last: no claim to urgency.
       (a.when === b.when ? a.title.localeCompare(b.title) : (a.when ?? '9999').localeCompare(b.when ?? '9999')),
   )
 

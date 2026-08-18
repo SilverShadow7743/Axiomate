@@ -3758,8 +3758,21 @@ scenario(
       t: 'setDates', id: 'OAPIL-1', start: '2026-08-03', end: '2026-08-10', now: NOW,
     } as Action)
 
+    /*
+     * Severity has to be able to reorder things, so the two overdue issues differ on it: OAPIL-1
+     * is High and OAPIL-2 is Medium, and OAPIL-2 is made the OLDER of the two. Under the original
+     * ordering — date only — the Medium would have come first.
+     */
+    const alsoHers = ok(dated, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { owner: 'Priya' },
+      reason: 'Reassigned for the test.', now: NOW,
+    } as Action)
+    const bothDated = ok(alsoHers, {
+      t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-04', now: NOW,
+    } as Action)
+
     /* Blocked: OAPIL-3 is hers and waiting on the client. */
-    const blocked = ok(dated, {
+    const blocked = ok(bothDated, {
       t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation' },
       reason: 'Client has not confirmed the batch window.', now: NOW,
     } as Action)
@@ -3787,6 +3800,7 @@ scenario(
 
     const list = myWork(withChange, priya, TODAY)
     const reasons = list.items.map((i) => i.reason)
+    const overdueIds = list.items.filter((i) => i.reason === 'overdue').map((i) => i.subjectId)
     const first = list.items[0]
 
     /* Somebody the directory does not know gets a different answer from somebody with nothing. */
@@ -3800,6 +3814,14 @@ scenario(
       list.counts.attest >= 1 &&
       /* decisions come first, because they are the only ones holding another person up */
       first.reason === 'decide' &&
+      /*
+       * And severity outranks age WITHIN a group. OAPIL-2 is Medium and four days older than
+       * OAPIL-1, which is High — under the original date-only ordering the Medium sorted first,
+       * which is the defect the "no priority score" framing concealed.
+       */
+      overdueIds[0] === 'OAPIL-1' &&
+      overdueIds[1] === 'OAPIL-2' &&
+      list.items.every((i) => i.reason !== 'decide' || i.severity === null) &&
       reasons.indexOf('decide') < reasons.indexOf('overdue') &&
       reasons.indexOf('overdue') < reasons.indexOf('blocked') &&
       /* she raised nothing, so nothing she raised is offered back to her */
@@ -3813,7 +3835,7 @@ scenario(
 
     return {
       verdict: good ? 'PASS' : 'FAIL',
-      actual: `One consultant, six collections, one list: ${list.counts.decide} awaiting her decision, ${list.counts.overdue} past its date, ${list.counts.blocked} blocked, ${list.counts.attest} week of her own hours unsubmitted, ${list.counts.due + list.counts.open} otherwise open. Decisions sort first and the sentence says why \u2014 "${describeWork(list).split('. ').slice(-1)[0]}" \u2014 because a decision is the only thing on the list that is stopping another person. Within a group the order is the date, oldest first. **There is no score anywhere**: a blended number would be a judgement nobody could argue with, and every row instead says its reason in words ("${first.why}"). A change request she raised herself would not appear, because the reducer would refuse her decision on it and a row that cannot be acted on is worse than no row. And the two empty lists are different answers: somebody with nothing to do is told so, while somebody the directory does not know is told the join failed \u2014 "${describeWork(stranger).slice(0, 58)}\u2026" \u2014 because a person shown an empty in-tray concludes they are up to date.`,
+      actual: `One consultant, six collections, one list: ${list.counts.decide} awaiting her decision, ${list.counts.overdue} past its date, ${list.counts.blocked} blocked, ${list.counts.attest} week of her own hours unsubmitted, ${list.counts.due + list.counts.open} otherwise open. Decisions sort first and the sentence says why \u2014 "${describeWork(list).split('. ').slice(-1)[0]}" \u2014 because a decision is the only thing on the list that is stopping another person. Within a group the order is the date, oldest first. The rank is three parts and all three are visible: reason, then **severity**, then age. OAPIL-1 (High) sorts above OAPIL-2 (Medium) even though OAPIL-2 is four days older — an earlier version of this ordered on date alone and called itself \"no priority score\", which hid that severity was weighted at zero. No blended number is shown or stored; every row instead names what placed it ("${first.why}"). A change request she raised herself would not appear, because the reducer would refuse her decision on it and a row that cannot be acted on is worse than no row. And the two empty lists are different answers: somebody with nothing to do is told so, while somebody the directory does not know is told the join failed \u2014 "${describeWork(stranger).slice(0, 58)}\u2026" \u2014 because a person shown an empty in-tray concludes they are up to date.`,
       stops: 'at the name join. Work is found by matching a display name against `Issue.owner` and `Timesheet.person`, so somebody whose directory name differs from the name on their issues sees an empty list. That is the structural gap pending-actions records, and it is reported here rather than hidden \u2014 `unrecognised` is a distinct answer from empty.',
       severity: '\u2014',
       impact:
