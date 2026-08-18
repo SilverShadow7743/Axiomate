@@ -27,6 +27,7 @@ import {
   type LabelKey,
   type ValueKind,
 } from '@/lib/config'
+import { capabilityStates, describeCapabilities } from '@/lib/capabilities'
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
@@ -62,6 +63,7 @@ import { useLabels } from './labels'
  */
 
 type Tab =
+  | 'capabilities'
   | 'index'
   | 'terminology'
   | 'roles'
@@ -84,6 +86,7 @@ type Tab =
 
 const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'index', label: 'All settings', group: 'Operating model' },
+  { id: 'capabilities', label: 'Capabilities', group: 'Operating model' },
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
@@ -255,6 +258,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
 
         <div className="cfg-panel">
           {tab === 'index' && <SettingsIndex state={state} go={setTab} />}
+          {tab === 'capabilities' && <Capabilities state={state} />}
           {tab === 'terminology' && (
             <Terminology
               key={scopeId}
@@ -2120,6 +2124,80 @@ function filingExample(filing: DocumentFiling): string {
   return filing.byEngagement
     ? `${root}/<tenant>/<engagement>/<year>/<id>-name.pdf`
     : `${root}/<tenant>/<year>/<id>-name.pdf`
+}
+
+/**
+ * What this workspace can do, and whether anybody can reach it.
+ *
+ * Read-only on purpose. Every switch it refers to already has a home elsewhere in configuration
+ * and is named on the row; duplicating the controls here would create two places to change one
+ * thing, which is how they come to disagree. This is an inventory, not a control panel.
+ */
+function Capabilities({ state }: { state: WorkspaceState }) {
+  const states = useMemo(() => capabilityStates(state.model), [state.model])
+  const broken = states.filter((c) => !c.usable)
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Capabilities</h3>
+      <p className="cfg-note">{describeCapabilities(states)}</p>
+      <p className="cfg-note">
+        Two different things are reported per row, and they are deliberately not merged into one
+        indicator. <b>Off</b> is a decision somebody made. <b>Unreachable</b> means no role holds
+        the permissions it needs — nobody decided anything, the feature is built, and every
+        attempt to use it is refused by a screen that renders perfectly. Those look identical from
+        the outside and want completely different responses.
+      </p>
+
+      {broken.length > 0 && (
+        <div className="cfg-card">
+          <p className="zone-note needed">
+            {broken.length === 1 ? 'One capability is' : `${broken.length} capabilities are`}{' '}
+            unreachable. Grant the missing permission under <b>Permissions</b>, to a role somebody
+            actually holds — adding it to a role nobody has changes nothing.
+          </p>
+        </div>
+      )}
+
+      {states.map((c) => (
+        <div className="cfg-card" key={c.capability.id}>
+          <div className="cfg-card-head">
+            <b>{c.capability.name}</b>
+            <span className="grow" />
+            {c.usable ? (
+              <Badge kind="seeded">
+                {c.heldBy.length} {c.heldBy.length === 1 ? 'role' : 'roles'}
+              </Badge>
+            ) : (
+              <Badge kind="p0">unreachable</Badge>
+            )}
+          </div>
+          <p className="cfg-inherit">{c.capability.what}</p>
+
+          {c.usable ? (
+            <p className="cfg-inherit">Held by {c.heldBy.join(', ')}.</p>
+          ) : (
+            <p className="zone-note needed">
+              No live role holds {c.missing.join(', ')}, so this is refused to everybody.
+            </p>
+          )}
+
+          {c.lostInMerge.length > 0 && (
+            <p className="zone-note needed">
+              The product grants {c.lostInMerge.join(', ')} by default and this workspace’s
+              stored roles do not have it. Stored configuration wins over shipped defaults —
+              deliberately, so a firm’s changes survive a release — which means a permission
+              added after this workspace was created never arrives on its own.
+            </p>
+          )}
+
+          {c.capability.switchedAt && (
+            <p className="cfg-inherit">Switched at {c.capability.switchedAt}.</p>
+          )}
+        </div>
+      ))}
+    </section>
+  )
 }
 
 function Transitions({

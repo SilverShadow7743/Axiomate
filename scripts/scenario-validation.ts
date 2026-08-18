@@ -102,6 +102,7 @@ import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { describeWork, myWork } from '../lib/mywork'
 import { describePortfolio, portfolio } from '../lib/portfolio'
+import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import {
   checkScopeItem,
   effortProblem,
@@ -3948,6 +3949,62 @@ scenario(
       severity: 'P2',
       impact:
         'A partner running three engagements had no screen that showed more than one at a time, so "which of these needs me" meant opening each and holding the comparison in their head.',
+    }
+  },
+)
+
+scenario(
+  'CP1',
+  'Somebody asks what this workspace can do, and is told what it cannot',
+  'Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.',
+  () => {
+    /*
+     * The companion to AC1, and the reason it exists.
+     *
+     * AC1 checks the SHIPPED defaults name an owner for every permission. That is a property of
+     * the build. It cannot see the failure that actually happened: a workspace created before a
+     * permission existed, whose stored roles never picked it up, where `mergeModel` keeps stored
+     * grants winning — correctly, so a firm's changes survive a release — and the feature is
+     * therefore refused to everybody with nothing anywhere saying so.
+     *
+     * This is that check at runtime, against whatever a workspace actually holds.
+     */
+    const healthy = capabilityStates(BASE.model)
+
+    /* Strip one permission from every role: the exact shape of the incident AC1 records. */
+    const grants = Object.fromEntries(
+      Object.entries(BASE.model.access.grants).map(([r, ks]) => [r, ks.filter((k) => k !== 'time.approve')]),
+    ) as typeof BASE.model.access.grants
+    const stripped = capabilityStates({
+      ...BASE.model,
+      access: { ...BASE.model.access, grants },
+    })
+
+    const timesheets = stripped.find((c) => c.capability.id === 'timesheets')!
+    const others = stripped.filter((c) => c.capability.id !== 'timesheets')
+
+    const good =
+      /* a healthy workspace reports every capability reachable */
+      healthy.every((c) => c.usable) &&
+      /not built but unreachable|every one of them is held/.test(describeCapabilities(healthy)) &&
+      /* removing one grant is detected, and named */
+      timesheets.usable === false &&
+      timesheets.missing.includes('time.approve') &&
+      /* and it is reported as drift from the shipped default, not merely as absent */
+      timesheets.lostInMerge.includes('time.approve') &&
+      /* nothing else is disturbed — the check is specific, not a blanket alarm */
+      others.every((c) => c.usable) &&
+      /unreachable/.test(describeCapabilities(stripped)) &&
+      /* every capability names what it needs, or the check would be vacuous */
+      healthy.every((c) => c.capability.needs.length > 0)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `${healthy.length} capabilities, each naming the permissions it cannot work without and the live roles that hold them. Against this workspace every one is reachable. Take “time.approve” away from every role and exactly one row changes: Timesheets reports "unreachable", names the missing permission, and additionally reports that the product grants it by default while these stored roles do not — which is the failure AC1 was written after and could not itself detect. The two states are kept apart deliberately: OFF is a decision somebody made, UNREACHABLE is nobody having decided anything, and a single indicator covering both would hide the second behind the first.`,
+      stops: 'at the catalogue being written by hand. A capability is a thing a person recognises and the code has no such concept — deriving the list from module names would produce a list of files — so something built and never added here is invisible to this screen. The count is asserted so the omission surfaces as a failing scenario rather than as silence.',
+      severity: '—',
+      impact:
+        'Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen.',
     }
   },
 )

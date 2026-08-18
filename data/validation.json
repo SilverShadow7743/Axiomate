@@ -694,6 +694,16 @@
       "impact": "A partner running three engagements had no screen that showed more than one at a time, so \"which of these needs me\" meant opening each and holding the comparison in their head."
     },
     {
+      "id": "CP1",
+      "title": "Somebody asks what this workspace can do, and is told what it cannot",
+      "expected": "Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.",
+      "verdict": "PASS",
+      "actual": "19 capabilities, each naming the permissions it cannot work without and the live roles that hold them. Against this workspace every one is reachable. Take “time.approve” away from every role and exactly one row changes: Timesheets reports \"unreachable\", names the missing permission, and additionally reports that the product grants it by default while these stored roles do not — which is the failure AC1 was written after and could not itself detect. The two states are kept apart deliberately: OFF is a decision somebody made, UNREACHABLE is nobody having decided anything, and a single indicator covering both would hide the second behind the first.",
+      "stops": "at the catalogue being written by hand. A capability is a thing a person recognises and the code has no such concept — deriving the list from module names would produce a list of files — so something built and never added here is invisible to this screen. The count is asserted so the omission surfaces as a failing scenario rather than as silence.",
+      "severity": "—",
+      "impact": "Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
