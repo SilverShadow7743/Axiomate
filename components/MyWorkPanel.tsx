@@ -58,7 +58,7 @@ export default function MyWorkPanel({
               ✕
             </button>
           </div>
-          <div className="evi-sub">{describeWork(list)}</div>
+          <div className="evi-sub sentence">{describeWork(list)}</div>
         </header>
 
         {list.unrecognised && (

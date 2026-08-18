@@ -53,7 +53,7 @@ export default function PortfolioPanel({
               ✕
             </button>
           </div>
-          <div className="evi-sub">{describePortfolio(lines)}</div>
+          <div className="evi-sub sentence">{describePortfolio(lines)}</div>
         </header>
 
         <div className="evi-list">

@@ -2077,6 +2077,26 @@ select.cell-editor {
   white-space: nowrap;
 }
 
+/*
+ * The same slot when it holds a sentence rather than a row of chips.
+ *
+ * `.evi-sub` is a one-line flex strip built for the evidence panel's metadata — nowrap and
+ * overflow:hidden are right there. My work and Portfolio reused the class for a summary
+ * sentence, and both were being cut off mid-word at the drawer edge: "…the figure is a count
+ * you ca". The text was in the DOM the whole time, so nothing failed and no test could see it;
+ * it took opening the panel in a browser.
+ *
+ * A modifier rather than a change to `.evi-sub`, because the evidence panel genuinely wants the
+ * single line and would start wrapping its chips onto two.
+ */
+.evi-sub.sentence {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
 /* Where the issue came from — kept visually apart from attached evidence. */
 .evi-source {
   flex: 0 0 auto;
