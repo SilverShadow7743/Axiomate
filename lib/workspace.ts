@@ -43,6 +43,14 @@ import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, accessProblems, can, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
+import {
+  LOG_FOR_OTHERS,
+  dailyCap,
+  dailyCapWarning,
+  refusesTimeEntry,
+  timeEntryAllowed,
+  type WeekState,
+} from './timeWindow'
 import { checkPersonSkill, type PersonSkill, type Skill, type SkillLevel, type SkillSource } from './skills'
 import {
   duplicateOf,
@@ -1232,6 +1240,45 @@ export function descendantsOf(state: WorkspaceState, id: string): string[] {
 function frozenProblem(state: WorkspaceState, person: string, date: string): string | null {
   const status = isFrozen(Object.values(state.timesheets), person, date)
   return status ? frozenMessage(status, weekStarting(date)) : null
+}
+
+/**
+ * That person's week, as `lib/timeWindow.ts` names the states.
+ *
+ * A translation and nothing more. `isFrozen` in `lib/timesheet.ts` remains the one place that
+ * decides whether a week is frozen — this only renames its answer for a module that describes
+ * the same fact with a different vocabulary. Two modules deciding it would be two rules.
+ */
+function weekStateFor(state: WorkspaceState, person: string, date: string): WeekState {
+  const status = isFrozen(Object.values(state.timesheets), person, date)
+  return status === 'Submitted' ? 'submitted' : status === 'Approved' ? 'approved' : 'none'
+}
+
+/**
+ * Whether the day this entry lands in has run long, as a sentence or ''.
+ *
+ * Never a refusal. People do work eleven-hour days at go-live, and a system that refuses to
+ * record one produces hours booked to the wrong day rather than fewer hours worked.
+ *
+ * The cap is per PERSON per DATE — not per issue, which would let three issues permit
+ * twenty-four hours in one day — so the total counts every entry that person already has on
+ * that date, plus the one being added.
+ *
+ * The name-to-id join is the weak link and it fails safely. `Version` keys on a directory id
+ * while `TimeEntry.person` holds a name, so a person whose name does not resolve gets no cap
+ * and therefore no warning — a missing remark, never a wrong refusal. That asymmetry is why the
+ * cap is wired here at all while the same join would be unacceptable in a refusing check.
+ */
+function dayWarning(state: WorkspaceState, person: string, date: string, adding: number): string {
+  const named = person.trim().toLowerCase()
+  const directory = Object.values(state.model.people).find((p) => p.name.trim().toLowerCase() === named)
+  if (!directory) return ''
+
+  const already = Object.values(state.timeEntries)
+    .filter((e) => !e.deletedAt && e.date === date && e.person.trim().toLowerCase() === named)
+    .reduce((n, e) => n + e.hours, 0)
+
+  return dailyCapWarning(dailyCap(Object.values(state.versions), directory.id, date), already + adding) ?? ''
 }
 
 /**
@@ -2866,9 +2913,16 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const problem = checkEntry({ hours: a.hours, date: a.date, person: a.person }, today)
       if (problem) return { state, error: problem.message }
 
-      const frozen = frozenProblem(state, a.person, a.date)
-      if (frozen) return { state, error: frozen }
-
+      /*
+       * Authority first, and this rule stays here rather than moving into `timeEntryAllowed`.
+       *
+       * The two are NOT the same question. This asks whether the actor may record hours for the
+       * PERSON named on the entry; `timeEntryAllowed` asks whether that person owns the ISSUE.
+       * Under the second, a consultant logging their own hours against a colleague's issue would
+       * start being refused — an everyday thing on any shared piece of work, and not something
+       * "wire the window rule" should quietly change. So this product's rule is the one below,
+       * and the window rule is told the authority question has already been settled.
+       */
       if (a.person.trim().toLowerCase() !== by.toLowerCase()) {
         const may = can(state.model, actor, 'time.recordForOthers')
         if (!may.allowed) {
@@ -2878,6 +2932,36 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }
         }
       }
+
+      /*
+       * The time entry window. `lib/timeWindow.ts` was built, proven and had no production
+       * consumer at all; this is the step the work-management design names as carrying the most
+       * regression risk, because it puts refusals in front of an arm that always succeeded and
+       * lands on a consultant at the end of a week.
+       *
+       * It replaces the freeze check that used to sit here — the verdict carries it, phrased by
+       * `lib/timesheet.ts` either way, so `addTime`, `updateTime` and `removeTime` still refuse
+       * a frozen week in the same words. What it ADDS is two refusals that nothing enforced:
+       * a closed issue, and a date before the work existed to be worked on.
+       *
+       * `LOG_FOR_OTHERS` is passed unconditionally, which makes the module's own ownership check
+       * unreachable. That is deliberate and is explained above: the authority question was
+       * already answered, by a different and narrower rule.
+       */
+      const verdict = timeEntryAllowed(
+        {
+          id: issue.id,
+          status: issue.status,
+          owner: issue.owner,
+          raised: issue.raised,
+          plannedStart: issue.plannedStart,
+          plannedEnd: issue.plannedEnd,
+        },
+        { name: a.person, permissions: [LOG_FOR_OTHERS] },
+        a.date,
+        weekStateFor(state, a.person, a.date),
+      )
+      if (refusesTimeEntry(verdict)) return { state, error: verdict.message }
 
       const seq = state.seq + 1
       const id = `time-${seq}`
@@ -2912,7 +2996,15 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             by,
           }),
         },
-        message: `${a.hours}h recorded.`,
+        /*
+         * Warnings travel with the confirmation rather than being dropped. `allowed` is not the
+         * same as unremarkable — a day past the due date and an over-long day are both worth
+         * seeing, and neither is a reason to refuse hours somebody actually worked. The design
+         * is explicit that an overrun warns and never refuses.
+         */
+        message: [`${a.hours}h recorded.`, ...verdict.warnings, dayWarning(state, a.person, a.date, a.hours)]
+          .filter(Boolean)
+          .join(' '),
       }
     }
 

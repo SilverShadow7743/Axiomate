@@ -53,7 +53,7 @@ Steps 1–3 are committed and live. Step 4 is the risky one.
 
 | # | Step | Note |
 |---|---|---|
-| C1 | **Step 4 — wire `lib/timeWindow.ts` to `addTime`** | The module is provable in isolation and **has no production consumer**. This step puts a refusal in front of an arm that currently always succeeds, and the person it lands on is a consultant at the end of a week with hours to record |
+| ~~C1~~ | ~~**Step 4 — wire `lib/timeWindow.ts` to `addTime`**~~ | **Done, 18 Aug.** `addTime` now refuses a closed issue and a date before the work existed, warns on an overrun and on a long day, and takes the freeze through the same verdict. Two things were deliberately NOT changed: the authority rule stays in the reducer (the module asks whether the person owns the ISSUE, which would have started refusing a consultant logging their own hours on a colleague's work), and the freeze wording is still `lib/timesheet.ts`'s, so all three time arms refuse in the same words. **`updateTime` still does not consult the window** — an entry can be edited onto a date the window would have refused, which TW1 records |
 | C2 | Step 5 — calendar grid, then My timesheet | Reads `TimeEntry`, writes through existing arms. No new storage |
 | C3 | Step 6 — the timesheets plan as already written | Submission, freeze, approval. Design approved, unbuilt |
 | C4 | **Verify the row menu in a browser** | Row actions, inline editing and the status-reason popover are **in production and were never rendered in a browser** — the workspace is behind Entra and I cannot sign in. Click a `⋮`, change one status, confirm the reason box refuses to save empty |

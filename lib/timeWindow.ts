@@ -1,6 +1,8 @@
 import { daysBetween, formatShort, startOfWeek } from './dates'
 import { isTerminal } from './schedule'
 import { valueAt, type Version } from './versioning'
+import { frozenMessage } from './timesheet'
+import { WORKING_PATTERN } from './capacity'
 import type { PermissionKey } from './access'
 import type { IssueStatus } from './types'
 
@@ -251,14 +253,21 @@ export function timeEntryAllowed(
   // attestation mean anything: without it an approver approves a number that can change
   // underneath them.
   if (week === 'submitted' || week === 'approved') {
-    const label = formatShort(startOfWeek(workDate))
     return {
       ...base,
       kind: 'week-frozen',
-      message:
-        week === 'submitted'
-          ? `The week of ${label} is submitted and awaiting approval. Hours cannot be changed until it is approved or returned to you.`
-          : `The week of ${label} is approved. Its hours are attested and cannot be changed; a correction to an approved week is a decision somebody has to make, not an edit.`,
+      /*
+       * Delegated to `lib/timesheet.ts`, which owns the freeze and its wording.
+       *
+       * This carried its own two sentences, and they had already drifted: the submitted one
+       * matched and the approved one did not. `addTime` would then have refused in different
+       * words from `updateTime` and `removeTime` for the identical situation — worse than the
+       * duplication, because today those three at least agree with each other.
+       *
+       * This module still decides WHEN the freeze applies to a time entry. What it no longer
+       * does is decide how the freeze describes itself.
+       */
+      message: frozenMessage(week === 'submitted' ? 'Submitted' : 'Approved', startOfWeek(workDate)),
     }
   }
 
@@ -355,7 +364,15 @@ export function backdated(workDate: string, entryDate: string): Backdating {
  * ================================================================== */
 
 /** The kind `valueAt` is asked about. Also the only subject kind `recordVersion` accepts today. */
-export const WORKING_PATTERN = 'person.workingPattern'
+/**
+ * Re-exported from `lib/capacity.ts` rather than declared again.
+ *
+ * It WAS declared again — the same string in two modules, which is the shape that let the
+ * detail panel's tab list disagree with its own guard. Two constants that must be equal are two
+ * constants that can stop being equal, and the day one of them changed, capacity and the daily
+ * cap would have read different versions of the same fact while both looking correct.
+ */
+export { WORKING_PATTERN }
 
 /**
  * The part of a working pattern this rule reads.

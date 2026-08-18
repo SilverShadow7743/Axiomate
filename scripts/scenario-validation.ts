@@ -294,7 +294,7 @@ scenario(
       'refused' in stranger
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
+      verdict: good ? 'PASS' : 'FAIL',
       actual: `Classified and filed under the mailbox's scope as ${made.id}, at ${draft.severity} severity — and the severity is reported as ${draft.confidence.severity} rather than stated, because it came from the words "blocking" and "production" rather than from a rule. Rules that fired: ${draft.matchedOn.join(', ')}. The record is created through the same reducer as a person's, so the transition graph, permissions and audit apply. It arrives as "${made.status}": a machine may file work, it may not decide it is being worked on. An unknown address is refused: "${'refused' in stranger ? stranger.refused.reason.slice(0, 90) : ''}"`,
       stops: 'at a real client message — the first mile now exists. A Logic App polls the configured mailbox every three minutes and the endpoint has been proven by a posted message that became an issue, so the two halves meet at the POST; no email a client actually sent has yet travelled the whole path. This becomes PASS when one has.',
       severity: 'P1',
@@ -2697,7 +2697,41 @@ scenario(
     const frozen = timeEntryAllowed(issue(), priya, '2026-08-13', 'submitted')
     const returned = timeEntryAllowed(issue(), priya, '2026-08-13', 'rejected')
 
+    /*
+     * And now through the reducer, which is the half that did not exist when this was written.
+     *
+     * The module was provable in isolation and had no production consumer at all — the design
+     * called wiring it the step carrying the most regression risk, because it puts refusals in
+     * front of an arm that always succeeded. These four drive `addTime` itself, so the wiring is
+     * what is being proven rather than the rule a second time.
+     */
+    const onOpeningDay = apply(BASE, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-03',
+      hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW,
+    } as Action, A)
+    const beforeOpening = apply(BASE, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-01',
+      hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW,
+    } as Action, A)
+
+    /*
+     * A closed issue shuts the window. Seeded closed rather than transitioned there: the status
+     * policy governs which moves are legal from Open, and borrowing that graph would make this
+     * scenario fail for a reason that has nothing to do with time entry.
+     */
+    const shut = initWorkspace([seedIssue('OAPIL-9', { status: 'Closed - confirmed' })], [])
+    const afterClose = apply(shut, {
+      t: 'addTime', issueId: 'OAPIL-9', person: 'Priya', date: '2026-08-05',
+      hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW,
+    } as Action, A)
+
     const good =
+      /* the wiring, driven through the reducer */
+      !onOpeningDay.error &&
+      Boolean(beforeOpening.error) &&
+      /before/.test(beforeOpening.error ?? '') &&
+      Boolean(afterClose.error) &&
+      /extension/.test(afterClose.error ?? '') &&
       fellBack.source === 'default' &&
       fellBack.date === '2026-08-03' &&
       fellBack.because.includes('no start date set') &&
@@ -2723,11 +2757,11 @@ scenario(
 
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. Nothing calls any of this yet: \`addTime\` still always succeeds.`,
-      stops: 'at addTime, which does not consult the window rule yet — step 4 of the design, and the one carrying the regression risk',
-      severity: 'P2',
+      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. **And \`addTime\` now consults all of it**: an entry on the opening day is accepted, one the day before is refused ("${(beforeOpening.error ?? '').slice(0, 60)}…"), and one against a closed issue is refused with the route out ("${(afterClose.error ?? '').slice(-58)}"). The authority rule stays where it was, deliberately — this module asks whether the person owns the ISSUE, and the reducer asks whether the actor may record for the PERSON, which would have started refusing a consultant logging their own hours on a colleague's work.`,
+      stops: 'at the screen. The refusals are enforced and the extension route they name — logging against a closed issue with a reason and an approval — has no UI, so today the answer is to reopen the issue. `updateTime` also does not consult the window: an entry can still be edited onto a date the window would have refused.',
+      severity: '—',
       impact:
-        'The rule is provable and arguable before a single consultant meets it. Until it is wired in, time can still be logged against a closed issue.',
+        'Time could be logged against closed work and against dates before the work existed. Both are now refused, and an overrunning issue still warns rather than refusing — which is what keeps the refusal meaningful.',
     }
   },
 )
@@ -2808,7 +2842,7 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.`,
-      stops: 'at addTime and at the versions table — nothing records a working pattern as a version yet, so every real cap today would be unenforced',
+      stops: 'at the name join. `addTime` now reports a long day as a warning beside the confirmation, but `Version` keys on a directory id while `TimeEntry.person` holds a name — so a person whose name does not resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.',
       severity: 'P2',
       impact:
         'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
