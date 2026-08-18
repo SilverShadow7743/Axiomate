@@ -233,6 +233,12 @@ export default function DetailPanel({
   const [resizing, setResizing] = useState(false)
 
   // The issue that owns the selection: an activity row reports under its parent issue.
+  /*
+   * What this workspace holds now, as against what was imported into it. The two diverge the
+   * moment anybody creates an issue, and the empty-detail line below reports them separately.
+   */
+  const liveIssues = Object.values(state.issues).filter((i) => !i.deletedAt).length
+
   const issueRow =
     row?.kind === 'issue'
       ? row
@@ -432,7 +438,15 @@ export default function DetailPanel({
       <div className="detail-body">
         {!row ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
-            Select a row to see its detail. {meta.issueCount} issues loaded from {meta.source}.
+            {/*
+              * Two figures that are both true and are not the same, so they are labelled rather
+              * than run together. This read "{meta.issueCount} issues loaded from {meta.source}"
+              * — which rendered as "216 issues loaded from … (v2), 179 issues", three numbers in
+              * one sentence, none of them the workspace's actual total.
+              */}
+            Select a row to see its detail. {liveIssues} issues here
+            {liveIssues === meta.issueCount ? '' : `, ${meta.issueCount} of them imported`} from{' '}
+            {meta.source}.
           </div>
         ) : tab === 'Data Source' ? (
           <DataSource meta={meta} />

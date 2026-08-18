@@ -27,7 +27,12 @@ export interface SeedFile {
  * This is the seed, not the store. With a database configured, `lib/db/boot.ts` imports this
  * once into Postgres and the workspace is served from there afterwards; without one, it is
  * read on every request and the session stays in memory. Either way the file is the origin of
- * the 179 issues and the provenance metadata the Data Source tab reports.
+ * the imported issues and the provenance metadata the Data Source tab reports.
+ *
+ * No count is written down here, and none is written into `meta.source` either. One was, in both
+ * places — "179 issues" — and it was true of the raw export before deduplication and wrong from
+ * the first load afterwards. A number in a label is a derived value stored as fact, which is the
+ * rule this schema follows everywhere except, until now, inside a string.
  */
 export async function loadSeed(): Promise<SeedFile> {
   const raw = await readFile(join(process.cwd(), 'data', 'issues.seed.json'), 'utf8')
@@ -35,9 +40,19 @@ export async function loadSeed(): Promise<SeedFile> {
   const internal = await loadInternal()
   if (!internal.length) return seed
 
+  /*
+   * Both halves move together. This used to add the internal issues to `issueCount` and leave
+   * `source` naming the client log alone, so the Data Source tab reported a figure that counted
+   * two logs beside a label that named one — and the extra issues looked like they had come from
+   * the client.
+   */
   return {
     ...seed,
-    meta: { ...seed.meta, issueCount: seed.meta.issueCount + internal.length },
+    meta: {
+      ...seed.meta,
+      issueCount: seed.meta.issueCount + internal.length,
+      source: `${seed.meta.source} and the Axiomate build log`,
+    },
     issues: [...seed.issues, ...internal],
   }
 }
