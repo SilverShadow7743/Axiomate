@@ -10,10 +10,28 @@ calendar and Teams. Nobody sees anybody else's.
 **Engagement.** An engagement has a mailbox of its own — `oapil@`, `slg@` — shared by the people
 delivering it, and it survives any of them leaving.
 
-They look alike and they are not. Personal correspondence belongs to a person; an engagement's
+They look alike and they are not. Individually addressed mail belongs to a person; an engagement's
 mailbox is the firm's record of a client relationship. That single difference points the token
 model, the storage decision and the visibility rule in opposite directions, which is why they are
 designed together rather than one being a special case of the other.
+
+### What a connected mailbox is actually for
+
+Two uses, and they are different enough to want different things from the design.
+
+**Prioritising my own work.** Something arrives in my inbox, and I turn it into my action — so the
+thing I have to do exists in the same list as everything else I have to do, ranked against it. The
+value is not that Axiomate has captured an email; it is that my work is in one place and can be
+ordered. Today a consultant's real queue is split between an inbox and a workspace, and neither
+knows about the other.
+
+**Routing what landed in the wrong place.** Client mail arrives at an individual address all the
+time — a reply-all, a forwarded thread, somebody who has the consultant's address and not the
+engagement's. Mapping it to a project is how it stops being one person's private knowledge and
+becomes the engagement's record.
+
+The second is the one that changes a recommendation below, because mapping is an act of
+publication: a message the firm did not hold becomes a message the firm holds.
 
 ---
 
@@ -100,12 +118,24 @@ A copy in the workspace, keyed to the owner, withheld from everybody else at the
 
 ### Recommendation: it resolves differently per tier, and that is the point
 
-**Personal → A, fetch live, keeping a reference on the way out.** When somebody turns one of their
-own messages into work, store the **reference and what they chose to quote** — `messageId`,
-subject, sender, received date, and an excerpt the person selected — on the issue. Not the
-message. That gives traceability ("this action came from that email, here is the paragraph")
-without the firm holding anybody's correspondence, and it is the same instinct as `Document` and
-`Evidence`: keep the fact, not the copy.
+**Personal → A, fetch live**, and then it depends on what the person does with it. There are three
+states, not two, and the difference between the last two is the whole of §1's second use.
+
+| | What is stored | Why |
+|---|---|---|
+| **Read, and nothing else** | Nothing at all | The overwhelming majority. Never stored, never in the database, gone from Axiomate when the account is disabled |
+| **Turned into my action** | The **reference and the excerpt they chose** — `messageId`, subject, sender, date, and the paragraph they selected | Traceability without publication. The action is the work; the message stays where it lives. Same instinct as `Document` and `Evidence`: keep the fact, not the copy |
+| **Mapped to a project** | **The message** | Mapping IS the act of publication. The person has decided this is the engagement's record rather than their own knowledge, and a record the team cannot read is not a record |
+
+That third row is the part an earlier draft of this document got wrong. It recommended keeping
+only a reference in every case, which would have made §1's second use impossible: a colleague
+cannot act on a client's message they are not allowed to see, and telling them "there is an email
+about this, ask Nishant" is the situation the mapping exists to end.
+
+**The consent model is the act itself.** Nothing is published because a rule decided; it is
+published because a person chose to map it, knowing that is what mapping means. The screen should
+say so at the moment of the click rather than in a policy nobody reads — the same standard applied
+to withdrawing a milestone and to agreeing scope.
 
 **Engagement → B, store it.** Every argument against storing individually addressed mail is an
 argument *for* storing this. A team sharing a queue needs the queue to exist between them; a message that arrives
@@ -136,6 +166,26 @@ people actually spend in meetings. Connecting one calendar fixes a number that i
 
 Teams last, and possibly opted into separately from the other two, because `Chat.Read` is a
 consent a person should be able to decline while still connecting their calendar.
+
+---
+
+## 3a. The surface this needs does not exist yet
+
+"So that I can prioritise my work" assumes a place where a person's work is listed and ordered.
+There is not one.
+
+The tree is organised by client and project, which is right for delivery and wrong for a
+consultant deciding what to do next — their work is scattered across three engagements and they
+have no view that gathers it. `Inbox` in the toolbar is notifications, not work. The nearest thing
+is a filtered grid, which somebody has to configure and re-configure.
+
+So a connected mailbox alone would deliver half the stated value: mail could become actions, and
+those actions would land in the same place everything else already fails to be prioritised.
+**A "my work" view is a prerequisite for the first use, not a follow-on from it** — and it needs
+no Graph consent, no token storage and no new integration. It reads records that already exist.
+
+Worth building first for that reason, and worth knowing that it is a separate piece of work from
+anything else in this document.
 
 ---
 
@@ -222,8 +272,15 @@ five-minute job and should not wait either.
 
 All three change the schema, so none should be answered by starting to build.
 
-The order that follows from the recommendations, if they are accepted: **engagement mailbox
-first** — it reuses the deployed shared-mailbox poll, the app-only Graph client and the existing
-scoped-mailbox configuration, and it is the tier where a stored queue is the right answer. Personal
-connection is the larger piece, because per-user token storage is a security component that has no
-equivalent in the codebase today.
+The order that follows, if the recommendations are accepted:
+
+1. **A "my work" view** — §3a. No consent, no tokens, no integration; it reads what exists. It is
+   also a prerequisite for the first stated use rather than a follow-on, because actions created
+   from mail need somewhere to be prioritised.
+2. **Engagement mailbox** — reuses the deployed shared-mailbox poll, the app-only Graph client and
+   the existing scoped-mailbox configuration, and it is the tier where a stored queue is right.
+   It also fixes the problem this design came from, by giving client mail an address that is not
+   an individual's.
+3. **Personal connection** — the largest piece, because per-user token storage is a security
+   component with no equivalent in the codebase today, and because mapping-as-publication needs
+   the engagement tier to exist before there is anywhere to map into.
