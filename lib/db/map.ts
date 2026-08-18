@@ -26,6 +26,7 @@ import type {
   PersonSkill as PersonSkillRow,
   Document as DocumentRow,
   Milestone as MilestoneRow,
+  ScopeItem as ScopeItemRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
@@ -46,6 +47,7 @@ import type { ChangeRequest, ChangeStatus } from '../changeRequest'
 import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
+import type { ScopeItem, ScopeKind, ScopeSource } from '../scope'
 import type {
   AcceptanceState,
   BillingTrigger,
@@ -992,6 +994,54 @@ export function rateFromRow(r: PersonRateRow): PersonRate {
     byId: r.byId ?? undefined,
     byEmail: r.byEmail,
     reason: r.reason,
+  }
+}
+
+/* ================================================================== *
+ * Scope items
+ * ================================================================== */
+
+/**
+ * `effortHours` is `Decimal?` and stays null rather than becoming zero.
+ *
+ * Null means the kind carries no effort — an assumption is not work — and zero would mean
+ * somebody estimated it at nothing. Those are different claims, and a total built from the second
+ * is a total that quietly includes lines nobody thought about.
+ */
+export function scopeItemToRow(tenantId: TenantId, i: ScopeItem): Prisma.ScopeItemUncheckedCreateInput {
+  return {
+    tenantId,
+    id: i.id,
+    sowId: i.sowId,
+    kind: i.kind,
+    text: i.text,
+    parentId: i.parentId,
+    effortHours: i.effortHours,
+    source: i.source,
+    sequence: i.sequence,
+    approvedBy: i.approvedBy,
+    approvedAt: i.approvedAt ? new Date(i.approvedAt) : null,
+    recordedBy: i.recordedBy,
+    recordedAt: new Date(i.recordedAt),
+    deletedAt: i.deletedAt ? new Date(i.deletedAt) : null,
+  }
+}
+
+export function scopeItemFromRow(r: ScopeItemRow): ScopeItem {
+  return {
+    id: r.id,
+    sowId: r.sowId,
+    kind: r.kind as ScopeKind,
+    text: r.text,
+    parentId: r.parentId,
+    effortHours: r.effortHours === null ? null : Number(r.effortHours),
+    source: r.source as ScopeSource,
+    sequence: r.sequence,
+    approvedBy: r.approvedBy,
+    approvedAt: r.approvedAt ? r.approvedAt.toISOString() : null,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 

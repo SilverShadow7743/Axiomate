@@ -139,6 +139,7 @@ async function scrub() {
   await prisma.timesheet.deleteMany({ where })
   await prisma.personRate.deleteMany({ where })
   await prisma.personSkill.deleteMany({ where })
+  await prisma.scopeItem.deleteMany({ where })
   await prisma.milestone.deleteMany({ where })
   await prisma.document.deleteMany({ where })
   await prisma.changeRequest.deleteMany({ where })

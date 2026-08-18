@@ -1945,6 +1945,15 @@ export default function IssueWorkspace({
           onDecideMilestone={(id, decision, note) =>
             dispatch({ t: 'decideMilestone', id, decision, note, now: new Date().toISOString() })
           }
+          onUpsertScope={(sowId, id, patch) =>
+            dispatch({ t: 'upsertScopeItem', id, sowId, patch, now: new Date().toISOString() })
+          }
+          onRemoveScope={(id) =>
+            dispatch({ t: 'removeScopeItem', id, now: new Date().toISOString() })
+          }
+          onDecideScope={(id, approved) =>
+            dispatch({ t: 'decideScopeItem', id, approved, now: new Date().toISOString() })
+          }
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
           }

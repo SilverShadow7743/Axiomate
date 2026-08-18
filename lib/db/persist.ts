@@ -29,6 +29,7 @@ import {
   personSkillToRow,
   documentToRow,
   milestoneToRow,
+  scopeItemToRow,
   changeToRow,
   revisionToRow,
   relationshipToRow,
@@ -559,6 +560,21 @@ export async function persistSteps(
      * at the withdrawn file — persisting only the document would leave the database holding a
      * pointer the reducer had already cleared.
      */
+    case 'upsertScopeItem':
+    case 'removeScopeItem':
+    case 'decideScopeItem': {
+      for (const [id, i] of Object.entries(after.scopeItems)) {
+        if (before.scopeItems[id] === i) continue
+        const row = scopeItemToRow(tenantId, i)
+        await tx.scopeItem.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
     case 'upsertMilestone':
     case 'removeMilestone':
     case 'deliverMilestone':

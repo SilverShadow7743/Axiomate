@@ -62,6 +62,12 @@ import {
 } from './documents'
 import type { StoreKind } from './documents'
 import {
+  checkScopeItem,
+  nextScopeSequence,
+  parentProblem,
+  type ScopeItem,
+} from './scope'
+import {
   acceptProblem,
   checkMilestone,
   deliverProblem,
@@ -338,6 +344,13 @@ export interface WorkspaceState {
    * `milestonePosition` reports that as a different thing from having made no progress.
    */
   milestones: Record<string, Milestone>
+  /**
+   * What each statement of work says it will deliver. See `./scope`.
+   *
+   * Scope items, not tree tiers — settled 18 August. `Sow.scope` keeps the agreement in the
+   * document's own words; this is the structured version, and the two are not required to agree.
+   */
+  scopeItems: Record<string, ScopeItem>
   /** Decisions asked for and given. See `./approval`. */
   approvals: Record<string, Approval>
   /** Messages raised for people, and whether they got anywhere. See `./notifications`. */
@@ -599,6 +612,7 @@ export function initWorkspace(
     personSkills: {},
     documents: {},
     milestones: {},
+    scopeItems: {},
     /**
      * One record per id, because the id is the identity.
      *
@@ -846,6 +860,23 @@ export type Action =
       now: string
     }
   | { t: 'removeDocument'; id: string; now: string }
+  /* ---- SCOPE ---- */
+  /**
+   * A line of what a statement of work says it will deliver. See `./scope`.
+   *
+   * Recording is one act and agreeing is another — `decideScopeItem` — because a line somebody
+   * typed while reading a draft is not yet scope, and its hours must not reach a total that gets
+   * compared against a contract.
+   */
+  | {
+      t: 'upsertScopeItem'
+      id: string | null
+      sowId: string
+      patch: Partial<Pick<ScopeItem, 'kind' | 'text' | 'parentId' | 'effortHours' | 'source' | 'sequence'>>
+      now: string
+    }
+  | { t: 'removeScopeItem'; id: string; now: string }
+  | { t: 'decideScopeItem'; id: string; approved: boolean; now: string }
   /* ---- MILESTONES ---- */
   | {
       t: 'upsertMilestone'
@@ -3698,6 +3729,158 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Withdrawn. The file stays in the document library.',
+      }
+    }
+
+    case 'upsertScopeItem': {
+      const sow = state.sows[a.sowId]
+      if (!sow || sow.deletedAt) return { state, error: 'That statement of work no longer exists.' }
+
+      const existing = a.id ? state.scopeItems[a.id] : null
+      if (a.id && !existing) return { state, error: 'That line of scope no longer exists.' }
+      /*
+       * An agreed line is not editable. Somebody confirmed this wording IS the scope, and
+       * changing it afterwards would alter what was agreed without anybody deciding to — the
+       * same rule an accepted milestone has, for the same reason. Un-agree it first, which is
+       * `decideScopeItem` with `approved: false` and leaves both moves on the trail.
+       */
+      if (existing?.approvedAt) {
+        return { state, error: 'That line has been agreed. Un-agree it first if the wording is wrong — changing agreed scope silently is how a contract and a plan stop matching.' }
+      }
+
+      const parentId = a.patch.parentId === undefined ? (existing?.parentId ?? null) : a.patch.parentId
+      if (parentId) {
+        const bad = parentProblem(Object.values(state.scopeItems), existing?.id ?? null, parentId)
+        if (bad) return { state, error: bad }
+        if (state.scopeItems[parentId].sowId !== a.sowId) {
+          return { state, error: 'That line belongs to a different statement of work.' }
+        }
+      }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `scope-${seq}`
+      const kind = a.patch.kind ?? existing?.kind ?? 'deliverable'
+      const merged: ScopeItem = {
+        id,
+        sowId: a.sowId,
+        kind,
+        text: (a.patch.text ?? existing?.text ?? '').trim(),
+        parentId,
+        // Read against the MERGED kind, so switching a deliverable to an exclusion drops the
+        // hours rather than leaving them behind a kind that cannot carry them.
+        effortHours: a.patch.effortHours === undefined ? (existing?.effortHours ?? null) : a.patch.effortHours,
+        source: a.patch.source ?? existing?.source ?? 'stated',
+        sequence: a.patch.sequence ?? existing?.sequence ?? nextScopeSequence(state.scopeItems, a.sowId),
+        approvedBy: existing?.approvedBy ?? null,
+        approvedAt: existing?.approvedAt ?? null,
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+
+      const problem = checkScopeItem(merged)
+      if (problem) return { state, error: problem }
+
+      return {
+        state: {
+          ...state,
+          seq,
+          scopeItems: { ...state.scopeItems, [id]: merged },
+          audit: log(actor, state, {
+            rowId: a.sowId,
+            field: `scope.${merged.kind}`,
+            from: existing?.text ?? null,
+            to: merged.text,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? 'Scope updated.' : 'Scope recorded. It is not agreed until somebody agrees it.',
+      }
+    }
+
+    case 'removeScopeItem': {
+      const existing = state.scopeItems[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That line of scope no longer exists.' }
+      if (existing.approvedAt) {
+        return { state, error: 'That line has been agreed. Un-agree it before removing it, so the trail says somebody decided rather than that it vanished.' }
+      }
+      /*
+       * Children go with the parent. A criterion judging a deliverable that is no longer in
+       * scope is judging nothing, and leaving it behind would put an orphan in a list that reads
+       * as the agreement.
+       */
+      const orphans = Object.values(state.scopeItems).filter(
+        (i) => i.parentId === a.id && !i.deletedAt,
+      )
+      const agreedChild = orphans.find((i) => i.approvedAt)
+      if (agreedChild) {
+        return { state, error: `“${agreedChild.text.slice(0, 40)}” sits under this and has been agreed. Un-agree it first.` }
+      }
+
+      const next = { ...state.scopeItems, [a.id]: { ...existing, deletedAt: a.now } }
+      for (const child of orphans) next[child.id] = { ...child, deletedAt: a.now }
+
+      return {
+        state: {
+          ...state,
+          scopeItems: next,
+          audit: log(actor, state, {
+            rowId: existing.sowId,
+            field: `scope.${existing.kind}`,
+            from: existing.text,
+            to: null,
+            at: a.now,
+            by,
+          }),
+        },
+        message: orphans.length
+          ? `Removed, with ${orphans.length} line${orphans.length === 1 ? '' : 's'} that sat under it.`
+          : 'Removed.',
+      }
+    }
+
+    /**
+     * Agree a line into the scope, or take it back out.
+     *
+     * No "asker cannot be the decider" rule here, unlike a change request or a milestone, and
+     * the reason is stated rather than omitted: transcribing a signed statement of work is not
+     * proposing something, and the only other producer of scope lines is an extraction that
+     * holds no grant at all. A firm wanting segregation withholds `scope.approve`.
+     */
+    case 'decideScopeItem': {
+      const existing = state.scopeItems[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That line of scope no longer exists.' }
+      if (Boolean(existing.approvedAt) === a.approved) {
+        return { state, error: a.approved ? 'That line is already agreed.' : 'That line is not agreed.' }
+      }
+      if (a.approved && existing.parentId) {
+        const parent = state.scopeItems[existing.parentId]
+        if (parent && !parent.deletedAt && !parent.approvedAt) {
+          return { state, error: `“${parent.text.slice(0, 40)}” has not been agreed yet, and this sits under it.` }
+        }
+      }
+
+      const next: ScopeItem = {
+        ...existing,
+        approvedBy: a.approved ? by : null,
+        approvedAt: a.approved ? a.now : null,
+      }
+      return {
+        state: {
+          ...state,
+          scopeItems: { ...state.scopeItems, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.sowId,
+            field: `scope.${existing.kind}`,
+            from: existing.approvedAt ? 'agreed' : 'recorded',
+            to: a.approved ? 'agreed' : 'recorded',
+            at: a.now,
+            by,
+          }),
+        },
+        message: a.approved ? 'Agreed. Its hours now count toward the scope total.' : 'No longer agreed.',
       }
     }
 

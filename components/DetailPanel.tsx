@@ -26,6 +26,7 @@ import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
 import type { Milestone } from '@/lib/milestone'
+import type { ScopeItem } from '@/lib/scope'
 import type { IssueNote, NoteType } from '@/lib/notes'
 import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
@@ -148,6 +149,9 @@ interface Props {
   onRemoveMilestone: (id: string) => void
   onDeliverMilestone: (id: string) => boolean
   onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
+  onUpsertScope: (sowId: string, id: string | null, patch: Partial<ScopeItem>) => boolean
+  onRemoveScope: (id: string) => void
+  onDecideScope: (id: string, approved: boolean) => boolean
   onAllocate: (
     projectId: string,
     a: { person: string; startDate: string; endDate: string; percentage: number; note: string; acceptOverallocation?: boolean },
@@ -199,6 +203,9 @@ export default function DetailPanel({
   onRemoveMilestone,
   onDeliverMilestone,
   onDecideMilestone,
+  onUpsertScope,
+  onRemoveScope,
+  onDecideScope,
   onAllocate,
   onRelease,
   onRecordPattern,
@@ -455,6 +462,9 @@ export default function DetailPanel({
                 onRemoveMilestone={onRemoveMilestone}
                 onDeliverMilestone={onDeliverMilestone}
                 onDecideMilestone={onDecideMilestone}
+                onUpsertScope={onUpsertScope}
+                onRemoveScope={onRemoveScope}
+                onDecideScope={onDecideScope}
               />
             )}
           </>

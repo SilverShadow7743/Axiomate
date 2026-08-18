@@ -3,7 +3,7 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
-import { classify, provenanceNote, type InboundMessage } from '@/lib/intake'
+import { classify, provenanceNote, type InboundMessage, htmlToText } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { secretProblem, secretValue } from '@/lib/secrets'
@@ -102,7 +102,13 @@ export async function POST(req: Request) {
     to: message.to,
     from: message.from,
     subject: typeof message.subject === 'string' ? message.subject : '',
-    body: typeof message.body === 'string' ? message.body : '',
+    /*
+     * Converted at the boundary, once, so everything downstream sees text: the empty-message
+     * refusal, the classifier's keyword matching, the description that reaches a consultant, and
+     * the duplicate check. Client mail arrives as HTML by design — see `htmlToText` — and until
+     * this line existed, issues were created with raw markup in them.
+     */
+    body: typeof message.body === 'string' ? htmlToText(message.body) : '',
     messageId: message.messageId,
     receivedAt:
       typeof message.receivedAt === 'string' ? message.receivedAt : new Date().toISOString(),

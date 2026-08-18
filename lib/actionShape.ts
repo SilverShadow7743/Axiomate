@@ -10,6 +10,7 @@ import { COMMITMENT_KINDS } from './capacity'
 import { SKILL_ORDER, SKILL_SOURCES } from './skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
+import { SCOPE_KINDS, SCOPE_SOURCES } from './scope'
 
 /**
  * Deciding whether an action is the shape it claims to be.
@@ -724,6 +725,29 @@ const SHAPES = {
         delivery: oneOf(new Set(DELIVERY_STATES)),
       }),
     ),
+    now,
+  },
+  upsertScopeItem: {
+    id: req(idOrNull),
+    sowId: req(id),
+    patch: req(
+      patchOf({
+        kind: oneOf(new Set(SCOPE_KINDS)),
+        text,
+        parentId: idOrNull,
+        effortHours: numOrNull,
+        source: oneOf(new Set(SCOPE_SOURCES)),
+        sequence: num,
+      }),
+    ),
+    now,
+  },
+  removeScopeItem: { id: req(id), now },
+  decideScopeItem: {
+    id: req(id),
+    // `false` un-agrees a line that was agreed in error. Not a separate action, because it is
+    // the same decision reversed and the audit reads better as one field changing twice.
+    approved: req(bool),
     now,
   },
   removeMilestone: { id: req(id), now },

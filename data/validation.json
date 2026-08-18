@@ -418,7 +418,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (14 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (15 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "44 of 44 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-17. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "44 of 44 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-18. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -528,7 +528,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-17: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-18: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
@@ -654,11 +654,31 @@
       "impact": "Effective dating could record and correct, and never withdraw. A version recorded against the wrong person was permanent, which made the identity cleanup impossible to finish."
     },
     {
+      "id": "IN2",
+      "title": "A client sends HTML mail and a consultant can read it",
+      "expected": "Markup becomes text, links survive with their targets, and plain text is passed through byte for byte.",
+      "verdict": "PASS",
+      "actual": "An Outlook body becomes something a person can read: the stylesheet is removed with its contents rather than left in the description, `<o:p>` and every other MSO artefact is gone, `&amp;` and `&#8211;` decode, and a bulleted list reads as a list. **Links keep their targets** — \"Microsoft guidance (https://learn.microsoft.com/dynamics365/)\" — which is the specific thing the Content Conversion connector would have discarded and the reason `infra/intake.bicep` rejected it. A link whose text is already its address is not repeated. Plain text comes back byte for byte, so a text/plain message is never rewritten by a function that exists for markup. Nothing is hard-wrapped, which was the connector's other failing. A client quoting code as `&amp;lt;` gets `&lt;` and not `<`: one decoding pass, because a second is corruption rather than tidying.",
+      "stops": "at the mailbox. The original message is not kept — it stays in the mailbox intake names in its provenance note, and storing a second copy of every client email as markup nobody reads would be a cost with no reader. Attachments are still not captured; the Logic App appends a line saying where they are.",
+      "severity": "—",
+      "impact": "Client mail arrived as raw markup and a consultant had to read tags to find the request. The conversion was always going to be needed somewhere; doing it here rather than in the connector is what keeps the links."
+    },
+    {
+      "id": "SC1",
+      "title": "A statement of work says what it will deliver, and agreeing it is a separate act",
+      "expected": "Scope is recorded before it is agreed, only agreed lines count toward the total, and the total is compared with the contract rather than enforced against it.",
+      "verdict": "PASS",
+      "actual": "Six lines of scope: four agreed, two recorded and not yet agreed. Only the agreed work counts toward the total — 740h, with the unagreed 900h reported beside it rather than added in, because a line somebody typed while reading a draft is not scope and its hours must not reach a figure that gets compared with a contract. That comparison is made and never enforced: against a 1,000h contract it says \"contract carries more than the scope does.\", and against 500h it says the agreed scope is more than was sold. Both are findings for a person, not refusals — a firm entering forty deliverables passes through every intermediate total on the way. An assumption cannot carry hours (\"A assumption is a statement about the agreement, not work somebody does, so it carries no hours.\"). Scope is one level deep: a criterion hangs off the deliverable it judges and reads directly beneath it, and hanging one off another criterion is refused, which is what stops a scope list quietly becoming a work breakdown.",
+      "stops": "at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.",
+      "severity": "—",
+      "impact": "What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 38 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 40 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."

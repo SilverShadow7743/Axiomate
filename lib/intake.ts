@@ -39,6 +39,156 @@ export interface InboundMessage {
   receivedAt: string
 }
 
+/* ================================================================== *
+ * HTML bodies
+ * ================================================================== */
+
+/**
+ * A mail body as something a person can read.
+ *
+ * Client mail arrives as HTML, and it arrives that way **on purpose**. `infra/intake.bicep`
+ * records the decision: the Content Conversion connector was rejected because it is in preview,
+ * it doubles the per-message connector cost, and — the reason that actually mattered — by its own
+ * documentation it discards hyperlinks and hard-wraps at eighty characters. Losing a link a
+ * client sent, silently, is worse than showing somebody tags.
+ *
+ * That reasoning was right and it was only half a decision. Nothing on this side then converted
+ * anything, so issues were created with raw markup in the description. This is the other half,
+ * and it is here rather than in the Logic App for three reasons: it is pure and therefore
+ * testable, it costs nothing per message, and it can keep the links that the rejected connector
+ * would have thrown away.
+ *
+ * What it deliberately does NOT do:
+ *
+ *   - **Hard-wrap.** That was one of the two objections to the connector. Lines stay long and the
+ *     screen decides where to break them.
+ *   - **Sanitise for rendering.** Nothing here is trusted as markup afterwards; the output is
+ *     plain text stored in a description field. Escaping is not this function's job and pretending
+ *     otherwise would invite somebody to render the result as HTML because "it has been cleaned".
+ *   - **Keep the original.** The message stays in the mailbox it arrived in, which the intake note
+ *     already names. Storing a second copy of every client email as markup nobody reads is a cost
+ *     with no reader.
+ */
+export function htmlToText(body: string): string {
+  if (!body) return ''
+  // Plain text passes through untouched. A body with no tag at all must not be rewritten by a
+  // function that only exists for markup — and mail servers do still send text/plain.
+  if (!/<[a-z!/][^>]*>/i.test(body)) return body
+
+  let out = body
+
+  /*
+   * Content that is not prose, removed with its content rather than just its tags. Stripping
+   * `<style>` as a tag pair alone leaves the entire stylesheet sitting in the description, which
+   * is the single ugliest thing an Outlook message would otherwise produce.
+   */
+  out = out.replace(/<!--[\s\S]*?-->/g, ' ')
+  out = out.replace(/<(script|style|head|title)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+
+  /*
+   * Links keep their target. This is the whole reason the conversion is done here: the connector
+   * that was rejected would have dropped it. `text (url)` unless the text already IS the url, in
+   * which case repeating it reads as a fault.
+   */
+  out = out.replace(
+    /<a\b[^>]*?href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (_m, href: string, inner: string) => {
+      const label = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+      const target = href.trim()
+      if (!target || /^(mailto:|tel:)/i.test(target)) return label || target
+      if (!label) return target
+      // A link whose text is its own address, or a fragment of it, gains nothing from the pair.
+      return label === target || target.includes(label) ? label : `${label} (${target})`
+    },
+  )
+
+  // Structure that means a line break. Order does not matter; each is independent.
+  out = out.replace(/<br\b[^>]*>/gi, '\n')
+  out = out.replace(/<\/(p|div|tr|h[1-6]|blockquote|section|article)\s*>/gi, '\n\n')
+  out = out.replace(/<\/(li)\s*>/gi, '\n')
+  out = out.replace(/<li\b[^>]*>/gi, '- ')
+  // A table cell boundary is a space, not a line break: a two-column row reads as one line.
+  out = out.replace(/<\/(td|th)\s*>/gi, '  ')
+
+  // Everything else that is a tag, including Outlook's `<o:p>` and every MSO artefact.
+  out = out.replace(/<[^>]+>/g, '')
+
+  out = decodeEntities(out)
+
+  /*
+   * Whitespace last, and only after the entities: `&nbsp;` becomes a space here and would
+   * otherwise survive as a character no collapse rule recognises. Outlook produces long runs of
+   * them.
+   */
+  out = out.replace(/\r\n?/g, '\n')
+  out = out
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trimEnd())
+    .join('\n')
+  // Three or more blank lines is Outlook padding, not somebody's paragraphing.
+  out = out.replace(/\n{3,}/g, '\n\n')
+  /*
+   * A list reads as a list. `</li>` contributes a newline and the source usually carries one of
+   * its own between items, so consecutive bullets arrive double-spaced — which turns a four-point
+   * list from a client into what looks like four separate paragraphs.
+   */
+  out = out.replace(/(^|\n)(- [^\n]*)\n\n(?=- )/g, '$1$2\n')
+
+  return out.trim()
+}
+
+/** The named entities that actually turn up in mail, plus every numeric one. */
+const NAMED: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  ndash: '\u2013',
+  mdash: '\u2014',
+  lsquo: '\u2018',
+  rsquo: '\u2019',
+  ldquo: '\u201c',
+  rdquo: '\u201d',
+  hellip: '\u2026',
+  bull: '\u2022',
+  pound: '\u00a3',
+  euro: '\u20ac',
+  copy: '\u00a9',
+  reg: '\u00ae',
+  trade: '\u2122',
+  deg: '\u00b0',
+}
+
+/**
+ * Entities, decoded once.
+ *
+ * `&amp;` is handled in the same pass as everything else rather than first or last, because a
+ * second pass over the result would turn `&amp;lt;` — which a client genuinely sends when quoting
+ * code — into `<`, and that is data corruption rather than tidying.
+ */
+export function decodeEntities(text: string): string {
+  return text.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (whole, body: string) => {
+    if (body[0] === '#') {
+      const code =
+        body[1] === 'x' || body[1] === 'X'
+          ? Number.parseInt(body.slice(2), 16)
+          : Number.parseInt(body.slice(1), 10)
+      // Anything outside the range, or a control character, is left as written rather than
+      // turned into a replacement glyph nobody can interpret.
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return whole
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return whole
+      }
+    }
+    const named = NAMED[body.toLowerCase()]
+    return named === undefined ? whole : named
+  })
+}
+
 export interface IntakeDraft {
   /** Where it should be filed — the mailbox's configured scope. */
   parentId: string

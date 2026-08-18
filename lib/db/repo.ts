@@ -16,6 +16,7 @@ import {
   personSkillFromRow,
   documentFromRow,
   milestoneFromRow,
+  scopeItemFromRow,
   auditToRow,
   dependencyFromRow,
   dependencyToRow,
@@ -137,6 +138,7 @@ type Reader = Pick<
   | 'personSkill'
   | 'document'
   | 'milestone'
+  | 'scopeItem'
 >
 
 /**
@@ -162,7 +164,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -227,6 +229,7 @@ export async function loadWorkspace(
        */
       db.document.findMany({ where: { tenantId }, orderBy: { uploadedAt: 'asc' } }),
       db.milestone.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
+      db.scopeItem.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -268,6 +271,7 @@ export async function loadWorkspace(
     // endpoint needs them to fetch. `boot()` is the one place they are stripped.
     documents: Object.fromEntries(documents.map((d) => [d.id, documentFromRow(d)])),
     milestones: Object.fromEntries(milestones.map((m) => [m.id, milestoneFromRow(m)])),
+    scopeItems: Object.fromEntries(scopeItems.map((i) => [i.id, scopeItemFromRow(i)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),

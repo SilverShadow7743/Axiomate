@@ -146,6 +146,7 @@ model Tenant {
   personSkills  PersonSkill[]
   documents     Document[]
   milestones    Milestone[]
+  scopeItems    ScopeItem[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -681,6 +682,7 @@ model Sow {
   /// Variations to this contract. Deltas — see `ChangeRequest`.
   changes    ChangeRequest[]
   milestones Milestone[]
+  scopeItems ScopeItem[]
 
   @@id([tenantId, id])
   @@index([tenantId, engagementId])
@@ -1190,6 +1192,64 @@ model Document {
   @@index([tenantId, subjectKind, subjectId])
   /// And the duplicate check, which is per subject and never across the tenant.
   @@index([tenantId, checksum])
+}
+
+/// A line of what a statement of work says it will deliver.
+///
+/// **Scope items, not tree tiers.** The revised operating model puts Process, Scenario and
+/// Configuration Deliverable in a work hierarchy beneath Process Area; they are recorded here
+/// instead, which leaves `NODE_KINDS`, `ALLOWED_PARENTS`, the tree builder and the intake parent
+/// check untouched. See `lib/scope.ts`.
+///
+/// `Sow.scope` keeps the agreement in the document's own words. This is the structured version,
+/// and the two are deliberately not required to agree — a paragraph and a list of line items are
+/// different renderings of one negotiation.
+///
+/// There is no `milestone` kind. `Milestone` is a record in its own right, with a payment
+/// schedule and its own delivery and acceptance axes; a scope item of that kind would be a second
+/// home for one concept.
+model ScopeItem {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `scope-12`, minted from the durable workspace counter.
+  id    String
+  sowId String
+  sow   Sow    @relation(fields: [tenantId, sowId], references: [tenantId, id], onDelete: Restrict)
+
+  /// deliverable | acceptance | assumption | exclusion | process | scenario | configuration.
+  kind String
+  text String @db.Text
+
+  /// One level only, enforced in the reducer: a parent must itself have no parent. Scope lists
+  /// what was agreed; a work breakdown is a different thing, and unbounded depth would turn one
+  /// into the other by accident. Self-referential, so no foreign key to a separate table.
+  parentId String?
+
+  /// Null on kinds that are statements rather than work — an assumption is not built by anybody.
+  /// Decimal because a half-day estimate is ordinary and rounding it moves a total.
+  effortHours Decimal? @db.Decimal(10, 2)
+
+  /// stated | extracted. `extracted` has no producer yet: SOW intelligence needs a document
+  /// library that is one administrator consent short. The value exists now because retrofitting
+  /// provenance onto rows already recorded means guessing at it.
+  source String
+
+  /// Presentation order, and the order the scope reads in. Not a dependency.
+  sequence Int
+
+  /// When this line became part of the AGREED scope, and who said so. Null means recorded but
+  /// not agreed — the normal state of anything proposed, and a normal state for a draft.
+  approvedBy String?
+  approvedAt DateTime?
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, sowId, sequence])
+  @@index([tenantId, parentId])
 }
 
 /// What was promised against a statement of work, when it lands, and what it is worth.

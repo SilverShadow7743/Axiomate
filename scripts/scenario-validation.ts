@@ -99,6 +99,16 @@ import {
   type SkillLevel,
 } from '../lib/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
+import { htmlToText } from '../lib/intake'
+import {
+  checkScopeItem,
+  effortProblem,
+  parentProblem,
+  scopeFor,
+  scopePosition,
+  type ScopeItem,
+  type ScopeKind,
+} from '../lib/scope'
 import { unconfiguredStore } from '../lib/storage/contract'
 import {
   describeMilestones,
@@ -3582,6 +3592,149 @@ scenario(
       severity: '—',
       impact:
         'Effective dating could record and correct, and never withdraw. A version recorded against the wrong person was permanent, which made the identity cleanup impossible to finish.',
+    }
+  },
+)
+
+scenario(
+  'IN2',
+  'A client sends HTML mail and a consultant can read it',
+  'Markup becomes text, links survive with their targets, and plain text is passed through byte for byte.',
+  () => {
+    const outlook = [
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><head>',
+      '<style><!-- p.MsoNormal {font-family:"Calibri",sans-serif;} --></style></head><body>',
+      '<p class="MsoNormal">Hi Nishant,<o:p></o:p></p>',
+      '<p>The posting is failing in PROD &amp; the batch aborts at step&nbsp;3.</p>',
+      '<p>Tracker: <a href="https://oapil.sharepoint.com/sites/erp">https://oapil.sharepoint.com/sites/erp</a></p>',
+      '<p>See the <a href="https://learn.microsoft.com/dynamics365/">Microsoft guidance</a>.</p>',
+      '<ul><li>OAPIL &ndash; fails</li>',
+      '<li>SLG &#8211; works</li></ul>',
+      '<p>Regards,<br>Bhandari</p></body></html>',
+    ].join('\n')
+
+    const text = htmlToText(outlook)
+
+    /* Plain text is not markup and must come back byte for byte. */
+    const plain = 'Batch fails at step 3.\n\nRegards,\nBhandari'
+    const passedThrough = htmlToText(plain)
+
+    /*
+     * A client quoting code sends `&amp;lt;`. One decoding pass gives `&lt;`, which is what they
+     * wrote; a second would give `<`, which is data corruption wearing the costume of tidying.
+     */
+    const quoted = htmlToText('<p>quoting code: &amp;lt;tag&amp;gt;</p>')
+
+    const good =
+      /* the stylesheet goes with its tag, rather than landing in the description */
+      !text.includes('MsoNormal') &&
+      !text.includes('Calibri') &&
+      !text.includes('<o:p>') &&
+      !/<[a-z/]/i.test(text) &&
+      /* entities decode, including numeric */
+      text.includes('PROD & the batch') &&
+      text.includes('step 3') &&
+      text.includes('OAPIL – fails') &&
+      text.includes('SLG – works') &&
+      /* a link whose text IS its address is not repeated */
+      text.includes('Tracker: https://oapil.sharepoint.com/sites/erp') &&
+      !text.includes('sites/erp (https') &&
+      /* a labelled link keeps its target — the reason this is done here and not by the connector */
+      text.includes('Microsoft guidance (https://learn.microsoft.com/dynamics365/)') &&
+      /* a list reads as a list rather than as separate paragraphs */
+      text.includes('- OAPIL – fails\n- SLG – works') &&
+      /* nothing is hard-wrapped: the other objection to the rejected connector */
+      !text.split('\n').some((l) => l.length === 80) &&
+      passedThrough === plain &&
+      quoted === 'quoting code: &lt;tag&gt;' &&
+      htmlToText('') === ''
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `An Outlook body becomes something a person can read: the stylesheet is removed with its contents rather than left in the description, \`<o:p>\` and every other MSO artefact is gone, \`&amp;\` and \`&#8211;\` decode, and a bulleted list reads as a list. **Links keep their targets** — "Microsoft guidance (https://learn.microsoft.com/dynamics365/)" — which is the specific thing the Content Conversion connector would have discarded and the reason \`infra/intake.bicep\` rejected it. A link whose text is already its address is not repeated. Plain text comes back byte for byte, so a text/plain message is never rewritten by a function that exists for markup. Nothing is hard-wrapped, which was the connector's other failing. A client quoting code as \`&amp;lt;\` gets \`&lt;\` and not \`<\`: one decoding pass, because a second is corruption rather than tidying.`,
+      stops: 'at the mailbox. The original message is not kept — it stays in the mailbox intake names in its provenance note, and storing a second copy of every client email as markup nobody reads would be a cost with no reader. Attachments are still not captured; the Logic App appends a line saying where they are.',
+      severity: '—',
+      impact:
+        'Client mail arrived as raw markup and a consultant had to read tags to find the request. The conversion was always going to be needed somewhere; doing it here rather than in the connector is what keeps the links.',
+    }
+  },
+)
+
+scenario(
+  'SC1',
+  'A statement of work says what it will deliver, and agreeing it is a separate act',
+  'Scope is recorded before it is agreed, only agreed lines count toward the total, and the total is compared with the contract rather than enforced against it.',
+  () => {
+    const sowId = 'sow-sc'
+    const item = (
+      id: string,
+      kind: ScopeKind,
+      text: string,
+      over: Partial<ScopeItem> = {},
+    ): ScopeItem => ({
+      id, sowId, kind, text, parentId: null, effortHours: null, source: 'stated',
+      sequence: Number(id.slice(-1)), approvedBy: null, approvedAt: null,
+      recordedBy: 'Operator', recordedAt: NOW, deletedAt: null, ...over,
+    })
+
+    const items = [
+      item('sc-1', 'deliverable', 'Procure-to-pay design', { effortHours: 400, approvedAt: NOW, approvedBy: 'Nishant' }),
+      item('sc-2', 'deliverable', 'Intercompany configuration', { effortHours: 300, approvedAt: NOW, approvedBy: 'Nishant' }),
+      /* Recorded and not agreed: real, and deliberately not in the total. */
+      item('sc-3', 'deliverable', 'Second-wave rollout', { effortHours: 900 }),
+      item('sc-4', 'acceptance', 'Three consecutive clean payment runs', { parentId: 'sc-1', approvedAt: NOW, approvedBy: 'Nishant' }),
+      item('sc-5', 'exclusion', 'Data migration from the legacy system'),
+      item('sc-6', 'scenario', 'Vendor invoice with three-way match', { effortHours: 40, approvedAt: NOW, approvedBy: 'Nishant' }),
+    ]
+
+    /* A contract of 740h against 740h of agreed work: no finding. */
+    const matched = scopePosition(sowId, items, 740)
+    /* The same scope against a contract of 1,000h: 260h nobody has written down. */
+    const short = scopePosition(sowId, items, 1000)
+    /* And against 500h: more agreed than was sold. */
+    const over = scopePosition(sowId, items, 500)
+
+    /* An assumption is a statement about the agreement, not work somebody does. */
+    const effortOnStatement = checkScopeItem({ kind: 'assumption', text: 'Client provides test data', effortHours: 8 })
+    const goodDeliverable = checkScopeItem({ kind: 'deliverable', text: 'Design', effortHours: 8 })
+    const blank = checkScopeItem({ kind: 'deliverable', text: '   ', effortHours: null })
+
+    /* Scope is one level deep. A criterion can hang off a deliverable, not off another criterion. */
+    const underTop = parentProblem(items, 'sc-5', 'sc-1')
+    const underChild = parentProblem(items, 'sc-5', 'sc-4')
+    const underSelf = parentProblem(items, 'sc-1', 'sc-1')
+
+    /* Reading order: a parent, then what hangs beneath it. */
+    const ordered = scopeFor(items, sowId).map((i) => i.id)
+
+    const good =
+      /* only agreed work counts, and the unagreed 900h stays out */
+      matched.approvedEffortHours === 740 &&
+      matched.totalEffortHours === 1640 &&
+      matched.approved === 4 &&
+      matched.pending === 2 &&
+      effortProblem(matched) === null &&
+      /* the comparison is reported both ways round */
+      effortProblem(short)?.includes('unaccounted for') === true &&
+      effortProblem(over)?.includes('more than was sold') === true &&
+      /* statements carry no hours */
+      Boolean(effortOnStatement) &&
+      goodDeliverable === null &&
+      Boolean(blank) &&
+      /* one level, and no self-parenting */
+      underTop === null &&
+      Boolean(underChild) &&
+      Boolean(underSelf) &&
+      /* a criterion reads directly beneath the deliverable it judges */
+      ordered.indexOf('sc-4') === ordered.indexOf('sc-1') + 1
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Six lines of scope: four agreed, two recorded and not yet agreed. Only the agreed work counts toward the total — ${matched.approvedEffortHours}h, with the unagreed ${matched.totalEffortHours - matched.approvedEffortHours}h reported beside it rather than added in, because a line somebody typed while reading a draft is not scope and its hours must not reach a figure that gets compared with a contract. That comparison is made and never enforced: against a 1,000h contract it says "${(effortProblem(short) ?? '').slice(-42)}", and against 500h it says the agreed scope is more than was sold. Both are findings for a person, not refusals — a firm entering forty deliverables passes through every intermediate total on the way. An assumption cannot carry hours ("${effortOnStatement}"). Scope is one level deep: a criterion hangs off the deliverable it judges and reads directly beneath it, and hanging one off another criterion is refused, which is what stops a scope list quietly becoming a work breakdown.`,
+      stops: 'at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.',
+      severity: '—',
+      impact:
+        'What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from.',
     }
   },
 )

@@ -5,6 +5,17 @@ import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/changeRequest'
 import {
+  SCOPE_KINDS,
+  SCOPE_KIND_LABEL,
+  WORK_KINDS,
+  describeScope,
+  effortProblem,
+  scopeFor,
+  scopePosition,
+  type ScopeItem,
+  type ScopeKind,
+} from '@/lib/scope'
+import {
   BILLING_TRIGGERS,
   describeMilestone,
   describeMilestones,
@@ -49,6 +60,9 @@ export default function CommercialPanel({
   onRemoveMilestone,
   onDeliverMilestone,
   onDecideMilestone,
+  onUpsertScope,
+  onRemoveScope,
+  onDecideScope,
 }: {
   row: ScheduleRow
   state: WorkspaceState
@@ -69,12 +83,19 @@ export default function CommercialPanel({
   /** Say the work landed. Separate from accepting it — see lib/milestone.ts. */
   onDeliverMilestone: (id: string) => boolean
   onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
+  /** A line of what the SOW says it will deliver. */
+  onUpsertScope: (sowId: string, id: string | null, patch: Partial<ScopeItem>) => boolean
+  onRemoveScope: (id: string) => void
+  /** Agree a line into the scope, or take it back out. */
+  onDecideScope: (id: string, approved: boolean) => boolean
 }) {
   const mayEdit = can(state.model, actor, 'sow.edit')
   const mayAttribute = can(state.model, actor, 'sow.attribute')
   const mayDecideChange = can(state.model, actor, 'change.approve')
   const mayEditMilestone = can(state.model, actor, 'milestone.edit')
   const mayAcceptMilestone = can(state.model, actor, 'milestone.accept')
+  const mayEditScope = can(state.model, actor, 'scope.edit')
+  const mayApproveScope = can(state.model, actor, 'scope.approve')
   const [adding, setAdding] = useState(false)
 
   const sows = useMemo(
@@ -206,6 +227,17 @@ export default function CommercialPanel({
             <p className={`comm-position${position.forecastOverrun ? ' warn' : ''}`}>
               {describePosition(position)}
             </p>
+
+            <Scope
+              sow={sow}
+              items={Object.values(state.scopeItems).filter((i) => i.sowId === sow.id && !i.deletedAt)}
+              contractedHours={contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt)).contractedHours}
+              mayEdit={mayEditScope.allowed}
+              mayApprove={mayApproveScope.allowed}
+              onUpsert={onUpsertScope}
+              onRemove={onRemoveScope}
+              onDecide={onDecideScope}
+            />
 
             <Milestones
               sow={sow}
@@ -899,6 +931,193 @@ function Milestones({
         ) : (
           <button className="btn" onClick={() => setOpen(true)}>
             Add a milestone
+          </button>
+        )
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * What the statement of work says it will deliver.
+ *
+ * Above the payment schedule, deliberately: what is being delivered is prior to what it is
+ * billed at, and reading the money first is how a scope conversation turns into a pricing one.
+ *
+ * Recorded and agreed are shown as different things. A line somebody typed while reading a draft
+ * is not scope, and its hours stay out of the total the contract is compared against — which is
+ * the whole reason `decideScopeItem` exists as a separate act.
+ */
+function Scope({
+  sow,
+  items,
+  contractedHours,
+  mayEdit,
+  mayApprove,
+  onUpsert,
+  onRemove,
+  onDecide,
+}: {
+  sow: Sow
+  items: ScopeItem[]
+  contractedHours: number
+  mayEdit: boolean
+  mayApprove: boolean
+  onUpsert: (sowId: string, id: string | null, patch: Partial<ScopeItem>) => boolean
+  onRemove: (id: string) => void
+  onDecide: (id: string, approved: boolean) => boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [kind, setKind] = useState<ScopeKind>('deliverable')
+  const [text, setText] = useState('')
+  const [hours, setHours] = useState('')
+  const [under, setUnder] = useState('')
+
+  const position = scopePosition(sow.id, items, contractedHours)
+  const ordered = scopeFor(items, sow.id)
+  const gap = effortProblem(position)
+  /* Only top-level lines can be parents — scope is one level deep, and the reducer refuses more. */
+  const parents = ordered.filter((i) => !i.parentId)
+  const carriesEffort = WORK_KINDS.includes(kind)
+  const ready = text.trim() !== ''
+
+  return (
+    <section className="comm-changes">
+      <h5 className="est-h">Scope</h5>
+      <p className="comm-position">{describeScope(position)}</p>
+      {gap && <p className="comm-position warn">{gap}</p>}
+
+      {ordered.length > 0 && (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>What</th>
+              <th>Kind</th>
+              <th>Effort</th>
+              <th>Agreed</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((i) => (
+              <tr key={i.id}>
+                <td style={i.parentId ? { paddingLeft: 22 } : undefined}>
+                  {i.parentId && <span className="est-block-note">↳ </span>}
+                  {i.text}
+                  {i.source === 'extracted' && <span className="est-block-note"> · proposed by extraction</span>}
+                </td>
+                <td>{SCOPE_KIND_LABEL[i.kind]}</td>
+                <td className="mono">{i.effortHours === null ? '—' : `${i.effortHours}h`}</td>
+                <td>
+                  {i.approvedAt ? (
+                    <span className="comm-status st-accepted">Agreed</span>
+                  ) : (
+                    <span className="comm-status st-pending">Recorded</span>
+                  )}
+                  {i.approvedBy && <span className="est-block-note"> — {i.approvedBy}</span>}
+                </td>
+                <td>
+                  {mayApprove && (
+                    <>
+                      <button className="btn-link" onClick={() => onDecide(i.id, !i.approvedAt)}>
+                        {i.approvedAt ? 'Un-agree' : 'Agree'}
+                      </button>{' '}
+                    </>
+                  )}
+                  {/*
+                    * Neither edit nor remove is offered on an agreed line — the reducer refuses
+                    * both, because changing what was agreed without a decision is how a contract
+                    * and a plan stop matching. Un-agree first.
+                    */}
+                  {mayEdit && !i.approvedAt && (
+                    <button className="btn-link" onClick={() => onRemove(i.id)}>
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {mayEdit ? (
+        open ? (
+          <div className="time-form">
+            <div className="time-row">
+              <label className="fld">
+                <span className="fld-label">Kind</span>
+                <select
+                  value={kind}
+                  onChange={(e) => {
+                    const next = e.target.value as ScopeKind
+                    setKind(next)
+                    // Hours belong to work, not to statements about the agreement. Cleared here
+                    // as well as refused by the reducer, so the field cannot be left looking set.
+                    if (!WORK_KINDS.includes(next)) setHours('')
+                  }}
+                >
+                  {SCOPE_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {SCOPE_KIND_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fld time-fld-note">
+                <span className="fld-label">What was agreed</span>
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder="One line, as the contract puts it" />
+              </label>
+              {carriesEffort && (
+                <label className="fld time-fld-hours">
+                  <span className="fld-label">Effort</span>
+                  <input type="number" min={0} step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} />
+                </label>
+              )}
+              {parents.length > 0 && (
+                <label className="fld time-fld-person">
+                  <span className="fld-label">Under</span>
+                  <select value={under} onChange={(e) => setUnder(e.target.value)}>
+                    <option value="">Nothing — a line of its own</option>
+                    {parents.map((pt) => (
+                      <option key={pt.id} value={pt.id}>
+                        {pt.text.slice(0, 44)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <button
+                className="btn"
+                disabled={!ready}
+                title={ready ? 'Record it' : 'A line of scope needs to say something'}
+                onClick={() => {
+                  if (
+                    onUpsert(sow.id, null, {
+                      kind,
+                      text,
+                      parentId: under || null,
+                      effortHours: carriesEffort && hours !== '' ? Number(hours) : null,
+                      source: 'stated',
+                    })
+                  ) {
+                    setOpen(false)
+                    setText('')
+                    setHours('')
+                    setUnder('')
+                  }
+                }}
+              >
+                Record
+              </button>
+              <button className="btn ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn" onClick={() => setOpen(true)}>
+            Record a line of scope
           </button>
         )
       ) : null}

@@ -81,6 +81,18 @@ export const PERMISSIONS = [
    * own grant, held by the client sponsor and the engagement leader, and the reducer refuses it
    * to whoever recorded the delivery whatever they hold.
    */
+  /*
+   * Recording what a contract says and agreeing that it IS the scope are different acts, so they
+   * are different grants — the same split as planning a milestone and accepting one.
+   *
+   * The "asker cannot be the decider" rule is deliberately NOT applied to scope approval, unlike
+   * change requests and milestones. Transcribing a signed statement of work is not proposing
+   * something, and the other producer of scope lines is an extraction with no grant at all. A
+   * firm that wants segregation here can withhold `scope.approve`, which is the lever that
+   * actually expresses it.
+   */
+  { key: 'scope.edit', label: 'Record scope', what: 'Write down what a statement of work says it will deliver — deliverables, acceptance criteria, assumptions, exclusions.' },
+  { key: 'scope.approve', label: 'Agree scope', what: 'Confirm that a recorded line is part of the agreed scope. Until it is agreed it is a note, and its hours are left out of the scope total.' },
   { key: 'milestone.edit', label: 'Plan a milestone', what: 'Set out the payment schedule against a statement of work, and record when a milestone is delivered.' },
   { key: 'milestone.accept', label: 'Accept a milestone', what: 'Sign a milestone off, or return it with a reason. Never one you recorded as delivered yourself — acceptance is somebody else’s judgement, and it is what makes a milestone billable.' },
   /*
@@ -227,14 +239,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
@@ -448,6 +460,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
    * enforced only here would mean storing a file for somebody who was never allowed to attach
    * one, and then refusing to write the row that would let anybody find it again.
    */
+  upsertScopeItem: 'scope.edit',
+  removeScopeItem: 'scope.edit',
+  decideScopeItem: 'scope.approve',
   upsertMilestone: 'milestone.edit',
   removeMilestone: 'milestone.edit',
   deliverMilestone: 'milestone.edit',
