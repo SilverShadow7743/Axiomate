@@ -2984,6 +2984,23 @@ select.cell-editor {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * The same muted note when it holds a sentence rather than a short value.
+ *
+ * `.cfg-inherit` ellipsises on one line, which is right for "inherited from Client" in a dense
+ * grid and wrong for a paragraph. Capabilities and Goals both used it for explanatory prose and
+ * both were cut off mid-word — the third instance of this exact fault found today, after
+ * `.evi-sub` in My work and Portfolio. Same shape, same cause: a single-line utility class
+ * reused for running text.
+ */
+.cfg-inherit.sentence {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.55;
+  max-width: 78ch;
+}
 /* `.field select` caps at 160px; a grid cell wants the full column. */
 .cfg-terms input {
   height: 25px;

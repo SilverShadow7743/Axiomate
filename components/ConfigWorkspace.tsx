@@ -2224,10 +2224,10 @@ function Goals({
             </button>
           </div>
           <p className={r.met ? 'cfg-inherit' : 'zone-note needed'}>{r.phrase}</p>
-          <p className="cfg-inherit">
+          <p className="cfg-inherit sentence">
             {r.measure ? r.measure.what : 'Its measure no longer exists.'}
           </p>
-          <p className="cfg-inherit">
+          <p className="cfg-inherit sentence">
             Measured over <b>{nameOf(state, r.goal.scopeId)}</b>
             {r.measure?.windowed && r.goal.from ? ` from ${r.goal.from}` : ''} to {r.goal.by}.
           </p>
@@ -2286,7 +2286,7 @@ function Goals({
             <input type="date" value={by} onChange={(e) => setBy(e.target.value)} />
           </label>
         </div>
-        <p className="cfg-inherit">{spec.what}</p>
+        <p className="cfg-inherit sentence">{spec.what}</p>
         <button className="btn primary" disabled={!ready} onClick={add}>
           Set this goal
         </button>
@@ -2334,10 +2334,10 @@ function Capabilities({ state }: { state: WorkspaceState }) {
               <Badge kind="p0">unreachable</Badge>
             )}
           </div>
-          <p className="cfg-inherit">{c.capability.what}</p>
+          <p className="cfg-inherit sentence">{c.capability.what}</p>
 
           {c.usable ? (
-            <p className="cfg-inherit">Held by {c.heldBy.join(', ')}.</p>
+            <p className="cfg-inherit sentence">Held by {c.heldBy.join(', ')}.</p>
           ) : (
             <p className="zone-note needed">
               No live role holds {c.missing.join(', ')}, so this is refused to everybody.
@@ -2354,7 +2354,7 @@ function Capabilities({ state }: { state: WorkspaceState }) {
           )}
 
           {c.capability.switchedAt && (
-            <p className="cfg-inherit">Switched at {c.capability.switchedAt}.</p>
+            <p className="cfg-inherit sentence">Switched at {c.capability.switchedAt}.</p>
           )}
         </div>
       ))}

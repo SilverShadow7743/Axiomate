@@ -64,7 +64,7 @@ export const MEASURES: Measure[] = [
   {
     key: 'closed',
     label: 'Work closed',
-    what: 'Issues beneath this node whose closure date falls inside the window. Counted from `actualEnd`, which the reducer stamps when a record moves to a closing status — not from when somebody last touched it.',
+    what: 'Issues beneath this node whose closure date falls inside the window. Counted from the closure date the reducer stamps when a record moves to a closing status — not from when somebody last touched it.',
     direction: 'atLeast',
     unit: 'issues',
     windowed: true,
@@ -88,7 +88,7 @@ export const MEASURES: Measure[] = [
   {
     key: 'hoursAtMost',
     label: 'Hours held under',
-    what: 'Hours recorded against issues beneath this node with a work date inside the window. Rolled up through the tree from `TimeEntry.issueId`, so it never depends on matching a person by name.',
+    what: 'Hours recorded against issues beneath this node with a work date inside the window. Rolled up through the tree from the issue each entry is against, so it never depends on matching a person by name.',
     direction: 'atMost',
     unit: 'hours',
     windowed: true,
