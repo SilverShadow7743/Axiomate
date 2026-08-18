@@ -55,7 +55,28 @@ completing them needs somebody else, and two different somebodies are needed ove
 
 ---
 
-## 2 · Row menu and inline status editing
+## 2 · My work
+
+New, 18 August. **`My work`** in the toolbar, left of `Configuration`, with a count on it.
+
+**Expect** your work gathered from six places — decisions waiting on you, anything past its date,
+anything blocked, your own unsubmitted hours, what is coming up, and the rest — grouped by *why*
+each thing wants you, with the reason spelled out under each group heading.
+
+> **There is deliberately no priority score.** If you see a number ranking rows, that is a fault.
+> The order is: decisions first (they are the only rows holding up another person), then overdue,
+> blocked, your hours, due, open. Oldest first inside each group.
+
+Two things to check specifically:
+
+- **A change or milestone you raised yourself must not appear.** The reducer would refuse your own
+  decision on it, so offering the row would be a control that cannot succeed.
+- **Clicking a row selects it in the tree and leaves the drawer open.** Working through eight items
+  should not mean eight trips back to the toolbar.
+
+---
+
+## 3 · Row menu and inline status editing
 
 These shipped first and have never been clicked.
 
@@ -75,7 +96,7 @@ column** — it is invisible until hover, selection or keyboard focus, which is 
 
 ---
 
-## 3 · Skills
+## 3a · Skills
 
 **Configuration** (top right of the toolbar) → left rail, **Operating model** → **Skills**.
 
