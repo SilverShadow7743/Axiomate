@@ -48,7 +48,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { documentStore } from '@/lib/storage/graph'
 import { MAX_UPLOAD_BYTES, formatBytes, subjectProblem, uploadProblem } from '@/lib/documents'
-import type { Action } from '@/lib/workspace'
+import { filingFolderFor, type Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 
 export const runtime = 'nodejs'
@@ -152,7 +152,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'That file is empty.' }, { status: 400 })
     }
 
-    const stored = await store.put({ tenantId, name: file.name, mimeType, bytes })
+    /*
+     * A second handle on the same library, built from the model.
+     *
+     * The one above answered "can this deployment store anything at all", which depends only on
+     * the credentials and the drive and is why it runs before a 25 MB body is read. This one
+     * knows where the firm files things, which is workspace configuration and therefore not
+     * knowable until the workspace is loaded — which the permission check has just done.
+     */
+    const filed = documentStore(state.model.documentFiling)
+
+    const stored = await filed.put({
+      tenantId,
+      name: file.name,
+      mimeType,
+      bytes,
+      folder: filingFolderFor(state, subjectId),
+    })
 
     const action: SubmittedAction = {
       t: 'recordDocument',

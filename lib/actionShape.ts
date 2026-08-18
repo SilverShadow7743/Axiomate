@@ -150,6 +150,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'upsertIntake',
   'deleteIntake',
   'setOrganization',
+  'setDocumentFiling',
   'resetAll',
 ] as const)
 

@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { entraConfig } from '../auth/entra'
 import { unconfiguredStore, type DocumentStore, type PutRequest, type StoredObject } from './contract'
+import { DEFAULT_DOCUMENT_FILING, type DocumentFiling } from '../config'
 
 /**
  * Documents in the firm's own SharePoint library, through Microsoft Graph.
@@ -34,6 +35,11 @@ import { unconfiguredStore, type DocumentStore, type PutRequest, type StoredObje
  *      consent. Delegated will not work — see above.
  *   2. Set `AXIOMATE_DOCS_DRIVE_ID` to the target document library's drive id.
  *
+ * Which library is deployment configuration and stays an environment variable — it names a
+ * resource in a tenant, like the database URL beside it. Where documents sit INSIDE that library
+ * is a filing convention, and that is workspace configuration: `model.documentFiling`, editable
+ * on the configuration screen without a deploy.
+ *
  * Until both are done, `unavailable()` says which is missing and the upload endpoint refuses at
  * the door. Nothing here half-works.
  */
@@ -49,7 +55,7 @@ function driveId(): string | undefined {
 }
 
 /** Read per call, not at module load, so a restart is all it takes to point somewhere else. */
-export function documentStore(): DocumentStore {
+export function documentStore(filing: DocumentFiling = DEFAULT_DOCUMENT_FILING): DocumentStore {
   const entra = entraConfig()
   const drive = driveId()
 
@@ -67,7 +73,7 @@ export function documentStore(): DocumentStore {
   return {
     kind: 'graph',
     unavailable: () => null,
-    put: (req) => put(drive, req),
+    put: (req) => put(drive, filing, req),
     get: (locator) => get(drive, locator),
     remove: (locator) => remove(drive, locator),
   }
@@ -137,24 +143,32 @@ async function token(): Promise<string> {
  * refuses a name containing a path, and this is the second of the two — the one that holds even
  * if a future caller forgets the first.
  */
-function pathFor(tenantId: string, name: string, on: Date): string {
-  const safe = name.replace(/[^A-Za-z0-9._ -]/g, '_').slice(0, 120)
-  const tenant = tenantId.replace(/[^A-Za-z0-9._-]/g, '_')
-  return `axiomate/${tenant}/${on.getUTCFullYear()}/${randomUUID()}-${safe}`
+function pathFor(filing: DocumentFiling, req: PutRequest, on: Date): string {
+  const segment = (v: string, max: number) =>
+    v.replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[. ]+|[. ]+$/g, '').slice(0, max)
+
+  const root = segment(filing.rootFolder, 80) || 'Axiomate'
+  const tenant = segment(req.tenantId, 60)
+  const job = filing.byEngagement && req.folder ? segment(req.folder, 80) : ''
+  const safe = segment(req.name, 120) || 'file'
+
+  return [root, tenant, job, `${on.getUTCFullYear()}`, `${randomUUID()}-${safe}`]
+    .filter(Boolean)
+    .join('/')
 }
 
 /* ================================================================== *
  * put / get / remove
  * ================================================================== */
 
-async function put(drive: string, req: PutRequest): Promise<StoredObject> {
+async function put(drive: string, filing: DocumentFiling, req: PutRequest): Promise<StoredObject> {
   /*
    * Checksummed from the bytes about to be written, not from what the client claimed. The record
    * this produces is what "is this still the document that was approved" is answered from, so it
    * has to describe what was stored rather than what was offered.
    */
   const checksum = createHash('sha256').update(req.bytes).digest('hex')
-  const path = pathFor(req.tenantId, req.name, new Date())
+  const path = pathFor(filing, req, new Date())
   const bearer = await token()
   const base = `https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(drive)}`
   const target = `${base}/root:/${path.split('/').map(encodeURIComponent).join('/')}`

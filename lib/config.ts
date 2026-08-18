@@ -158,6 +158,36 @@ export interface OrganizationIdentity {
   description: string
 }
 
+/**
+ * Where documents are filed in SharePoint.
+ *
+ * Configuration rather than a constant, because the answer is a firm's own filing convention and
+ * every firm already has one. The two parts are separated for a reason:
+ *
+ *   `rootFolder`  one folder the whole workspace lives under, so Axiomate's documents can be
+ *                 found, moved, permissioned or backed up as one thing rather than being mixed
+ *                 into a library somebody else also uses.
+ *
+ *   `byEngagement` whether the engagement or project a document belongs to becomes a folder of
+ *                 its own beneath it. On, a person opening the library sees the same shape they
+ *                 see in the tree. Off, everything sits directly under the root, which is what a
+ *                 firm filing by year or by client instead would want.
+ *
+ * What is NOT configurable, and will not be: the tenant segment and the uuid on the stored name.
+ * The first is the same isolation rule every composite key in this schema enforces, and the
+ * second is what stops a re-upload of the same filename silently replacing evidence. Neither is
+ * a filing preference.
+ */
+export interface DocumentFiling {
+  rootFolder: string
+  byEngagement: boolean
+}
+
+export const DEFAULT_DOCUMENT_FILING: DocumentFiling = {
+  rootFolder: 'Projects',
+  byEngagement: true,
+}
+
 export const DEFAULT_ORGANIZATION: OrganizationIdentity = {
   name: 'Axiocloud Solutions',
   shortName: 'Axiocloud',
@@ -550,6 +580,8 @@ export function emptyOverride(): ScopeOverride {
 export interface OperatingModel {
   /** The delivery firm operating this workspace. */
   organization: OrganizationIdentity
+  /** Where uploaded documents are filed in the library. See `DocumentFiling`. */
+  documentFiling: DocumentFiling
   roles: Record<string, OrgRole>
   people: Record<string, Person>
   responsibilities: Record<string, ResponsibilityType>
@@ -938,6 +970,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
 
   return {
     organization: { ...DEFAULT_ORGANIZATION },
+    documentFiling: { ...DEFAULT_DOCUMENT_FILING },
     roles,
     people,
     responsibilities,
@@ -1226,6 +1259,10 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     workflows: { ...seed.workflows, ...(stored.workflows ?? {}) },
     templates: { ...seed.templates, ...(stored.templates ?? {}) },
     organization: { ...seed.organization, ...(stored.organization ?? {}) },
+    // Explicit like every other key, and load-bearing for the same reason: every model stored
+    // before this key existed has no `documentFiling`, and the spread above would leave it
+    // undefined — which is not "file at the root", it is a crash on the next upload.
+    documentFiling: { ...seed.documentFiling, ...(stored.documentFiling ?? {}) },
     parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
     overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
     seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,

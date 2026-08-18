@@ -46,6 +46,17 @@ export interface PutRequest {
   name: string
   mimeType: string
   bytes: Uint8Array
+  /**
+   * The engagement or project this belongs under, for readability in the library.
+   *
+   * Null when the document could not be placed, and a store must file those rather than refuse
+   * them — where a file appears in a folder tree is presentation, and losing an upload over
+   * presentation would be the wrong trade.
+   *
+   * Deliberately NOT a security boundary. Isolation is `tenantId` plus the permission checked
+   * at the endpoint; this is one segment of a human-readable path and nothing reads it back.
+   */
+  folder: string | null
 }
 
 export interface DocumentStore {

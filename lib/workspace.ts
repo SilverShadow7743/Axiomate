@@ -172,6 +172,7 @@ import {
   type LabelKey,
   type OperatingModel,
   type OrganizationIdentity,
+  type DocumentFiling,
   type OrgRole,
   type Person,
   type ResponsibilityType,
@@ -1111,6 +1112,7 @@ export type ConfigOp =
   | { k: 'upsertIntake'; id: string | null; patch: Partial<IntakeMailbox> }
   | { k: 'deleteIntake'; id: string }
   | { k: 'setOrganization'; patch: Partial<OrganizationIdentity> }
+  | { k: 'setDocumentFiling'; patch: Partial<DocumentFiling> }
   /** Throw the whole operating model away and rebuild it from the shipped seed. */
   | { k: 'resetAll' }
 
@@ -1221,6 +1223,33 @@ export function nameOf(state: WorkspaceState, id: string): string {
     state.activities[id]?.phase ??
     id
   )
+}
+
+/**
+ * Which engagement or project a document belongs under, by name.
+ *
+ * Walks up from whatever the document was attached to until it reaches an engagement or a
+ * project, because those are the two tiers a person thinks of as "the job". A module is too
+ * fine — nobody looks for a contract in `Finance` — and a client is too coarse, since one client
+ * can run several engagements whose documents should not be pooled.
+ *
+ * Returns null rather than guessing when nothing above it is either. The caller files those at
+ * the root, which is honest: an unplaceable document is better at the top than under a folder
+ * named after the wrong job.
+ *
+ * The name is taken as it stands. It is sanitised where it is used as a path segment, not here —
+ * this answers "which job", and turning that into a safe folder name is the store's business.
+ */
+export function filingFolderFor(state: WorkspaceState, subjectId: string): string | null {
+  const seen = new Set<string>()
+  let at: string | null = subjectId
+  while (at && !seen.has(at)) {
+    seen.add(at)
+    const node = state.nodes[at]
+    if (node && (node.kind === 'engagement' || node.kind === 'project')) return node.name
+    at = parentOf(state, at)
+  }
+  return null
 }
 
 export function parentOf(state: WorkspaceState, id: string): string | null {
@@ -5602,6 +5631,48 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           reason: assigned.length ? `${assigned.length} issues still hold values for it; they are kept.` : undefined,
         },
         `“${type.label}” archived.`,
+      )
+    }
+
+    /**
+     * Where documents are filed.
+     *
+     * The root is trimmed of slashes rather than refused for containing them: somebody typing
+     * "/Projects/" means `Projects`, and a refusal there would be pedantry. An empty root IS
+     * refused — filing at the top of a shared library is a decision with consequences for
+     * everybody else using it, and it should not be reachable by clearing a box.
+     */
+    case 'setDocumentFiling': {
+      const next = { ...m.documentFiling, ...op.patch }
+      const root = next.rootFolder.replace(/^[\s/]+|[\s/]+$/g, '')
+      if (!root) return { state, error: 'Documents need a folder to go in. Name one.' }
+      if (/[\\:*?"<>|]/.test(root)) {
+        return { state, error: 'A SharePoint folder name cannot contain \\ : * ? " < > or |.' }
+      }
+      const filing: DocumentFiling = { ...next, rootFolder: root }
+      if (
+        filing.rootFolder === m.documentFiling.rootFolder &&
+        filing.byEngagement === m.documentFiling.byEngagement
+      ) {
+        return { state, error: 'That is already how documents are filed.' }
+      }
+      return done(
+        { ...m, documentFiling: filing },
+        {
+          rowId: 'documentFiling',
+          field: 'documentFiling',
+          from: `${m.documentFiling.rootFolder}${m.documentFiling.byEngagement ? '/<engagement>' : ''}`,
+          to: `${filing.rootFolder}${filing.byEngagement ? '/<engagement>' : ''}`,
+          at: now,
+          by,
+        },
+        /*
+         * Says plainly that nothing moves. Filing is applied when a document is stored, and the
+         * locator on an existing record is a Graph item id rather than a path — so files already
+         * in the library stay exactly where they are and stay readable. Somebody changing this
+         * expecting a reorganisation would otherwise find out by not finding out.
+         */
+        `New documents will be filed under “${filing.rootFolder}”. Documents already stored do not move.`,
       )
     }
 

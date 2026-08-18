@@ -3416,7 +3416,7 @@ scenario(
      */
     const store = unconfiguredStore('No document library has been chosen.')
     let refusedPut = ''
-    void store.put({ tenantId: 't', name: 'x.pdf', mimeType: 'application/pdf', bytes: new Uint8Array([1]) })
+    void store.put({ tenantId: 't', name: 'x.pdf', mimeType: 'application/pdf', bytes: new Uint8Array([1]), folder: null })
       .then(() => { refusedPut = 'IT SUCCEEDED, which would silently drop the file' })
       .catch((e: Error) => { refusedPut = e.message })
 

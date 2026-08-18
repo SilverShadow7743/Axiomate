@@ -23,6 +23,7 @@ import {
   resolveTemplate,
   type AgentFamily,
   type Autonomy,
+  type DocumentFiling,
   type LabelKey,
   type ValueKind,
 } from '@/lib/config'
@@ -472,6 +473,7 @@ function RolesAndPeople({
   const model = state.model
   const roles = liveRoles(model)
   const org = model.organization
+  const filing = model.documentFiling
   const [newRole, setNewRole] = useState('')
   const [newParty, setNewParty] = useState('')
   const [personFilter, setPersonFilter] = useState('')
@@ -529,6 +531,60 @@ function RolesAndPeople({
           <p className="cfg-inherit">
             The party code is the value written onto issues this organisation is answerable
             for. It is stored data, not a label — it cannot be changed while issues carry it.
+          </p>
+        </div>
+      </section>
+
+      <section className="cfg-section">
+        <h3 className="cfg-h">Where documents are filed</h3>
+        <p className="cfg-note">
+          The folder structure uploads are written into, inside the SharePoint library this
+          deployment is pointed at. <em>Which</em> library is deployment configuration and is set
+          with the infrastructure; where documents sit inside it is a filing convention, and every
+          firm already has one.
+        </p>
+        <div className="cfg-card">
+          <div className="cfg-fld-row">
+            <label className="cfg-fld">
+              <span>Top folder</span>
+              <input
+                defaultValue={filing.rootFolder}
+                onBlur={(e) =>
+                  e.target.value.trim() !== filing.rootFolder &&
+                  onConfig({ k: 'setDocumentFiling', patch: { rootFolder: e.target.value } })
+                }
+              />
+            </label>
+          </div>
+          <label className="cfg-check">
+            <input
+              type="checkbox"
+              checked={filing.byEngagement}
+              onChange={(e) =>
+                onConfig({ k: 'setDocumentFiling', patch: { byEngagement: e.target.checked } })
+              }
+            />
+            <span>
+              <b>A folder per engagement or project.</b> The library then has the same shape as the
+              tree. Turn it off and everything sits directly under the top folder — which is what a
+              firm filing by year or by client instead would want.
+            </span>
+          </label>
+          <p className="cfg-inherit">
+            A document attached to something with no engagement or project above it is filed at the
+            top rather than refused: where a file appears is presentation, and losing an upload over
+            presentation would be the wrong trade.
+          </p>
+          <p className="cfg-inherit">
+            Files go to <code>{filingExample(filing)}</code>. The tenant segment and the unique
+            prefix on the name are not configurable — the first is the isolation rule the whole
+            schema enforces, and the second is what stops re-uploading a filename silently
+            replacing evidence.
+          </p>
+          <p className="cfg-inherit">
+            Changing this moves nothing. Filing is applied when a document is stored, and every
+            record points at its file by id rather than by path, so what is already in the library
+            stays where it is and stays readable.
           </p>
         </div>
       </section>
@@ -2051,6 +2107,20 @@ function Permissions({
 /* ================================================================== *
  * Status transitions
  * ================================================================== */
+
+/**
+ * One real path, built the way the store builds it.
+ *
+ * A described layout and an actual one drift, and the reader cannot tell which they are looking
+ * at. This shows the shape with the parts that vary named in angle brackets and the parts that
+ * do not shown literally.
+ */
+function filingExample(filing: DocumentFiling): string {
+  const root = filing.rootFolder.trim() || 'Axiomate'
+  return filing.byEngagement
+    ? `${root}/<tenant>/<engagement>/<year>/<id>-name.pdf`
+    : `${root}/<tenant>/<year>/<id>-name.pdf`
+}
 
 function Transitions({
   state,
