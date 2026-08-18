@@ -103,6 +103,7 @@ import { htmlToText } from '../lib/intake'
 import { describeWork, myWork } from '../lib/mywork'
 import { describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
+import { describeGoals, goalProgress } from '../lib/goals'
 import {
   checkScopeItem,
   effortProblem,
@@ -4005,6 +4006,69 @@ scenario(
       severity: '—',
       impact:
         'Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen.',
+    }
+  },
+)
+
+scenario(
+  'GL1',
+  'A firm sets a target and cannot fudge how it is doing against it',
+  'A goal names a measure the register computes, there is no field to enter progress into, and a measure or scope that no longer resolves reports that rather than zero.',
+  () => {
+    const scope = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const set = (patch: Record<string, unknown>) =>
+      apply(BASE, { t: 'config', op: { k: 'upsertGoal', id: null, patch }, now: NOW } as Action, A)
+
+    /* Each refusal is its own sentence, because each would otherwise render as a goal sitting
+       at zero — which reads as "we are failing" rather than "this is misconfigured". */
+    const noName = set({ measure: 'closed', scopeId: scope, target: 5, by: '2026-09-30' }).error
+    const badMeasure = set({ name: 'G', measure: 'vibes', scopeId: scope, target: 5, by: '2026-09-30' }).error
+    const badScope = set({ name: 'G', measure: 'closed', scopeId: 'not-a-node', target: 5, by: '2026-09-30' }).error
+    const negative = set({ name: 'G', measure: 'closed', scopeId: scope, target: -1, by: '2026-09-30' }).error
+    const noDate = set({ name: 'G', measure: 'closed', scopeId: scope, target: 5, by: '' }).error
+    const backwards = set({ name: 'G', measure: 'closed', scopeId: scope, target: 5, by: '2026-09-30', from: '2026-12-01' }).error
+
+    /* A ceiling and a target, so both directions are exercised — they are not the same shape. */
+    const withCeiling = ok(BASE, {
+      t: 'config', op: { k: 'upsertGoal', id: null,
+        patch: { name: 'Backlog under 2', measure: 'openAtMost', scopeId: scope, target: 2, by: '2026-09-30' } },
+      now: NOW,
+    } as Action)
+    const withBoth = ok(withCeiling, {
+      t: 'config', op: { k: 'upsertGoal', id: null,
+        patch: { name: 'Close ten', measure: 'closed', scopeId: scope, target: 10, by: '2026-09-30', from: '2026-08-01' } },
+      now: NOW,
+    } as Action)
+
+    const rows = goalProgress(withBoth, TODAY)
+    const ceiling = rows.find((r) => r.goal.measure === 'openAtMost')!
+    const target = rows.find((r) => r.goal.measure === 'closed')!
+
+    /* Nothing anywhere in the stored goal is a progress figure. */
+    const stored = Object.values(withBoth.model.goals)
+    const fields = new Set(stored.flatMap((g2) => Object.keys(g2)))
+    const noProgressField = !['progress', 'percent', 'complete', 'actual', 'status'].some((k) => fields.has(k))
+
+    const good =
+      Boolean(noName && badMeasure && badScope && negative && noDate && backwards) &&
+      /not a measure/.test(badMeasure!) &&
+      /part of the tree/.test(badScope!) &&
+      /* the register is what answers, and it answers differently for the two directions */
+      ceiling.actual === 3 && ceiling.met === false &&
+      target.actual === 0 && target.met === false &&
+      /ceiling/.test(ceiling.phrase) && /short/.test(target.phrase) &&
+      /* no percentage anywhere, because one number would flip meaning between the two rows */
+      !rows.some((r) => /%/.test(r.phrase)) &&
+      noProgressField &&
+      /computed from the register/.test(describeGoals(rows))
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A goal names a measure and a part of the tree, and the figure is computed on every read. Two are set here over the same engagement: a ceiling ("${ceiling.phrase}") and a target ("${target.phrase}"). They are deliberately not one shape — a ceiling at 40% of its limit is healthy and a target at 40% is behind, so no percentage is shown for either. **There is no field to enter progress into**, and the stored record is checked for one: ${[...fields].join(', ')}. Six ways of setting a goal that could never be met are refused with six different sentences — no name, an unknown measure ("${badMeasure}"), a scope that is not a node, a negative target, no date, and a window that starts after the date it is judged on. Every one of those would otherwise render as a goal sitting at zero, which reads as failure rather than as misconfiguration.`,
+      stops: 'at four measures. Only what the register can count is offered — work closed, open held under, unowned held under, and hours held under — and hours roll up through `TimeEntry.issueId` rather than matching a person by name, because that join is the one already known to fail silently. Milestones accepted and scope agreed are derivable and deliberately absent: they are commercial figures with no read grant, and adding them as a goal measure would reintroduce through a goal what was declined in the portfolio.',
+      severity: 'P2',
+      impact:
+        'A firm could state targets in a document and measure them by asking people how they were doing. The measure is now the register itself, and nobody can type a number into it.',
     }
   },
 )

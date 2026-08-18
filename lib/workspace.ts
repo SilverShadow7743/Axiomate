@@ -178,6 +178,7 @@ import {
   type ResponsibilityType,
   type RoutingRule,
 } from './config'
+import { MEASURES, type Goal } from './goals'
 
 /* ================================================================== *
  * Record shapes
@@ -1113,6 +1114,8 @@ export type ConfigOp =
   | { k: 'deleteIntake'; id: string }
   | { k: 'setOrganization'; patch: Partial<OrganizationIdentity> }
   | { k: 'setDocumentFiling'; patch: Partial<DocumentFiling> }
+  | { k: 'upsertGoal'; id: string | null; patch: Partial<Goal> }
+  | { k: 'deleteGoal'; id: string }
   /** Throw the whole operating model away and rebuild it from the shipped seed. */
   | { k: 'resetAll' }
 
@@ -5642,6 +5645,80 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
      * refused — filing at the top of a shared library is a decision with consequences for
      * everybody else using it, and it should not be reachable by clearing a box.
      */
+    /**
+      * Set or correct a target.
+      *
+      * Everything checked here is a thing that would otherwise fail silently rather than loudly:
+      * a measure that does not exist computes nothing, a scope that is not a node counts nothing,
+      * and a window that runs backwards matches nothing. All three would render as a goal sitting
+      * at zero, which reads as "we are failing" rather than "this is misconfigured".
+      *
+      * There is deliberately no `progress` field to write. See `lib/goals.ts`.
+      */
+     case 'upsertGoal': {
+       const id = op.id ?? `GOAL_${m.seq}`
+       const existing = m.goals[id]
+       const name = (op.patch.name ?? existing?.name ?? '').trim()
+       if (!name) return { state, error: 'A goal needs a name.' }
+
+       const measure = op.patch.measure ?? existing?.measure ?? ''
+       const spec = MEASURES.find((x) => x.key === measure)
+       if (!spec) {
+         return { state, error: `“${measure || 'nothing'}” is not a measure. A goal has to name one the register can compute.` }
+       }
+
+       const scopeId = op.patch.scopeId ?? existing?.scopeId ?? ''
+       if (!state.nodes[scopeId]) {
+         return { state, error: 'A goal is measured over a part of the tree, and that is not one.' }
+       }
+
+       const target = op.patch.target ?? existing?.target ?? 0
+       if (!Number.isFinite(target) || target < 0) {
+         return { state, error: 'A target has to be a number, and not a negative one.' }
+       }
+
+       const by = (op.patch.by ?? existing?.by ?? '').slice(0, 10)
+       if (!/^\d{4}-\d{2}-\d{2}$/.test(by)) {
+         return { state, error: 'A goal needs a date it is judged on.' }
+       }
+       const from = op.patch.from !== undefined ? op.patch.from : (existing?.from ?? null)
+       if (from && from.slice(0, 10) > by) {
+         return { state, error: 'The window starts after the date it is judged on, so nothing could ever count.' }
+       }
+
+       const goal: Goal = {
+         id,
+         name,
+         scopeId,
+         measure,
+         target,
+         by,
+         // Kept on the record even for a measure that ignores it, so switching the measure back
+         // does not lose the window somebody chose.
+         from: from ? from.slice(0, 10) : null,
+         note: op.patch.note ?? existing?.note ?? '',
+         createdBy: existing?.createdBy ?? by,
+         createdAt: existing?.createdAt ?? now,
+         deletedAt: null,
+       }
+
+       return done(
+         { ...m, goals: { ...m.goals, [id]: goal }, seq: m.seq + (op.id ? 0 : 1) },
+         { rowId: id, field: 'goal', from: existing?.name ?? null, to: name, at: now, by },
+         existing ? `“${name}” updated.` : `“${name}” set. Its figure is computed from the register, so there is nothing to keep up to date.`,
+       )
+     }
+
+     case 'deleteGoal': {
+       const goal = m.goals[op.id]
+       if (!goal || goal.deletedAt) return { state, error: 'That goal no longer exists.' }
+       return done(
+         { ...m, goals: { ...m.goals, [op.id]: { ...goal, deletedAt: now } } },
+         { rowId: op.id, field: 'goal', from: goal.name, to: '(removed)', at: now, by },
+         `“${goal.name}” removed.`,
+       )
+     }
+
     case 'setDocumentFiling': {
       const next = { ...m.documentFiling, ...op.patch }
       const root = next.rootFolder.replace(/^[\s/]+|[\s/]+$/g, '')

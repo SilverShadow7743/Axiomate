@@ -28,6 +28,7 @@ import {
   type ValueKind,
 } from '@/lib/config'
 import { capabilityStates, describeCapabilities } from '@/lib/capabilities'
+import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
 import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
@@ -64,6 +65,7 @@ import { useLabels } from './labels'
 
 type Tab =
   | 'capabilities'
+  | 'goals'
   | 'index'
   | 'terminology'
   | 'roles'
@@ -87,6 +89,7 @@ type Tab =
 const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'index', label: 'All settings', group: 'Operating model' },
   { id: 'capabilities', label: 'Capabilities', group: 'Operating model' },
+  { id: 'goals', label: 'Goals', group: 'Governance' },
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
@@ -259,6 +262,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
         <div className="cfg-panel">
           {tab === 'index' && <SettingsIndex state={state} go={setTab} />}
           {tab === 'capabilities' && <Capabilities state={state} />}
+          {tab === 'goals' && <Goals state={state} onConfig={onConfig} />}
           {tab === 'terminology' && (
             <Terminology
               key={scopeId}
@@ -2133,6 +2137,164 @@ function filingExample(filing: DocumentFiling): string {
  * and is named on the row; duplicating the controls here would create two places to change one
  * thing, which is how they come to disagree. This is an inventory, not a control panel.
  */
+/**
+ * Targets, and what the register says about them.
+ *
+ * Both halves on one screen because they are one thought: a target nobody can see the number
+ * for is a note, and a number with no target beside it is a statistic. There is no field to
+ * enter progress into — see `lib/goals.ts` for why that is the point rather than an omission.
+ */
+function Goals({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  /*
+   * The clock is read here rather than taken as a prop, and only for "days left".
+   *
+   * Every figure that counts anything comes from the register; the date is the one input that
+   * cannot. Held in state so a screen left open overnight does not silently re-render a
+   * different answer mid-session — it says what it said when it was opened.
+   */
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const rows = useMemo(() => goalProgress(state, today), [state, today])
+
+  const [name, setName] = useState('')
+  const [scopeId, setScopeId] = useState('')
+  const [measure, setMeasure] = useState(MEASURES[0].key)
+  const [target, setTarget] = useState('')
+  const [by, setBy] = useState('')
+  const [from, setFrom] = useState('')
+
+  const spec = MEASURES.find((m) => m.key === measure)!
+  const nodes = useMemo(
+    () => Object.values(state.nodes).filter((n) => !n.deletedAt).sort((a, b) => a.name.localeCompare(b.name)),
+    [state.nodes],
+  )
+  const ready = name.trim() && scopeId && target !== '' && by
+
+  const add = () => {
+    const okDone = onConfig({
+      k: 'upsertGoal',
+      id: null,
+      patch: {
+        name: name.trim(),
+        scopeId,
+        measure,
+        target: Number(target),
+        by,
+        from: spec.windowed && from ? from : null,
+      },
+    })
+    if (okDone) {
+      setName('')
+      setTarget('')
+      setBy('')
+      setFrom('')
+    }
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Goals</h3>
+      <p className="cfg-note">{describeGoals(rows)}</p>
+      <p className="cfg-note">
+        A goal names a <b>measure</b> and a part of the tree, and the number is computed from the
+        register every time this loads. <b>There is nowhere to type progress.</b> That is
+        deliberate: a figure somebody enters about their own work drifts in one direction, and a
+        goal that has read the same for a month is the normal state of every other tool&rsquo;s
+        version of this screen.
+      </p>
+      <p className="cfg-note">
+        The cost is that a target has to be something the register can count. Anything it cannot
+        — client satisfaction, say — is absent rather than offered with a box to fill in,
+        because one hand-entered number would make every other figure here less believable.
+      </p>
+
+      {rows.map((r) => (
+        <div className="cfg-card" key={r.goal.id}>
+          <div className="cfg-card-head">
+            <b>{r.goal.name}</b>
+            <span className="grow" />
+            <Badge kind={r.met ? 'seeded' : 'p0'}>{r.met ? 'met' : 'not met'}</Badge>
+            <button className="btn ghost" onClick={() => onConfig({ k: 'deleteGoal', id: r.goal.id })}>
+              Remove
+            </button>
+          </div>
+          <p className={r.met ? 'cfg-inherit' : 'zone-note needed'}>{r.phrase}</p>
+          <p className="cfg-inherit">
+            {r.measure ? r.measure.what : 'Its measure no longer exists.'}
+          </p>
+          <p className="cfg-inherit">
+            Measured over <b>{nameOf(state, r.goal.scopeId)}</b>
+            {r.measure?.windowed && r.goal.from ? ` from ${r.goal.from}` : ''} to {r.goal.by}.
+          </p>
+        </div>
+      ))}
+
+      <div className="cfg-card">
+        <div className="cfg-card-head">
+          <b>Set a goal</b>
+        </div>
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="What it is for" />
+          </label>
+          <label className="cfg-fld">
+            <span>Measured over</span>
+            <select value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+              <option value="">Choose a part of the tree</option>
+              {nodes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name} ({n.kind})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Measure</span>
+            <select value={measure} onChange={(e) => setMeasure(e.target.value)}>
+              {MEASURES.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cfg-fld">
+            <span>{spec.direction === 'atLeast' ? `Target (${spec.unit})` : `Ceiling (${spec.unit})`}</span>
+            <input
+              type="number"
+              min={0}
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            />
+          </label>
+          {spec.windowed && (
+            <label className="cfg-fld">
+              <span>Counting from</span>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+          )}
+          <label className="cfg-fld">
+            <span>Judged on</span>
+            <input type="date" value={by} onChange={(e) => setBy(e.target.value)} />
+          </label>
+        </div>
+        <p className="cfg-inherit">{spec.what}</p>
+        <button className="btn primary" disabled={!ready} onClick={add}>
+          Set this goal
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function Capabilities({ state }: { state: WorkspaceState }) {
   const states = useMemo(() => capabilityStates(state.model), [state.model])
   const broken = states.filter((c) => !c.usable)

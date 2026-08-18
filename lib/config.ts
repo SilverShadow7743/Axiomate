@@ -31,6 +31,7 @@
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
+import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
@@ -582,6 +583,14 @@ export interface OperatingModel {
   organization: OrganizationIdentity
   /** Where uploaded documents are filed in the library. See `DocumentFiling`. */
   documentFiling: DocumentFiling
+  /**
+   * Targets the firm has set for itself. Progress is never stored — see `lib/goals.ts`.
+   *
+   * Here rather than in its own table for the same reason `approvalRules` and `sla` are: a goal
+   * is a policy statement about intent, not a transaction. It is written rarely, read on every
+   * load, and needs no migration to add.
+   */
+  goals: Record<string, Goal>
   roles: Record<string, OrgRole>
   people: Record<string, Person>
   responsibilities: Record<string, ResponsibilityType>
@@ -971,6 +980,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   return {
     organization: { ...DEFAULT_ORGANIZATION },
     documentFiling: { ...DEFAULT_DOCUMENT_FILING },
+    // Empty, not seeded. A shipped goal would be this product asserting what a firm should aim
+    // at, which is not something it knows.
+    goals: {},
     roles,
     people,
     responsibilities,
@@ -1263,6 +1275,10 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // before this key existed has no `documentFiling`, and the spread above would leave it
     // undefined — which is not "file at the root", it is a crash on the next upload.
     documentFiling: { ...seed.documentFiling, ...(stored.documentFiling ?? {}) },
+    // Explicit, like every other key. A model stored before goals existed has none, and the
+    // spread above would leave `undefined` — which the first `Object.values(model.goals)` turns
+    // into a crash, in production, on the workspace that has data.
+    goals: { ...seed.goals, ...(stored.goals ?? {}) },
     parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
     overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
     seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,

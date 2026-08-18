@@ -704,6 +704,16 @@
       "impact": "Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen."
     },
     {
+      "id": "GL1",
+      "title": "A firm sets a target and cannot fudge how it is doing against it",
+      "expected": "A goal names a measure the register computes, there is no field to enter progress into, and a measure or scope that no longer resolves reports that rather than zero.",
+      "verdict": "PASS",
+      "actual": "A goal names a measure and a part of the tree, and the figure is computed on every read. Two are set here over the same engagement: a ceiling (\"3 open against a ceiling of 2, over by 1. 46 days left.\") and a target (\"0 of 10 issues, 10 short. 46 days left.\"). They are deliberately not one shape — a ceiling at 40% of its limit is healthy and a target at 40% is behind, so no percentage is shown for either. **There is no field to enter progress into**, and the stored record is checked for one: id, name, scopeId, measure, target, by, from, note, createdBy, createdAt, deletedAt. Six ways of setting a goal that could never be met are refused with six different sentences — no name, an unknown measure (\"“vibes” is not a measure. A goal has to name one the register can compute.\"), a scope that is not a node, a negative target, no date, and a window that starts after the date it is judged on. Every one of those would otherwise render as a goal sitting at zero, which reads as failure rather than as misconfiguration.",
+      "stops": "at four measures. Only what the register can count is offered — work closed, open held under, unowned held under, and hours held under — and hours roll up through `TimeEntry.issueId` rather than matching a person by name, because that join is the one already known to fail silently. Milestones accepted and scope agreed are derivable and deliberately absent: they are commercial figures with no read grant, and adding them as a goal measure would reintroduce through a goal what was declined in the portfolio.",
+      "severity": "P2",
+      "impact": "A firm could state targets in a document and measure them by asking people how they were doing. The measure is now the register itself, and nobody can type a number into it."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
