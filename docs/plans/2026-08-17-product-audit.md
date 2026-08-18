@@ -300,6 +300,11 @@ confidently."*
 
 Do not build this before file storage and the CR entity exist.
 
+> **Both now exist (17 Aug), and the kind list grew (18 Aug).** The revised operating model's
+> Process, Scenario and Configuration Deliverable were settled as **scope items rather than tree
+> tiers**, so they join the `kind` union above rather than touching `NODE_KINDS`. See
+> `2026-08-18-operating-model.md` §4. Nothing structural now stands in front of this entity.
+
 ### 5. Delivery and work management — **strong, with one rigidity**
 
 **Gap.** The hierarchy cannot express Work Package, Process or Scenario. Process Area exists (the

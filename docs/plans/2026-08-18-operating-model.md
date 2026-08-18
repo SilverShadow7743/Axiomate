@@ -11,6 +11,9 @@ which parts are **already working**, and names the one constraint sitting under 
 
 ## 1. Three contradictions worth deciding before anything is built
 
+*Revised 18 August: 1b shrank from three tiers to two once Process, Scenario and Configuration
+Deliverable were settled as scope items — see §4.*
+
 These are not gaps. They are places where the model and the code make different choices, so
 adopting the model means retiring something that works.
 
@@ -37,7 +40,12 @@ carries). Adopting it means choosing one of:
 Nothing should be built for §5 until this is answered, because the three produce different
 schemas.
 
-### 1b. Three named tiers are missing in the middle, and the middle is the expensive place
+### 1b. Two named tiers are missing in the middle, and the middle is the expensive place
+
+> **Revised 18 August.** This originally read *three* tiers and covered Process, Scenario and
+> Configuration Deliverable as well. Those are now settled as scope items rather than tree tiers —
+> see §4 — so only **Workstream** and **Work Package** remain unplaced, and the cost below applies
+> to those two alone.
 
 The model's hierarchy:
 
@@ -49,8 +57,10 @@ The built hierarchy:
                                               └── issue → sub-issue → activity → milestone
 
 `module` is already labelled **Process Area** in the shipped terminology, so the two agree at that
-level and diverge above and below it. **Workstream**, **Deliverable** and **Work Package** have no
-home — and they sit *between* two tiers that already exist, which is the costly place to insert.
+level. Below it the model's Process / Scenario / Configuration Deliverable are scope items, not
+tiers (§4). Above it, **Workstream** and **Work Package** have no home — and they sit *between*
+two tiers that already exist, which is the costly place to insert. **Deliverable** is undecided
+and is read as a scope item until it is; see §4.
 
 Adding a structural tier is not one edit. It touches `NODE_KINDS`, `ALLOWED_PARENTS`, `canParent`,
 the tree builder, `CREATABLE_KINDS` in `lib/actionShape.ts`, the row menu's `childKinds`, the
@@ -129,24 +139,68 @@ building them twice.
 
 ---
 
-## 4. One question the model does not settle
+## 4. Answered, 18 August — scope items, not tree tiers
 
-§6's hierarchy includes **Process**, **Scenario** and **Configuration Deliverable**. That is the
-Microsoft D365 Business Process Catalogue vocabulary — the same taxonomy as
+§6's hierarchy includes **Process**, **Scenario** and **Configuration Deliverable** — the
+Microsoft D365 Business Process Catalogue vocabulary, the same taxonomy as
 `industry-process-scope-explorer.html`, where `Scenario` is a work-item type carrying an
 `Acceptance Criteria` field.
 
-Two different things could be meant, and they are different records:
+The question was whether those are records against a statement of work, or levels in the tree.
 
-1. **`SowScopeItem`** — structured scope entered against or extracted from a statement of work:
-   deliverables, assumptions, exclusions, acceptance criteria. The audit names this and sequences
-   it after file storage, which now exists.
-2. **A work-breakdown tier** — Process and Scenario as levels *in the tree*, beneath Process Area,
-   that work items hang from.
+> **Answer: `SowScopeItem`. Not a tree tier.**
 
-They can coexist. They are not the same record, and one should not silently become the other.
+That is the cheaper answer and the better one, and it changes §1b materially.
 
----
+### What it means
+
+The tree stops where it already stops. `module` is Process Area and remains the deepest
+structural tier; Process, Scenario and Configuration Deliverable become **kinds of scope item**
+recorded against a SOW, extending the set the audit already proposed:
+
+    SowScopeItem {
+      sowId
+      kind      deliverable | assumption | exclusion | acceptance | milestone
+                | process | scenario | configuration-deliverable      ← added by this answer
+      text
+      effortHours?
+      source    'stated' | 'extracted'
+      confidence
+      approvedBy, approvedAt
+    }
+
+None of that touches `NODE_KINDS`, `ALLOWED_PARENTS`, `canParent`, the tree builder,
+`CREATABLE_KINDS`, `childKinds`, the scope-override chain or the intake parent check. The whole
+expensive list in §1b falls away for these three, which is the point of the answer.
+
+### What it leaves open
+
+**Workstream and Work Package are still unplaced**, and this answer does not settle them. They
+are organisational groupings of *work*, not statements of *scope*, so the tree remains the
+plausible home — but they are now the only two tiers §6 asks for, rather than five.
+
+**Deliverable is genuinely ambiguous and should be decided next.** It appears twice in the model:
+under Scope Baseline in §5, and in the §6 work hierarchy. Both readings are defensible:
+
+| Reading | Consequence |
+|---|---|
+| A scope item of kind `deliverable` | Already in the audit's shape. Costs nothing extra. Per-deliverable acceptance becomes a property of a scope item, which is where the acceptance criteria already live |
+| A tree tier between Work Package and Process Area | A structural tier, with the full §1b cost |
+
+The first is consistent with the answer just given and is the reading this document assumes until
+told otherwise.
+
+### What it unblocks
+
+`SowScopeItem` was gated on file storage and the change-request entity. **Both now exist**, so
+nothing structural stands in front of it. It is also the record that makes two things possible
+that the model asks for and the product cannot do:
+
+- **Per-deliverable acceptance.** The audit records that "delivered but not accepted" is
+  answerable at milestone level and nowhere else. Acceptance criteria live on a scope item, so
+  this is where §10's distinction stops being milestone-only.
+- **Scope as a baseline component.** §5's Scope Baseline is a list of deliverables, requirements
+  and acceptance criteria — which is a set of scope items at a point in time, not a new entity.
 
 ## 5. What this does not change today
 
@@ -161,9 +215,11 @@ arms that already exist.
 
 When the model's first increment is scheduled, the honest order is:
 
-1. **The identity key** (§3 above) — because §7, §9 and §10 are built twice without it.
-2. **The baseline decision** (§1a) — a schema fork, not a feature.
-3. **Workstream / Deliverable / Work Package** (§1b) — the tiers, once there is something to hang
+1. **`SowScopeItem`** (§4) — now fully unblocked, touches no structural tier, and is the record
+   that carries acceptance criteria. The cheapest real step in the model.
+2. **The identity key** (§3 above) — because §7, §9 and §10 are built twice without it.
+3. **The baseline decision** (§1a) — a schema fork, not a feature.
+4. **Workstream / Work Package** (§1b) — the two remaining tiers, once there is something to hang
    beneath them.
 
 Assignment-with-effort (§1c) is the smallest genuinely new thing and the one that makes the
