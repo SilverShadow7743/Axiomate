@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
+import MyWorkPanel from './MyWorkPanel'
+import { myWork } from '@/lib/mywork'
 import { can } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
@@ -149,6 +151,7 @@ export default function IssueWorkspace({
   const [dialog, setDialog] = useState<DialogState>(null)
   /** Issue whose evidence manager is open, if any. */
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
+  const [myWorkOpen, setMyWorkOpen] = useState(false)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
@@ -574,6 +577,12 @@ export default function IssueWorkspace({
 
   /* ---------------- derived tree ---------------- */
   const allRows = useMemo(() => buildTree(state, today), [state, today])
+  /*
+   * The badge count. Computed here rather than inside the panel because the toolbar needs it
+   * whether or not the panel is open — a queue whose size is only visible once you open it is a
+   * queue nobody opens.
+   */
+  const myWorkCount = useMemo(() => myWork(state, actor, today).items.length, [state, actor, today])
 
   const sortedRows = useMemo(
     () => (sort ? sortTree(allRows, COLUMNS.find((c) => c.key === sort.key), sort.dir) : allRows),
@@ -1716,6 +1725,14 @@ export default function IssueWorkspace({
           )}
         </div>
         <button
+          className={`btn${myWorkOpen ? ' primary' : ''}`}
+          onClick={() => setMyWorkOpen(true)}
+          title="Everything waiting on you, across every engagement"
+        >
+          My work
+          {myWorkCount > 0 && <span className="mywork-count">{myWorkCount}</span>}
+        </button>
+        <button
           className={`btn${configOpen ? ' primary' : ''}`}
           onClick={() => setConfigOpen(true)}
           title="Terminology, roles, responsibilities, agents"
@@ -2100,6 +2117,23 @@ export default function IssueWorkspace({
           state={state}
           onRestore={(id) => dispatch({ t: 'restore', id, now: new Date().toISOString() })}
           onClose={() => setArchiveOpen(false)}
+        />
+      )}
+
+      {myWorkOpen && (
+        <MyWorkPanel
+          state={state}
+          actor={actor}
+          today={today}
+          onSelect={(id) => {
+            /*
+             * Selects and leaves the drawer open. Picking one row is not finishing the list, and
+             * closing on every click would make working through eight items eight round trips
+             * through a button in the toolbar.
+             */
+            setSelectedId(id)
+          }}
+          onClose={() => setMyWorkOpen(false)}
         />
       )}
 

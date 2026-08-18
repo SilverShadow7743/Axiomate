@@ -674,6 +674,16 @@
       "impact": "What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from."
     },
     {
+      "id": "MW1",
+      "title": "A consultant asks what to do next, and gets an answer they can argue with",
+      "expected": "Work is gathered from six collections and grouped by why it wants somebody — decisions other people are blocked on first — with no priority score anywhere.",
+      "verdict": "PASS",
+      "actual": "One consultant, six collections, one list: 1 awaiting her decision, 1 past its date, 1 blocked, 1 week of her own hours unsubmitted, 0 otherwise open. Decisions sort first and the sentence says why — \"The one awaiting your decision is holding somebody else up.\" — because a decision is the only thing on the list that is stopping another person. Within a group the order is the date, oldest first. **There is no score anywhere**: a blended number would be a judgement nobody could argue with, and every row instead says its reason in words (\"Validator raised it. +40h, and not in the contracted total until decided.\"). A change request she raised herself would not appear, because the reducer would refuse her decision on it and a row that cannot be acted on is worse than no row. And the two empty lists are different answers: somebody with nothing to do is told so, while somebody the directory does not know is told the join failed — \"Nothing here is matched to you: “Nobody At All” is not in …\" — because a person shown an empty in-tray concludes they are up to date.",
+      "stops": "at the name join. Work is found by matching a display name against `Issue.owner` and `Timesheet.person`, so somebody whose directory name differs from the name on their issues sees an empty list. That is the structural gap pending-actions records, and it is reported here rather than hidden — `unrecognised` is a distinct answer from empty.",
+      "severity": "—",
+      "impact": "A consultant deciding what to do next had to read a tree organised by client and project, which is the wrong axis for the question. Their work is now in one place, ordered by an argument they can see and disagree with."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",

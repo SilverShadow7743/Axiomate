@@ -100,6 +100,7 @@ import {
 } from '../lib/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
+import { describeWork, myWork } from '../lib/mywork'
 import {
   checkScopeItem,
   effortProblem,
@@ -3735,6 +3736,88 @@ scenario(
       severity: '—',
       impact:
         'What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from.',
+    }
+  },
+)
+
+scenario(
+  'MW1',
+  'A consultant asks what to do next, and gets an answer they can argue with',
+  'Work is gathered from six collections and grouped by why it wants somebody \u2014 decisions other people are blocked on first \u2014 with no priority score anywhere.',
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const priya: Actor = { id: priyaRow.id, name: 'Priya' }
+
+    /* A lead, so there is somebody whose decision is genuinely pending on somebody else. */
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaRow.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+
+    /* Overdue: OAPIL-1 is hers and its due date is in the past. */
+    const dated = ok(staffed, {
+      t: 'setDates', id: 'OAPIL-1', start: '2026-08-03', end: '2026-08-10', now: NOW,
+    } as Action)
+
+    /* Blocked: OAPIL-3 is hers and waiting on the client. */
+    const blocked = ok(dated, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation' },
+      reason: 'Client has not confirmed the batch window.', now: NOW,
+    } as Action)
+
+    /* Hours recorded and not submitted. */
+    const withHours = ok(blocked, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05',
+      hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW,
+    } as Action)
+
+    /* And a change request somebody ELSE raised, which she may decide. */
+    /* The engagement node's real id, not its label — the seed mints it. */
+    const engId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withSow = ok(withHours, {
+      t: 'upsertSow', id: null, engagementId: engId,
+      patch: { reference: 'SOW-MW', title: 'For the test', status: 'Active', effortHours: 100, value: 10000, currency: 'GBP' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(withSow.sows).find((x) => x.reference === 'SOW-MW')!.id
+    const withChange = ok(withSow, {
+      t: 'upsertChangeRequest', id: null, sowId,
+      patch: { title: 'More scope', effortHours: 40, value: 4000, currency: 'GBP', scope: '', reason: 'The client asked', effectiveFrom: null },
+      submit: true, now: NOW,
+    } as Action)
+
+    const list = myWork(withChange, priya, TODAY)
+    const reasons = list.items.map((i) => i.reason)
+    const first = list.items[0]
+
+    /* Somebody the directory does not know gets a different answer from somebody with nothing. */
+    const stranger = myWork(withChange, { id: 'nobody', name: 'Nobody At All' }, TODAY)
+
+    const good =
+      /* every source is represented */
+      list.counts.decide >= 1 &&
+      list.counts.overdue >= 1 &&
+      list.counts.blocked >= 1 &&
+      list.counts.attest >= 1 &&
+      /* decisions come first, because they are the only ones holding another person up */
+      first.reason === 'decide' &&
+      reasons.indexOf('decide') < reasons.indexOf('overdue') &&
+      reasons.indexOf('overdue') < reasons.indexOf('blocked') &&
+      /* she raised nothing, so nothing she raised is offered back to her */
+      !list.items.some((i) => i.key.startsWith('cr:') && i.why.includes('Priya')) &&
+      /* every row says why, in words, and no row carries a score */
+      list.items.every((i) => i.why.trim().length > 0) &&
+      /* the two empty cases are different answers */
+      stranger.unrecognised === true &&
+      /not in the directory/.test(describeWork(stranger)) &&
+      /holding somebody else up/.test(describeWork(list))
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `One consultant, six collections, one list: ${list.counts.decide} awaiting her decision, ${list.counts.overdue} past its date, ${list.counts.blocked} blocked, ${list.counts.attest} week of her own hours unsubmitted, ${list.counts.due + list.counts.open} otherwise open. Decisions sort first and the sentence says why \u2014 "${describeWork(list).split('. ').slice(-1)[0]}" \u2014 because a decision is the only thing on the list that is stopping another person. Within a group the order is the date, oldest first. **There is no score anywhere**: a blended number would be a judgement nobody could argue with, and every row instead says its reason in words ("${first.why}"). A change request she raised herself would not appear, because the reducer would refuse her decision on it and a row that cannot be acted on is worse than no row. And the two empty lists are different answers: somebody with nothing to do is told so, while somebody the directory does not know is told the join failed \u2014 "${describeWork(stranger).slice(0, 58)}\u2026" \u2014 because a person shown an empty in-tray concludes they are up to date.`,
+      stops: 'at the name join. Work is found by matching a display name against `Issue.owner` and `Timesheet.person`, so somebody whose directory name differs from the name on their issues sees an empty list. That is the structural gap pending-actions records, and it is reported here rather than hidden \u2014 `unrecognised` is a distinct answer from empty.',
+      severity: '\u2014',
+      impact:
+        'A consultant deciding what to do next had to read a tree organised by client and project, which is the wrong axis for the question. Their work is now in one place, ordered by an argument they can see and disagree with.',
     }
   },
 )
