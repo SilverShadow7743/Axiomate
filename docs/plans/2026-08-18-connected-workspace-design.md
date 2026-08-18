@@ -19,14 +19,25 @@ designed together rather than one being a special case of the other.
 
 ## 1. Where this came from
 
-Intake pointed at a personal mailbox produced, in one day, twenty-seven issues. About seventeen
-were LinkedIn notifications, newsletters, Pinterest digests, meeting-bot summaries, out-of-office
-replies and two bank one-time passcodes.
+Intake pointed at an individual's mailbox produced, in one day, twenty-seven issues. About
+seventeen were LinkedIn notifications, newsletters, Pinterest digests, meeting-bot summaries,
+out-of-office replies and two bank one-time passcodes.
+
+**It is a company mailbox, not a private one** — `sekharn@axiocloudsolutions.com`, on the firm's
+own domain. An earlier draft of this called it personal and that was wrong. What matters is not
+who owns the mailbox but that it is **individually addressed**: office mail routinely carries
+one-to-one management conversations, commercial negotiation and HR matters, and twenty-five
+colleagues reading one person's inbox is a problem whether or not the firm owns the domain.
+
+The two bank passcodes are the useful evidence here. They arrived at the office address, which is
+what an office address does in practice — it receives things that are not work, and no policy
+about what it is *for* changes what actually lands in it.
 
 The obvious fix is a filter. It is the wrong one: a filter is a permanent guess about which mail
 matters, wrong at the edges, and silent when it is wrong. The second fix is a triage queue on a
 shared mailbox — better, and it was half built before this design replaced it, because a shared
-queue is the wrong shape for personal correspondence. **A person decides about their own mail.**
+queue is the wrong shape for individually addressed mail. **A person decides about their own
+mail**, whoever owns the domain it arrives on.
 
 ---
 
@@ -81,10 +92,11 @@ enters the database at all.
 A copy in the workspace, keyed to the owner, withheld from everybody else at the boundary.
 
 - Enables a queue that survives, search, and offline reading.
-- **Costs:** the firm's database now holds every employee's correspondence. That is a materially
-  different retention and privacy posture, it is the thing a DPA asks about, and the withholding
-  is a permission check that has to be right on every path forever. This codebase has been caught
-  by the payload-leak class three times; this is the collection where the fourth would matter.
+- **Costs:** the firm's database now holds every employee's individually addressed mail. The firm
+  owning the mailboxes does not make that free — it is a materially different retention posture, it
+  is what a DPA asks about, and the withholding becomes a permission check that has to be right on
+  every path forever. This codebase has been caught by the payload-leak class three times; this is
+  the collection where the fourth would matter.
 
 ### Recommendation: it resolves differently per tier, and that is the point
 
@@ -95,8 +107,8 @@ message. That gives traceability ("this action came from that email, here is the
 without the firm holding anybody's correspondence, and it is the same instinct as `Document` and
 `Evidence`: keep the fact, not the copy.
 
-**Engagement → B, store it.** Every argument against storing personal mail is an argument *for*
-storing this. A team sharing a queue needs the queue to exist between them; a message that arrives
+**Engagement → B, store it.** Every argument against storing individually addressed mail is an
+argument *for* storing this. A team sharing a queue needs the queue to exist between them; a message that arrives
 while one person is on leave has to still be there when they return; and a departing consultant
 must not take the client's correspondence with them. The privacy posture is different in kind,
 because this is a client relationship the firm is a party to rather than an individual's inbox.
@@ -178,16 +190,17 @@ that files automatically into a scope is exactly an engagement mailbox with
 `disposition: file`; add `disposition: triage` and the same record describes the queue in §3.
 `IntakeMailbox.scopeId` already points at a scope in the tree, so most of the configuration exists.
 
-What stops is pointing one at anybody's personal mailbox. That is the change that fixes the
-problem this design came from, and it waits for nothing here.
+What stops is pointing one at anybody's individual mailbox — company-owned or not. That is the
+change that fixes the problem this design came from, and it waits for nothing here.
 
 ---
 
 ## 7. Immediate, independent of all of it
 
 **Intake is still filing from `sekharn@axiocloudsolutions.com` right now.** Roughly one to two
-messages an hour become issues, and personal mail is being copied into a workspace twenty-five
-people can read.
+messages an hour become issues. It is the firm's own mailbox, which softens the framing and does
+not change the substance: it is one person's individually addressed mail, being copied into a
+workspace twenty-five people can read, and about two thirds of it is not work.
 
 One config change stops it — `enabled: false` on the mailbox, in Configuration → Routing & intake,
 or a one-line script. Nothing in this document should be waited for first.
