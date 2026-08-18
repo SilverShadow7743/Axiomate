@@ -1732,6 +1732,14 @@ select.cell-editor {
   border-radius: 0 3px 3px 0;
 }
 
+/* A note that states something the save is waiting on, rather than something already true. */
+.zone-note.needed {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  margin-top: 5px;
+}
+
 /* Status as a choice set — it drives the lifecycle, so it is not just another dropdown. */
 
 /* Progress: a real control, never a disabled-looking text box. */

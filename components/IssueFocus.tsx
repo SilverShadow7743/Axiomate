@@ -154,6 +154,28 @@ export default function IssueFocus({
   const [manualProgress, setManualProgress] = useState(initial.percent !== '')
   const [confirmDiscard, setConfirmDiscard] = useState(false)
 
+  /*
+   * What this move has to carry, read from the configured policy rather than a list here.
+   *
+   * The form used to offer only the *route* — `allowedNext` filtered the dropdown — and say
+   * nothing about the two conditions attached to arriving. So picking "Closed - no defect"
+   * looked accepted, and the refusal came at Save, naming a reason the screen had nowhere to
+   * put. Two of the three closing statuses were unreachable from this form entirely.
+   *
+   * Both lists are configurable in Configuration → Status transitions, which is why they are
+   * read here instead of restated: a firm that removes the reason requirement should stop
+   * being asked, and a firm that adds one to another status should start.
+   */
+  const [reason, setReason] = useState('')
+  const reasonRef = useRef<HTMLTextAreaElement>(null)
+  const movingTo =
+    mode === 'edit' && issue && f.status !== issue.status ? (f.status as IssueStatus) : null
+  const asks = movingTo && statusPolicy.enforced
+  const needsReason = Boolean(asks && statusPolicy.requireReason.includes(movingTo!))
+  const needsEvidence = Boolean(
+    asks && statusPolicy.requireEvidence.includes(movingTo!) && evidenceItems.length === 0,
+  )
+
   const dirty = useMemo(
     () =>
       Object.keys(initial).some((k) => (f[k] ?? '') !== (initial[k] ?? '')) ||
@@ -200,7 +222,22 @@ export default function IssueFocus({
       : null
 
   const submit = () => {
-    onSubmit({ ...f, percent: manualProgress ? f.percent || '0' : '' })
+    /*
+     * Not a refusal message: the same choice `StatusCellEditor` makes, for the same reason.
+     * The field is already on screen and already explained, so the shortest route from "this
+     * will not go through" to it going through is the cursor, not a sentence.
+     */
+    if (needsReason && !reason.trim()) {
+      reasonRef.current?.focus()
+      return
+    }
+    onSubmit({
+      ...f,
+      percent: manualProgress ? f.percent || '0' : '',
+      // Only when there is one. An empty string would ride into `create` as a draft field and
+      // read, in the trail, as a reason somebody gave.
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
+    })
   }
 
   const body = (
@@ -375,6 +412,48 @@ export default function IssueFocus({
                   </select>
                 </label>
               </div>
+
+              {needsReason && (
+                <label className="fld">
+                  <span className="fld-label">
+                    Why it is moving to &ldquo;{movingTo}&rdquo;
+                  </span>
+                  <textarea
+                    ref={reasonRef}
+                    rows={2}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="What was decided, and on what basis"
+                  />
+                  <p className="zone-note needed">
+                    This outcome is one people ask about months later, so it is recorded with the
+                    change rather than left to memory. Required by{' '}
+                    <b>Configuration → Status transitions</b>, where it can be lifted.
+                  </p>
+                </label>
+              )}
+
+              {needsEvidence && (
+                <div className="fld">
+                  <p className="zone-note needed">
+                    &ldquo;{movingTo}&rdquo; needs at least one piece of evidence on the record —
+                    that is what makes the closure producible later, and nothing is attached yet.
+                    {issue && (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => onManageEvidence(issue.id)}
+                        >
+                          Attach evidence
+                        </button>{' '}
+                        — this form stays open behind it and keeps what you have typed.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
 
               {/* Progressive disclosure: automatic is the common case, so the manual
                   controls stay out of the way until they are actually wanted. */}
@@ -603,7 +682,16 @@ export default function IssueFocus({
             <button type="button" className="btn" onClick={attemptClose}>
               Cancel
             </button>
-            <button type="button" className="btn primary" onClick={submit}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={submit}
+              title={
+                needsReason && !reason.trim()
+                  ? `A move to “${movingTo}” needs a reason`
+                  : undefined
+              }
+            >
               {mode === 'edit' ? 'Save changes' : 'Create issue'}
             </button>
           </div>

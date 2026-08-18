@@ -1247,6 +1247,12 @@ export default function IssueWorkspace({
               percentOverride: p.percent === '' ? null : Number(p.percent),
             },
             now,
+            /*
+             * Carried, not dropped. The form only sets this when the configured policy asks for
+             * it on the status being moved to; without it the reducer refused every move to a
+             * `requireReason` status, and the message named a field the form had no box for.
+             */
+            reason: p.reason || undefined,
           })
         } else if (state.activities[id]) {
           ok = dispatch({
