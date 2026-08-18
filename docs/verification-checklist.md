@@ -246,6 +246,12 @@ Select an **issue** row → **Evidence** tab → **`Manage evidence`**.
 > library's drive id."*
 >
 > **That message is a pass, not a fail.** It is pending action A6 and only you can clear it.
+>
+> One correction to it, not yet reflected in the string: the permission actually being granted is
+> **`Sites.Selected`**, not `Files.ReadWrite.All`. `Sites.Selected` grants access to nothing until
+> the application is granted on one named site; `Files.ReadWrite.All` would have given it every
+> file in every site and OneDrive in the tenant. The site is
+> `axiocloudsolutions.sharepoint.com/sites/axiomate-documents`, created 18 August 2026.
 > Anything else — a silent failure, a generic error, or an apparent success — is a fault, because
 > an upload that reports success and stores nothing is the exact failure the entity was built to
 > prevent.
@@ -255,11 +261,82 @@ with a working download, and `⤒` on an evidence row should attach a file to th
 
 ---
 
-## 11 · Two defects, now fixed — worth confirming
+## 11 · Portfolio — every engagement at once
+
+**Portfolio** in the toolbar, left of *My work*.
+
+**11a — the list.** One line per engagement, ordered by what most wants attention.
+
+> **Expect** each line to state what is wrong as **counted claims** — "13 blocked, 15 with no
+> owner" — and an engagement with nothing wrong to say so in words.
+>
+> **Fault:** any percentage, any RAG light, any single blended number. Each figure must resolve
+> to rows you can open and disagree with. A score is an argument about weights nobody can see.
+
+**11b — nothing is counted twice.** Expand the tree beside it. `OAPIL Engagement` contains the
+project `D365 Implementation`.
+
+> **Expect one line, named for the engagement**, carrying the project's issues in its figures and
+> saying "1 project inside". The first version of this listed both tiers and reported every
+> engagement twice with doubled totals; it is the fault most likely to come back.
+
+**11c — the footer admits what it misses.** Work filed above the engagement tier is in no line.
+The footer says so. The 29 issues under *Unfiled intake* are that number.
+
+---
+
+## 12 · Capabilities — what this workspace can do
+
+**Configuration** → **Capabilities**.
+
+**12a — every row reports two different things.** *Off* is a decision somebody made.
+*Unreachable* means no role holds the permissions it needs.
+
+> **Expect 19 rows, all showing a role count.** None should read *unreachable*.
+>
+> **Fault:** the two states merged into one indicator. "Off" and "nobody can use this" look
+> identical from outside and want completely different responses. Five permissions were once in
+> exactly the second state in production and nothing anywhere said so.
+
+**12b — it is an inventory, not a control panel.** There are no switches here; rows name where
+the switch lives (*"Switched at Configuration → Where documents are filed"*). Two places to change
+one thing is how they come to disagree.
+
+---
+
+## 13 · Goals — and the box that is deliberately missing
+
+**Configuration** → **Goals**.
+
+**13a — set one.** Name it, choose a part of the tree, pick a measure, give it a target and a date.
+
+> **Expect** the figure to appear immediately, computed from the register.
+>
+> **Fault, and the one that matters most on this screen: any field to enter progress into.**
+> There is none and there must never be one. A number somebody types about their own work drifts
+> in one direction, and a goal reading 80% for a month is the normal state of every other tool's
+> version of this.
+
+**13b — ceilings and targets are not one shape.** Set both a *Work closed* goal (a target to
+reach) and an *Open work held under* goal (a ceiling to stay below).
+
+> **Expect no percentage on either.** 40% of a ceiling is healthy; 40% of a target is behind, and
+> one number that flips meaning between two rows is worse than none.
+
+**13c — an unmeetable goal is refused, and says which way it is unmeetable.** Try a window that
+starts after the date it is judged on.
+
+> **Expect** *"The window starts after the date it is judged on, so nothing could ever count."*
+> Six such refusals exist, each with its own sentence. All six would otherwise render as a goal
+> sitting at zero — which reads as failing rather than as misconfigured.
+
+---
+
+## 14 · Two defects, now fixed — worth confirming
 
 Both were found by reading the code and both are fixed. These two steps check the fixes.
 
-**11a — activity rows keep the parent's tabs.** Select an **activity** row (a phase under an
+**14a — activity rows keep the parent's tabs.** Select an **activity** row (a phase under an
 issue). Click `Time`, then `Evidence`, then `Estimation`.
 
 > **Expect them to stay put** and show the parent issue's content. Before the fix, each click
@@ -267,17 +344,34 @@ issue). Click `Time`, then `Evidence`, then `Estimation`.
 > the guard was built from the row's own field, which an activity never has. Both now read one
 > list, so they cannot disagree again.
 
-**11b — Configuration says so up front.** This one needs somebody *without* `config.manage`.
+**14b — Configuration says so up front.** This one needs somebody *without* `config.manage`.
 
 > **Expect a banner** across the top of the Configuration workspace reading
 > *"Read only. …"* with the reason. The button that opens it is deliberately still there:
 > looking up what a work type or a service level means is useful to everybody, and the one
 > genuinely sensitive section — Rates — is already absent from the rail without `rate.view`.
 
-**11c — the evidence drawer disables rather than refuses.** Also needs a second, less-privileged
+**14c — the evidence drawer disables rather than refuses.** Also needs a second, less-privileged
 person. `+ Attach files`, `+ Link` and the per-item `✕` are now disabled with the reason in the
 tooltip. Imported evidence has no `✕` at all — no grant makes it removable, so a permanently grey
 button would only invite somebody to hunt for the permission that would ungrey it.
+
+---
+
+## What has actually been opened in a browser
+
+Recorded because the distinction turned out to matter more than anything else in this document.
+On 18 August 2026 three faults were found by opening screens, and **none of them was visible to
+`tsc`, to the build, or to 73 passing scenarios**:
+
+| Fault | Why nothing else could see it |
+|---|---|
+| The detail form refused a closure naming a reason field it had no box for | The rule was proven; no scenario drives a React component |
+| My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
+| Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
+
+Sections **1, 11, 12, 13 and 14a** have been driven end to end against production. The rest have
+been read and reasoned about but not clicked. That gap is where the three faults were.
 
 ---
 
