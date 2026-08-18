@@ -684,6 +684,16 @@
       "impact": "A consultant deciding what to do next had to read a tree organised by client and project, which is the wrong axis for the question. Their work is now in one place, ordered by an argument they can see and disagree with."
     },
     {
+      "id": "PF1",
+      "title": "A partner asks which engagement is in trouble",
+      "expected": "Every engagement on one screen, each stating what it has overdue, blocked, unowned or gone quiet — as counts that can be checked, with no score anywhere.",
+      "verdict": "PASS",
+      "actual": "2 engagements on one screen, ordered by what most wants attention. The OAPIL engagement reports \"1 past its date, 1 blocked, 1 with no owner\" — three claims, each a count that resolves to rows somebody can open, rather than a percentage or a colour. Concerns are ordered by argument, not by size: a date that has passed is a commitment already broken, so it outranks a blocked item being honestly waited on, which outranks work nobody owns. Nesting is handled where it actually bites — \"Phase 2\" sits under the engagement and gets no line of its own, but its issue is in the engagement's 3, and across every line each of the 3 live issues is counted exactly once. An earlier version listed both tiers and reported every engagement twice with doubled totals.",
+      "stops": "short of money. Contracted value, milestones accepted and what is unbillable are all derivable and none of them are shown, because there is no read grant for commercial figures — `sow.edit` is a write permission, and gating a read on it would conflate two questions. A commercial column also needs what `rate.view` and `skill.view` get: withholding from the page payload rather than hiding on screen.",
+      "severity": "P2",
+      "impact": "A partner running three engagements had no screen that showed more than one at a time, so \"which of these needs me\" meant opening each and holding the comparison in their head."
+    },
+    {
       "id": "AC1",
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",

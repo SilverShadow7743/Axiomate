@@ -146,8 +146,14 @@ export function summariseScope(state: WorkspaceState, nodeId: string): ScopeSumm
   }
 }
 
-/** Live issues anywhere beneath a node, at any depth. */
-function issuesUnder(state: WorkspaceState, nodeId: string) {
+/**
+ * Live issues anywhere beneath a node, at any depth.
+ *
+ * Exported for `lib/portfolio.ts`, which needs the same walk over every engagement at once.
+ * One implementation rather than two: a portfolio that counted a node's issues differently
+ * from the panel showing that node would be a contradiction the reader has to resolve.
+ */
+export function issuesUnder(state: WorkspaceState, nodeId: string) {
   const inScope = new Set<string>([nodeId])
   // Nodes are few and shallow; repeat until the frontier stops growing rather than recursing.
   let grew = true

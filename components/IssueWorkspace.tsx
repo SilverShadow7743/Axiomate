@@ -5,6 +5,7 @@ import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel 
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import MyWorkPanel from './MyWorkPanel'
+import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
 import { can } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
@@ -152,6 +153,7 @@ export default function IssueWorkspace({
   /** Issue whose evidence manager is open, if any. */
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
   const [myWorkOpen, setMyWorkOpen] = useState(false)
+  const [portfolioOpen, setPortfolioOpen] = useState(false)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
@@ -1731,6 +1733,13 @@ export default function IssueWorkspace({
           )}
         </div>
         <button
+          className={`btn${portfolioOpen ? ' primary' : ''}`}
+          onClick={() => setPortfolioOpen(true)}
+          title="Every engagement at once — what each one has overdue, blocked, unowned or quiet"
+        >
+          Portfolio
+        </button>
+        <button
           className={`btn${myWorkOpen ? ' primary' : ''}`}
           onClick={() => setMyWorkOpen(true)}
           title="Everything waiting on you, across every engagement"
@@ -2123,6 +2132,21 @@ export default function IssueWorkspace({
           state={state}
           onRestore={(id) => dispatch({ t: 'restore', id, now: new Date().toISOString() })}
           onClose={() => setArchiveOpen(false)}
+        />
+      )}
+
+      {portfolioOpen && (
+        <PortfolioPanel
+          state={state}
+          today={today}
+          onSelect={(id) => {
+            /*
+             * Same choice the my-work drawer makes: select and stay open. Comparing engagements
+             * is the point, and closing on the first click would end the comparison.
+             */
+            setSelectedId(id)
+          }}
+          onClose={() => setPortfolioOpen(false)}
         />
       )}
 

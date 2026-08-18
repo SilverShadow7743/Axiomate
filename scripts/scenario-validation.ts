@@ -101,6 +101,7 @@ import {
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { describeWork, myWork } from '../lib/mywork'
+import { describePortfolio, portfolio } from '../lib/portfolio'
 import {
   checkScopeItem,
   effortProblem,
@@ -3873,6 +3874,80 @@ scenario(
       severity: '\u2014',
       impact:
         'A consultant deciding what to do next had to read a tree organised by client and project, which is the wrong axis for the question. Their work is now in one place, ordered by an argument they can see and disagree with.',
+    }
+  },
+)
+
+scenario(
+  'PF1',
+  'A partner asks which engagement is in trouble',
+  'Every engagement on one screen, each stating what it has overdue, blocked, unowned or gone quiet — as counts that can be checked, with no score anywhere.',
+  () => {
+    /*
+     * The nesting is the point of this scenario.
+     *
+     * A real tree is `client > engagement > project`, and the first version of `portfolio` listed
+     * every node of either kind. Run against production it produced two lines per engagement with
+     * identical figures — the project's issues counted once under its own name and again under
+     * its parent's — so every total was double the truth. The rule is now the outermost of the
+     * two kinds, and this is the shape that proves it.
+     */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    const nested = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Phase 2' }, now: NOW,
+    } as Action)
+    const phase2 = Object.values(nested.nodes).find((n) => n.name === 'Phase 2')!.id
+    const moved = ok(nested, { t: 'move', id: 'OAPIL-1', newParentId: phase2, now: NOW } as Action)
+
+    /* One overdue, one blocked, one with nobody's name on it. */
+    const dated = ok(moved, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    /* Via In Progress, because the transition graph refuses Open straight to Awaiting — which
+       this scenario found by being run rather than by being reasoned about. */
+    const started = ok(dated, { t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'In Progress' }, now: NOW } as Action)
+    const blocked = ok(started, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Awaiting client confirmation' }, now: NOW,
+    } as Action)
+    const unowned = ok(blocked, { t: 'updateIssue', id: 'OAPIL-3', patch: { owner: 'Unassigned' }, now: NOW } as Action)
+
+    /* A second engagement with nothing in it, so the quiet case is proved rather than assumed.
+       An engagement with no concerns must say so plainly — the alternative is a green light,
+       which is a score wearing a different hat. */
+    const quiet = ok(unowned, {
+      t: 'create', parentId: 'client:OAPIL', kind: 'engagement', draft: { name: 'Support Retainer' }, now: NOW,
+    } as Action)
+
+    const lines = portfolio(quiet, TODAY)
+    const oapil = lines.find((l) => l.nodeId === engagementId)
+    const kinds = oapil ? oapil.concerns.map((c) => c.kind) : []
+
+    /* Every issue is counted exactly once across the whole portfolio. */
+    const counted = lines.reduce((n, l) => n + l.issues, 0)
+    const live = Object.values(quiet.issues).filter((i) => !i.deletedAt).length
+
+    const good =
+      /* the nested project does not get its own line — that was the double count */
+      !lines.some((l) => l.name === 'Phase 2') &&
+      /* and its issue is still counted, in its engagement's figures */
+      oapil !== undefined &&
+      oapil.projects === 1 &&
+      counted === live &&
+      /* the three concerns are found and ordered worst first */
+      kinds.join(',') === 'overdue,blocked,unowned' &&
+      /* each is a count somebody can go and check, not a rating */
+      oapil.concerns.every((c) => c.count > 0 && /\d/.test(c.phrase)) &&
+      /* an engagement with nothing wrong says so rather than showing a green light */
+      lines.some((l) => l.concerns.length === 0) &&
+      /* and the summary refuses to score */
+      /nothing here is scored/.test(describePortfolio(lines))
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `${lines.length} engagements on one screen, ordered by what most wants attention. The OAPIL engagement reports "${oapil ? oapil.concerns.map((c) => c.phrase).join(', ') : 'nothing'}" — three claims, each a count that resolves to rows somebody can open, rather than a percentage or a colour. Concerns are ordered by argument, not by size: a date that has passed is a commitment already broken, so it outranks a blocked item being honestly waited on, which outranks work nobody owns. Nesting is handled where it actually bites — "Phase 2" sits under the engagement and gets no line of its own, but its issue is in the engagement's ${oapil ? oapil.issues : 0}, and across every line each of the ${live} live issues is counted exactly once. An earlier version listed both tiers and reported every engagement twice with doubled totals.`,
+      stops: 'short of money. Contracted value, milestones accepted and what is unbillable are all derivable and none of them are shown, because there is no read grant for commercial figures — `sow.edit` is a write permission, and gating a read on it would conflate two questions. A commercial column also needs what `rate.view` and `skill.view` get: withholding from the page payload rather than hiding on screen.',
+      severity: 'P2',
+      impact:
+        'A partner running three engagements had no screen that showed more than one at a time, so "which of these needs me" meant opening each and holding the comparison in their head.',
     }
   },
 )
