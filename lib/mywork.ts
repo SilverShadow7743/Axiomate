@@ -40,7 +40,10 @@
  *      another person outranks anything only you are waiting on.
  *   2. **severity** — High before Medium before Low, within a reason. The field existed the whole
  *      time and was being ignored.
- *   3. **date** — oldest first, breaking the tie.
+ *   3. **date** — oldest first, breaking the tie. For work with no date of its own that is
+ *      `lastActivity`: an issue nobody has touched since May is a different proposition from one
+ *      touched yesterday, and without it the largest group on the list fell through to
+ *      alphabetical order by title.
  *
  * Every row shows the two components that placed it, so the ordering is legible on the screen and
  * not only in this comment. That is the actual difference from a score: not that no judgement is
@@ -92,6 +95,34 @@ export const REASON_LABEL: Record<WorkReason, string> = {
   attest: 'Your hours',
   due: 'Coming up',
   open: 'Yours, open',
+}
+
+/**
+ * The same six, phrased to sit in a comma-separated sentence.
+ *
+ * Separate from `REASON_LABEL` because a heading and a clause want different words, and reusing
+ * the heading produced "2 blocked, 2 your hours, 30 yours, open." — where the comma inside
+ * "Yours, open" reads as the next item in the list.
+ */
+export const REASON_PHRASE: Record<WorkReason, string> = {
+  decide: 'awaiting your decision',
+  overdue: 'past its date',
+  blocked: 'blocked',
+  attest: 'weeks of hours to submit',
+  due: 'coming up',
+  open: 'open with nothing pressing',
+}
+
+/**
+ * The clause with its count, pluralised where the noun needs it.
+ *
+ * Only `attest` carries a countable noun — "1 weeks of hours to submit" was the giveaway. The
+ * other five are adjectival and read correctly at any number, so this is one exception rather
+ * than a pluralisation scheme nothing else needs.
+ */
+export function phraseFor(reason: WorkReason, n: number): string {
+  if (reason === 'attest' && n === 1) return `${n} week of hours to submit`
+  return `${n} ${REASON_PHRASE[reason]}`
 }
 
 export const REASON_WHY: Record<WorkReason, string> = {
@@ -293,14 +324,29 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       })
       continue
     }
+    /*
+     * Undated work sorts on how long it has been quiet.
+     *
+     * This group is most of the list — thirty of thirty-four for one real person — and every row
+     * in it had `when: null`, so the third sort key did nothing and the order fell through to
+     * alphabetical by title. Severity separated High from Low and then stopped, which is not an
+     * answer to "what do I do next".
+     *
+     * `lastActivity` is the honest substitute. It is not a commitment and is not presented as
+     * one — the row says "nothing since" rather than "due" — but an issue nobody has touched
+     * since May is a different proposition from one touched yesterday, and that is exactly the
+     * distinction somebody scanning this list is trying to make.
+     */
     items.push({
       key: `issue:${issue.id}`,
       reason: 'open',
       severity: issue.severity,
       subjectId: issue.id,
       title: `${issue.id} ${issue.subject}`,
-      why: due ? `${issue.severity} · due ${due}.` : `${issue.severity} · no date set.`,
-      when: due,
+      why: due
+        ? `${issue.severity} · due ${due}.`
+        : `${issue.severity} · no date set, nothing since ${issue.lastActivity}.`,
+      when: due ?? issue.lastActivity,
     })
   }
 
@@ -313,6 +359,16 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       weeks.add(weekStarting(e.date))
     }
     for (const week of weeks) {
+      /*
+       * Only weeks that have ended.
+       *
+       * The current week is always "recorded and not submitted", every day, until it finishes —
+       * a row that is permanently true is a row people learn to scroll past, and it would have
+       * been on this list from Monday morning. Somebody wanting to submit early still can, from
+       * the Time tab; this list is what NEEDS them, and an unfinished week does not yet.
+       */
+      if (weekStarting(today) === week) continue
+
       const sheet = Object.values(state.timesheets).find(
         (t) => isMe(t.person) && t.weekStarting === week,
       )
@@ -364,9 +420,7 @@ export function describeWork(list: WorkList): string {
   if (!list.items.length) {
     return `Nothing is waiting for you under “${list.matchedName}”.`
   }
-  const lead = REASON_ORDER.filter((r) => list.counts[r]).map(
-    (r) => `${list.counts[r]} ${REASON_LABEL[r].toLowerCase()}`,
-  )
+  const lead = REASON_ORDER.filter((r) => list.counts[r]).map((r) => phraseFor(r, list.counts[r]))
   const decide = list.counts.decide
   return decide
     ? `${lead.join(', ')}. The ${decide === 1 ? 'one' : decide} awaiting your decision ${decide === 1 ? 'is' : 'are'} holding somebody else up.`

@@ -3801,6 +3801,23 @@ scenario(
     const list = myWork(withChange, priya, TODAY)
     const reasons = list.items.map((i) => i.reason)
     const overdueIds = list.items.filter((i) => i.reason === 'overdue').map((i) => i.subjectId)
+    /*
+     * Undated work, in its own tiny workspace. The three issues above are all dated or blocked,
+     * so the open group is empty here — and staleness is exactly the ordering that only shows up
+     * once a person has a pile of undated work, which is the state a real one is in.
+     */
+    const undated = initWorkspace(
+      [
+        seedIssue('OAPIL-20', { severity: 'High', lastActivity: '2026-05-04' }),
+        seedIssue('OAPIL-21', { severity: 'High', lastActivity: '2026-08-11' }),
+        seedIssue('OAPIL-22', { severity: 'Low', lastActivity: '2026-01-01' }),
+      ],
+      [],
+    )
+    const openList = myWork(undated, priya, TODAY)
+    const openRows = openList.items.filter((i) => i.reason === 'open')
+    const openIds = openRows.map((i) => i.subjectId)
+    const openWhens = openRows.map((i) => i.when)
     const first = list.items[0]
 
     /* Somebody the directory does not know gets a different answer from somebody with nothing. */
@@ -3828,6 +3845,22 @@ scenario(
       !list.items.some((i) => i.key.startsWith('cr:') && i.why.includes('Priya')) &&
       /* every row says why, in words, and no row carries a score */
       list.items.every((i) => i.why.trim().length > 0) &&
+      /*
+       * Undated work sorts on staleness, not on the alphabet. This was the largest group on a
+       * real person's list — thirty of thirty-four — and every row had a null date, so the third
+       * key did nothing and the order fell through to title.
+       */
+      openIds.length === 3 &&
+      /* High before Low, and inside High the one nobody has touched since May comes first */
+      openIds[0] === 'OAPIL-20' &&
+      openIds[1] === 'OAPIL-21' &&
+      openIds[2] === 'OAPIL-22' &&
+      openWhens[0] === '2026-05-04' &&
+      openRows.every((r) => /nothing since/.test(r.why)) &&
+      /* the current week is not nagged about before it has ended */
+      !list.items.some((i) => i.key === `week:${weekStarting(TODAY)}`) &&
+      /* and the summary is a sentence rather than a comma-spliced list of headings */
+      !/yours, open/i.test(describeWork(list)) &&
       /* the two empty cases are different answers */
       stranger.unrecognised === true &&
       /not in the directory/.test(describeWork(stranger)) &&
