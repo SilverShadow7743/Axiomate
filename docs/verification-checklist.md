@@ -428,6 +428,25 @@ Open **Configuration → Routing & intake → Request forms**.
    step 3. Expected, not a bug: two identical submissions while enabled create two records —
    a form has no sender message id.
 
+## 19 · Blueprints — the shape of what ran, stored for what's next
+
+Open **Configuration → Blueprints** (under Governance).
+
+1. Choose OAPIL Engagement as the source and press **Propose**. The sentence states how many
+   entries were found, how many are dated, and the anchor date — or says plainly that nothing
+   carries a planned date and everything will apply undated.
+2. Untick a structural tier: its children must drop out of the count on the Store button.
+   Untick the client-specific history; keep the repeatable shape.
+3. Name it "D365 implementation v1" and store. The card appears at v1, "applied never",
+   with the entry/offset/dependency counts.
+4. Rename it (edit via a fresh store is fine): still v1. Only a change to entries or links
+   moves the version — provenance must never point at versions nobody authored.
+5. **Do not apply it today.** Applying creates a real engagement; the apply half of this
+   section runs the day a real one starts: choose the target and anchor, read the button —
+   it states the exact count it will create — apply, then check the card records
+   "Applied v1 to X on date by name" and the built subtree carries dates computed from the
+   anchor with undated items still undated.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
@@ -440,7 +459,7 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13, 14a, 15, 16, 17 and 18** have been driven end to end against
+Sections **1, 11, 12, 13, 14a, 15, 16, 17, 18 and 19 (extract half)** have been driven end to end against
 production. Section 18 on 19 Aug 2026: the OAPIL request form was created on screen, rendered
 anonymously with zero workspace strings in the HTML, refused a wrong token and a switched-off
 form with the identical sentence and status, and a genuine submission filed OAPIL-146 under
