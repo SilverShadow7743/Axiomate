@@ -51,6 +51,7 @@ export const PERMISSIONS = [
   { key: 'work.edit', label: 'Edit work', what: 'Change the fields of a work item, short of closing it.' },
   { key: 'work.assign', label: 'Assign work', what: 'Set the owner, the accountable party and any other responsibility.' },
   { key: 'work.close', label: 'Close work', what: 'Move a work item into a closing status.' },
+  { key: 'mail.send', label: 'Write to clients', what: 'Send email from an engagement’s own mailbox, recorded on the record. Clients receive it, which is why it is its own authority.' },
   { key: 'work.schedule', label: 'Commit dates', what: 'Set or move a planned start and end. A date is a commitment.' },
   { key: 'work.link', label: 'Relate work', what: 'Link two records, or declare a dependency between them.' },
   { key: 'work.move', label: 'Move work', what: 'Reparent a record, or create and rename the tiers it sits in.' },
@@ -191,7 +192,7 @@ export const MACHINE_ROLE_ID = 'ROLE_AUTOMATION'
 const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 
 const DELIVERY_CORE: PermissionKey[] = [
-  'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link',
+  'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link', 'mail.send',
   'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request',
   // Beside `evidence.add`, because attaching the file and describing it are one act to the
   // person doing it. Anybody who may say "here is the proof" may hold up the proof.

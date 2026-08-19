@@ -187,6 +187,13 @@ export const CAPABILITIES: Capability[] = [
     switchedAt: 'Configuration → Approvals',
   },
   {
+    id: 'clientMail',
+    name: 'Client mail',
+    what: 'Replies sent as the engagement’s own mailbox, recorded on the record, threading back through intake.',
+    needs: ['mail.send'],
+    switchedAt: null,
+  },
+  {
     id: 'intake',
     name: 'Email intake',
     what: 'Messages to a watched mailbox filed as work, under a named part of the tree.',
