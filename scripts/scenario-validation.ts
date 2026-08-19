@@ -80,6 +80,9 @@ function readProof(): ProofRun | null {
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
+import { boardLanes, dropOutcome } from '../lib/board'
+import { calendarMonth, describeCalendar } from '../lib/calendar'
+import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -4144,6 +4147,66 @@ scenario(
       severity: 'P2',
       impact: 'Propagation is correct as far as it goes. It goes half as far as the operating model describes.',
     }
+  },
+)
+
+/* ================================================================== *
+ * Board and Calendar views (design 2026-08-19)
+ * ================================================================== */
+
+scenario(
+  'BV1',
+  'A board drag asks the same transition rules as the grid',
+  'Illegal moves are refused in the policy’s own words; a closing status needing a reason asks for one before dispatch; missing evidence refuses with the message naming it',
+  () => {
+    const rows = rowsOf(BASE)
+    const policy = BASE.model.statusPolicy
+    const open = rows.find((r) => r.status === 'Open')
+    if (!open) {
+      return { verdict: 'FAIL', actual: 'fixture has no Open issue', stops: 'no card to drag', severity: 'P1', impact: 'scenario cannot run' } as const
+    }
+
+    const lanes = boardLanes(rows)
+    const laneKeysValid = lanes.every((l) => (ISSUE_STATUSES as readonly string[]).includes(l.status))
+    const laneTotal = lanes.reduce((n, l) => n + l.rows.length, 0)
+    const cardable = rows.filter((r) => r.status !== null).length
+
+    const illegal = dropOutcome(policy, open, 'Awaiting client confirmation', false)
+    const illegalMsg = illegal.kind === 'refused' && /cannot move straight to/.test(illegal.message)
+    const needsReason = dropOutcome(policy, open, 'Closed - no defect', false)
+    const awaiting = { ...open, status: 'Awaiting client confirmation' as const }
+    const noEvidence = dropOutcome(policy, awaiting, 'Closed - confirmed', false)
+    const noEvidenceMsg = noEvidence.kind === 'refused' && /evidence/.test(noEvidence.message)
+    const legal = dropOutcome(policy, open, 'In Progress', false)
+
+    const okAll =
+      laneKeysValid && laneTotal === cardable &&
+      illegalMsg && needsReason.kind === 'ask' && noEvidenceMsg && legal.kind === 'ok'
+
+    return okAll
+      ? { verdict: 'PASS', actual: 'lanes are exactly the configured statuses and every card counted once; Open→Awaiting refused with checkTransition’s message; Closed - no defect asks for a reason; Closed - confirmed without evidence refused naming evidence; Open→In Progress ok', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `laneKeysValid=${laneKeysValid} laneTotal=${laneTotal}/${cardable} illegal=${illegal.kind} ask=${needsReason.kind} noEvidence=${noEvidence.kind} legal=${legal.kind}`, stops: 'dropOutcome disagrees with the transition policy', severity: 'P1', impact: 'a drag could bypass or wrongly refuse the graph' } as const
+  },
+)
+
+scenario(
+  'CV1',
+  'The calendar admits to what it cannot show',
+  'dated + undated equals every card under the filter, the sentence states the undated count, and no placed span leaks outside its month',
+  () => {
+    const rows = rowsOf(BASE).filter((r) => r.status !== null)
+    const m = calendarMonth(rows, TODAY)
+    const reconciled = m.dated.length + m.undated.length === rows.length
+    const sentence = describeCalendar(m)
+    const stated = m.undated.length === 0 || sentence.includes(String(m.undated.length))
+    const monthKey = TODAY.slice(0, 7)
+    const noLeak = m.weeks.flat().every((d) => d.rows.length === 0 || d.date.slice(0, 7) === monthKey)
+    const gridShape = m.weeks.every((w) => w.length === 7)
+
+    const okAll = reconciled && stated && noLeak && gridShape
+    return okAll
+      ? { verdict: 'PASS', actual: `${m.dated.length} dated + ${m.undated.length} undated = ${rows.length}; sentence carries the undated count; ${m.inMonth} in month; placements stay inside the month; every week has seven days`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `reconciled=${reconciled} stated=${stated} noLeak=${noLeak} gridShape=${gridShape}`, stops: 'the calendar hides or double-counts part of the register', severity: 'P1', impact: 'the screen would silently show less than the register holds' } as const
   },
 )
 

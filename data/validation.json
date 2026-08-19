@@ -732,6 +732,26 @@
       "stops": "at the four areas that have no entity behind them",
       "severity": "P2",
       "impact": "Propagation is correct as far as it goes. It goes half as far as the operating model describes."
+    },
+    {
+      "id": "BV1",
+      "title": "A board drag asks the same transition rules as the grid",
+      "expected": "Illegal moves are refused in the policy’s own words; a closing status needing a reason asks for one before dispatch; missing evidence refuses with the message naming it",
+      "verdict": "PASS",
+      "actual": "lanes are exactly the configured statuses and every card counted once; Open→Awaiting refused with checkTransition’s message; Closed - no defect asks for a reason; Closed - confirmed without evidence refused naming evidence; Open→In Progress ok",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "CV1",
+      "title": "The calendar admits to what it cannot show",
+      "expected": "dated + undated equals every card under the filter, the sentence states the undated count, and no placed span leaks outside its month",
+      "verdict": "PASS",
+      "actual": "0 dated + 3 undated = 3; sentence carries the undated count; 0 in month; placements stay inside the month; every week has seven days",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }
