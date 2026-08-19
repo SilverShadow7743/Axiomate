@@ -1252,7 +1252,7 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       id: 'routing',
       title: 'Routing & intake',
       what: 'Mailboxes work can arrive at, and the rules that classify it.',
-      now: `${m.routingRules.length} rules · ${m.intake.length} mailboxes`,
+      now: `${m.routingRules.length} rules · ${m.intake.length} mailboxes · ${(m.intakeForms ?? []).length} forms`,
     },
     {
       id: 'recurring',
@@ -3229,6 +3229,8 @@ function Routing({
   const types = liveResponsibilities(model)
   const [rule, setRule] = useState({ name: '', module: '', severity: '', keyword: '', value: '', typeId: 'ISSUE_OWNER' })
   const [address, setAddress] = useState('')
+  const [formName, setFormName] = useState('')
+  const [formScope, setFormScope] = useState('')
 
   return (
     <>
@@ -3413,6 +3415,94 @@ function Routing({
             }}
           >
             Add mailbox
+          </button>
+        </div>
+      </section>
+
+      <section className="cfg-section">
+        <h3 className="cfg-h">Request forms</h3>
+        <p className="cfg-note">
+          A public page a client can be handed: fixed generic fields, filed through the same
+          pipeline as mail. The URL is the whole gate, as a mailbox address is — anyone holding
+          it may submit, nobody holding it may read. The page itself loads nothing from this
+          workspace.
+        </p>
+
+        {model.intakeForms.map((f) => (
+          <div className="cfg-card" key={f.id}>
+            <div className="cfg-card-head">
+              <b>{f.name}</b>
+              <span className="grow" />
+              <Badge kind={f.enabled ? 'seeded' : 'p0'}>{f.enabled ? 'accepting' : 'off'}</Badge>
+              <button
+                className="btn ghost"
+                onClick={() => onConfig({ k: 'upsertIntakeForm', id: f.id, patch: { enabled: !f.enabled } })}
+              >
+                {f.enabled ? 'Switch off' : 'Switch on'}
+              </button>
+              <button className="btn ghost" onClick={() => onConfig({ k: 'deleteIntakeForm', id: f.id })}>
+                Remove
+              </button>
+            </div>
+            <p className="cfg-inherit sentence mono">/intake/form/{f.token}</p>
+            <div className="cfg-fld-row">
+              <label className="cfg-fld">
+                <span>Files under</span>
+                <select
+                  value={f.scopeId}
+                  onChange={(e) =>
+                    onConfig({ k: 'upsertIntakeForm', id: f.id, patch: { scopeId: e.target.value } })
+                  }
+                >
+                  {scopes
+                    .filter((sc) => sc.id !== ROOT_SCOPE)
+                    .map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {`${sc.name} (${sc.kind})`}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        ))}
+        {!model.intakeForms.length && <div className="cfg-empty">No forms yet.</div>}
+
+        <div className="cfg-inline">
+          <input
+            value={formName}
+            placeholder="OAPIL request form"
+            aria-label="New form name"
+            onChange={(e) => setFormName(e.target.value)}
+          />
+          <select value={formScope} aria-label="New form scope" onChange={(e) => setFormScope(e.target.value)}>
+            <option value="">Files under…</option>
+            {scopes
+              .filter((sc) => sc.id !== ROOT_SCOPE)
+              .map((sc) => (
+                <option key={sc.id} value={sc.id}>
+                  {`${sc.name} (${sc.kind})`}
+                </option>
+              ))}
+          </select>
+          <button
+            className="btn"
+            disabled={!formName.trim() || !formScope}
+            onClick={() => {
+              /* The token is minted HERE, by the caller — the reducer refuses a blank one and
+               * never invents one, because apply must stay replayable. */
+              const created = onConfig({
+                k: 'upsertIntakeForm',
+                id: null,
+                patch: { name: formName.trim(), scopeId: formScope, token: crypto.randomUUID(), enabled: true },
+              })
+              if (created) {
+                setFormName('')
+                setFormScope('')
+              }
+            }}
+          >
+            Add form
           </button>
         </div>
       </section>

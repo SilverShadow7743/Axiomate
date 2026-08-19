@@ -408,6 +408,26 @@ Open **Configuration → Recurring work** (under Automation).
 6. Try adding a rule that files under the company root: the form only offers scopes an issue
    may live under, and the reducer refuses anything else with the message naming the kind.
 
+## 18 · Request forms — capture without disclosure
+
+Open **Configuration → Routing & intake → Request forms**.
+
+1. Add a form named "OAPIL request form" filing under OAPIL Engagement. Its card shows the
+   full URL with the minted token, badge "accepting".
+2. Open that URL in a **private window, signed out**. The form renders: name, email, subject,
+   description, urgency. View the page source: no workspace names, counts or vocabulary
+   anywhere in it.
+3. Change one character of the token in the address bar and reload: the page still renders the
+   same form — it must not answer whether a token is real. Submit through it: the refusal is
+   one sentence, identical to what a disabled form would say.
+4. Back on the real URL, submit a genuine test entry with urgency "Urgent — work is stopped".
+   The page answers "Received — reference OAPIL-nnn".
+5. Signed in, find that reference: filed under OAPIL Engagement, severity High with confidence
+   stated, raisedBy carrying the claimed name and email, and a pinned note naming the form.
+6. Switch the form off, submit again from the private window: the same one-sentence refusal as
+   step 3. Expected, not a bug: two identical submissions while enabled create two records —
+   a form has no sender message id.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
