@@ -305,9 +305,9 @@ export default function FilterBar({
       )}
 
       <div className="segmented" role="group" aria-label="View">
-        {(['tree', 'board'] as const).map((v) => (
+        {(['tree', 'board', 'calendar'] as const).map((v) => (
           <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
-            {v === 'tree' ? 'Tree' : 'Board'}
+            {v === 'tree' ? 'Tree' : v === 'board' ? 'Board' : 'Calendar'}
           </button>
         ))}
       </div>

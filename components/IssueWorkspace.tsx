@@ -60,6 +60,7 @@ import SlaPlanPanel from './SlaPlanPanel'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import BoardView from './BoardView'
+import CalendarView from './CalendarView'
 import { loadView, saveView, type WorkspaceView } from '@/lib/viewChoice'
 import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
@@ -1822,7 +1823,9 @@ export default function IssueWorkspace({
         onOpenArchive={() => setArchiveOpen(true)}
       />
 
-      {view === 'board' ? (
+      {view === 'calendar' ? (
+        <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
+      ) : view === 'board' ? (
         <BoardView
           rows={rows}
           policy={state.model.statusPolicy}

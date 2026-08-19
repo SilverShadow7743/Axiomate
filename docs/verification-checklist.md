@@ -358,6 +358,35 @@ button would only invite somebody to hunt for the permission that would ungrey i
 
 ---
 
+## 15 · The Board — a drag with the same ceremony as the form
+
+Open the workspace, click **Board** in the view switcher (beside the zoom buttons — which
+should disappear, since there is no timeline to zoom).
+
+1. Every configured status is a lane, empty ones included. The header sentence states the
+   total and says a drag asks the same transition rules as the grid.
+2. Drag any **Open** card onto **Awaiting client confirmation**. It must refuse at the lane:
+   *"Open" cannot move straight to "Awaiting client confirmation"* — the policy's own words,
+   listing where the work may go instead.
+3. Drag an Open card onto **In Progress** (legal). A strip appears asking for a reason, and
+   **Move it** stays disabled until one is typed. Cancel leaves everything unchanged.
+4. Drag a card without evidence onto **Closed - confirmed** (from Awaiting). It must refuse
+   naming evidence — a drop cannot conjure evidence, so there is no dialog to nowhere.
+5. Complete a legal move with a reason, then open History on that record: the change is there
+   with the reason, identical to one made through the grid.
+
+## 16 · The Calendar — and what it admits it cannot show
+
+Click **Calendar** in the switcher.
+
+1. The header sentence states the split — how many scheduled items fall in this month, and how
+   many records have no planned date at all. Compare the second number against the toolbar's
+   own `unscheduled` count under the same filters: they must agree.
+2. The **Unscheduled** rail lists those records; clicking one opens the detail panel.
+3. Click a day: the rail switches to that day's items. Click it again to return.
+4. ‹ / Today / › move months; nothing ever renders on a padding day from an adjacent month.
+5. Nothing on this view edits anything — that is v1 as designed, not a gap.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
@@ -370,7 +399,7 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13 and 14a** have been driven end to end against production. The rest have
+Sections **1, 11, 12, 13 and 14a** have been driven end to end against production; 15 and 16 are next to be clicked once deployed. The rest have
 been read and reasoned about but not clicked. That gap is where the three faults were.
 
 ---
