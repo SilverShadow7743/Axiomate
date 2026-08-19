@@ -762,6 +762,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "RW2",
+      "title": "A recurrence rule is validated where it is written",
+      "expected": "A scope that cannot hold an issue is refused with the message naming it; a valid rule is stored; lastRaisedOn cannot be invented at configuration time",
+      "verdict": "PASS",
+      "actual": "a company-scoped rule is refused naming the kind; a valid engagement-scoped rule stores with lastRaisedOn null; a nameless rule is refused saying why",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

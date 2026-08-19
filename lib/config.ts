@@ -29,6 +29,7 @@
  */
 
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
+import type { Recurrence } from './recurrence'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import type { Goal } from './goals'
@@ -661,6 +662,8 @@ export interface OperatingModel {
   templates: Record<string, ProjectTemplate>
   routingRules: RoutingRule[]
   intake: IntakeMailbox[]
+  /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
+  recurrences: Recurrence[]
   /** Keyed by scope node id, plus `ROOT` for the organisation-wide defaults. */
   overrides: Record<string, ScopeOverride>
   /** Mints ids for records added here. */
@@ -1003,6 +1006,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     templates,
     routingRules: [],
     intake: [],
+    recurrences: [],
     overrides: { [ROOT_SCOPE]: emptyOverride() },
     seq: n + 1,
   }
@@ -1279,6 +1283,9 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // spread above would leave `undefined` — which the first `Object.values(model.goals)` turns
     // into a crash, in production, on the workspace that has data.
     goals: { ...seed.goals, ...(stored.goals ?? {}) },
+    // Explicit for the same reason as the two above: a model stored before this key existed
+    // arrives without it, and undefined here crashes the first read in production only.
+    recurrences: stored.recurrences ?? seed.recurrences,
     parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
     overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
     seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,

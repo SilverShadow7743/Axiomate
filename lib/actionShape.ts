@@ -149,6 +149,8 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteRoutingRule',
   'upsertIntake',
   'deleteIntake',
+  'upsertRecurrence',
+  'deleteRecurrence',
   'setOrganization',
   'setDocumentFiling',
   'upsertGoal',

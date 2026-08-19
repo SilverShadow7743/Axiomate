@@ -18,6 +18,7 @@
  * trail exists for — so it goes through the same reducer and lands in the same History.
  */
 
+import type { Recurrence } from './recurrence'
 import type {
   AccountableParty,
   ActivityPhase,
@@ -1112,6 +1113,8 @@ export type ConfigOp =
   | { k: 'deleteRoutingRule'; id: string }
   | { k: 'upsertIntake'; id: string | null; patch: Partial<IntakeMailbox> }
   | { k: 'deleteIntake'; id: string }
+  | { k: 'upsertRecurrence'; id: string | null; patch: Partial<Recurrence> }
+  | { k: 'deleteRecurrence'; id: string }
   | { k: 'setOrganization'; patch: Partial<OrganizationIdentity> }
   | { k: 'setDocumentFiling'; patch: Partial<DocumentFiling> }
   | { k: 'upsertGoal'; id: string | null; patch: Partial<Goal> }
@@ -6005,6 +6008,64 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, intake: m.intake.filter((i) => i.id !== op.id) },
         { rowId: op.id, field: 'intake', from: box.address, to: '(removed)', at: now, by },
         `${box.address} removed.`,
+      )
+    }
+
+    case 'upsertRecurrence': {
+      const id = op.id ?? `RECUR_${m.seq}`
+      const existing = m.recurrences.find((r) => r.id === id)
+      const name = (op.patch.name ?? existing?.name ?? '').trim()
+      if (!name) return { state, error: 'A recurrence needs a name — it becomes the subject of everything it raises.' }
+
+      /*
+       * The scope must be able to hold an issue, checked at WRITE time. A rule that could never
+       * file is refused when somebody is looking at the screen, not discovered by the pass at
+       * seven in the morning. The same check runs again inside `create` on every raise — that
+       * is the half that holds when the scope is deleted after this rule was written.
+       */
+      const scopeId = op.patch.scopeId ?? existing?.scopeId ?? ''
+      const scopeKind = kindOf(state, scopeId)
+      if (!scopeKind) return { state, error: 'The scope this rule files into does not exist.' }
+      if (!canParent('issue', scopeKind)) {
+        return { state, error: `An issue cannot live under a ${scopeKind}, so this rule could never file anything.` }
+      }
+
+      const cadence = op.patch.cadence ?? existing?.cadence ?? null
+      if (!cadence) return { state, error: 'A recurrence needs a cadence — weekly on a weekday, or monthly on a day.' }
+      if (cadence.kind === 'weekly' && (cadence.weekday < 0 || cadence.weekday > 6)) {
+        return { state, error: 'A weekly cadence needs a weekday between Sunday and Saturday.' }
+      }
+      if (cadence.kind === 'monthly' && (cadence.day < 1 || cadence.day > 31)) {
+        return { state, error: 'A monthly cadence needs a day between 1 and 31 — 31 means the last day of the month.' }
+      }
+
+      const rule: Recurrence = {
+        id,
+        name,
+        scopeId,
+        cadence,
+        type: op.patch.type ?? existing?.type ?? '',
+        severity: op.patch.severity ?? existing?.severity ?? 'Medium',
+        owner: op.patch.owner ?? existing?.owner ?? '',
+        enabled: op.patch.enabled ?? existing?.enabled ?? false,
+        // Advanced only by the pass, in the same batch as a successful raise — never from a form.
+        lastRaisedOn: op.patch.lastRaisedOn ?? existing?.lastRaisedOn ?? null,
+      }
+      const recurrences = existing ? m.recurrences.map((r) => (r.id === id ? rule : r)) : [...m.recurrences, rule]
+      return done(
+        { ...m, recurrences, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'recurrence', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `“${name}” updated.` : `“${name}” configured.`,
+      )
+    }
+
+    case 'deleteRecurrence': {
+      const rule = m.recurrences.find((r) => r.id === op.id)
+      if (!rule) return { state, error: 'Recurrence not found.' }
+      return done(
+        { ...m, recurrences: m.recurrences.filter((r) => r.id !== op.id) },
+        { rowId: op.id, field: 'recurrence', from: rule.name, to: '(removed)', at: now, by },
+        `“${rule.name}” removed.`,
       )
     }
 

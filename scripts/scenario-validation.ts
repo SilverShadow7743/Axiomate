@@ -4250,6 +4250,43 @@ scenario(
   },
 )
 
+scenario(
+  'RW2',
+  'A recurrence rule is validated where it is written',
+  'A scope that cannot hold an issue is refused with the message naming it; a valid rule is stored; lastRaisedOn cannot be invented at configuration time',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+
+    const bad = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertRecurrence', id: null, patch: { name: 'Month-end close', scopeId: companyId, cadence: { kind: 'monthly', day: 31 }, enabled: true } },
+      now: NOW,
+    } as Action)
+    const refused = Boolean(bad.error && /cannot live under a company/.test(bad.error))
+
+    const good = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertRecurrence', id: null, patch: { name: 'Month-end close', scopeId: engagementId, cadence: { kind: 'monthly', day: 31 }, type: 'Task', severity: 'Medium', enabled: true } },
+      now: NOW,
+    } as Action)
+    const rule = good.error ? null : good.state.model.recurrences.find((r) => r.name === 'Month-end close')
+    const stored = Boolean(rule && rule.enabled && rule.lastRaisedOn === null)
+
+    const noName = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertRecurrence', id: null, patch: { scopeId: engagementId, cadence: { kind: 'weekly', weekday: 1 } } },
+      now: NOW,
+    } as Action)
+    const namedRefusal = Boolean(noName.error && /needs a name/.test(noName.error))
+
+    const okAll = refused && stored && namedRefusal
+    return okAll
+      ? { verdict: 'PASS', actual: 'a company-scoped rule is refused naming the kind; a valid engagement-scoped rule stores with lastRaisedOn null; a nameless rule is refused saying why', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `refused=${refused} (${bad.error ?? 'no error'}) stored=${stored} namedRefusal=${namedRefusal}`, stops: 'the upsert arm accepts what the pass could never file', severity: 'P1', impact: 'a rule fails at 7am instead of in the form' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
