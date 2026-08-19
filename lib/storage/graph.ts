@@ -30,8 +30,7 @@ import { DEFAULT_DOCUMENT_FILING, type DocumentFiling } from '../config'
  * ---------------------------------------------------------------------------
  * What an administrator has to do once
  *
- *   1. Grant the registration the **application** permission `Files.ReadWrite.All`
- *      (or `Sites.ReadWrite.All` if the library is on a site rather than a drive), with admin
+ *   1. Grant the registration the **application** permission `Sites.ReadWrite.All`, with admin
  *      consent. Delegated will not work — see above.
  *   2. Set `AXIOMATE_DOCS_DRIVE_ID` to the target document library's drive id.
  *
@@ -66,7 +65,7 @@ export function documentStore(filing: DocumentFiling = DEFAULT_DOCUMENT_FILING):
   }
   if (!drive) {
     return unconfiguredStore(
-      'No document library has been chosen. An administrator needs to grant this application the Files.ReadWrite.All application permission in Entra, then set AXIOMATE_DOCS_DRIVE_ID to the library’s drive id.',
+      'No document library has been chosen. An administrator needs to grant this application the Sites.ReadWrite.All application permission in Entra, then set AXIOMATE_DOCS_DRIVE_ID to the library’s drive id.',
     )
   }
 
@@ -116,7 +115,7 @@ async function token(): Promise<string> {
      * an error message is not a place to publish configuration.
      */
     throw new Error(
-      `The document library could not be reached: Microsoft rejected this application’s credentials (${res.status}). An administrator should check the client secret has not expired and that admin consent for Files.ReadWrite.All is still granted.`,
+      `The document library could not be reached: Microsoft rejected this application’s credentials (${res.status}). An administrator should check the client secret has not expired and that admin consent for Sites.ReadWrite.All is still granted.`,
     )
   }
   const json = (await res.json()) as { access_token: string; expires_in: number }
@@ -256,7 +255,7 @@ async function remove(drive: string, locator: string): Promise<void> {
  */
 async function putFailure(res: Response): Promise<string> {
   if (res.status === 401 || res.status === 403) {
-    return 'The document library refused this application. An administrator needs to confirm the Files.ReadWrite.All application permission is still consented, and that the drive id is one this registration can reach.'
+    return 'The document library refused this application. An administrator needs to confirm the Sites.ReadWrite.All application permission is still consented, and that the drive id is one this registration can reach.'
   }
   if (res.status === 404) {
     return 'The configured document library no longer exists, or this application cannot see it. Check AXIOMATE_DOCS_DRIVE_ID.'
