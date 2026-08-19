@@ -62,6 +62,7 @@ import TreeGrid from './TreeGrid'
 import BoardView from './BoardView'
 import CalendarView from './CalendarView'
 import { loadView, saveView, type WorkspaceView } from '@/lib/viewChoice'
+import { applyBlueprint } from '@/lib/blueprint'
 import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
@@ -2196,6 +2197,39 @@ export default function IssueWorkspace({
           actor={actor}
           signedIn={Boolean(verified)}
           onConfig={applyConfigOp}
+          onApplyBlueprint={(blueprintId, targetIdArg, anchorArg, keepIds) => {
+            /*
+             * Plan against the CURRENT state, then replay the planned actions through the
+             * ordinary dispatch. The reducer assigns ids from seq, so replaying the same
+             * ordered actions against the same state yields the simulation's ids - and any
+             * interleaved refusal surfaces exactly as a hand edit's would.
+             */
+            const bp = state.model.blueprints[blueprintId]
+            if (!bp) return { applied: 0, refused: [{ entryName: blueprintId, error: 'Blueprint not found.' }] }
+            const run = applyBlueprint(state, bp, targetIdArg, anchorArg, actor, new Set(keepIds), new Date().toISOString())
+            let applied = 0
+            for (const step of run.steps) {
+              if (dispatch(step.action)) applied++
+              else break
+            }
+            if (applied === run.steps.length && run.steps.length > 0) {
+              dispatch({
+                t: 'config',
+                op: {
+                  k: 'upsertBlueprint',
+                  id: bp.id,
+                  patch: {
+                    applications: [
+                      ...bp.applications,
+                      { at: new Date().toISOString(), by: actor.name, targetId: targetIdArg, version: bp.version },
+                    ],
+                  },
+                },
+                now: new Date().toISOString(),
+              })
+            }
+            return { applied, refused: run.refusals.map((r) => ({ entryName: r.entryName, error: r.error })) }
+          }}
           onClose={() => setConfigOpen(false)}
           onRecordRate={(r) =>
             dispatch({ t: 'recordRate', ...r, now: new Date().toISOString() })

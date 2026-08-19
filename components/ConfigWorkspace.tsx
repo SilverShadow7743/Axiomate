@@ -31,6 +31,7 @@ import { capabilityStates, describeCapabilities } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { describeRecurrence, type Cadence } from '@/lib/recurrence'
+import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/lib/blueprint'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
@@ -84,6 +85,7 @@ type Tab =
   | 'approvals'
   | 'automation'
   | 'recurring'
+  | 'blueprints'
   | 'watch'
   | 'sizing'
   | 'scopes'
@@ -110,6 +112,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'recurring', label: 'Recurring work', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
   { id: 'routing', label: 'Routing & intake', group: 'Automation' },
+  { id: 'blueprints', label: 'Blueprints', group: 'Governance' },
   { id: 'scopes', label: 'Scope overrides', group: 'Governance' },
 ]
 
@@ -119,6 +122,8 @@ interface Props {
   /** Whether this deployment verifies who somebody is, rather than taking their word. */
   signedIn: boolean
   onConfig: (op: ConfigOp) => boolean
+  /** Applying creates records, not configuration - the rates precedent. Returns a summary. */
+  onApplyBlueprint: (blueprintId: string, targetId: string, anchor: string, keep: string[]) => { applied: number; refused: { entryName: string; error: string }[] }
   /**
    * Rates are records, not configuration, so they do not travel through `onConfig`.
    *
@@ -141,7 +146,8 @@ interface Props {
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose }: Props) {
+export default function ConfigWorkspace({ state, actor, signedIn, onConfig,
+  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -281,6 +287,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} />}
+          {tab === 'blueprints' && <Blueprints state={state} onConfig={onConfig} onApply={onApplyBlueprint} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
@@ -1262,6 +1269,15 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
         const rules = m.recurrences ?? []
         const on = rules.filter((r) => r.enabled).length
         return rules.length ? `${rules.length} ${rules.length === 1 ? 'rule' : 'rules'} · ${on} firing` : 'None yet'
+      })(),
+    },
+    {
+      id: 'blueprints',
+      title: 'Blueprints',
+      what: 'Engagement shapes stored for reuse - offsets, never dates.',
+      now: (() => {
+        const bps = Object.values(m.blueprints ?? {})
+        return bps.length ? `${bps.length} stored · ${bps.reduce((n, b) => n + b.applications.length, 0)} applications` : 'None yet'
       })(),
     },
     {
@@ -2472,6 +2488,205 @@ function Recurring({
         <button className="btn primary" disabled={!ready} onClick={add}>
           Add this rule
         </button>
+      </div>
+    </section>
+  )
+}
+
+function Blueprints({
+  state,
+  onConfig,
+  onApply,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+  onApply: (blueprintId: string, targetId: string, anchor: string, keep: string[]) => { applied: number; refused: { entryName: string; error: string }[] }
+}) {
+  const blueprints = Object.values(state.model.blueprints ?? {})
+  const engagements = useMemo(
+    () => Object.values(state.nodes).filter((n) => !n.deletedAt && n.kind === 'engagement'),
+    [state.nodes],
+  )
+  const targets = useMemo(
+    () => Object.values(state.nodes).filter((n) => !n.deletedAt && (n.kind === 'client' || n.kind === 'engagement')),
+    [state.nodes],
+  )
+
+  /* ---- extract flow ---- */
+  const [sourceId, setSourceId] = useState('')
+  const [proposal, setProposal] = useState<BlueprintProposal | null>(null)
+  const [ticked, setTicked] = useState<Set<string>>(new Set())
+  const [bpName, setBpName] = useState('')
+
+  const propose = () => {
+    const prop = extractBlueprint(state, sourceId)
+    setProposal(prop)
+    setTicked(new Set(prop.entries.map((e) => e.id)))
+  }
+
+  const toggle = (id: string) => {
+    setTicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const store = () => {
+    if (!proposal) return
+    const entries = proposal.entries.filter((e) => ticked.has(e.id))
+    const keptIds = new Set(entries.map((e) => e.id))
+    const links = proposal.links.filter((l) => keptIds.has(l.predecessorEntryId) && keptIds.has(l.successorEntryId))
+    const okDone = onConfig({
+      k: 'upsertBlueprint',
+      id: null,
+      patch: { name: bpName.trim(), sourceEngagementId: sourceId, entries, links },
+    })
+    if (okDone) {
+      setProposal(null)
+      setBpName('')
+      setSourceId('')
+    }
+  }
+
+  /* ---- apply flow, per card ---- */
+  const [applyFor, setApplyFor] = useState<string | null>(null)
+  const [targetId, setTargetId] = useState('')
+  const [anchor, setAnchor] = useState('')
+  const [outcome, setOutcome] = useState<string | null>(null)
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Blueprints</h3>
+      <p className="cfg-note">
+        The shape of an engagement that already ran, stored so the next one starts from it.
+        Entries carry <b>offsets, never dates</b>: applying names one anchor day and every date
+        is computed from it. Owners and statuses are deliberately absent - people are
+        per-engagement, and everything applies at the entry state.
+      </p>
+
+      {blueprints.map((bp) => (
+        <div className="cfg-card" key={bp.id}>
+          <div className="cfg-card-head">
+            <b>{bp.name}</b>
+            <span className="grow" />
+            <Badge kind="seeded">v{bp.version}</Badge>
+            <button className="btn ghost" onClick={() => { setApplyFor(applyFor === bp.id ? null : bp.id); setOutcome(null) }}>
+              Apply…
+            </button>
+            <button className="btn ghost" onClick={() => onConfig({ k: 'deleteBlueprint', id: bp.id })}>
+              Remove
+            </button>
+          </div>
+          <p className="cfg-inherit sentence">{describeBlueprint(bp)}</p>
+          {bp.applications.map((ap, i) => (
+            <p className="cfg-inherit sentence" key={i}>
+              Applied v{ap.version} to <b>{nameOf(state, ap.targetId) || ap.targetId}</b> on {ap.at.slice(0, 10)} by {ap.by}.
+            </p>
+          ))}
+
+          {applyFor === bp.id && (
+            <div className="cfg-fld-row" style={{ alignItems: 'flex-end' }}>
+              <label className="cfg-fld">
+                <span>Build under</span>
+                <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                  <option value="">Choose a client or engagement</option>
+                  {targets.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name} ({n.kind})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="cfg-fld">
+                <span>Anchor date (day zero)</span>
+                <input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} />
+              </label>
+              <button
+                className="btn primary"
+                disabled={!targetId || !anchor}
+                onClick={() => {
+                  const res = onApply(bp.id, targetId, anchor, bp.entries.map((e) => e.id))
+                  setOutcome(
+                    res.refused.length
+                      ? `${res.applied} records created; ${res.refused.length} refused - ${res.refused
+                          .slice(0, 3)
+                          .map((r) => `“${r.entryName}“: ${r.error}`)
+                          .join(' ')}`
+                      : `${res.applied} records created under ${nameOf(state, targetId)}, dated from ${anchor}.`,
+                  )
+                  setApplyFor(null)
+                }}
+              >
+                {/* The confirmation sentence IS the guard: the count before the click. */}
+                Create {bp.entries.length} records under {targetId ? nameOf(state, targetId) : '…'}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+      {outcome && <p className="cfg-note">{outcome}</p>}
+      {!blueprints.length && <div className="cfg-empty">No blueprints stored yet.</div>}
+
+      <div className="cfg-card">
+        <div className="cfg-card-head">
+          <b>Extract from an engagement</b>
+        </div>
+        <div className="cfg-fld-row" style={{ alignItems: 'flex-end' }}>
+          <label className="cfg-fld">
+            <span>Source</span>
+            <select value={sourceId} onChange={(e) => { setSourceId(e.target.value); setProposal(null) }}>
+              <option value="">Choose an engagement that ran</option>
+              {engagements.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn" disabled={!sourceId} onClick={propose}>
+            Propose
+          </button>
+        </div>
+
+        {proposal && (
+          <>
+            <p className="cfg-inherit sentence">
+              {proposal.entries.length} entries proposed, {proposal.dated} of them dated
+              {proposal.anchor
+                ? ` - offsets computed from ${proposal.anchor}, the earliest planned date the engagement carried.`
+                : ' - nothing in this engagement carries a planned date, so every entry will apply undated.'}
+              {' '}Untick what is not repeatable; unticking a tier removes everything inside it. Nothing is stored unreviewed.
+            </p>
+            <div className="bp-picklist">
+              {proposal.entries.map((e) => (
+                <label key={e.id} className="bp-pick">
+                  <input type="checkbox" checked={ticked.has(e.id)} onChange={() => toggle(e.id)} />
+                  <span className={e.kind === 'issue' ? '' : 'bp-pick-tier'}>
+                    {e.parentEntryId ? ' ' : ''}
+                    {e.name}
+                  </span>
+                  <span className="bp-pick-meta">
+                    {e.kind}
+                    {e.endOffset !== null ? ` · +${e.endOffset}d` : ''}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="cfg-inline">
+              <input
+                value={bpName}
+                placeholder="D365 implementation v1"
+                aria-label="Blueprint name"
+                onChange={(e) => setBpName(e.target.value)}
+              />
+              <button className="btn primary" disabled={!bpName.trim() || !ticked.size} onClick={store}>
+                Store {ticked.size} of {proposal.entries.length} entries
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </section>
   )

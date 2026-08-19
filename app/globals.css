@@ -5198,3 +5198,35 @@ select.cell-editor {
   opacity: 0.55;
   cursor: default;
 }
+
+/* Blueprint extraction picklist (design 2026-08-19) */
+.bp-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--bg);
+}
+
+.bp-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 2px 4px;
+}
+
+.bp-pick-tier {
+  font-weight: 600;
+}
+
+.bp-pick-meta {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-faint);
+}
