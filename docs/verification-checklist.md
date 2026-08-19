@@ -440,7 +440,13 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13, 14a, 15, 16 and 17** have been driven end to end against production.
+Sections **1, 11, 12, 13, 14a, 15, 16, 17 and 18** have been driven end to end against
+production. Section 18 on 19 Aug 2026: the OAPIL request form was created on screen, rendered
+anonymously with zero workspace strings in the HTML, refused a wrong token and a switched-off
+form with the identical sentence and status, and a genuine submission filed OAPIL-146 under
+OAPIL Engagement — severity High from the stated urgency, the claimed sender on raisedBy, and
+the pinned note naming the form. The form was left switched OFF afterwards, pending a decision
+on distributing its URL.
 Section 17 on 19 Aug 2026: rule RECUR_83 configured on screen, the pass run by hand raised
 OAPIL-144 ("Weekly delivery status — 2026-08-19") under OAPIL Engagement, a second run raised
 nothing, and the card reads "Last raised for 2026-08-19" with nowhere to edit it. The rule was
