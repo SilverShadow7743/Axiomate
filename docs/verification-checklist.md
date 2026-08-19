@@ -420,7 +420,14 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13, 14a, 15 and 16** have been driven end to end against production.
+Sections **1, 11, 12, 13, 14a, 15, 16 and 17** have been driven end to end against production.
+Section 17 on 19 Aug 2026: rule RECUR_83 configured on screen, the pass run by hand raised
+OAPIL-144 ("Weekly delivery status — 2026-08-19") under OAPIL Engagement, a second run raised
+nothing, and the card reads "Last raised for 2026-08-19" with nowhere to edit it. The rule was
+then switched off pending a decision on whether the firm wants it live. Two notes: the History
+panel does not render the acting name per row, so step 3's attribution is proven by scenario
+RW3 rather than by eye; and the run response's `recurrences` field was found missing from the
+route's hand-built response — fixed the same day.
 On 19 Aug 2026 the board's three drop outcomes were exercised live: the illegal move refused in
 the policy's words, a legal move collected its reason and landed in History identically to a
 grid edit, and the record was moved back the same way. 15.4 (evidence refusal) could not be

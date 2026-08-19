@@ -126,6 +126,8 @@ export async function POST(req: Request) {
       forgottenActionKeys: forgotten,
       summary: run.summary,
       raised: run.raised,
+      // What the recurrence rules raised, by rule, occurrence and issue id.
+      recurrences: run.recurrences,
       onset: run.diff.onset,
       continuing: run.diff.continuing,
       cleared: run.diff.cleared.length,
