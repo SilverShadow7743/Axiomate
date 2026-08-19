@@ -380,8 +380,12 @@ should disappear, since there is no timeline to zoom).
 Click **Calendar** in the switcher.
 
 1. The header sentence states the split — how many scheduled items fall in this month, and how
-   many records have no planned date at all. Compare the second number against the toolbar's
-   own `unscheduled` count under the same filters: they must agree.
+   many records carry no planned date. **This number is larger than the toolbar's `unscheduled`
+   count, and both are right**: the toolbar counts the health label, and `computeHealth` gives
+   Blocked precedence over Unscheduled (lib/schedule.ts:70-71), so a blocked record with no date
+   is in the calendar's figure but not the toolbar's. The check that must hold is the calendar's
+   own: dated + undated = every record shown. On 19 Aug 2026 that was 1 + 137 = 138, beside a
+   toolbar reading of 124 unscheduled + 14 blocked.
 2. The **Unscheduled** rail lists those records; clicking one opens the detail panel.
 3. Click a day: the rail switches to that day's items. Click it again to return.
 4. ‹ / Today / › move months; nothing ever renders on a padding day from an adjacent month.
@@ -399,7 +403,17 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13 and 14a** have been driven end to end against production; 15 and 16 are next to be clicked once deployed. The rest have
+Sections **1, 11, 12, 13, 14a, 15 and 16** have been driven end to end against production.
+On 19 Aug 2026 the board's three drop outcomes were exercised live: the illegal move refused in
+the policy's words, a legal move collected its reason and landed in History identically to a
+grid edit, and the record was moved back the same way. 15.4 (evidence refusal) could not be
+browser-driven — no live record sits in Awaiting — and stays covered by scenario BV1 through
+the real reducer.
+
+One note for whoever automates this next: **a synthetic CDP mouse-drag on a `draggable` element
+freezes the Chromium renderer** — native drag-and-drop enters a nested event loop that the
+synthetic release never exits. A person dragging with a real mouse is unaffected. Automation
+must dispatch `DragEvent`s from page JavaScript instead, which is how 15.2–15.5 were driven. The rest have
 been read and reasoned about but not clicked. That gap is where the three faults were.
 
 ---
