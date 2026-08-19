@@ -782,6 +782,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "IF1",
+      "title": "A form submission is classified through the same half as mail",
+      "expected": "A disabled form refuses; stated urgency becomes severity with confidence stated and outranks the guess-words; routing rules still fire on form text; an empty subject falls back to the first line",
+      "verdict": "PASS",
+      "actual": "disabled refuses naming the form; stated low beats the urgent guess-word with confidence stated; urgent maps High; the inventory rule fires and assigns Priya; empty subject falls back to the first line",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

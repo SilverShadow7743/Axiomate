@@ -83,6 +83,7 @@ import { buildTree } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
+import { classifyForm } from '../lib/intake'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4326,6 +4327,65 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: `raised ${first.raised[0].issueId} “Weekly status — ${occ}” Open/Unassigned, machine-attributed; lastRaisedOn advanced to the occurrence; same-day re-run raised nothing`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `raisedOne=${raisedOne} refusal=${first.refusals[0]?.error ?? 'none'} subjectOk=${subjectOk} statusOk=${statusOk} advanced=${advanced} (${ruleAfter?.lastRaisedOn}) attributed=${attributed} quiet=${quiet} vanishedRefused=${vanishedRefused} (${third.refusals[0]?.error ?? 'no refusal'})`, stops: 'the raise cycle disagrees with the design', severity: 'P1', impact: 'the unattended morning pass floods or goes silent' } as const
+  },
+)
+
+/* ================================================================== *
+ * Intake forms (design 2026-08-19)
+ * ================================================================== */
+
+scenario(
+  'IF1',
+  'A form submission is classified through the same half as mail',
+  'A disabled form refuses; stated urgency becomes severity with confidence stated and outranks the guess-words; routing rules still fire on form text; an empty subject falls back to the first line',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const form = { id: 'FORM_T', name: 'OAPIL request', scopeId: engagementId, enabled: true }
+    const msg = (over: Partial<{ subject: string; body: string }> = {}) => ({
+      to: 'form:FORM_T',
+      from: 'Ravi Mada <ravi@client.example>',
+      subject: 'Inventory posting fails',
+      body: 'The inventory journal will not post. This is urgent for month end.',
+      messageId: 'form-test-1',
+      receivedAt: NOW,
+      ...over,
+    })
+
+    const off = classifyForm({ ...form, enabled: false }, msg(), BASE.model, 'normal')
+    const offRefused = 'refused' in off && /switched off/.test(off.refused.reason)
+
+    // Stated 'low' must beat the body's 'urgent' guess-word: the sender decided.
+    const statedLow = classifyForm(form, msg(), BASE.model, 'low')
+    const statedWins =
+      'draft' in statedLow &&
+      statedLow.draft.severity === 'Low' &&
+      statedLow.draft.confidence.severity === 'stated'
+
+    const urgent = classifyForm(form, msg(), BASE.model, 'urgent')
+    const urgentHigh = 'draft' in urgent && urgent.draft.severity === 'High' && urgent.draft.parentId === engagementId
+
+    // A routing rule on a keyword fires on form text exactly as on mail.
+    const ruled = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertRoutingRule', id: null,
+        patch: { name: 'Inventory to Priya', when: { module: 'inventory', severity: '', keyword: '' }, then: { responsibilityTypeId: 'ISSUE_OWNER', value: 'Priya' }, enabled: true, order: 1 },
+      },
+      now: NOW,
+    } as Action)
+    const routed = classifyForm(form, msg(), ruled.model, 'normal')
+    const ruleFired =
+      'draft' in routed &&
+      routed.draft.matchedOn.includes('Inventory to Priya') &&
+      routed.draft.assignments.some((a) => a.value === 'Priya')
+
+    const noSubject = classifyForm(form, msg({ subject: '' }), BASE.model, 'normal')
+    const fellBack = 'draft' in noSubject && noSubject.draft.subject.startsWith('The inventory journal')
+
+    const okAll = offRefused && statedWins && urgentHigh && ruleFired && fellBack
+    return okAll
+      ? { verdict: 'PASS', actual: 'disabled refuses naming the form; stated low beats the urgent guess-word with confidence stated; urgent maps High; the inventory rule fires and assigns Priya; empty subject falls back to the first line', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `offRefused=${offRefused} statedWins=${statedWins} urgentHigh=${urgentHigh} ruleFired=${ruleFired} fellBack=${fellBack}`, stops: 'the form half disagrees with the mail half', severity: 'P1', impact: 'form-raised records would route differently from identical email' } as const
   },
 )
 

@@ -257,12 +257,32 @@ export function classify(
     }
   }
 
+  return { draft: draftFor(mailbox.scopeId, message, model) }
+}
+
+/**
+ * The shareable half of classification: rules, guesses, draft.
+ *
+ * `classify` above resolves a mailbox and calls this; `classifyForm` below resolves a form and
+ * calls this. One copy, deliberately — two would drift, and the drift would be invisible until
+ * a form-raised record routed differently from the identical email.
+ *
+ * `stated` carries what the sender themselves declared — a form's urgency choice. It wins over
+ * the rules' severity and is recorded as `stated`, the same vocabulary as a rule naming it:
+ * in both cases somebody decided, rather than the words being guessed at.
+ */
+export function draftFor(
+  scopeId: string,
+  message: InboundMessage,
+  model: OperatingModel,
+  stated?: { severity: Severity },
+): IntakeDraft {
   const haystack = `${message.subject} ${message.body}`.toLowerCase()
 
   /* ---- rules, in their configured order ---- */
   const matchedOn: string[] = []
   const assignments: { responsibilityTypeId: string; value: string }[] = []
-  let severity: Severity | null = null
+  let severity: Severity | null = stated?.severity ?? null
   let type: string | null = null
 
   const rules = [...model.routingRules].filter((r) => r.enabled).sort((a, b) => a.order - b.order)
@@ -273,11 +293,11 @@ export function classify(
       assignments.push({ responsibilityTypeId: rule.then.responsibilityTypeId, value: rule.then.value })
     }
     // A rule that names a severity states it; the first one to do so wins, which is what the
-    // order is for.
+    // order is for. A severity the sender stated outranks both.
     if (!severity && rule.when.severity) severity = rule.when.severity as Severity
   }
 
-  /* ---- what the rules did not say ---- */
+  /* ---- what neither the sender nor the rules said ---- */
   const severityConfidence: IntakeDraft['confidence']['severity'] = severity
     ? 'stated'
     : HIGH_WORDS.test(haystack) || LOW_WORDS.test(haystack)
@@ -293,18 +313,51 @@ export function classify(
   const typeConfidence: IntakeDraft['confidence']['type'] = guessedType ? 'guessed' : 'default'
 
   return {
-    draft: {
-      parentId: mailbox.scopeId,
-      subject: message.subject.trim() || firstLine(message.body),
-      description: message.body.trim(),
-      type,
-      severity,
-      raisedBy: message.from.trim(),
-      assignments,
-      matchedOn,
-      confidence: { severity: severityConfidence, type: typeConfidence },
-    },
+    parentId: scopeId,
+    subject: message.subject.trim() || firstLine(message.body),
+    description: message.body.trim(),
+    type,
+    severity,
+    raisedBy: message.from.trim(),
+    assignments,
+    matchedOn,
+    confidence: { severity: severityConfidence, type: typeConfidence },
   }
+}
+
+/** A form's urgency words, mapped without interpretation. */
+export function urgencyToSeverity(urgency: 'urgent' | 'normal' | 'low'): Severity {
+  return urgency === 'urgent' ? 'High' : urgency === 'low' ? 'Low' : 'Medium'
+}
+
+/**
+ * Match a submission to a form, and produce a draft through the same second half as mail.
+ *
+ * The refusal vocabulary mirrors `classify`'s. Note what the CALLER must add on top: an
+ * unknown token and a disabled form must be indistinguishable at the endpoint — this function
+ * distinguishes them because configuration screens need the difference; the wire must not.
+ */
+export function classifyForm(
+  form: { id: string; name: string; scopeId: string; enabled: boolean },
+  message: InboundMessage,
+  model: OperatingModel,
+  urgency: 'urgent' | 'normal' | 'low',
+): { draft: IntakeDraft } | { refused: IntakeRefusal } {
+  if (!message.subject.trim() && !message.body.trim()) {
+    return { refused: { code: 'empty', reason: 'The submission has neither a subject nor a description.' } }
+  }
+  if (!form.enabled) {
+    return { refused: { code: 'mailbox-disabled', reason: `The ${form.name} form is switched off.` } }
+  }
+  if (!form.scopeId) {
+    return {
+      refused: {
+        code: 'no-scope',
+        reason: `The ${form.name} form has no scope, so there is nowhere to file what arrives.`,
+      },
+    }
+  }
+  return { draft: draftFor(form.scopeId, message, model, { severity: urgencyToSeverity(urgency) }) }
 }
 
 function ruleMatches(rule: RoutingRule, haystack: string, message: InboundMessage): boolean {
