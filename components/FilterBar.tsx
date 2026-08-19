@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { FilterState, SlaPolicy, ZoomLevel } from '@/lib/types'
+import type { WorkspaceView } from '@/lib/viewChoice'
 import { EMPTY_FILTERS } from '@/lib/types'
 import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
@@ -97,6 +98,8 @@ interface Props {
   }
   zoom: ZoomLevel
   setZoom: (z: ZoomLevel) => void
+  view: WorkspaceView
+  setView: (v: WorkspaceView) => void
   counts: {
     total: number
     shown: number
@@ -133,6 +136,8 @@ export default function FilterBar({
   facets,
   zoom,
   setZoom,
+  view,
+  setView,
   counts,
   onExpandAll,
   onCollapseAll,
@@ -299,6 +304,15 @@ export default function FilterBar({
         </button>
       )}
 
+      <div className="segmented" role="group" aria-label="View">
+        {(['tree', 'board'] as const).map((v) => (
+          <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
+            {v === 'tree' ? 'Tree' : 'Board'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'tree' && (
       <div className="segmented" role="group" aria-label="Timeline zoom">
         {ZOOMS.map((z) => (
           <button key={z} className={zoom === z ? 'active' : ''} onClick={() => setZoom(z)}>
@@ -306,6 +320,7 @@ export default function FilterBar({
           </button>
         ))}
       </div>
+      )}
 
       <div ref={menuWrap} style={{ position: 'relative' }}>
         <button className="btn ghost" onClick={() => setColMenu((v) => !v)}>

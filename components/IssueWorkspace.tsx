@@ -59,6 +59,8 @@ import { planSlaDates, slaReason } from '@/lib/sla'
 import SlaPlanPanel from './SlaPlanPanel'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
+import BoardView from './BoardView'
+import { loadView, saveView, type WorkspaceView } from '@/lib/viewChoice'
 import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
@@ -550,6 +552,9 @@ export default function IssueWorkspace({
   const [requestTab, setRequestTab] = useState<DetailTab | null>(null)
 
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
+  const [view, setViewState] = useState<WorkspaceView>('tree')
+  useEffect(() => { setViewState(loadView()) }, [])
+  const setView = useCallback((v: WorkspaceView) => { setViewState(v); saveView(v) }, [])
   /**
    * The configured service levels.
    *
@@ -1797,6 +1802,8 @@ export default function IssueWorkspace({
         facets={facets}
         zoom={zoom}
         setZoom={setZoom}
+        view={view}
+        setView={setView}
         counts={counts}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
@@ -1815,6 +1822,9 @@ export default function IssueWorkspace({
         onOpenArchive={() => setArchiveOpen(true)}
       />
 
+      {view === 'board' ? (
+        <BoardView rows={rows} selectedId={selectedId} onSelect={requestSelect} />
+      ) : (
       <div className="split">
         <div className="pane-tree" style={{ width: treeWidth }}>
           <TreeGrid
@@ -1875,6 +1885,7 @@ export default function IssueWorkspace({
           />
         </div>
       </div>
+      )}
 
       {/* Everything below is about ONE record, so it uses that record's terminology rather
           than the organisation's. Nested provider, nearest wins — same rule as the resolver. */}
