@@ -82,6 +82,7 @@ import { classifySecret } from '../lib/secretRules'
 import { buildTree } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
+import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4207,6 +4208,45 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: `${m.dated.length} dated + ${m.undated.length} undated = ${rows.length}; sentence carries the undated count; ${m.inMonth} in month; placements stay inside the month; every week has seven days`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `reconciled=${reconciled} stated=${stated} noLeak=${noLeak} gridShape=${gridShape}`, stops: 'the calendar hides or double-counts part of the register', severity: 'P1', impact: 'the screen would silently show less than the register holds' } as const
+  },
+)
+
+/* ================================================================== *
+ * Recurring work (design 2026-08-19)
+ * ================================================================== */
+
+scenario(
+  'RW1',
+  'The cadence arithmetic: clamping, catch-up, and the strictly-after guard',
+  'Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing',
+  () => {
+    const rule = (over: Partial<Recurrence>): Recurrence => ({
+      id: 'RULE_T', name: 'Month-end close', scopeId: 'engagement:X',
+      cadence: { kind: 'monthly', day: 31 }, type: 'Task', severity: 'Medium',
+      owner: '', enabled: true, lastRaisedOn: null, ...over,
+    })
+
+    const feb = occurrenceOnOrBefore({ kind: 'monthly', day: 31 }, '2026-03-05')
+    const febLeap = occurrenceOnOrBefore({ kind: 'monthly', day: 31 }, '2028-03-05')
+    const midMonth = occurrenceOnOrBefore({ kind: 'monthly', day: 31 }, '2026-08-19')
+    const weekly = occurrenceOnOrBefore({ kind: 'weekly', weekday: 1 }, '2026-08-19') // Wed -> Mon 17th
+    const weeklySame = occurrenceOnOrBefore({ kind: 'weekly', weekday: 3 }, '2026-08-19') // Wed -> itself
+
+    const stale = dueOccurrence(rule({ lastRaisedOn: '2026-06-30' }), '2026-08-02')
+    const sameDay = dueOccurrence(rule({ lastRaisedOn: '2026-07-31' }), '2026-08-02')
+    const never = dueOccurrence(rule({}), '2026-08-02')
+    const off = dueOccurrence(rule({ enabled: false }), '2026-08-02')
+    const subject = subjectFor(rule({}), '2026-08-31')
+
+    const okAll =
+      feb === '2026-02-28' && febLeap === '2028-02-29' && midMonth === '2026-07-31' &&
+      weekly === '2026-08-17' && weeklySame === '2026-08-19' &&
+      stale === '2026-07-31' && sameDay === null && never === '2026-07-31' && off === null &&
+      subject === 'Month-end close — 2026-08-31'
+
+    return okAll
+      ? { verdict: 'PASS', actual: 'Feb clamps to 28 (29 in a leap year); a rule stale since June owes only July 31; the guard is strictly-after so a raised occurrence is never re-raised; a disabled rule owes nothing; the subject carries the occurrence date', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `feb=${feb} febLeap=${febLeap} mid=${midMonth} weekly=${weekly} weeklySame=${weeklySame} stale=${stale} sameDay=${sameDay} never=${never} off=${off}`, stops: 'the cadence arithmetic disagrees with the design', severity: 'P1', impact: 'the morning pass would flood the register or silently never raise' } as const
   },
 )
 

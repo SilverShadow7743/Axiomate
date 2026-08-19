@@ -752,6 +752,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "RW1",
+      "title": "The cadence arithmetic: clamping, catch-up, and the strictly-after guard",
+      "expected": "Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing",
+      "verdict": "PASS",
+      "actual": "Feb clamps to 28 (29 in a leap year); a rule stale since June owes only July 31; the guard is strictly-after so a raised occurrence is never re-raised; a disabled rule owes nothing; the subject carries the occurrence date",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }
