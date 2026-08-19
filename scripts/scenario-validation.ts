@@ -84,6 +84,7 @@ import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
+import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4436,6 +4437,94 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'blank token refused saying the caller mints it; company scope refused naming the kind; the token survives a rename and rotates only when explicitly sent', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `blankRefused=${blankRefused} scopeRefused=${scopeRefused} tokenSurvives=${tokenSurvives} tokenRotates=${tokenRotates}`, stops: 'the upsert arm mishandles the capability token', severity: 'P1', impact: 'a rename would silently kill or change every distributed URL' } as const
+  },
+)
+
+/* ================================================================== *
+ * Blueprints (design 2026-08-19)
+ * ================================================================== */
+
+scenario(
+  'BP1',
+  'The round-trip: extract from an engagement, apply to a fresh parent, reproduce the shape',
+  'Same tiers and items under the new parent, a dated item re-anchored to the named day, an undated item still undated, and the dependency reproduced between the mapped ids',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    /* Give the source a date and a dependency so the round-trip has something to carry. */
+    let src = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    src = ok(src, { t: 'addDependency', predecessorId: 'OAPIL-1', successorId: 'OAPIL-2', dependencyType: 'FS', lagDays: 2, now: NOW } as Action)
+
+    const proposal = extractBlueprint(src, engagementId)
+    const anchorOk = proposal.anchor === '2026-08-01'
+    const datedEntry = proposal.entries.find((e) => e.name === src.issues['OAPIL-1'].subject)
+    const offsetsOk = datedEntry?.startOffset === 0 && datedEntry?.endOffset === 9
+    const linkCarried = proposal.links.length === 1 && proposal.links[0].lagDays === 2
+
+    const bp: Blueprint = {
+      id: 'BP_T', name: 'Fixture shape', sourceEngagementId: engagementId, version: 1,
+      entries: proposal.entries, links: proposal.links, applications: [],
+    }
+    const keep = new Set(bp.entries.map((e) => e.id))
+    const run = applyBlueprint(src, bp, clientId, '2026-09-01', A, keep, NOW)
+
+    const created = [...run.mapping.values()]
+    const allApplied = created.length === bp.entries.length && run.refusals.length === 0
+    const newDated = run.mapping.get(datedEntry?.id ?? '')
+    const dates = newDated ? run.state.issues[newDated] : null
+    const reAnchored = dates?.plannedStart === '2026-09-01' && dates?.plannedEnd === '2026-09-10'
+    const undatedEntry = proposal.entries.find((e) => e.kind === 'issue' && e.endOffset === null)
+    const newUndated = run.mapping.get(undatedEntry?.id ?? '')
+    const stillUndated = newUndated ? run.state.issues[newUndated].plannedEnd === null : false
+    const depReproduced = Object.values(run.state.dependencies).some(
+      (d) => d.predecessorId === newDated && created.includes(d.successorId) && d.lagDays === 2,
+    )
+    const structureOk = created.every((id) => {
+      const node = run.state.nodes[id]
+      const issue = run.state.issues[id]
+      const parent = node?.parentId ?? issue?.parentId
+      return parent === clientId || created.includes(parent ?? '')
+    })
+
+    const okAll = anchorOk && offsetsOk && linkCarried && allApplied && reAnchored && stillUndated && depReproduced && structureOk
+    return okAll
+      ? { verdict: 'PASS', actual: `anchor 2026-08-01, offsets 0/9, ${bp.entries.length} entries applied under the client with zero refusals, the dated item re-anchored to 2026-09-01..10, the undated one still undated, the FS+2 dependency reproduced between mapped ids`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `anchorOk=${anchorOk} offsetsOk=${offsetsOk} link=${linkCarried} applied=${allApplied}(${run.refusals[0]?.error ?? ''}) reAnchored=${reAnchored} stillUndated=${stillUndated} dep=${depReproduced} structure=${structureOk}`, stops: 'the round-trip loses shape or dates', severity: 'P1', impact: 'a blueprint would not reproduce what it was extracted from' } as const
+  },
+)
+
+scenario(
+  'BP2',
+  'Pruning is subtree pruning, and an archived target refuses everything',
+  'An unticked parent takes its children with it; applying under an archived node collects refusals with the reducer’s message and creates nothing',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const proposal = extractBlueprint(BASE, engagementId)
+    const bp: Blueprint = {
+      id: 'BP_T2', name: 'Fixture shape', sourceEngagementId: engagementId, version: 1,
+      entries: proposal.entries, links: proposal.links, applications: [],
+    }
+
+    /* Untick the structural tier: its child issues must not apply even though ticked. */
+    const tier = proposal.entries.find((e) => e.kind !== 'issue')
+    const keep = new Set(bp.entries.map((e) => e.id))
+    if (tier) keep.delete(tier.id)
+    const pruned = applyBlueprint(BASE, bp, clientId, '2026-09-01', A, keep, NOW)
+    const childEntries = proposal.entries.filter((e) => e.parentEntryId === tier?.id)
+    const subtreeGone = childEntries.every((c) => !pruned.mapping.has(c.id))
+
+    /* Archived target: the phase-2 guard refuses every create. */
+    const clientGone = ok(BASE, { t: 'softDelete', id: clientId, mode: 'cascade', now: NOW } as Action)
+    const refused = applyBlueprint(clientGone, bp, clientId, '2026-09-01', A, new Set(bp.entries.map((e) => e.id)), NOW)
+    const nothingMade = refused.mapping.size === 0 && refused.refusals.length > 0
+    const namedWhy = refused.refusals.every((r) => /archived|no longer exists/.test(r.error))
+
+    const okAll = Boolean(tier) && subtreeGone && nothingMade && namedWhy
+    return okAll
+      ? { verdict: 'PASS', actual: `unticking ${tier?.name} kept its ${childEntries.length} children out of the apply; the archived target refused every create with the guard’s own message and created nothing`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `tier=${Boolean(tier)} subtreeGone=${subtreeGone} nothingMade=${nothingMade} namedWhy=${namedWhy} (${refused.refusals[0]?.error ?? 'none'})`, stops: 'pruning or the archived-target guard leaks', severity: 'P1', impact: 'an apply could build records nobody chose, or inside the archive' } as const
   },
 )
 

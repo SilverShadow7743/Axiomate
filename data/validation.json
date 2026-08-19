@@ -418,7 +418,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (15 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (16 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
@@ -799,6 +799,26 @@
       "expected": "A blank token refuses; a scope that cannot hold an issue refuses naming the kind; the stored token survives unrelated edits and changes only when explicitly sent",
       "verdict": "PASS",
       "actual": "blank token refused saying the caller mints it; company scope refused naming the kind; the token survives a rename and rotates only when explicitly sent",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "BP1",
+      "title": "The round-trip: extract from an engagement, apply to a fresh parent, reproduce the shape",
+      "expected": "Same tiers and items under the new parent, a dated item re-anchored to the named day, an undated item still undated, and the dependency reproduced between the mapped ids",
+      "verdict": "PASS",
+      "actual": "anchor 2026-08-01, offsets 0/9, 4 entries applied under the client with zero refusals, the dated item re-anchored to 2026-09-01..10, the undated one still undated, the FS+2 dependency reproduced between mapped ids",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "BP2",
+      "title": "Pruning is subtree pruning, and an archived target refuses everything",
+      "expected": "An unticked parent takes its children with it; applying under an archived node collects refusals with the reducer’s message and creates nothing",
+      "verdict": "PASS",
+      "actual": "unticking Inventory kept its 3 children out of the apply; the archived target refused every create with the guard’s own message and created nothing",
       "stops": "",
       "severity": "P2",
       "impact": "none"
