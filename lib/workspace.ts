@@ -18,6 +18,7 @@
  * trail exists for — so it goes through the same reducer and lands in the same History.
  */
 
+import type { Blueprint } from './blueprint'
 import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
 import type {
   AccountableParty,
@@ -1113,6 +1114,8 @@ export type ConfigOp =
   | { k: 'deleteRoutingRule'; id: string }
   | { k: 'upsertIntake'; id: string | null; patch: Partial<IntakeMailbox> }
   | { k: 'deleteIntake'; id: string }
+  | { k: 'upsertBlueprint'; id: string | null; patch: Partial<Blueprint> }
+  | { k: 'deleteBlueprint'; id: string }
   | { k: 'upsertIntakeForm'; id: string | null; patch: Partial<IntakeForm> }
   | { k: 'deleteIntakeForm'; id: string }
   | { k: 'upsertRecurrence'; id: string | null; patch: Partial<Recurrence> }
@@ -6085,6 +6088,52 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, recurrences, seq: m.seq + (op.id ? 0 : 1) },
         { rowId: id, field: 'recurrence', from: existing?.name ?? null, to: name, at: now, by },
         existing ? `“${name}” updated.` : `“${name}” configured.`,
+      )
+    }
+
+    case 'upsertBlueprint': {
+      const id = op.id ?? `BP_${m.seq}`
+      const existing = m.blueprints[id]
+      const name = (op.patch.name ?? existing?.name ?? '').trim()
+      if (!name) return { state, error: 'A blueprint needs a name.' }
+      const entries = op.patch.entries ?? existing?.entries ?? []
+      if (!entries.length) return { state, error: 'A blueprint with no entries would build nothing. Extract before storing.' }
+
+      /*
+       * Version bumps on STRUCTURAL edits only - entries or links actually changing. A rename
+       * is the same shape; the applications append is bookkeeping. Bumping on either would
+       * leave provenance pointing at versions nobody authored.
+       */
+      const links = op.patch.links ?? existing?.links ?? []
+      const structural =
+        existing &&
+        ((op.patch.entries && JSON.stringify(op.patch.entries) !== JSON.stringify(existing.entries)) ||
+          (op.patch.links && JSON.stringify(op.patch.links) !== JSON.stringify(existing.links)))
+      const bp: Blueprint = {
+        id,
+        name,
+        sourceEngagementId: op.patch.sourceEngagementId ?? existing?.sourceEngagementId ?? '',
+        version: existing ? existing.version + (structural ? 1 : 0) : 1,
+        entries,
+        links,
+        applications: op.patch.applications ?? existing?.applications ?? [],
+      }
+      return done(
+        { ...m, blueprints: { ...m.blueprints, [id]: bp }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'blueprint', from: existing ? `v${existing.version}` : null, to: `v${bp.version}`, at: now, by },
+        existing ? `“${name}” ${structural ? `updated to v${bp.version}` : 'updated'}.` : `“${name}” stored as v1.`,
+      )
+    }
+
+    case 'deleteBlueprint': {
+      const bp = m.blueprints[op.id]
+      if (!bp) return { state, error: 'Blueprint not found.' }
+      const rest = { ...m.blueprints }
+      delete rest[op.id]
+      return done(
+        { ...m, blueprints: rest },
+        { rowId: op.id, field: 'blueprint', from: bp.name, to: '(removed)', at: now, by },
+        `“${bp.name}” removed.`,
       )
     }
 

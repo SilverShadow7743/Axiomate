@@ -4528,6 +4528,57 @@ scenario(
   },
 )
 
+scenario(
+  'BP3',
+  'Version moves only when the shape does',
+  'Creation is v1; a rename stays v1; an entries edit bumps to v2; the applications append does not bump',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const proposal = extractBlueprint(BASE, engagementId)
+
+    const made = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: null, patch: { name: 'D365 shape', sourceEngagementId: engagementId, entries: proposal.entries, links: proposal.links } },
+      now: NOW,
+    } as Action)
+    const bp = Object.values(made.model.blueprints).find((b) => b.name === 'D365 shape')!
+    const v1 = bp.version === 1
+
+    const renamed = ok(made, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: bp.id, patch: { name: 'D365 implementation shape' } },
+      now: NOW,
+    } as Action)
+    const stillV1 = renamed.model.blueprints[bp.id].version === 1
+
+    const edited = ok(renamed, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: bp.id, patch: { entries: proposal.entries.slice(0, -1) } },
+      now: NOW,
+    } as Action)
+    const v2 = edited.model.blueprints[bp.id].version === 2
+
+    const appended = ok(edited, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: bp.id, patch: { applications: [{ at: NOW, by: 'Validator', targetId: 'client:X', version: 2 }] } },
+      now: NOW,
+    } as Action)
+    const stillV2 = appended.model.blueprints[bp.id].version === 2 && appended.model.blueprints[bp.id].applications.length === 1
+
+    const empty = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: null, patch: { name: 'Empty', entries: [] } },
+      now: NOW,
+    } as Action)
+    const emptyRefused = Boolean(empty.error && /would build nothing/.test(empty.error))
+
+    const okAll = v1 && stillV1 && v2 && stillV2 && emptyRefused
+    return okAll
+      ? { verdict: 'PASS', actual: 'v1 at creation, v1 after a rename, v2 after an entries edit, still v2 after the applications append; an empty blueprint is refused saying it would build nothing', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `v1=${v1} stillV1=${stillV1} v2=${v2} stillV2=${stillV2} emptyRefused=${emptyRefused}`, stops: 'versioning disagrees with the provenance rule', severity: 'P1', impact: 'provenance would point at versions nobody authored' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

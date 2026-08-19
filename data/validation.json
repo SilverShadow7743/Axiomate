@@ -822,6 +822,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "BP3",
+      "title": "Version moves only when the shape does",
+      "expected": "Creation is v1; a rename stays v1; an entries edit bumps to v2; the applications append does not bump",
+      "verdict": "PASS",
+      "actual": "v1 at creation, v1 after a rename, v2 after an entries edit, still v2 after the applications append; an empty blueprint is refused saying it would build nothing",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

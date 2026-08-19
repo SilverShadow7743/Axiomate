@@ -30,6 +30,7 @@
 
 import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import type { Recurrence } from './recurrence'
+import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import type { Goal } from './goals'
@@ -683,6 +684,8 @@ export interface OperatingModel {
   intake: IntakeMailbox[]
   /** Public structured-capture forms feeding the same pipeline. */
   intakeForms: IntakeForm[]
+  /** Engagement shapes stored for reuse - offsets, never dates. See lib/blueprint.ts. */
+  blueprints: Record<string, Blueprint>
   /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
   recurrences: Recurrence[]
   /** Keyed by scope node id, plus `ROOT` for the organisation-wide defaults. */
@@ -1028,6 +1031,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     routingRules: [],
     intake: [],
     intakeForms: [],
+    blueprints: {},
     recurrences: [],
     overrides: { [ROOT_SCOPE]: emptyOverride() },
     seq: n + 1,
@@ -1309,6 +1313,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // arrives without it, and undefined here crashes the first read in production only.
     recurrences: stored.recurrences ?? seed.recurrences,
     intakeForms: stored.intakeForms ?? seed.intakeForms,
+    blueprints: { ...seed.blueprints, ...(stored.blueprints ?? {}) },
     parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
     overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
     seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,
