@@ -792,6 +792,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "IF2",
+      "title": "A form is validated where it is written, and its token is the caller’s",
+      "expected": "A blank token refuses; a scope that cannot hold an issue refuses naming the kind; the stored token survives unrelated edits and changes only when explicitly sent",
+      "verdict": "PASS",
+      "actual": "blank token refused saying the caller mints it; company scope refused naming the kind; the token survives a rename and rotates only when explicitly sent",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

@@ -155,7 +155,7 @@ import { blankEngagement, type EngagementDetail } from './engagement'
 import { addWorkingDays } from './dates'
 import { isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
-import {
+import { type IntakeForm,
   KIND_LABEL_KEY,
   DEFAULT_ORGANIZATION,
   ROOT_SCOPE,
@@ -1113,6 +1113,8 @@ export type ConfigOp =
   | { k: 'deleteRoutingRule'; id: string }
   | { k: 'upsertIntake'; id: string | null; patch: Partial<IntakeMailbox> }
   | { k: 'deleteIntake'; id: string }
+  | { k: 'upsertIntakeForm'; id: string | null; patch: Partial<IntakeForm> }
+  | { k: 'deleteIntakeForm'; id: string }
   | { k: 'upsertRecurrence'; id: string | null; patch: Partial<Recurrence> }
   | { k: 'deleteRecurrence'; id: string }
   | { k: 'setOrganization'; patch: Partial<OrganizationIdentity> }
@@ -6083,6 +6085,53 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, recurrences, seq: m.seq + (op.id ? 0 : 1) },
         { rowId: id, field: 'recurrence', from: existing?.name ?? null, to: name, at: now, by },
         existing ? `“${name}” updated.` : `“${name}” configured.`,
+      )
+    }
+
+    case 'upsertIntakeForm': {
+      const id = op.id ?? `FORM_${m.seq}`
+      const existing = m.intakeForms.find((f) => f.id === id)
+      const name = (op.patch.name ?? existing?.name ?? '').trim()
+      if (!name) return { state, error: 'A form needs a name — the submitter sees it, and the provenance note carries it.' }
+
+      /*
+       * The token travels in the action, minted by the caller. Never generated here: the
+       * reducer must stay replayable, and a token invented during apply would differ on every
+       * replay. Blank on creation is refused; on later edits the stored token stands unless a
+       * new one is explicitly sent.
+       */
+      const token = (op.patch.token ?? existing?.token ?? '').trim()
+      if (!token) return { state, error: 'A form needs its token minted by the caller — without one the URL cannot exist.' }
+
+      const scopeId = op.patch.scopeId ?? existing?.scopeId ?? ''
+      const scopeKind = kindOf(state, scopeId)
+      if (!scopeKind) return { state, error: 'The scope this form files into does not exist.' }
+      if (!canParent('issue', scopeKind)) {
+        return { state, error: `An issue cannot live under a ${scopeKind}, so this form could never file anything.` }
+      }
+
+      const form: IntakeForm = {
+        id,
+        name,
+        scopeId,
+        enabled: op.patch.enabled ?? existing?.enabled ?? false,
+        token,
+      }
+      const intakeForms = existing ? m.intakeForms.map((f) => (f.id === id ? form : f)) : [...m.intakeForms, form]
+      return done(
+        { ...m, intakeForms, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'intakeForm', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `${name} form updated.` : `${name} form configured.`,
+      )
+    }
+
+    case 'deleteIntakeForm': {
+      const form = m.intakeForms.find((f) => f.id === op.id)
+      if (!form) return { state, error: 'Form not found.' }
+      return done(
+        { ...m, intakeForms: m.intakeForms.filter((f) => f.id !== op.id) },
+        { rowId: op.id, field: 'intakeForm', from: form.name, to: '(removed)', at: now, by },
+        `${form.name} form removed.`,
       )
     }
 

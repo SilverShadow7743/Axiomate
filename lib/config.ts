@@ -556,6 +556,25 @@ export interface IntakeMailbox {
   enabled: boolean
 }
 
+/**
+ * A public form that captures structured work into the same pipeline as mail.
+ *
+ * The token is the whole gate, as the mailbox address is: anyone holding the URL may submit,
+ * nobody holding it may read. It is minted by the caller when the form is created — never in
+ * the reducer, which must stay replayable — and it never changes on later edits unless one is
+ * explicitly sent.
+ */
+export interface IntakeForm {
+  id: string
+  /** Shown to the submitter ("the OAPIL request form") and on the provenance note. */
+  name: string
+  /** Scope id new issues are filed under. Must be able to hold an issue. */
+  scopeId: string
+  enabled: boolean
+  /** The capability in the URL. Blank is refused at creation. */
+  token: string
+}
+
 /* ================================================================== *
  * Scope overrides
  * ================================================================== */
@@ -662,6 +681,8 @@ export interface OperatingModel {
   templates: Record<string, ProjectTemplate>
   routingRules: RoutingRule[]
   intake: IntakeMailbox[]
+  /** Public structured-capture forms feeding the same pipeline. */
+  intakeForms: IntakeForm[]
   /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
   recurrences: Recurrence[]
   /** Keyed by scope node id, plus `ROOT` for the organisation-wide defaults. */
@@ -1006,6 +1027,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     templates,
     routingRules: [],
     intake: [],
+    intakeForms: [],
     recurrences: [],
     overrides: { [ROOT_SCOPE]: emptyOverride() },
     seq: n + 1,
@@ -1286,6 +1308,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // Explicit for the same reason as the two above: a model stored before this key existed
     // arrives without it, and undefined here crashes the first read in production only.
     recurrences: stored.recurrences ?? seed.recurrences,
+    intakeForms: stored.intakeForms ?? seed.intakeForms,
     parties: Array.isArray(stored.parties) && stored.parties.length ? stored.parties : seed.parties,
     overrides: { ...seed.overrides, ...(stored.overrides ?? {}) },
     seq: typeof stored.seq === 'number' ? Math.max(stored.seq, seed.seq) : seed.seq,

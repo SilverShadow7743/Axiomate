@@ -4389,6 +4389,56 @@ scenario(
   },
 )
 
+scenario(
+  'IF2',
+  'A form is validated where it is written, and its token is the caller’s',
+  'A blank token refuses; a scope that cannot hold an issue refuses naming the kind; the stored token survives unrelated edits and changes only when explicitly sent',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+
+    const blank = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertIntakeForm', id: null, patch: { name: 'OAPIL request', scopeId: engagementId, enabled: true } },
+      now: NOW,
+    } as Action)
+    const blankRefused = Boolean(blank.error && /token minted by the caller/.test(blank.error))
+
+    const badScope = act(BASE, {
+      t: 'config',
+      op: { k: 'upsertIntakeForm', id: null, patch: { name: 'OAPIL request', scopeId: companyId, token: 'tok-1', enabled: true } },
+      now: NOW,
+    } as Action)
+    const scopeRefused = Boolean(badScope.error && /cannot live under a company/.test(badScope.error))
+
+    const made = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertIntakeForm', id: null, patch: { name: 'OAPIL request', scopeId: engagementId, token: 'tok-1', enabled: true } },
+      now: NOW,
+    } as Action)
+    const form = made.model.intakeForms.find((f) => f.name === 'OAPIL request')!
+
+    const renamed = ok(made, {
+      t: 'config',
+      op: { k: 'upsertIntakeForm', id: form.id, patch: { name: 'OAPIL requests' } },
+      now: NOW,
+    } as Action)
+    const tokenSurvives = renamed.model.intakeForms.find((f) => f.id === form.id)?.token === 'tok-1'
+
+    const rotated = ok(renamed, {
+      t: 'config',
+      op: { k: 'upsertIntakeForm', id: form.id, patch: { token: 'tok-2' } },
+      now: NOW,
+    } as Action)
+    const tokenRotates = rotated.model.intakeForms.find((f) => f.id === form.id)?.token === 'tok-2'
+
+    const okAll = blankRefused && scopeRefused && tokenSurvives && tokenRotates
+    return okAll
+      ? { verdict: 'PASS', actual: 'blank token refused saying the caller mints it; company scope refused naming the kind; the token survives a rename and rotates only when explicitly sent', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `blankRefused=${blankRefused} scopeRefused=${scopeRefused} tokenSurvives=${tokenSurvives} tokenRotates=${tokenRotates}`, stops: 'the upsert arm mishandles the capability token', severity: 'P1', impact: 'a rename would silently kill or change every distributed URL' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
