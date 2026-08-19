@@ -487,6 +487,16 @@ been read and reasoned about but not clicked. That gap is where the three faults
 
 ---
 
+**Section 19, extract half, 19 Aug 2026:** OAPIL proposed 111 entries (1 dated, offsets
+from 2026-08-17), the tier list reading as the reusable D365 shape — Finance, Inventory,
+Procurement, Data Migration, Security/Access, Reporting, Quality, Environment/LCS, Production,
+Sales, Programme/Contractual, Dispatch. Unticking Finance dropped the count to 93 (itself plus
+16 issues); unticking Dispatch dropped only itself, correctly — it holds nothing. The
+store-time subtree-prune fix (150c95f) came from this very step: the first run counted an
+unticked tier's children, which would have stored orphans that never apply. **Nothing was
+stored**: which of the 111 are the firm's repeatable shape is delivery knowledge, and that
+judgment is the operator's, not the verifier's.
+
 ## Reporting back
 
 For anything that fails, the useful three lines are: **which step**, **what you saw**, and
