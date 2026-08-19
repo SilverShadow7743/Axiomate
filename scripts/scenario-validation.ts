@@ -85,6 +85,7 @@ import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
 import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
+import { isOutboundRefusal, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4576,6 +4577,53 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'v1 at creation, v1 after a rename, v2 after an entries edit, still v2 after the applications append; an empty blueprint is refused saying it would build nothing', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `v1=${v1} stillV1=${stillV1} v2=${v2} stillV2=${stillV2} emptyRefused=${emptyRefused}`, stops: 'versioning disagrees with the provenance rule', severity: 'P1', impact: 'provenance would point at versions nobody authored' } as const
+  },
+)
+
+/* ================================================================== *
+ * Outbound mail (design 2026-08-19)
+ * ================================================================== */
+
+scenario(
+  'OM1',
+  'A reply resolves to the nearest mailbox, a real recipient, and a threaded subject',
+  'The engagement mailbox beats a client-wide one; no covering mailbox refuses naming the configuration; a display-name-only claim gets no compose; the subject carries the id',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    /* The claim: OAPIL-1 raised by an angle-bracket sender. */
+    const claimed = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { raisedBy: 'Ravi Mada <ravi@client.example>' }, now: NOW } as Action)
+    let s1 = claimed
+
+    /* Client-wide mailbox only: resolves, but as the client's address. */
+    s1 = ok(s1, { t: 'config', op: { k: 'upsertIntake', id: null, patch: { address: 'client-wide@axiocloud.example', scopeId: clientId, enabled: true } }, now: NOW } as Action)
+    const clientOnly = sendingMailboxFor(s1, 'OAPIL-1')
+    const clientWide = !isOutboundRefusal(clientOnly) && clientOnly.mailbox.address === 'client-wide@axiocloud.example'
+
+    /* Add the engagement's own mailbox: nearest must now win. */
+    const s2 = ok(s1, { t: 'config', op: { k: 'upsertIntake', id: null, patch: { address: 'engagement@axiocloud.example', scopeId: engagementId, enabled: true } }, now: NOW } as Action)
+    const near = sendingMailboxFor(s2, 'OAPIL-1')
+    const nearest = !isOutboundRefusal(near) && near.mailbox.address === 'engagement@axiocloud.example'
+    const threaded = !isOutboundRefusal(near) && /^RE: .+ \[OAPIL-1\]$/.test(near.subject)
+    const toClaim = !isOutboundRefusal(near) && near.recipient === 'ravi@client.example'
+
+    /* No mailbox anywhere: refuse naming the configuration screen. */
+    const bare = sendingMailboxFor(claimed, 'OAPIL-1')
+    const noBox = isOutboundRefusal(bare) && bare.code === 'no-mailbox' && /Routing & intake/.test(bare.reason)
+
+    /* A display-name-only claim gets no compose. */
+    const s3 = ok(s2, { t: 'updateIssue', id: 'OAPIL-2', patch: { raisedBy: 'Somebody At Client' }, now: NOW } as Action)
+    const noAddr = sendingMailboxFor(s3, 'OAPIL-2')
+    const noRecipient = isOutboundRefusal(noAddr) && noAddr.code === 'no-recipient'
+
+    const bareEmail = recipientOf('ravi@client.example') === 'ravi@client.example'
+    const subjectShape = outboundSubjectFor('OAPIL-9', '  Inventory fails  ') === 'RE: Inventory fails [OAPIL-9]'
+
+    const okAll = clientWide && nearest && threaded && toClaim && noBox && noRecipient && bareEmail && subjectShape
+    return okAll
+      ? { verdict: 'PASS', actual: 'client-wide resolves alone; the engagement mailbox wins once it exists; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `clientWide=${clientWide} nearest=${nearest} threaded=${threaded} toClaim=${toClaim} noBox=${noBox} noRecipient=${noRecipient} bareEmail=${bareEmail} subjectShape=${subjectShape}`, stops: 'outbound resolution disagrees with the design', severity: 'P1', impact: 'a reply could go out as the wrong mailbox or to nobody stated' } as const
   },
 )
 
