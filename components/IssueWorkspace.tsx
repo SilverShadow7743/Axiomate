@@ -1823,7 +1823,16 @@ export default function IssueWorkspace({
       />
 
       {view === 'board' ? (
-        <BoardView rows={rows} selectedId={selectedId} onSelect={requestSelect} />
+        <BoardView
+          rows={rows}
+          policy={state.model.statusPolicy}
+          hasEvidence={(id) =>
+            Object.values(state.evidence).some((e) => e.issueId === id && !e.deletedAt)
+          }
+          selectedId={selectedId}
+          onSelect={requestSelect}
+          onCommitStatus={(rowId, status, reason) => commitCell(rowId, 'status', status, reason)}
+        />
       ) : (
       <div className="split">
         <div className="pane-tree" style={{ width: treeWidth }}>
