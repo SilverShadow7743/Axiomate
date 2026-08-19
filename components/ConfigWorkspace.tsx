@@ -2533,9 +2533,28 @@ function Blueprints({
     })
   }
 
+  /*
+   * Unticking a tier removes its whole subtree from what is stored - the same rule apply
+   * enforces. Without this, children of an unticked parent stored as orphans pointing at an
+   * entry that does not exist, silently never applying. Found by checklist 19 step 2.
+   */
+  const kept = useMemo(() => {
+    if (!proposal) return new Set<string>()
+    const byId = new Map(proposal.entries.map((e) => [e.id, e]))
+    const chainTicked = (id: string): boolean => {
+      let cur = byId.get(id)
+      while (cur) {
+        if (!ticked.has(cur.id)) return false
+        cur = cur.parentEntryId ? byId.get(cur.parentEntryId) : undefined
+      }
+      return true
+    }
+    return new Set(proposal.entries.filter((e) => chainTicked(e.id)).map((e) => e.id))
+  }, [proposal, ticked])
+
   const store = () => {
     if (!proposal) return
-    const entries = proposal.entries.filter((e) => ticked.has(e.id))
+    const entries = proposal.entries.filter((e) => kept.has(e.id))
     const keptIds = new Set(entries.map((e) => e.id))
     const links = proposal.links.filter((l) => keptIds.has(l.predecessorEntryId) && keptIds.has(l.successorEntryId))
     const okDone = onConfig({
@@ -2681,8 +2700,8 @@ function Blueprints({
                 aria-label="Blueprint name"
                 onChange={(e) => setBpName(e.target.value)}
               />
-              <button className="btn primary" disabled={!bpName.trim() || !ticked.size} onClick={store}>
-                Store {ticked.size} of {proposal.entries.length} entries
+              <button className="btn primary" disabled={!bpName.trim() || !kept.size} onClick={store}>
+                Store {kept.size} of {proposal.entries.length} entries
               </button>
             </div>
           </>
