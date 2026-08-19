@@ -391,6 +391,23 @@ Click **Calendar** in the switcher.
 4. ‹ / Today / › move months; nothing ever renders on a padding day from an adjacent month.
 5. Nothing on this view edits anything — that is v1 as designed, not a gap.
 
+## 17 · Recurring work — the rule, the raise, and the guard
+
+Open **Configuration → Recurring work** (under Automation).
+
+1. Add a weekly rule due today against a real engagement — pick today's weekday. The card
+   appears saying "Never raised yet."
+2. Run the pass by hand: POST `/api/schedule/run` signed in (or with the schedule token). The
+   response's `recurrences` names the rule, the occurrence, and the new issue id.
+3. Find the issue in the tree: subject is the rule's name stamped with the occurrence date,
+   status Open, owner as configured (or Unassigned), History attributed to **Scheduled pass**.
+4. POST the pass again. `recurrences` is empty — the same occurrence is never raised twice —
+   and the rule's card now says what it last raised for.
+5. The card's last-raised date has nowhere to be edited. That is a record of what happened,
+   not a setting.
+6. Try adding a rule that files under the company root: the form only offers scopes an issue
+   may live under, and the reducer refuses anything else with the message naming the kind.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.

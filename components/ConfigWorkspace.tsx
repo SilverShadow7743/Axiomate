@@ -29,7 +29,8 @@ import {
 } from '@/lib/config'
 import { capabilityStates, describeCapabilities } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
-import { kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
+import { canParent, kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
+import { describeRecurrence, type Cadence } from '@/lib/recurrence'
 import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
@@ -82,6 +83,7 @@ type Tab =
   | 'permissions'
   | 'approvals'
   | 'automation'
+  | 'recurring'
   | 'watch'
   | 'sizing'
   | 'scopes'
@@ -105,6 +107,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
+  { id: 'recurring', label: 'Recurring work', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
   { id: 'routing', label: 'Routing & intake', group: 'Automation' },
   { id: 'scopes', label: 'Scope overrides', group: 'Governance' },
@@ -277,6 +280,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig, onRe
           {tab === 'roles' && <RolesAndPeople state={state} onConfig={onConfig} />}
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
+          {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
@@ -1249,6 +1253,16 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       title: 'Routing & intake',
       what: 'Mailboxes work can arrive at, and the rules that classify it.',
       now: `${m.routingRules.length} rules · ${m.intake.length} mailboxes`,
+    },
+    {
+      id: 'recurring',
+      title: 'Recurring work',
+      what: 'Rules that raise an issue on a cadence, fired by the daily pass.',
+      now: (() => {
+        const rules = m.recurrences ?? []
+        const on = rules.filter((r) => r.enabled).length
+        return rules.length ? `${rules.length} ${rules.length === 1 ? 'rule' : 'rules'} · ${on} firing` : 'None yet'
+      })(),
     },
     {
       id: 'scopes',
@@ -2289,6 +2303,174 @@ function Goals({
         <p className="cfg-inherit sentence">{spec.what}</p>
         <button className="btn primary" disabled={!ready} onClick={add}>
           Set this goal
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function Recurring({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const rules = state.model.recurrences ?? []
+  const types = liveWorkTypes(state.model)
+
+  const [name, setName] = useState('')
+  const [scopeId, setScopeId] = useState('')
+  const [kind, setKind] = useState<'weekly' | 'monthly'>('monthly')
+  const [weekday, setWeekday] = useState('1')
+  const [day, setDay] = useState('31')
+  const [type, setType] = useState('')
+  const [severity, setSeverity] = useState('Medium')
+  const [owner, setOwner] = useState('')
+
+  /* Only places an issue may live - the same test the reducer applies, offered up front. */
+  const scopes = useMemo(
+    () =>
+      Object.values(state.nodes)
+        .filter((n) => !n.deletedAt && canParent('issue', n.kind))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [state.nodes],
+  )
+  const ready = name.trim() && scopeId
+
+  const add = () => {
+    const cadence: Cadence =
+      kind === 'weekly' ? { kind: 'weekly', weekday: Number(weekday) } : { kind: 'monthly', day: Number(day) }
+    const okDone = onConfig({
+      k: 'upsertRecurrence',
+      id: null,
+      patch: {
+        name: name.trim(),
+        scopeId,
+        cadence,
+        type,
+        severity: severity as never,
+        owner: owner.trim(),
+        enabled: true,
+      },
+    })
+    if (okDone) {
+      setName('')
+      setOwner('')
+    }
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Recurring work</h3>
+      <p className="cfg-note">
+        {rules.length
+          ? `${rules.length} ${rules.length === 1 ? 'rule' : 'rules'}, ${rules.filter((r) => r.enabled).length} firing. Raised by the daily pass through the same funnel as a person’s click - permission, filing rules and audit trail included.`
+          : `No rules yet. A rule raises an issue on a cadence - a month-end close, a weekly status - fired by the daily pass through the same funnel as a person’s click.`}
+      </p>
+      <p className="cfg-note">
+        A pass that was down for days raises the missed occurrence <b>once</b>, not once per
+        missed day. Day 31 means the last day of every month, February included. What a rule
+        last raised for is shown on its card and advances only when a raise succeeds - there is
+        nowhere to edit it, because it is a record of what happened.
+      </p>
+
+      {rules.map((r) => (
+        <div className="cfg-card" key={r.id}>
+          <div className="cfg-card-head">
+            <b>{r.name}</b>
+            <span className="grow" />
+            <Badge kind={r.enabled ? 'seeded' : 'p0'}>{r.enabled ? 'firing' : 'off'}</Badge>
+            <button
+              className="btn ghost"
+              onClick={() => onConfig({ k: 'upsertRecurrence', id: r.id, patch: { enabled: !r.enabled } })}
+            >
+              {r.enabled ? 'Switch off' : 'Switch on'}
+            </button>
+            <button className="btn ghost" onClick={() => onConfig({ k: 'deleteRecurrence', id: r.id })}>
+              Remove
+            </button>
+          </div>
+          <p className="cfg-inherit sentence">{describeRecurrence(r)}</p>
+          <p className="cfg-inherit sentence">
+            Files under <b>{nameOf(state, r.scopeId)}</b>
+            {r.owner ? ` for ${r.owner}` : ', unassigned until somebody takes it'}.
+          </p>
+        </div>
+      ))}
+
+      <div className="cfg-card">
+        <div className="cfg-card-head">
+          <b>Add a rule</b>
+        </div>
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Month-end close" />
+          </label>
+          <label className="cfg-fld">
+            <span>Files under</span>
+            <select value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+              <option value="">Choose where it files</option>
+              {scopes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name} ({n.kind})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Cadence</span>
+            <select value={kind} onChange={(e) => setKind(e.target.value as 'weekly' | 'monthly')}>
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          {kind === 'weekly' ? (
+            <label className="cfg-fld">
+              <span>On</span>
+              <select value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
+                  <option key={d} value={i}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="cfg-fld">
+              <span>On day (31 = month-end)</span>
+              <input type="number" min={1} max={31} value={day} onChange={(e) => setDay(e.target.value)} />
+            </label>
+          )}
+          <label className="cfg-fld">
+            <span>Work type</span>
+            <select value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="">Default</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.label}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cfg-fld">
+            <span>Severity</span>
+            <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
+              <option>High</option>
+              <option>Medium</option>
+              <option>Low</option>
+            </select>
+          </label>
+          <label className="cfg-fld">
+            <span>Owner (optional)</span>
+            <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Unassigned" />
+          </label>
+        </div>
+        <button className="btn primary" disabled={!ready} onClick={add}>
+          Add this rule
         </button>
       </div>
     </section>
