@@ -5077,3 +5077,124 @@ select.cell-editor {
   white-space: normal;
   overflow: visible;
 }
+
+/* ================================================================== *
+ * Public intake form (design 2026-08-19)
+ * ================================================================== */
+
+.pubform {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: var(--surface);
+}
+
+.pubform-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pubform-card h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.pubform-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.pubform-fld {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pubform-fld input,
+.pubform-fld textarea {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.pubform-fld textarea {
+  resize: vertical;
+}
+
+.pubform-fld input:focus-visible,
+.pubform-fld textarea:focus-visible,
+.pubform-send:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pubform-urgency {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pubform-urgency legend {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.pubform-urgency label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pubform-ok {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--h-ontrack);
+}
+
+.pubform-err {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--h-overdue);
+}
+
+.pubform-send {
+  font: inherit;
+  font-size: 14px;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.pubform-send:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
