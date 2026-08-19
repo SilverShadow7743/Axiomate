@@ -772,6 +772,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "RW3",
+      "title": "The pass raises once, advances the guard, and a same-day re-run raises nothing",
+      "expected": "First run: one issue with the occurrence-stamped subject, Open, machine-attributed, lastRaisedOn advanced to the occurrence. Second run: zero raised. A rule whose scope has since vanished refuses without advancing.",
+      "verdict": "PASS",
+      "actual": "raised OAPIL-004 “Weekly status — 2026-08-15” Open/Unassigned, machine-attributed; lastRaisedOn advanced to the occurrence; same-day re-run raised nothing",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

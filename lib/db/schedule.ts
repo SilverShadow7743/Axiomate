@@ -5,7 +5,7 @@ import { persistSteps } from './persist'
 import { auditToRow } from './map'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
-import { runWatch } from '../workspace'
+import { runRecurrences, runWatch } from '../workspace'
 import { EMPTY_OBSERVATION, describeRun, type Observation, type WatchDiff } from '../watch'
 
 /**
@@ -30,6 +30,8 @@ export interface ScheduledRun {
   error?: string
   summary: string
   raised: number
+  /** What the recurrence rules raised this run, by rule and occurrence. */
+  recurrences: { ruleId: string; name: string; occurrence: string; issueId: string }[]
   diff: WatchDiff
   misses: { ruleId: string; label: string; why: string }[]
   refusals: { action: string; error: string }[]
@@ -56,22 +58,36 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
           : EMPTY_OBSERVATION
 
       const run = runWatch(state, previous, today, now, actor)
+
+      /*
+       * Recurring work rides the same pass and the same transaction. It runs AFTER the watch
+       * against the watch's resulting state, so a raise and the morning's notifications agree
+       * about what exists. Both-or-neither: the raised issue and the advanced lastRaisedOn are
+       * steps in this one Serializable transaction.
+       */
+      const recur = runRecurrences(run.state, today, now, actor)
       const raised = run.steps.filter((s) => s.action.t === 'notify').length
-      const summary = describeRun(run.diff, raised)
+      const summaryRecur = recur.raised.length
+        ? ` Raised ${recur.raised.map((r) => `“${r.name}” for ${r.occurrence}`).join(', ')}.`
+        : ''
+      const summary = describeRun(run.diff, raised) + summaryRecur
 
       for (const step of run.steps) {
         await persistSteps(tx, tenantId, step.action, step.before, step.after)
       }
+      for (const step of recur.steps) {
+        await persistSteps(tx, tenantId, step.action, step.before, step.after)
+      }
 
-      const newAudit = run.state.audit.slice(state.audit.length)
+      const newAudit = recur.state.audit.slice(state.audit.length)
       if (newAudit.length) {
         await tx.scheduleAudit.createMany({ data: newAudit.map((a) => auditToRow(tenantId, a)) })
       }
-      if (run.state.seq !== state.seq) {
+      if (recur.state.seq !== state.seq) {
         await tx.workspaceMeta.upsert({
           where: { tenantId },
-          create: { tenantId, seq: run.state.seq },
-          update: { seq: run.state.seq },
+          create: { tenantId, seq: recur.state.seq },
+          update: { seq: recur.state.seq },
         })
       }
 
@@ -102,9 +118,10 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
         ok: true,
         summary,
         raised,
+        recurrences: recur.raised,
         diff: run.diff,
         misses: run.misses,
-        refusals: run.refusals.map((r) => ({ action: r.action.t, error: r.error })),
+        refusals: [...run.refusals, ...recur.refusals].map((r) => ({ action: r.action.t, error: r.error })),
       }
     },
     { isolationLevel: 'Serializable', timeout: 30_000, maxWait: 10_000 },

@@ -21,7 +21,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import {
+import { runRecurrences,
   apply,
   applyWithRules,
   initWorkspace,
@@ -4284,6 +4284,48 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'a company-scoped rule is refused naming the kind; a valid engagement-scoped rule stores with lastRaisedOn null; a nameless rule is refused saying why', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `refused=${refused} (${bad.error ?? 'no error'}) stored=${stored} namedRefusal=${namedRefusal}`, stops: 'the upsert arm accepts what the pass could never file', severity: 'P1', impact: 'a rule fails at 7am instead of in the form' } as const
+  },
+)
+
+scenario(
+  'RW3',
+  'The pass raises once, advances the guard, and a same-day re-run raises nothing',
+  'First run: one issue with the occurrence-stamped subject, Open, machine-attributed, lastRaisedOn advanced to the occurrence. Second run: zero raised. A rule whose scope has since vanished refuses without advancing.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const cfg = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertRecurrence', id: null, patch: { name: 'Weekly status', scopeId: engagementId, cadence: { kind: 'weekly', weekday: 6 }, type: 'Task', severity: 'Low', enabled: true } },
+      now: NOW,
+    } as Action)
+
+    const MACHINE: Actor = { id: 'machine:schedule', name: 'Scheduled pass' }
+    const first = runRecurrences(cfg, TODAY, NOW, MACHINE) // TODAY 2026-08-15 is a Saturday
+    const raisedOne = first.raised.length === 1 && first.refusals.length === 0
+    const occ = first.raised[0]?.occurrence
+    const issue = first.raised[0] ? first.state.issues[first.raised[0].issueId] : null
+    const subjectOk = Boolean(issue && issue.subject === `Weekly status — ${occ}`)
+    const statusOk = Boolean(issue && issue.status === 'Open' && issue.owner === 'Unassigned')
+    const ruleAfter = first.state.model.recurrences.find((r) => r.name === 'Weekly status')
+    const advanced = ruleAfter?.lastRaisedOn === occ
+    const attributed = first.state.audit.some((a) => a.by === 'Scheduled pass' && String(a.to ?? '').includes('Weekly status'))
+
+    const second = runRecurrences(first.state, TODAY, NOW, MACHINE)
+    const quiet = second.raised.length === 0 && second.steps.length === 0
+
+    // The scope vanishes after the rule was written: the raise must refuse, and the guard
+    // must not advance - the write-time check was the courtesy half, this is the half that holds.
+    const gone = ok(cfg, { t: 'softDelete', id: engagementId, mode: 'cascade', now: NOW } as Action)
+    const third = runRecurrences(gone, TODAY, NOW, MACHINE)
+    const vanishedRefused =
+      third.raised.length === 0 &&
+      third.refusals.length === 1 &&
+      (gone.model.recurrences.find((r) => r.name === 'Weekly status')?.lastRaisedOn ?? null) === null
+
+    const okAll = raisedOne && subjectOk && statusOk && advanced && attributed && quiet && vanishedRefused
+    return okAll
+      ? { verdict: 'PASS', actual: `raised ${first.raised[0].issueId} “Weekly status — ${occ}” Open/Unassigned, machine-attributed; lastRaisedOn advanced to the occurrence; same-day re-run raised nothing`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `raisedOne=${raisedOne} refusal=${first.refusals[0]?.error ?? 'none'} subjectOk=${subjectOk} statusOk=${statusOk} advanced=${advanced} (${ruleAfter?.lastRaisedOn}) attributed=${attributed} quiet=${quiet} vanishedRefused=${vanishedRefused} (${third.refusals[0]?.error ?? 'no refusal'})`, stops: 'the raise cycle disagrees with the design', severity: 'P1', impact: 'the unattended morning pass floods or goes silent' } as const
   },
 )
 

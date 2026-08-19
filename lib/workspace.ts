@@ -18,7 +18,7 @@
  * trail exists for — so it goes through the same reducer and lands in the same History.
  */
 
-import type { Recurrence } from './recurrence'
+import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
 import type {
   AccountableParty,
   ActivityPhase,
@@ -1421,7 +1421,20 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       typeof (a as { patch?: { status?: string } }).patch?.status === 'string' &&
       (isTerminal((a as { patch: { status: IssueStatus } }).patch.status) ||
         isTerminal(state.issues[(a as { id: string }).id]?.status ?? null))
-    const need = permissionForAction(a.t, { closing })
+    /**
+     * One narrow reclassification: advancing a recurrence's `lastRaisedOn` is the bookkeeping
+     * of a raise, not configuration. The pass runs as a machine that may file work and may not
+     * configure the platform, and the guard must advance in the same batch as the raise it
+     * guards — so a config op whose entire patch is `lastRaisedOn` takes `work.create`, the
+     * permission of the raise itself. Anything else on the patch, name included, is
+     * configuration and keeps `config.manage`. Scenario RW3 holds both halves.
+     */
+    const guardOnly =
+      a.t === 'config' &&
+      (a as { op: { k: string; patch?: object } }).op.k === 'upsertRecurrence' &&
+      (a as { op: { id?: string | null } }).op.id != null &&
+      Object.keys((a as { op: { patch?: object } }).op.patch ?? {}).join(',') === 'lastRaisedOn'
+    const need = guardOnly ? 'work.create' : permissionForAction(a.t, { closing })
     if (need) {
       const verdict = can(state.model, actor, need)
       if (!verdict.allowed) return { state, error: verdict.reason ?? 'Not permitted.' }
@@ -1458,6 +1471,20 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'create': {
       const parentKind = kindOf(state, a.parentId)
       if (!parentKind) return { state, error: 'The parent record no longer exists.' }
+      /*
+       * An archived parent is not a place work appears. `kindOf` answers for soft-deleted rows
+       * — it has to, so history renders — which meant every filer (the form, intake, the
+       * recurrence pass) could quietly create records inside the archive, visible to nobody.
+       * Found by RW3's vanished-scope arm, fixed for all of them here.
+       */
+      const parentGone =
+        state.nodes[a.parentId]?.deletedAt ??
+        state.issues[a.parentId]?.deletedAt ??
+        state.activities[a.parentId]?.deletedAt ??
+        null
+      if (parentGone) {
+        return { state, error: 'That parent is archived. Restore it first, or file this somewhere live.' }
+      }
 
       const seq = state.seq + 1
       const name = (a.draft.name || '').trim()
@@ -6282,4 +6309,96 @@ export function runWatch(
   }
 
   return { state: current, diff, observation, steps, misses, refusals }
+}
+
+/* ================================================================== *
+ * Recurring work (design 2026-08-19)
+ * ================================================================== */
+
+export interface RecurrenceRun {
+  state: WorkspaceState
+  steps: { action: Action; before: WorkspaceState; after: WorkspaceState }[]
+  refusals: { action: Action; error: string }[]
+  /** What was raised, for the run's summary. */
+  raised: { ruleId: string; name: string; occurrence: string; issueId: string }[]
+}
+
+/**
+ * Raise whatever the recurrence rules owe for today.
+ *
+ * Same shape and same discipline as `runWatch` above: every raise is an ordinary `create`
+ * action through `apply`, so the permission check, the `canParent` guard and the audit trail
+ * all hold, and a refusal is recorded rather than thrown. Two rules the arithmetic module
+ * carries and this function must not undo:
+ *
+ *  - `dueOccurrence` returns at most ONE date per rule — a pass that was down for days raises
+ *    the missed occurrence once, never once per missed day.
+ *  - `lastRaisedOn` advances to the OCCURRENCE, not today, and only after the raise succeeded
+ *    — in the same action sequence, so the surrounding transaction commits both or neither.
+ *    On a refusal it does not advance, and the next pass retries the same occurrence.
+ */
+export function runRecurrences(
+  state: WorkspaceState,
+  today: string,
+  now: string,
+  actor: Actor,
+): RecurrenceRun {
+  let current = state
+  const steps: RecurrenceRun['steps'] = []
+  const refusals: RecurrenceRun['refusals'] = []
+  const raised: RecurrenceRun['raised'] = []
+
+  for (const rule of current.model.recurrences ?? []) {
+    const occurrence = dueOccurrence(rule, today)
+    if (!occurrence) continue
+
+    const create: Action = {
+      t: 'create',
+      parentId: rule.scopeId,
+      kind: 'issue',
+      draft: {
+        name: subjectFor(rule, occurrence),
+        description: `Raised by the recurring rule “${rule.name}” for its ${occurrence} occurrence.`,
+        type: rule.type,
+        severity: rule.severity,
+        // Empty falls to 'Unassigned' in the create arm - the stored value the unowned counts watch.
+        owner: rule.owner,
+        raisedBy: actor.name,
+        // The entry state, whatever the rule says about severity: a machine may file work; it
+        // may not decide it is being worked on. Same sentence as intake, same reason.
+        status: 'Open',
+      },
+      now,
+    } as Action
+
+    const before = current
+    const result = apply(current, create, actor)
+    if (result.error) {
+      refusals.push({ action: create, error: result.error })
+      continue
+    }
+    const newId = Object.keys(result.state.issues).find((id) => !before.issues[id])
+    steps.push({ action: create, before, after: result.state })
+    current = result.state
+
+    const advance: Action = {
+      t: 'config',
+      op: { k: 'upsertRecurrence', id: rule.id, patch: { lastRaisedOn: occurrence } },
+      now,
+    } as Action
+    const adv = apply(current, advance, actor)
+    if (adv.error) {
+      // The raise stood but the guard did not move: record it loudly, because the next pass
+      // would raise the same occurrence again. The surrounding transaction should not commit
+      // a half like this, which is why both actions run inside it.
+      refusals.push({ action: advance, error: adv.error })
+      continue
+    }
+    steps.push({ action: advance, before: current, after: adv.state })
+    current = adv.state
+
+    raised.push({ ruleId: rule.id, name: rule.name, occurrence, issueId: newId ?? '' })
+  }
+
+  return { state: current, steps, refusals, raised }
 }
