@@ -852,6 +852,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "ID1",
+      "title": "A person is renamed and their records stay theirs",
+      "expected": "Join fields carry a directory id resolved at write time; the id wins on read; ambiguity resolves to null rather than a guess; pre-migration rows still join by name; role audiences never resolve to a person.",
+      "verdict": "PASS",
+      "actual": "Assigning Priya stores her directory id on the issue and on the assignment notice; two entries sharing a name resolve to null rather than a guess; after a rename her My Work and inbox still hold the records by id while the abandoned name honestly matches nothing; a pre-migration row with a null id still joins by name; a role-addressed notification keeps toId null.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

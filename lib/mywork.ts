@@ -197,7 +197,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
    * keep the plain name compare: they record what was written, not who someone is.
    */
   const isMine = (who: string | null | undefined, whoId?: string | null): boolean =>
-    whoId && person ? whoId === person.id : isMe(who)
+    whoId ? person?.id === whoId : isMe(who)
 
   /* ---------------- 1. decisions somebody is waiting on ---------------- */
 

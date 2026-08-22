@@ -30,10 +30,10 @@ import { runRecurrences,
   type SeedIssueInput,
   type WorkspaceState,
 } from '../lib/workspace'
-import { undelivered } from '../lib/notifications'
+import { inboxFor, undelivered } from '../lib/notifications'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
-import { rolesFor } from '../lib/access'
+import { directoryIdByName, rolesFor } from '../lib/access'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
@@ -4746,6 +4746,80 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'The ask pins bytes-v1; the asker, an outsider, and a noteless change request are refused in the arm’s words; Priya’s second answer replaces her first and completion waits for Tarun; approval lands as a pinned Decision note; v2 supersedes v1, reads "approved — an earlier version", and a second successor of v1 is refused.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `selfRefused=${selfRefused} pinned=${pinned} refusals=${refusals} midChanges=${midChanges} replaced=${replaced} stillAwaiting=${stillAwaiting} approved=${approved} noted=${noted} chained=${chained} earlier=${earlier} linear=${linear}`, stops: 'the review lifecycle disagrees with the design', severity: 'P1', impact: 'a deliverable could read as approved when the approved bytes are not the ones being sent' } as const
+  },
+)
+
+/* ================================================================== *
+ * Identity ids (design 2026-08-22)
+ * ================================================================== */
+
+scenario(
+  'ID1',
+  'A person is renamed and their records stay theirs',
+  'Join fields carry a directory id resolved at write time; the id wins on read; ambiguity resolves to null rather than a guess; pre-migration rows still join by name; role audiences never resolve to a person.',
+  () => {
+    const priya = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+
+    /* Write-time resolution: assigning a unique name stores its id, and the assignment
+       notification carries it too. */
+    const assigned = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Priya' }, now: NOW,
+    } as Action)
+    /* BASE already has Priya as owner — move away and back so the change actually fires. */
+    const away = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action)
+    const back = ok(away, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Priya' }, now: '2026-08-18T09:00:00.000Z' } as Action)
+    const stored = back.issues['OAPIL-1'].ownerId === priya.id
+    const notice = Object.values(back.notifications).find((n) => n.ruleId === 'assignment' && n.to === 'Priya')
+    const noticeId = notice?.toId === priya.id
+
+    /* Ambiguity resolves to null, never a guess — driven on the pure resolver. */
+    const dupModel = {
+      ...BASE.model,
+      people: {
+        ...BASE.model.people,
+        DUP_1: { id: 'DUP_1', name: 'Same Name', roleIds: [], fromSource: false },
+        DUP_2: { id: 'DUP_2', name: 'same name ', roleIds: [], fromSource: false },
+      },
+    }
+    const ambiguous = directoryIdByName(dupModel, 'Same Name') === null
+    const unique = directoryIdByName(BASE.model, 'priya') === priya.id
+    const unassigned = directoryIdByName(BASE.model, 'Unassigned') === null
+
+    /* The rename: one field edit, no sweep — and the joins hold. */
+    const renamed = ok(back, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: priya.id, name: 'Priya Renamed', roleIds: priya.roleIds },
+      now: NOW,
+    } as Action)
+    const mineAfter = myWork(renamed, { id: 'val-p', name: 'Priya Renamed' }, TODAY)
+    const workSurvives = mineAfter.items.some((i) => i.subjectId === 'OAPIL-1')
+    const inboxSurvives = inboxFor(renamed.notifications, 'Priya Renamed', priya.id).some(
+      (n) => n.ruleId === 'assignment',
+    )
+    /* The OLD name is nobody now — the list says the join failed rather than pretending. */
+    const oldName = myWork(renamed, { id: 'val-q', name: 'Priya' }, TODAY)
+    const oldNameHonest = oldName.unrecognised && !oldName.items.some((i) => i.subjectId === 'OAPIL-1')
+
+    /* Pre-migration shape: a null id still joins by name. */
+    const legacy = {
+      ...back,
+      issues: { ...back.issues, 'OAPIL-1': { ...back.issues['OAPIL-1'], ownerId: null } },
+    }
+    const legacyJoins = myWork(legacy, { id: 'val-p', name: 'Priya' }, TODAY).items.some(
+      (i) => i.subjectId === 'OAPIL-1',
+    )
+
+    /* Role audiences never resolve to a person id. */
+    const roleNotify = ok(BASE, {
+      t: 'notify', to: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'in-app', subject: 'x', body: 'x', aboutId: 'OAPIL-1', ruleId: 'AUTO_T', now: NOW,
+    } as Action)
+    const roleNull = Object.values(roleNotify.notifications).every((n) => n.to !== 'role:ROLE_ENGAGEMENT_LEAD' || n.toId === null)
+
+    void assigned
+    const okAll = stored && noticeId && ambiguous && unique && unassigned && workSurvives && inboxSurvives && oldNameHonest && legacyJoins && roleNull
+    return okAll
+      ? { verdict: 'PASS', actual: 'Assigning Priya stores her directory id on the issue and on the assignment notice; two entries sharing a name resolve to null rather than a guess; after a rename her My Work and inbox still hold the records by id while the abandoned name honestly matches nothing; a pre-migration row with a null id still joins by name; a role-addressed notification keeps toId null.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `stored=${stored} noticeId=${noticeId} ambiguous=${ambiguous} unique=${unique} unassigned=${unassigned} workSurvives=${workSurvives} inboxSurvives=${inboxSurvives} oldNameHonest=${oldNameHonest} legacyJoins=${legacyJoins} roleNull=${roleNull}`, stops: 'the identity join disagrees with the design', severity: 'P1', impact: 'a renamed person loses their queue, their inbox, or both — the Tarun incident class' } as const
   },
 )
 

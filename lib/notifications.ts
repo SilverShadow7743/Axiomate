@@ -74,7 +74,9 @@ export function inboxFor(
   const key = person.trim().toLowerCase()
   return Object.values(all)
     .filter((n) =>
-      n.toId && personId ? n.toId === personId : n.to.trim().toLowerCase() === key,
+      // An id-addressed notification belongs to that id, full stop — a viewer who resolved
+      // to nobody must not receive it by matching a stale display name.
+      n.toId ? n.toId === personId : n.to.trim().toLowerCase() === key,
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
