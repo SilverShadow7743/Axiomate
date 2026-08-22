@@ -447,6 +447,39 @@ Open **Configuration → Blueprints** (under Governance).
    "Applied v1 to X on date by name" and the built subtree carries dates computed from the
    anchor with undated items still undated.
 
+## 20 · Client mail — the outward door, proven shut before it opens
+
+The only feature in this application that writes OUTWARD. Every step before the send proves a
+refusal; the send itself is one message, to the operator's own address, followed back in.
+
+1. **Before anything is granted**: open **Configuration → Capabilities**. "Client mail" must
+   show unreachable with `lostInMerge` naming `mail.send` — the stored roles predate the key,
+   and this screen existing is why that is an observation rather than a mystery. (`note.add`
+   is also required but the delivery roles already hold it.)
+2. On **Configuration → Permissions**, grant "Write to clients" to the operator's role.
+   Capabilities now shows Client mail reachable.
+3. Open an issue with **no email in Raised by** (any internal record): the Reply to client
+   section shows the no-recipient sentence and no compose. Open one whose Raised by is a bare
+   display name: same. The section must never show a Send button it would refuse.
+4. Open **OAPIL-146** (raisedBy carries a claimed address). The compose shows From = the
+   OAPIL intake mailbox, To = the claimed address, Subject = `RE: … [OAPIL-146]` — all
+   read-only. Sign in as somebody without the grant (or revoke it): the section is absent
+   entirely, and a direct `POST /api/mail/send` refuses 403 in the gate's own words.
+5. **The policy proof, before any send** — `Test-ApplicationAccessPolicy` for the app against
+   `OAPILCatalyst@` must say **Granted**, and against any other mailbox must say **Denied**.
+   The Denied half is the point: without it, app-only Mail.Send is send-as-anyone.
+6. Type a short message **to the operator's own address** (edit the test record's raisedBy to
+   claim it first). Send. Success closes the compose; the pinned **Client Communication**
+   note appears on the Notes tab without a reload, carrying recipient, subject and body, and
+   attributed to the person — not to any machine.
+7. The message arrives in the operator's inbox **from `OAPILCatalyst@`**, subject carrying
+   `[OAPIL-146]`. Check the shared mailbox's Sent Items holds it too.
+8. **Reply to that email.** Within the watcher's three minutes, intake files the reply against
+   OAPIL — the reference in the subject is what threads it — and the loop is closed: out from
+   the record, back to the record.
+9. Restore whatever the test bent: the record's raisedBy claim, and the test grant if it was
+   made on a role that should not keep it.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
