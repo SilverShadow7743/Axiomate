@@ -259,5 +259,80 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
     Object.entries(state.documents).map(([id, d]) => [id, { ...d, locator: null }]),
   )
 
-  return { ...state, rates, personSkills, documents }
+  const base = { ...state, rates, personSkills, documents }
+
+  /*
+   * The client boundary — the same posture as the rate redaction above, applied to content.
+   *
+   * Keys on the VERDICT, never on role identity: a reader whose roles do not resolve
+   * `internal.view` to allowed gets the withheld view, whoever they are. That is the
+   * fail-safe — a workspace that has not yet granted the new key shows internal users a
+   * boundary-limited view until the grant lands (loud, never leaky), while ADMIN's ALL
+   * covers the operator from the first deploy.
+   *
+   * What survives: records, notes and documents a person marked client-visible, the
+   * ANCESTOR CHAIN of surviving records (a record without its place is unreadable) and
+   * nothing else of the tree, activities/links between surviving records, and audit entries
+   * about them — dropped whole otherwise, never redacted within. Everything commercial and
+   * everything about people is withheld wholesale regardless of flags: record visibility is
+   * about content, not about the machinery. Counts recompute downstream from this subset,
+   * which is the sign-in gate's lesson — withholding the records and shipping the summary
+   * of them is the same disclosure.
+   */
+  if (can(state.model, actor, 'internal.view').allowed) return base
+
+  const issues = Object.fromEntries(
+    Object.entries(state.issues).filter(([, i]) => (i.clientVisible ?? false) && !i.deletedAt),
+  )
+  const keepNodes = new Set<string>()
+  for (const i of Object.values(issues)) {
+    let cur: string | null | undefined = i.parentId
+    while (cur && !keepNodes.has(cur) && state.nodes[cur]) {
+      keepNodes.add(cur)
+      cur = state.nodes[cur].parentId
+    }
+  }
+  const docsVisible = Object.fromEntries(
+    Object.entries(documents).filter(([, d]) => (d.clientVisible ?? false) && !d.deletedAt),
+  )
+  return {
+    ...base,
+    issues,
+    nodes: Object.fromEntries(Object.entries(state.nodes).filter(([id]) => keepNodes.has(id))),
+    activities: Object.fromEntries(
+      Object.entries(state.activities).filter(([, a]) => issues[a.issueId]),
+    ),
+    dependencies: state.dependencies.filter(
+      (d) => issues[d.predecessorId.split('#')[0]] && issues[d.successorId.split('#')[0]],
+    ),
+    relationships: state.relationships.filter((r) => issues[r.sourceIssueId] && issues[r.targetIssueId]),
+    notes: Object.fromEntries(
+      Object.entries(state.notes).filter(
+        ([, n]) => (n.clientVisible ?? false) && issues[n.issueId] && !n.deletedAt,
+      ),
+    ),
+    evidence: Object.fromEntries(
+      Object.entries(state.evidence).filter(
+        ([, e]) => issues[e.issueId] && !e.deletedAt && (!e.documentId || docsVisible[e.documentId]),
+      ),
+    ),
+    documents: docsVisible,
+    audit: state.audit.filter((a) => Boolean(issues[a.rowId])),
+    estimates: {},
+    estimateRevisions: {},
+    timeEntries: {},
+    timesheets: {},
+    rates: {},
+    changes: {},
+    personSkills: {},
+    documentReviews: {},
+    milestones: {},
+    scopeItems: {},
+    approvals: {},
+    notifications: {},
+    sows: {},
+    allocations: {},
+    commitments: {},
+    versions: {},
+  }
 }

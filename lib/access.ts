@@ -130,6 +130,7 @@ export const PERMISSIONS = [
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
   { key: 'document.review', label: 'Review deliverables', what: 'Answer approve or request changes on a document sent to you. The review names its reviewers — both are required.' },
+  { key: 'internal.view', label: 'See internal records', what: 'See records and notes that have not been marked client-visible. Without it, only what somebody deliberately marked leaves the server.' },
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
   { key: 'estimate.agree', label: 'Agree an estimate', what: 'Baseline it, after which changes need a reason.' },
   { key: 'lifecycle.build', label: 'Plan a lifecycle', what: 'Generate or clear the activity plan under an issue.' },
@@ -194,7 +195,7 @@ const ALL: PermissionKey[] = [...PERMISSION_KEYS]
 
 const DELIVERY_CORE: PermissionKey[] = [
   'work.create', 'work.edit', 'work.assign', 'work.close', 'work.schedule', 'work.link', 'mail.send',
-  'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request',
+  'note.add', 'evidence.add', 'estimate.edit', 'lifecycle.build', 'time.record', 'approval.request', 'internal.view',
   // Beside `evidence.add`, because attaching the file and describing it are one act to the
   // person doing it. Anybody who may say "here is the proof" may hold up the proof.
   'document.upload',
@@ -254,7 +255,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
   // too. A support consultant has skills like anybody else, and a directory that cannot hear
   // from a whole role is a directory with a hole in it nobody would think to look for.
-  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record', 'document.upload'],
+  ROLE_SUPPORT: ['work.create', 'work.edit', 'work.assign', 'note.add', 'evidence.add', 'time.record', 'time.submit', 'skill.record', 'document.upload', 'internal.view'],
   // The one client role that decides anything: a sponsor is the person a change order is
   // actually put to, and a rule that names them is worthless if the grant does not.
   // The one client role that decides anything, and milestone acceptance is the decision that
@@ -549,6 +550,19 @@ export function permissionForAction(
 /** Problems with a policy, checked before it is stored. */
 export function accessProblems(policy: AccessPolicy, roleIds: string[]): string[] {
   const out: string[] = []
+
+  /*
+   * The boundary is the point: `internal.view` is what separates an internal seat from a
+   * client seat, and granting it to a shipped client role would erase the distinction the
+   * guest phase stands on. Custom roles are the firm's own judgment and are not policed.
+   */
+  for (const clientRole of ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']) {
+    if ((policy.grants[clientRole] ?? []).includes('internal.view')) {
+      out.push(
+        `${clientRole} is a client role, and “See internal records” cannot be granted to it — the client boundary is the point.`,
+      )
+    }
+  }
 
   for (const [roleId, keys] of Object.entries(policy.grants)) {
     for (const k of keys) {
