@@ -480,6 +480,30 @@ refusal; the send itself is one message, to the operator's own address, followed
 9. Restore whatever the test bent: the record's raisedBy claim, and the test grant if it was
    made on a role that should not keep it.
 
+## 21 · Proofing — the review that stays with the bytes it judged
+
+Needs the document store live first: `AXIOMATE_DOCS_DRIVE_ID` must be set on the app
+(pending-actions A6), or step 3 refuses with the sentence naming it. Needs a second signed-in
+account (Tarun) for steps 5–6.
+
+1. **Before anything is granted**: Configuration → Capabilities shows "Proofing" unreachable
+   with `lostInMerge` naming `document.review`. Grant "Review deliverables" on Permissions to
+   the operator's role and to Tarun's; the capability turns reachable.
+2. Open an issue → Links → Manage evidence. The drawer's "Held by this app" list shows each
+   stored file with **unreviewed** and the new controls.
+3. Upload a small PDF. Ask for review: the picker does not offer yourself; name Tarun and a
+   question. The chip reads **awaiting 1 of 1**.
+4. As the asker, confirm no Approve/Request-changes buttons render for you — and that a
+   direct `decideDocumentReview` POST refuses with the asker-cannot-decide sentence.
+5. **As Tarun**: Request changes with an empty note is refused in the arm's words; with a
+   note it lands, chip **changes requested**. Approve afterwards: the verdict REPLACES —
+   chip **approved**, and a pinned Decision note naming the file appears in Notes.
+6. **New version**: upload a changed file through the row's button. The list still shows one
+   row (v2), the chip now reads **approved — an earlier version** (dashed), and v1 stays
+   downloadable through the chain.
+7. Withdraw a fresh review as its asker: chip **review withdrawn**; recorded verdicts stay
+   visible in the audit trail.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
