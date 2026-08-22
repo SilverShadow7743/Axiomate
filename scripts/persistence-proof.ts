@@ -35,6 +35,7 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { importWorkspace, loadWorkspace } from '../lib/db/repo'
 import { myWork } from '../lib/mywork'
+import { clientView } from '../lib/clientBoundary'
 import { persistActions } from '../lib/db/persist'
 import { runScheduledPass } from '../lib/db/schedule'
 import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
@@ -592,6 +593,34 @@ async function main() {
       'and a redacted row is refused by the mapper rather than saved as an erased level',
       refused.includes('Refusing to persist a redacted person-skill'),
       refused || 'IT WAS ACCEPTED, which would erase a level',
+    )
+  }
+
+  /* ---------------- the client boundary: read the payload's own string ---------------- */
+  {
+    const st0 = (await loadWorkspace(TENANT)).state
+    const issueId = Object.values(st0.issues)[0]!.id
+    await persistActions(TENANT, A, [
+      { t: 'updateIssue', id: issueId, patch: { clientVisible: true }, now: NOW } as Action,
+      { t: 'addNote', issueId, body: 'INTERNAL-ONLY-MARKER working note', noteType: 'Investigation', pinned: false, now: NOW } as Action,
+      { t: 'addNote', issueId, body: 'CLIENT-SAFE-MARKER reply', noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action,
+    ])
+    const st = (await loadWorkspace(TENANT)).state
+    const view = clientView(st)
+    const payload = JSON.stringify(view)
+    /* Read from the STRING — "the screen would not have shown it" is the claim this refuses. */
+    const internalSubjects = Object.values(st.issues)
+      .filter((i) => !(i.clientVisible ?? false) && !i.deletedAt && i.subject.length > 8)
+      .slice(0, 10)
+    check(
+      'the withheld payload string carries the marked and none of the internal',
+      payload.includes('CLIENT-SAFE-MARKER') &&
+        !payload.includes('INTERNAL-ONLY-MARKER') &&
+        internalSubjects.every((i) => !payload.includes(JSON.stringify(i.subject).slice(1, -1))) &&
+        Object.keys(view.rates).length === 0 &&
+        Object.keys(view.timeEntries).length === 0 &&
+        view.audit.every((a) => Boolean(view.issues[a.rowId])),
+      `payload ${payload.length} chars · ${Object.keys(view.issues).length} visible issues · ${view.audit.length} audit rows`,
     )
   }
 

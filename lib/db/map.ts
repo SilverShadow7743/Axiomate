@@ -199,6 +199,7 @@ export function issueToRow(
     status: i.status,
     owner: i.owner,
     ownerId: i.ownerId ?? null,
+    clientVisible: i.clientVisible ?? false,
     raisedBy: i.raisedBy,
     accountable: i.accountable,
     scheduleMode: i.scheduleMode,
@@ -241,6 +242,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     status: r.status as IssueStatus,
     owner: r.owner,
     ownerId: r.ownerId ?? null,
+    clientVisible: r.clientVisible ?? false,
     raisedBy: r.raisedBy,
     accountable: r.accountable as AccountableParty,
     raised: fromDateOrEmpty(r.raisedDate),
@@ -443,6 +445,7 @@ export function noteToRow(tenantId: TenantId, n: IssueNote): Prisma.IssueNoteUnc
     body: n.body,
     noteType: n.noteType,
     pinned: n.pinned,
+    clientVisible: n.clientVisible ?? false,
     createdBy: n.createdBy,
     createdAt: new Date(n.createdAt),
     updatedBy: n.updatedBy,
@@ -461,6 +464,7 @@ export function noteFromRow(r: IssueNoteRow): IssueNote {
     // reads back as what it was written as.
     noteType: r.noteType as NoteType,
     pinned: r.pinned,
+    clientVisible: r.clientVisible ?? false,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     updatedBy: r.updatedBy,
@@ -1165,6 +1169,7 @@ export function documentToRow(tenantId: TenantId, d: DocumentRecord): Prisma.Doc
     uploadedById: d.uploadedById ?? null,
     uploadedAt: new Date(d.uploadedAt),
     supersedesId: d.supersedesId ?? null,
+    clientVisible: d.clientVisible ?? false,
     deletedAt: d.deletedAt ? new Date(d.deletedAt) : null,
   }
 }
@@ -1186,6 +1191,7 @@ export function documentFromRow(r: DocumentRow): DocumentRecord {
     uploadedById: r.uploadedById ?? undefined,
     uploadedAt: r.uploadedAt.toISOString(),
     supersedesId: r.supersedesId ?? null,
+    clientVisible: r.clientVisible ?? false,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

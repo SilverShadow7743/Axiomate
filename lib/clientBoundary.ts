@@ -52,7 +52,20 @@ export function clientView(state: WorkspaceState): WorkspaceState {
       ),
     ),
     documents: docsVisible,
-    audit: state.audit.filter((a) => Boolean(issues[a.rowId])),
+    /*
+     * Two cuts, both dropping whole entries — never redacting a field inside one.
+     *
+     * The second cut is the payload proof's first catch: entries about a record's CHILDREN
+     * (`note`, `evidence`, `document`) carry the child's content — a note's body rides
+     * `reason`, a document's name rides `from`/`to` — while `rowId` names the parent issue.
+     * An internal note on a client-visible issue therefore survived the rowId filter with
+     * its body aboard. The entry does not say WHICH child it is about, so its visibility
+     * cannot be tested; the only honest move is to withhold the class. Nothing is lost that
+     * the client could have: visible children are delivered as the records themselves.
+     */
+    audit: state.audit.filter(
+      (a) => Boolean(issues[a.rowId]) && !['note', 'evidence', 'document'].includes(a.field),
+    ),
     estimates: {},
     estimateRevisions: {},
     timeEntries: {},

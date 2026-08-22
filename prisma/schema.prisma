@@ -247,6 +247,8 @@ model Issue {
   /// The directory id half of the person reference, resolved at write time. Null when the
   /// name did not uniquely resolve, and on rows written before the identity-id migration.
   ownerId     String?
+  /// Whether a client-facing surface may show this record. Default false — marked by a person.
+  clientVisible Boolean @default(false)
   raisedBy    String
   /// String, not an enum. The accountable-party vocabulary is configurable
   /// (`OperatingModel.parties`), so an enum here would reject any party a user adds.
@@ -476,6 +478,8 @@ model IssueNote {
   noteType String
   /// Pinned notes sort above the rest, whatever their age.
   pinned   Boolean @default(false)
+  /// Whether a client-facing surface may show this note. The sent client reply is born true.
+  clientVisible Boolean @default(false)
 
   /// Authorship of the original observation. Never rewritten by an edit — a correction three
   /// weeks later must not reassign who first made the remark, or when.
@@ -1197,6 +1201,9 @@ model Document {
   /// The document this one replaces — the version chain, linear by the reducer's refusal
   /// of a second successor. Null on originals and on rows stored before phase 6.
   supersedesId String?
+
+  /// Whether a client-facing surface may offer this file. Default false.
+  clientVisible Boolean @default(false)
 
   note         String   @db.Text
   uploadedBy   String
