@@ -86,6 +86,7 @@ import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from
 import { classifyForm } from '../lib/intake'
 import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
 import { isOutboundRefusal, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
+import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4030,7 +4031,7 @@ scenario(
     const good =
       /* the catalogue is written by hand, so its size is asserted: a capability built
          and never added here must surface as a failing count, not as silence */
-      healthy.length === 20 &&
+      healthy.length === 21 &&
       /* a healthy workspace reports every capability reachable */
       healthy.every((c) => c.usable) &&
       /not built but unreachable|every one of them is held/.test(describeCapabilities(healthy)) &&
@@ -4670,6 +4671,81 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'client-wide resolves alone; the engagement mailbox wins once it exists and is skipped once disabled; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `clientWide=${clientWide} nearest=${nearest} threaded=${threaded} toClaim=${toClaim} disabledSkipped=${disabledSkipped} noBox=${noBox} noRecipient=${noRecipient} bareEmail=${bareEmail} subjectShape=${subjectShape}`, stops: 'outbound resolution disagrees with the design', severity: 'P1', impact: 'a reply could go out as the wrong mailbox or to nobody stated' } as const
+  },
+)
+
+/* ================================================================== *
+ * Proofing (design 2026-08-22)
+ * ================================================================== */
+
+scenario(
+  'PR1',
+  'A deliverable is sent for review, judged, re-judged, and re-uploaded',
+  'The review pins the bytes it was asked about; the asker cannot answer; a change request names its change; a second answer replaces the first; a new version visibly does not carry the old approval.',
+  () => {
+    const asker: Actor = { id: 'pr-a', name: 'Asha' }
+    const priya: Actor = { id: 'pr-p', name: 'Priya' }
+    const tarun: Actor = { id: 'pr-t', name: 'Tarun' }
+
+    const s0 = apply(BASE, {
+      t: 'recordDocument', subjectKind: 'issue', subjectId: 'OAPIL-1', name: 'cutover-plan.pdf',
+      mimeType: 'application/pdf', sizeBytes: 4096, checksum: 'bytes-v1', locator: 't/v1', store: 'graph', note: '', now: NOW,
+    } as Action, asker).state
+    const docId = Object.values(s0.documents).find((d) => d.checksum === 'bytes-v1')!.id
+
+    /* The asker may not review their own ask. */
+    const selfAsk = apply(s0, { t: 'requestDocumentReview', documentId: docId, reviewers: ['Asha'], question: 'ok?', now: NOW } as Action, asker)
+    const selfRefused = Boolean(selfAsk.error)
+
+    const s1 = apply(s0, {
+      t: 'requestDocumentReview', documentId: docId, reviewers: ['Priya', 'Tarun'],
+      question: 'Does this go to the client?', now: NOW,
+    } as Action, asker).state
+    const review = () => Object.values(s1x.documentReviews)[0]
+    let s1x = s1
+    const pinned = Object.values(s1.documentReviews)[0].checksum === 'bytes-v1'
+
+    /* Refusals, in the arm's own words. */
+    const askerDecides = apply(s1, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'approved', note: '', now: NOW } as Action, asker)
+    const outsiderDecides = apply(s1, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'approved', note: '', now: NOW } as Action, A)
+    const notelessChanges = apply(s1, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'changes', note: '  ', now: NOW } as Action, priya)
+    const refusals = Boolean(askerDecides.error) && Boolean(outsiderDecides.error) && Boolean(notelessChanges.error)
+
+    /* Priya asks for changes, then changes her mind — replaced, not appended. */
+    s1x = apply(s1x, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'changes', note: 'Section 3 names the wrong environment.', now: NOW } as Action, priya).state
+    const midChanges = describeReview(review(), s1x.documents[docId]) === 'changes requested'
+    s1x = apply(s1x, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'approved', note: 'Fixed in the call.', now: NOW } as Action, priya).state
+    const replaced = review().verdicts.length === 1 && review().verdicts[0].verdict === 'approved'
+    const stillAwaiting = describeReview(review(), s1x.documents[docId]) === 'awaiting 1 of 2'
+
+    /* Tarun completes it: approved, and the pinned Decision note lands on the record. */
+    s1x = apply(s1x, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'approved', note: '', now: NOW } as Action, tarun).state
+    const approved = describeReview(review(), s1x.documents[docId]) === 'approved'
+    const noted = Object.values(s1x.notes).some((n) => n.issueId === 'OAPIL-1' && n.pinned && /APPROVED/.test(n.body) && n.noteType === 'Decision')
+
+    /* A new version: the chain grows, and the approval visibly stays with the old bytes. */
+    const s2 = apply(s1x, {
+      t: 'recordDocument', subjectKind: 'issue', subjectId: 'OAPIL-1', name: 'cutover-plan.pdf',
+      mimeType: 'application/pdf', sizeBytes: 5000, checksum: 'bytes-v2', locator: 't/v2', store: 'graph', note: '', now: NOW,
+      supersedesId: docId,
+    } as Action, asker).state
+    const v2 = Object.values(s2.documents).find((d) => d.checksum === 'bytes-v2')!
+    const chain = versionChainOf(s2.documents, docId)
+    const chained = chain.length === 2 && chain[0].id === v2.id && chain[1].id === docId
+    const earlier = !coversDocument(Object.values(s2.documentReviews)[0], v2) &&
+      describeReview(Object.values(s2.documentReviews)[0], v2) === 'approved — an earlier version'
+    /* And the chain is linear: a second successor of v1 is refused. */
+    const secondSuccessor = apply(s2, {
+      t: 'recordDocument', subjectKind: 'issue', subjectId: 'OAPIL-1', name: 'cutover-plan.pdf',
+      mimeType: 'application/pdf', sizeBytes: 5001, checksum: 'bytes-v3', locator: 't/v3', store: 'graph', note: '', now: NOW,
+      supersedesId: docId,
+    } as Action, asker)
+    const linear = Boolean(secondSuccessor.error)
+
+    const okAll = selfRefused && pinned && refusals && midChanges && replaced && stillAwaiting && approved && noted && chained && earlier && linear
+    return okAll
+      ? { verdict: 'PASS', actual: 'The ask pins bytes-v1; the asker, an outsider, and a noteless change request are refused in the arm’s words; Priya’s second answer replaces her first and completion waits for Tarun; approval lands as a pinned Decision note; v2 supersedes v1, reads "approved — an earlier version", and a second successor of v1 is refused.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `selfRefused=${selfRefused} pinned=${pinned} refusals=${refusals} midChanges=${midChanges} replaced=${replaced} stillAwaiting=${stillAwaiting} approved=${approved} noted=${noted} chained=${chained} earlier=${earlier} linear=${linear}`, stops: 'the review lifecycle disagrees with the design', severity: 'P1', impact: 'a deliverable could read as approved when the approved bytes are not the ones being sent' } as const
   },
 )
 

@@ -196,6 +196,15 @@ export const CAPABILITIES: Capability[] = [
     switchedAt: null,
   },
   {
+    id: 'proofing',
+    name: 'Proofing',
+    what: 'A deliverable sent to named colleagues for approve or request-changes, pinned to the exact bytes reviewed.',
+    // Both halves: asking rides on upload, answering has its own key. A role with one and
+    // not the other can see reviews it cannot move, which the screen states rather than hides.
+    needs: ['document.upload', 'document.review'],
+    switchedAt: null,
+  },
+  {
     id: 'intake',
     name: 'Email intake',
     what: 'Messages to a watched mailbox filed as work, under a named part of the tree.',

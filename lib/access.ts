@@ -241,14 +241,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
@@ -259,7 +259,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
   // actually put to, and a rule that names them is worthless if the grant does not.
   // The one client role that decides anything, and milestone acceptance is the decision that
   // most belongs to a client: it is what turns delivered work into money owed.
-  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide', 'milestone.accept'],
+  ROLE_CLIENT_SPONSOR: ['work.create', 'note.add', 'evidence.add', 'approval.decide', 'document.review', 'milestone.accept'],
   ROLE_CLIENT_LEAD: ['work.create', 'note.add', 'evidence.add'],
   ROLE_CLIENT_USER: ['work.create', 'note.add'],
 }
