@@ -170,6 +170,10 @@ export async function POST(req: Request) {
       folder: filingFolderFor(state, subjectId),
     })
 
+    /* A new version, when the row's button armed one. Validated by the reducer against the
+       TARGET's stored row — same subject, still live, not already replaced. */
+    const supersedesId = String(form.get('supersedesId') ?? '').trim() || undefined
+
     const action: SubmittedAction = {
       t: 'recordDocument',
       subjectKind,
@@ -182,6 +186,7 @@ export async function POST(req: Request) {
       store: store.kind,
       note,
       evidenceId,
+      ...(supersedesId ? { supersedesId } : {}),
       now: new Date().toISOString(),
     } as unknown as SubmittedAction
 

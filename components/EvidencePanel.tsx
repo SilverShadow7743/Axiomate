@@ -17,6 +17,15 @@ import {
 } from '@/lib/evidence'
 import { formatIso } from '@/lib/dates'
 import { formatBytes as formatDocBytes, type DocumentRecord } from '@/lib/documents'
+import {
+  coversDocument,
+  describeReview,
+  reviewStateOf,
+  reviewsForDocument,
+  versionChainOf,
+  type DocumentReview,
+  type ReviewVerdict,
+} from '@/lib/proofing'
 import type { Decision } from '@/lib/access'
 import type { IssueRecord } from '@/lib/workspace'
 
@@ -69,6 +78,19 @@ interface Props {
    */
   onUpload: (file: File, evidenceId: string | null) => Promise<string | null>
   onWithdrawDocument: (id: string) => void
+  /* ---- proofing ---- */
+  /** Every document in the workspace — a version chain can reach outside this panel's list. */
+  allDocuments: Record<string, DocumentRecord>
+  reviews: Record<string, DocumentReview>
+  /** Directory names offered as reviewers. */
+  people: string[]
+  actorName: string
+  mayReview: Decision
+  onAskReview: (documentId: string, reviewers: string[], question: string) => void
+  onDecideReview: (reviewId: string, verdict: ReviewVerdict, note: string) => void
+  onWithdrawReview: (reviewId: string) => void
+  /** A new version of an existing document — the same upload, chained. */
+  onUploadVersion: (file: File, supersedesId: string) => Promise<string | null>
   onClose: () => void
 }
 
@@ -86,12 +108,30 @@ export default function EvidencePanel({
   documents,
   onUpload,
   onWithdrawDocument,
+  allDocuments,
+  reviews,
+  people,
+  actorName,
+  mayReview,
+  onAskReview,
+  onDecideReview,
+  onWithdrawReview,
+  onUploadVersion,
   onClose,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   useOverlay(rootRef, true, onClose)
 
   const fileInput = useRef<HTMLInputElement>(null)
+  const versionInput = useRef<HTMLInputElement>(null)
+  /** Which document a chosen file will supersede — armed by its row's New version button. */
+  const [versionFor, setVersionFor] = useState<string | null>(null)
+  /** Which document's ask-for-review form is open. */
+  const [askFor, setAskFor] = useState<string | null>(null)
+  const [askWho, setAskWho] = useState<Set<string>>(new Set())
+  const [askQuestion, setAskQuestion] = useState('')
+  /** The verdict note, per review — required for Request changes, kept on refusal. */
+  const [verdictNote, setVerdictNote] = useState('')
   const [filter, setFilter] = useState<EvidenceKind | 'all'>('all')
   const [preview, setPreview] = useState<EvidenceItem | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -303,20 +343,159 @@ export default function EvidencePanel({
               firm&rsquo;s document library, where it can be produced later.
             </p>
           ) : (
-            liveDocs.map((d) => (
-              <div key={d.id} className="evi-item">
+            liveDocs
+              /* Chain heads only: an old version is reached through its successor's history
+                 line, not listed as a sibling of the file that replaced it. */
+              .filter((d) => !liveDocs.some((x) => x.supersedesId === d.id))
+              .map((d) => {
+                const chain = versionChainOf(allDocuments, d.id)
+                const latest =
+                  chain
+                    .flatMap((c) => reviewsForDocument(reviews, c.id))
+                    .sort((a, b) => b.askedAt.localeCompare(a.askedAt))[0] ?? null
+                const iAmReviewer =
+                  latest?.reviewers.some((r) => r.trim().toLowerCase() === actorName.trim().toLowerCase()) ?? false
+                const iAsked = latest?.askedBy.trim().toLowerCase() === actorName.trim().toLowerCase()
+                const outcome = latest ? reviewStateOf(latest).outcome : null
+                return (
+              <div key={d.id} className="evi-item evi-doc">
                 <span className="evi-icon">{KIND_ICON[categorise(d.name, d.mimeType)]}</span>
                 <div className="evi-item-body">
                   <div className="evi-item-name" title={d.name}>
                     {d.name}
+                    {chain.length > 1 && <span className="prov"> · v{chain.length}</span>}
                   </div>
                   <div className="evi-item-meta">
                     <span>{formatDocBytes(d.sizeBytes)}</span>
                     <span className="mono">{formatIso(d.uploadedAt.slice(0, 10))}</span>
                     <span>{d.uploadedBy}</span>
+                    {latest ? (
+                      <span
+                        className={`review-chip rc-${latest.withdrawnAt ? 'withdrawn' : outcome}${latest && !latest.withdrawnAt && outcome === 'approved' && !coversDocument(latest, d) ? ' rc-stale' : ''}`}
+                        title={`“${latest.question}” — asked by ${latest.askedBy}`}
+                      >
+                        {describeReview(latest, d)}
+                      </span>
+                    ) : (
+                      <span className="prov">unreviewed</span>
+                    )}
                   </div>
+
+                  {/* A named reviewer answers here. Request changes keeps its note rule: the
+                      arm refuses a noteless one, so the box sits beside the buttons. */}
+                  {latest && !latest.withdrawnAt && iAmReviewer && mayReview.allowed && (
+                    <div className="evi-review-verdict">
+                      <input
+                        value={verdictNote}
+                        onChange={(e) => setVerdictNote(e.target.value)}
+                        placeholder="Note — required to request changes"
+                        aria-label="Review note"
+                      />
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          onDecideReview(latest.id, 'approved', verdictNote)
+                          setVerdictNote('')
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="btn ghost"
+                        disabled={!verdictNote.trim()}
+                        onClick={() => {
+                          onDecideReview(latest.id, 'changes', verdictNote)
+                          setVerdictNote('')
+                        }}
+                      >
+                        Request changes
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Asking. Absent without the grant to attach — the same both-halves rule
+                      as everywhere: the arm refuses what the button hides. */}
+                  {askFor === d.id ? (
+                    <div className="evi-review-ask">
+                      <div className="evi-review-people">
+                        {people
+                          .filter((p) => p.trim().toLowerCase() !== actorName.trim().toLowerCase())
+                          .map((p) => (
+                            <label key={p}>
+                              <input
+                                type="checkbox"
+                                checked={askWho.has(p)}
+                                onChange={(e) => {
+                                  const next = new Set(askWho)
+                                  if (e.target.checked) next.add(p)
+                                  else next.delete(p)
+                                  setAskWho(next)
+                                }}
+                              />
+                              {p}
+                            </label>
+                          ))}
+                      </div>
+                      <input
+                        value={askQuestion}
+                        onChange={(e) => setAskQuestion(e.target.value)}
+                        placeholder="What should they judge?"
+                        aria-label="Review question"
+                      />
+                      <button
+                        className="btn primary"
+                        disabled={!askWho.size || !askQuestion.trim()}
+                        onClick={() => {
+                          onAskReview(d.id, [...askWho], askQuestion.trim())
+                          setAskFor(null)
+                          setAskWho(new Set())
+                          setAskQuestion('')
+                        }}
+                      >
+                        Ask
+                      </button>
+                      <button className="btn ghost" onClick={() => setAskFor(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="evi-item-actions">
+                  {mayAttach.allowed && askFor !== d.id && (
+                    <button
+                      className="btn ghost"
+                      onClick={() => {
+                        setAskFor(d.id)
+                        setAskWho(new Set())
+                        setAskQuestion('')
+                      }}
+                      title="Send this document to named colleagues for approve / request changes"
+                    >
+                      Ask for review…
+                    </button>
+                  )}
+                  {latest && !latest.withdrawnAt && iAsked && (
+                    <button
+                      className="btn ghost"
+                      onClick={() => onWithdrawReview(latest.id)}
+                      title="Withdraw the review. Recorded verdicts stay recorded."
+                    >
+                      Withdraw review
+                    </button>
+                  )}
+                  {mayAttach.allowed && (
+                    <button
+                      className="btn ghost"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setVersionFor(d.id)
+                        versionInput.current?.click()
+                      }}
+                      title="Upload a replacement. The old version stays downloadable; reviews stay with the bytes they judged."
+                    >
+                      New version
+                    </button>
+                  )}
                   {/*
                     * A normal link to our own endpoint, which authorises the request when it is
                     * made. Never a storage URL: one of those works for anybody holding it and
@@ -335,8 +514,26 @@ export default function EvidencePanel({
                   </button>
                 </div>
               </div>
-            ))
+                )
+              })
           )}
+          {/* The version chooser — armed per row, resolved through the same upload path. */}
+          <input
+            ref={versionInput}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file || !versionFor) return
+              setBusy(file.name)
+              setFailed(null)
+              const err = await onUploadVersion(file, versionFor)
+              setBusy(null)
+              setVersionFor(null)
+              if (err) setFailed(err)
+            }}
+          />
         </div>
 
         <div className="evi-tabs" role="tablist" aria-label="Evidence categories">

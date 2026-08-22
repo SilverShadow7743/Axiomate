@@ -323,6 +323,8 @@ export default function IssueWorkspace({
       subjectKind: 'issue' | 'sow' | 'node' | 'change',
       subjectId: string,
       evidenceId: string | null,
+      /** A new version of an existing document — the reducer validates the chain. */
+      supersedesId?: string,
     ): Promise<string | null> => {
       const form = new FormData()
       form.append('file', file)
@@ -330,6 +332,7 @@ export default function IssueWorkspace({
       form.append('subjectId', subjectId)
       form.append('note', '')
       if (evidenceId) form.append('evidenceId', evidenceId)
+      if (supersedesId) form.append('supersedesId', supersedesId)
 
       let res: Response
       try {
@@ -2269,6 +2272,23 @@ export default function IssueWorkspace({
           onUpload={(file, evidenceId) => uploadDocument(file, 'issue', evidenceFor, evidenceId)}
           onWithdrawDocument={(id) =>
             dispatch({ t: 'removeDocument', id, now: new Date().toISOString() })
+          }
+          allDocuments={state.documents}
+          reviews={state.documentReviews}
+          people={Object.values(state.model.people).map((p) => p.name)}
+          actorName={actor.name}
+          mayReview={can(state.model, actor, 'document.review')}
+          onAskReview={(documentId, reviewers, question) =>
+            dispatch({ t: 'requestDocumentReview', documentId, reviewers, question, now: new Date().toISOString() })
+          }
+          onDecideReview={(reviewId, verdict, note) =>
+            dispatch({ t: 'decideDocumentReview', reviewId, verdict, note, now: new Date().toISOString() })
+          }
+          onWithdrawReview={(reviewId) =>
+            dispatch({ t: 'withdrawDocumentReview', reviewId, now: new Date().toISOString() })
+          }
+          onUploadVersion={(file, supersedesId) =>
+            uploadDocument(file, 'issue', evidenceFor, null, supersedesId)
           }
           onClose={() => setEvidenceFor(null)}
         />

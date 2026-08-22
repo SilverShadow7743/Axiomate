@@ -1379,6 +1379,56 @@ select.cell-editor {
   }
 }
 
+/* ---------- proofing: the review chip and its two small forms ---------- */
+.review-chip {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.review-chip.rc-approved {
+  border-color: var(--h-ontrack, #2e7d32);
+  color: var(--h-ontrack, #2e7d32);
+}
+.review-chip.rc-changes {
+  border-color: var(--h-overdue);
+  color: var(--h-overdue);
+}
+.review-chip.rc-stale,
+.review-chip.rc-withdrawn {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.evi-review-verdict,
+.evi-review-ask {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.evi-review-verdict input,
+.evi-review-ask input[type='text'],
+.evi-review-ask > input {
+  flex: 1 1 180px;
+  font-size: 12px;
+}
+.evi-review-people {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+}
+.evi-review-people label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 /* ---------- merged detail tabs ----------
    Schedule and Links carry sections where four tabs used to cross-reference each other. */
 .tab-sect {
