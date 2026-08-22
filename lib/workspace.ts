@@ -43,7 +43,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { ACTION_PERMISSIONS, accessProblems, can, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   LOG_FOR_OTHERS,
@@ -133,7 +133,7 @@ import {
   type WatchDiff,
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
-import { deliveryFor, type Channel, type Notification } from './notifications'
+import { deliveryFor, type Channel, type Delivery, type Notification } from './notifications'
 import {
   approvalsFor,
   blockingRule,
@@ -944,6 +944,8 @@ export type Action =
       now: string
     }
   | { t: 'markNotificationRead'; id: string; now: string }
+  /** The drain stamping what actually happened to a queued message. Server-internal, like `notify`. */
+  | { t: 'markNotificationDelivery'; id: string; delivery: Delivery; note: string; now: string }
   /* ---- COMMERCIAL ---- */
   | { t: 'upsertSow'; id: string | null; engagementId: string; patch: Partial<Sow>; now: string }
   | { t: 'archiveSow'; id: string; now: string }
@@ -1600,10 +1602,52 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           assignments: {},
           deletedAt: null,
         }
+        /*
+         * Machine-created work must not land silently. A client's request that files itself
+         * and tells nobody defeats the door it came through — so everyone who may hand work
+         * out (a live role holding work.assign) is told, in-app, without any automation rule
+         * having to exist. Deterministic (sorted, capped) so the server's replay mints the
+         * same notifications the browser's optimistic copy did.
+         */
+        let seqAfter = seq
+        let notifications = state.notifications
+        if (rolesFor(state.model, actor).includes(MACHINE_ROLE_ID)) {
+          const grants = state.model.access.grants
+          const triagers = Object.values(state.model.people)
+            .filter((p) =>
+              p.roleIds.some((rid) => {
+                const role = state.model.roles?.[rid]
+                return role && !role.deletedAt && (grants[rid] ?? []).includes('work.assign')
+              }),
+            )
+            .sort((x, y) => x.name.localeCompare(y.name))
+            .slice(0, 8)
+          for (const p of triagers) {
+            seqAfter += 1
+            const nid = `notif-${seqAfter}`
+            notifications = {
+              ...notifications,
+              [nid]: {
+                id: nid,
+                to: p.name,
+                channel: 'in-app',
+                subject: `New request ${id}`,
+                body: `${issue.raisedBy} raised “${issue.subject}” — it is unowned until somebody takes it.`,
+                aboutId: id,
+                ruleId: 'intake-arrival',
+                createdAt: a.now,
+                delivery: 'delivered',
+                deliveryNote: '',
+                readAt: null,
+              },
+            }
+          }
+        }
         return {
           state: {
             ...state,
-            seq,
+            seq: seqAfter,
+            notifications,
             issues: { ...state.issues, [id]: issue },
             audit: log(actor, state, {
               rowId: id,
@@ -2022,11 +2066,47 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           )
         }
       }
+      /*
+       * Being handed work is the one event everybody needs told about, and no automation
+       * rule should have to exist for it. Raised straight from the arm — every path that
+       * changes an owner (grid cell, field strip, board, edit form, the API) lands here, so
+       * one mint covers them all. Skipped for self-assignment, which is not news, and for
+       * clearing to Unassigned, which is nobody's inbox.
+       */
+      let notifications = state.notifications
+      let seqAfter = state.seq
+      const newOwner = a.patch.owner
+      if (
+        newOwner != null &&
+        newOwner !== i.owner &&
+        newOwner.trim() &&
+        newOwner !== 'Unassigned' &&
+        newOwner.trim().toLowerCase() !== by.trim().toLowerCase()
+      ) {
+        seqAfter += 1
+        const nid = `notif-${seqAfter}`
+        notifications = {
+          ...notifications,
+          [nid]: {
+            id: nid,
+            to: newOwner,
+            channel: 'in-app',
+            subject: `${a.id} is now yours`,
+            body: `${by} assigned you ${a.id} — “${next.subject}”.`,
+            aboutId: a.id,
+            ruleId: 'assignment',
+            createdAt: a.now,
+            delivery: 'delivered',
+            deliveryNote: '',
+            readAt: null,
+          },
+        }
+      }
       // The warning rides back on the success message, because a note only the audit trail
       // sees arrives too late to be acted on by the person who could still change their mind.
       const ownerNote = ownerVerdict ? availabilityNote(ownerVerdict) : undefined
       return {
-        state: { ...state, issues: { ...state.issues, [a.id]: next }, audit },
+        state: { ...state, issues: { ...state.issues, [a.id]: next }, audit, notifications, seq: seqAfter },
         message: ownerNote ? `Saved. ${ownerNote}` : 'Saved.',
       }
     }
@@ -4392,6 +4472,32 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         state: {
           ...state,
           notifications: { ...state.notifications, [a.id]: { ...n, readAt: a.now } },
+        },
+      }
+    }
+
+    case 'markNotificationDelivery': {
+      const n = state.notifications[a.id]
+      if (!n) return { state, error: 'That notification no longer exists.' }
+      if (n.delivery === a.delivery && n.deliveryNote === a.note) return { state }
+      return {
+        state: {
+          ...state,
+          notifications: {
+            ...state.notifications,
+            [a.id]: { ...n, delivery: a.delivery, deliveryNote: a.note },
+          },
+          // "Was anyone told" is part of the record's story, so the outcome is audited
+          // against the record the message was about — same rowId as the raise.
+          audit: log(actor, state, {
+            rowId: n.aboutId,
+            field: 'notification',
+            from: n.delivery,
+            to: a.note ? `${a.delivery} — ${a.note}` : a.delivery,
+            at: a.now,
+            by,
+            reason: n.ruleId,
+          }),
         },
       }
     }

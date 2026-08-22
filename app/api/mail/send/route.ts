@@ -6,7 +6,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
-import { entraConfig } from '@/lib/auth/entra'
+import { sendAsMailbox } from '@/lib/mail'
 import type { Action } from '@/lib/workspace'
 import type { IssueNote } from '@/lib/notes'
 
@@ -31,34 +31,6 @@ import type { IssueNote } from '@/lib/notes'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-let cached: { token: string; expiresAt: number } | null = null
-
-async function graphToken(): Promise<string> {
-  const entra = entraConfig()
-  if (!entra) throw new Error('Entra is not configured.')
-  const now = Date.now()
-  if (cached && cached.expiresAt > now + 60_000) return cached.token
-
-  const res = await fetch(`https://login.microsoftonline.com/${entra.tenantId}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: entra.clientId,
-      client_secret: entra.clientSecret,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials',
-    }),
-  })
-  if (!res.ok) {
-    throw new Error(
-      `Microsoft rejected this application's credentials (${res.status}). An administrator should check the client secret and that admin consent for Mail.Send is still granted.`,
-    )
-  }
-  const json = (await res.json()) as { access_token: string; expires_in: number }
-  cached = { token: json.access_token, expiresAt: now + json.expires_in * 1000 }
-  return json.access_token
-}
 
 export async function POST(req: Request) {
   let body: { issueId?: string; text?: string }
@@ -133,29 +105,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: resolved.reason }, { status: 422 })
     }
 
-    /* ---- the send itself ---- */
-    const token = await graphToken()
-    const res = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(resolved.mailbox.address)}/sendMail`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          message: {
-            subject: resolved.subject,
-            body: { contentType: 'Text', content: text },
-            toRecipients: [{ emailAddress: { address: resolved.recipient } }],
-          },
-          saveToSentItems: true,
-        }),
-      },
-    )
+    /* ---- the send itself, through the shared Graph client ---- */
+    const res = await sendAsMailbox(resolved.mailbox.address, resolved.recipient, resolved.subject, text)
     if (!res.ok) {
-      // A refused token may reflect consent that has since been fixed — drop the cache so
-      // the next attempt asks for a fresh one instead of replaying the stale claim for an hour.
-      if (res.status === 401 || res.status === 403) cached = null
       // The full error names tenant internals; the caller gets one honest sentence.
-      console.error(`mail send refused for ${issueId}: ${res.status} ${await res.text()}`)
+      console.error(`mail send refused for ${issueId}: ${res.status} ${res.detail}`)
       return NextResponse.json(
         {
           ok: false,

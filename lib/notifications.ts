@@ -48,6 +48,15 @@ export interface Notification {
  */
 export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNote: string } {
   if (channel === 'in-app') return { delivery: 'delivered', deliveryNote: '' }
+  if (channel === 'email') {
+    // Written pending and DRAINED: the scheduled pass sends these through the same Graph
+    // client as client mail and stamps what actually happened. Pending here means queued,
+    // not abandoned — the stamp is the proof either way.
+    return {
+      delivery: 'pending',
+      deliveryNote: 'Queued for the scheduled pass to email.',
+    }
+  }
   return {
     delivery: 'pending',
     deliveryNote: `No ${channel} transport is configured, so this was recorded and not sent.`,

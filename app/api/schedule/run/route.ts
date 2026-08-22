@@ -3,6 +3,7 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { loadWorkspace } from '@/lib/db/repo'
 import { runScheduledPass } from '@/lib/db/schedule'
 import { pruneAppliedActions } from '@/lib/db/persist'
+import { drainEmailNotifications } from '@/lib/db/notifyDrain'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
@@ -121,9 +122,28 @@ export async function POST(req: Request) {
       /* Reported below as zero. A pass that could not tidy up still ran. */
     }
 
+    /**
+     * After the pass and outside its transaction, for the same reason as the pruning above —
+     * and additionally because a mail server must never sit inside a Serializable retry loop:
+     * the transaction would replay, and the client would be written to twice.
+     */
+    let drained: { attempted: number; sent: number; failed: number; note?: string } = {
+      attempted: 0,
+      sent: 0,
+      failed: 0,
+    }
+    try {
+      drained = await drainEmailNotifications(tenantId, SCHEDULE_ACTOR, new Date().toISOString())
+    } catch (err) {
+      // The pass still ran; the queue keeps its pending truth and the next run retries.
+      console.error(`notification drain failed: ${describeDbError(err)}`)
+    }
+
     return NextResponse.json({
       ok: true,
       forgottenActionKeys: forgotten,
+      // What left the building this run — the count the Inbox's "not sent" number goes down by.
+      notifications: drained,
       summary: run.summary,
       raised: run.raised,
       // What the recurrence rules raised, by rule, occurrence and issue id.

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import type { Actor } from '@/lib/actor'
-import { inboxFor, undelivered, unreadCount } from '@/lib/notifications'
+import { inboxFor, undelivered, unreadCount, type Notification } from '@/lib/notifications'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
 
@@ -21,12 +21,16 @@ export default function Inbox({
   state,
   actor,
   onRead,
+  onReadAll,
   onOpen,
 }: {
   state: WorkspaceState
   actor: Actor
   onRead: (id: string) => void
-  onOpen: (issueId: string) => void
+  /** Mark every unread notification read in one batch — see dispatchMany, not a loop of dispatches. */
+  onReadAll: (ids: string[]) => void
+  /** The whole notification rides along so the workspace can land on the right tab for it. */
+  onOpen: (issueId: string, notification: Notification) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -60,6 +64,15 @@ export default function Inbox({
             <div className="menu-head">
               <b>Notifications</b>
               <span className="prov">for {actor.name}</span>
+              {unread > 1 && (
+                <button
+                  className="btn ghost"
+                  onClick={() => onReadAll(mine.filter((n) => !n.readAt).map((n) => n.id))}
+                  title="Mark every notification here as read"
+                >
+                  Mark all read
+                </button>
+              )}
             </div>
 
             {mine.length === 0 ? (
@@ -75,7 +88,7 @@ export default function Inbox({
                       className="inbox-item"
                       onClick={() => {
                         if (!n.readAt) onRead(n.id)
-                        onOpen(n.aboutId)
+                        onOpen(n.aboutId, n)
                         setOpen(false)
                       }}
                     >
@@ -88,6 +101,12 @@ export default function Inbox({
                   </li>
                 ))}
               </ul>
+            )}
+            {mine.length > 30 && (
+              <p className="prov inbox-empty">
+                {mine.length - 30} older not shown — the badge counts them, so the list says so
+                rather than letting the numbers disagree.
+              </p>
             )}
 
             {stuck.length > 0 && (

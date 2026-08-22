@@ -314,6 +314,8 @@ export async function persistSteps(
       } else if (after.activities[id]) {
         await tx.issueActivity.create({ data: activityToRow(tenantId, after.activities[id]) })
       }
+      // A machine-created issue also minted arrival notifications; they land with it.
+      await persistNotificationDiff(tx, tenantId, before, after)
       return
     }
 
@@ -349,7 +351,9 @@ export async function persistSteps(
       return void (await upsertNode(tx, tenantId, after, action.id))
 
     case 'updateIssue':
-      return void (await upsertIssue(tx, tenantId, after, action.id))
+      await upsertIssue(tx, tenantId, after, action.id)
+      // An owner change may have minted an assignment notification; it lands with the row.
+      return void (await persistNotificationDiff(tx, tenantId, before, after))
 
     case 'setAssignment':
       return void (await upsertIssue(tx, tenantId, after, action.issueId))
@@ -673,18 +677,9 @@ export async function persistSteps(
      * applies what they ask for inside the same transaction.
      */
     case 'notify':
-    case 'markNotificationRead': {
-      for (const [id, n] of Object.entries(after.notifications)) {
-        if (before.notifications[id] === n) continue
-        const row = notificationToRow(tenantId, n)
-        await tx.notification.upsert({
-          where: { tenantId_id: { tenantId, id } },
-          create: row,
-          update: row,
-        })
-      }
-      return
-    }
+    case 'markNotificationDelivery':
+    case 'markNotificationRead':
+      return void (await persistNotificationDiff(tx, tenantId, before, after))
 
     /**
      * The approval, and nothing else.
@@ -808,6 +803,24 @@ export async function persistSteps(
 /* ================================================================== *
  * Helpers
  * ================================================================== */
+
+/** Every notification the batch touched — created, stamped, or read — written as one shape. */
+async function persistNotificationDiff(
+  tx: Tx,
+  tenantId: TenantId,
+  before: WorkspaceState,
+  after: WorkspaceState,
+): Promise<void> {
+  for (const [id, n] of Object.entries(after.notifications)) {
+    if (before.notifications[id] === n) continue
+    const row = notificationToRow(tenantId, n)
+    await tx.notification.upsert({
+      where: { tenantId_id: { tenantId, id } },
+      create: row,
+      update: row,
+    })
+  }
+}
 
 async function upsertNode(tx: Tx, tenantId: TenantId, s: WorkspaceState, id: string): Promise<void> {
   const n = s.nodes[id]

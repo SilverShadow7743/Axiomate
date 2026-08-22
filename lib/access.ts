@@ -498,6 +498,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
    */
   notify: null,
   markNotificationRead: null,
+  /* The drain stamping what happened to a queued message after it happened — a record of an
+   * outcome, not a grant. Never accepted over the wire; see the workspace endpoint's KINDS. */
+  markNotificationDelivery: null,
 }
 
 /**

@@ -1730,7 +1730,26 @@ export default function IssueWorkspace({
           state={state}
           actor={actor}
           onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
-          onOpen={(issueId) => revealIssue(issueId)}
+          onReadAll={(ids) => {
+            // One batch through dispatchMany: successive dispatch calls in one tick each
+            // read the pre-change state and the last setState wins — the documented trap.
+            const now = new Date().toISOString()
+            dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
+          }}
+          onOpen={(issueId, n) => {
+            revealIssue(issueId)
+            // Land on the tab the notification is about, through the panel's own request
+            // mechanism — an assignment reads on Overview, hours on Time, mail on Notes.
+            const tab =
+              n.ruleId === 'assignment'
+                ? 'Overview'
+                : /timesheet|hours|\btime\b/i.test(`${n.subject} ${n.ruleId}`)
+                  ? 'Time'
+                  : /note|mail|reply/i.test(`${n.subject} ${n.ruleId}`)
+                    ? 'Notes'
+                    : null
+            if (tab) setRequestTab(tab as DetailTab)
+          }}
         />
 
         <span className="grow" />

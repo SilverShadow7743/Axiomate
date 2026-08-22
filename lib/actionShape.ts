@@ -568,6 +568,12 @@ const SHAPES = {
   decideApproval: { id: req(id), decision: req(oneOf(DECISIONS)), note: req(text), now },
   /* ---- NOTIFICATION ---- */
   markNotificationRead: { id: req(id), now },
+  markNotificationDelivery: {
+    id: req(id),
+    delivery: req(oneOf(new Set(['delivered', 'pending', 'failed']))),
+    note: req(text),
+    now,
+  },
   /* ---- COMMERCIAL ---- */
   /** `id: null` is how an upsert says "insert"; see the nullable-required note on `addEvidence`. */
   upsertSow: { id: req(idOrNull), engagementId: req(id), patch: req(plainObject), now },
