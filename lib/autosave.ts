@@ -195,6 +195,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       timeEntries: parsed.timeEntries ?? {},
       approvals: parsed.approvals ?? {},
       notifications: parsed.notifications ?? {},
+      // `?? {}` because a mirror written before proofing existed has no such key.
+      documentReviews: parsed.documentReviews ?? {},
       sows: parsed.sows ?? {},
       allocations: parsed.allocations ?? {},
       commitments: parsed.commitments ?? {},

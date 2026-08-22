@@ -129,6 +129,7 @@ export const PERMISSIONS = [
   },
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
+  { key: 'document.review', label: 'Review deliverables', what: 'Answer approve or request changes on a document sent to you. The review names its reviewers — both are required.' },
   { key: 'estimate.edit', label: 'Estimate', what: 'Score complexity, set capacity and build a breakdown.' },
   { key: 'estimate.agree', label: 'Agree an estimate', what: 'Baseline it, after which changes need a reason.' },
   { key: 'lifecycle.build', label: 'Plan a lifecycle', what: 'Generate or clear the activity plan under an issue.' },
@@ -469,6 +470,11 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   deliverMilestone: 'milestone.edit',
   decideMilestone: 'milestone.accept',
   recordDocument: 'document.upload',
+  /* Asking rides on upload (whoever may put a deliverable on the record may ask about it);
+   * answering needs its own key; withdrawing is the asker's act, gated like asking. */
+  requestDocumentReview: 'document.upload',
+  decideDocumentReview: 'document.review',
+  withdrawDocumentReview: 'document.upload',
   // The floor. Withdrawing somebody ELSE's attachment additionally needs `document.remove`,
   // checked in the arm — the same shape as time and skills.
   removeDocument: 'document.upload',

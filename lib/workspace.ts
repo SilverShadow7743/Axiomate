@@ -134,6 +134,7 @@ import {
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, type Channel, type Delivery, type Notification } from './notifications'
+import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
   blockingRule,
@@ -345,6 +346,8 @@ export interface WorkspaceState {
    * somebody asks for is usually an old one.
    */
   documents: Record<string, DocumentRecord>
+  /** Deliverable reviews — see lib/proofing.ts. Keyed by review id. */
+  documentReviews: Record<string, DocumentReview>
   /**
    * What was promised, when it lands, and what it is worth. See `./milestone`.
    *
@@ -621,6 +624,7 @@ export function initWorkspace(
     changes: {},
     personSkills: {},
     documents: {},
+    documentReviews: {},
     milestones: {},
     scopeItems: {},
     /**
@@ -867,9 +871,16 @@ export type Action =
       note: string
       /** Attach it to an issue's evidence list in the same act, when one is being described. */
       evidenceId?: string | null
+      /** The document this upload replaces — a new version in the chain. */
+      supersedesId?: string | null
       now: string
     }
   | { t: 'removeDocument'; id: string; now: string }
+  /* ---- PROOFING ---- */
+  /** Ask named colleagues to judge a stored document. The checksum is pinned from the row. */
+  | { t: 'requestDocumentReview'; documentId: string; reviewers: string[]; question: string; now: string }
+  | { t: 'decideDocumentReview'; reviewId: string; verdict: ReviewVerdict; note: string; now: string }
+  | { t: 'withdrawDocumentReview'; reviewId: string; now: string }
   /* ---- SCOPE ---- */
   /**
    * A line of what a statement of work says it will deliver. See `./scope`.
@@ -3825,6 +3836,24 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         return { state, error: `That exact file is already attached here as “${already.name}”.` }
       }
 
+      /*
+       * A new version validates against the TARGET's stored row, never the client's claim:
+       * same subject (chains must not cross records), still live, and not already replaced —
+       * the chain is linear so “the newest” has one answer.
+       */
+      if (a.supersedesId) {
+        const target = state.documents[a.supersedesId]
+        if (!target || target.deletedAt) {
+          return { state, error: 'The document this replaces no longer exists.' }
+        }
+        if (target.subjectKind !== a.subjectKind || target.subjectId !== a.subjectId) {
+          return { state, error: 'A new version must live on the same record as the one it replaces.' }
+        }
+        if (Object.values(state.documents).some((d) => d.supersedesId === target.id && !d.deletedAt)) {
+          return { state, error: 'That document already has a newer version.' }
+        }
+      }
+
       const seq = state.seq + 1
       const id = `doc-${seq}`
       const next: DocumentRecord = {
@@ -3841,6 +3870,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         uploadedBy: by,
         uploadedById: actor.id,
         uploadedAt: a.now,
+        supersedesId: a.supersedesId ?? null,
         deletedAt: null,
       }
 
@@ -4368,6 +4398,156 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * the rule later cannot rewrite what a person was actually asked. That is the same reason a
      * revision keeps its own before-and-after instead of pointing at a calibration that moves.
      */
+    /* ---------------- PROOFING ---------------- */
+
+    case 'requestDocumentReview': {
+      const doc = state.documents[a.documentId]
+      if (!doc || doc.deletedAt) return { state, error: 'That document does not exist or was removed.' }
+      if (doc.subjectKind !== 'issue' || !state.issues[doc.subjectId] || state.issues[doc.subjectId].deletedAt) {
+        return { state, error: 'Reviews are asked on documents attached to a live issue.' }
+      }
+      const reviewers = [...new Set(a.reviewers.map((r) => r.trim()).filter(Boolean))]
+      if (!reviewers.length) return { state, error: 'Name at least one reviewer.' }
+      if (reviewers.some((r) => r.toLowerCase() === by.trim().toLowerCase())) {
+        return { state, error: 'The asker cannot be a reviewer — the same rule approvals hold to. Name somebody else.' }
+      }
+      const question = a.question.trim()
+      if (!question) return { state, error: 'Say what the reviewers are judging.' }
+
+      const seq = state.seq + 1
+      const id = `rev-${seq}`
+      const review: DocumentReview = {
+        id,
+        documentId: doc.id,
+        /* Pinned from the STORED row — an action-supplied checksum could name bytes that
+           were never stored. */
+        checksum: doc.checksum,
+        issueId: doc.subjectId,
+        question,
+        askedBy: by,
+        askedAt: a.now,
+        reviewers,
+        verdicts: [],
+        withdrawnAt: null,
+        deletedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          documentReviews: { ...state.documentReviews, [id]: review },
+          audit: log(actor, state, {
+            rowId: doc.subjectId,
+            field: 'review',
+            from: null,
+            to: `asked on “${doc.name}” → ${reviewers.join(', ')}`,
+            at: a.now,
+            by,
+            reason: question,
+          }),
+        },
+        message: `Review asked of ${reviewers.join(', ')}.`,
+      }
+    }
+
+    case 'decideDocumentReview': {
+      const review = state.documentReviews[a.reviewId]
+      if (!review || review.deletedAt) return { state, error: 'That review no longer exists.' }
+      if (review.withdrawnAt) return { state, error: 'This review was withdrawn; ask a new one if it still matters.' }
+      if (review.askedBy.trim().toLowerCase() === by.trim().toLowerCase()) {
+        return { state, error: 'The asker cannot be the decider — the rule holds here as it does for approvals.' }
+      }
+      if (!review.reviewers.some((r) => r.trim().toLowerCase() === by.trim().toLowerCase())) {
+        return { state, error: 'This review names its reviewers, and you are not one of them.' }
+      }
+      const note = a.note.trim()
+      if (a.verdict === 'changes' && !note) {
+        return { state, error: 'A change request that names no change is noise — say what should change.' }
+      }
+
+      /* A second answer by the same reviewer REPLACES the first. Completion counts
+         reviewers, not verdicts — changing your mind must not complete a review early. */
+      const verdicts = [
+        ...review.verdicts.filter((v) => v.by.trim().toLowerCase() !== by.trim().toLowerCase()),
+        { by, verdict: a.verdict, note, at: a.now },
+      ]
+      const next: DocumentReview = { ...review, verdicts }
+
+      let seq = state.seq
+      let notes = state.notes
+      const done = reviewStateOf(next)
+      if (done.answered === done.total) {
+        /* Minted inside the arm, so the server's replay writes the same note the browser's
+           optimistic copy did — the assignment-notification precedent. */
+        seq += 1
+        const nid = `note-${seq}`
+        const doc = state.documents[review.documentId]
+        notes = {
+          ...notes,
+          [nid]: {
+            id: nid,
+            issueId: review.issueId,
+            body: `Review of “${doc?.name ?? review.documentId}” — ${done.outcome === 'approved' ? 'APPROVED' : 'changes requested'}: ${verdicts
+              .map((v) => `${v.by} (${v.verdict}${v.note ? ` — ${v.note}` : ''})`)
+              .join('; ')}.
+Question: ${review.question}`,
+            noteType: 'Decision',
+            pinned: true,
+            createdBy: by,
+            createdAt: a.now,
+            updatedBy: null,
+            updatedAt: null,
+            deletedAt: null,
+          },
+        }
+      }
+
+      return {
+        state: {
+          ...state,
+          seq,
+          notes,
+          documentReviews: { ...state.documentReviews, [a.reviewId]: next },
+          audit: log(actor, state, {
+            rowId: review.issueId,
+            field: 'review',
+            from: review.id,
+            to: `${a.verdict}${note ? ` — ${note.length > 90 ? `${note.slice(0, 87)}…` : note}` : ''}`,
+            at: a.now,
+            by,
+          }),
+        },
+        message:
+          done.answered === done.total
+            ? `Review complete — ${done.outcome === 'approved' ? 'approved' : 'changes requested'}. Recorded in Notes.`
+            : 'Recorded.',
+      }
+    }
+
+    case 'withdrawDocumentReview': {
+      const review = state.documentReviews[a.reviewId]
+      if (!review || review.deletedAt) return { state, error: 'That review no longer exists.' }
+      if (review.withdrawnAt) return { state, message: 'Already withdrawn.' }
+      return {
+        state: {
+          ...state,
+          documentReviews: {
+            ...state.documentReviews,
+            [a.reviewId]: { ...review, withdrawnAt: a.now },
+          },
+          audit: log(actor, state, {
+            rowId: review.issueId,
+            field: 'review',
+            from: review.id,
+            to: 'withdrawn',
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Review withdrawn.',
+      }
+    }
+
     case 'requestApproval': {
       const issue = state.issues[a.subjectId]
       if (!issue) return { state, error: 'That record no longer exists.' }

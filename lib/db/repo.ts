@@ -247,6 +247,9 @@ export async function loadWorkspace(
     timeEntries: Object.fromEntries(timeEntries.map((e) => [e.id, timeFromRow(e)])),
     approvals: Object.fromEntries(approvals.map((a) => [a.id, approvalFromRow(a)])),
     notifications: Object.fromEntries(notifications.map((n) => [n.id, notificationFromRow(n)])),
+    // Placeholder until the DocumentReview table lands (plan step 5) — reviews created
+    // before then exist only in the browser session, and the screens ship after step 5.
+    documentReviews: {},
     sows: Object.fromEntries(sows.map((s) => [s.id, sowFromRow(s)])),
     allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),

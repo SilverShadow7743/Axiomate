@@ -720,9 +720,19 @@ const SHAPES = {
     store: req(oneOf(new Set(STORE_KINDS))),
     note: req(text),
     evidenceId: opt(idOrNull),
+    supersedesId: opt(idOrNull),
     now,
   },
   removeDocument: { id: req(id), now },
+  /* ---- PROOFING ---- */
+  requestDocumentReview: { documentId: req(id), reviewers: req(strings), question: req(text), now },
+  decideDocumentReview: {
+    reviewId: req(id),
+    verdict: req(oneOf(new Set(['approved', 'changes']))),
+    note: req(text),
+    now,
+  },
+  withdrawDocumentReview: { reviewId: req(id), now },
   upsertMilestone: {
     id: req(idOrNull),
     sowId: req(id),

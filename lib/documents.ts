@@ -76,6 +76,11 @@ export interface DocumentRecord {
   uploadedBy: string
   uploadedById?: string
   uploadedAt: string
+  /**
+   * The document this one replaces — the version chain, walked by `lib/proofing.ts`.
+   * Optional because rows stored before phase 6 never carried it; absent reads as null.
+   */
+  supersedesId?: string | null
   deletedAt: string | null
 }
 
