@@ -50,6 +50,13 @@ export interface IssueNote {
   noteType: NoteType
   /** Pinned notes sort above the rest, whatever their age. */
   pinned: boolean
+  /**
+   * Whether a client-facing surface may show this note. Default false — internal until a
+   * person decides otherwise. The one auto-visible note is the sent client reply: what was
+   * said to the client is client-visible by definition. Optional because rows stored before
+   * the boundary shipped carry no value; absent reads as false.
+   */
+  clientVisible?: boolean
 
   /**
    * Creation is recorded once and never rewritten.

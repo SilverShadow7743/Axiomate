@@ -54,6 +54,7 @@ const KINDS = new Set([
   'requestDocumentReview',
   'decideDocumentReview',
   'withdrawDocumentReview',
+  'setDocumentVisibility',
   'markNotificationRead',
   'upsertSow',
   'archiveSow',

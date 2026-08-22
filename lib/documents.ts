@@ -81,6 +81,8 @@ export interface DocumentRecord {
    * Optional because rows stored before phase 6 never carried it; absent reads as null.
    */
   supersedesId?: string | null
+  /** Whether a client-facing surface may offer this file. Default false; absent reads as false. */
+  clientVisible?: boolean
   deletedAt: string | null
 }
 

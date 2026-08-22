@@ -240,6 +240,12 @@ export interface IssueRecord {
   owner: string
   /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
   ownerId?: string | null
+  /**
+   * Whether a client-facing surface may show this record. Default false; born true only for
+   * a client-role actor's own submission or an intake arrival — hiding somebody's own
+   * request from them would be absurd. Absent (pre-boundary rows) reads as false.
+   */
+  clientVisible?: boolean
   raisedBy: string
   accountable: AccountableParty
   raised: string
@@ -606,6 +612,7 @@ export function initWorkspace(
       assignments: {},
       statusSince: null,
       pausedDays: 0,
+      clientVisible: false,
       deletedAt: null,
     }
   }
@@ -757,11 +764,11 @@ export type Action =
     }
   | { t: 'updateEvidence'; id: string; patch: Partial<EvidenceItem>; now: string }
   /* ---- NOTES ---- */
-  | { t: 'addNote'; issueId: string; body: string; noteType: NoteType; pinned: boolean; now: string }
+  | { t: 'addNote'; issueId: string; body: string; noteType: NoteType; pinned: boolean; clientVisible?: boolean; now: string }
   | {
       t: 'updateNote'
       id: string
-      patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>
+      patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned' | 'clientVisible'>>
       now: string
     }
   | { t: 'removeNote'; id: string; now: string }
@@ -875,9 +882,12 @@ export type Action =
       evidenceId?: string | null
       /** The document this upload replaces — a new version in the chain. */
       supersedesId?: string | null
+      clientVisible?: boolean
       now: string
     }
   | { t: 'removeDocument'; id: string; now: string }
+  /** Documents have no update arm; visibility is the one field a person changes after upload. */
+  | { t: 'setDocumentVisibility'; id: string; clientVisible: boolean; now: string }
   /* ---- PROOFING ---- */
   /** Ask named colleagues to judge a stored document. The checksum is pinned from the row. */
   | { t: 'requestDocumentReview'; documentId: string; reviewers: string[]; question: string; now: string }
@@ -1580,6 +1590,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         if (state.issues[id]) return { state, error: `Issue ${id} already exists.` }
 
         const status = (a.draft.status as IssueStatus) || 'Open'
+        /*
+         * The boundary's birth rule: a record is internal unless the person who raised it is
+         * the client (their own submission must be visible to them) or the machine door
+         * (intake — the claimed sender is the client). Everything else becomes visible only
+         * by a person's later decision.
+         */
+        const actorRoles = rolesFor(state.model, actor)
+        const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+        const bornVisible =
+          actorRoles.includes(MACHINE_ROLE_ID) || actorRoles.some((r) => clientRoles.includes(r))
+
         const issue: IssueRecord = {
           id,
           parentId: a.parentId,
@@ -1629,6 +1650,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           assignments: {},
           statusSince: a.now.slice(0, 10),
           pausedDays: 0,
+          clientVisible: bornVisible,
           deletedAt: null,
         }
         /*
@@ -1640,7 +1662,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
          */
         let seqAfter = seq
         let notifications = state.notifications
-        if (rolesFor(state.model, actor).includes(MACHINE_ROLE_ID)) {
+        if (actorRoles.includes(MACHINE_ROLE_ID)) {
           const grants = state.model.access.grants
           const triagers = Object.values(state.model.people)
             .filter((p) =>
@@ -1840,6 +1862,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         actualEnd: null,
         statusSince: a.now.slice(0, 10),
         pausedDays: 0,
+        // A copy of a visible record is visible — a client following OAPIL-146 must not
+        // lose its successor.
+        clientVisible: original.clientVisible ?? false,
         age: 0,
         daysSinceActivity: 0,
         nextAction: '',
@@ -2900,6 +2925,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         body,
         noteType: a.noteType ?? DEFAULT_NOTE_TYPE,
         pinned: a.pinned,
+        clientVisible: a.clientVisible ?? false,
         createdBy: by,
         createdAt: a.now,
         updatedBy: null,
@@ -3892,6 +3918,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         uploadedById: actor.id,
         uploadedAt: a.now,
         supersedesId: a.supersedesId ?? null,
+        clientVisible: a.clientVisible ?? false,
         deletedAt: null,
       }
 
@@ -4420,6 +4447,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * the rule later cannot rewrite what a person was actually asked. That is the same reason a
      * revision keeps its own before-and-after instead of pointing at a calibration that moves.
      */
+    case 'setDocumentVisibility': {
+      const doc = state.documents[a.id]
+      if (!doc || doc.deletedAt) return { state, error: 'That document does not exist or was removed.' }
+      if ((doc.clientVisible ?? false) === a.clientVisible) return { state }
+      return {
+        state: {
+          ...state,
+          documents: { ...state.documents, [a.id]: { ...doc, clientVisible: a.clientVisible } },
+          audit: log(actor, state, {
+            rowId: doc.subjectId,
+            field: 'document',
+            from: doc.clientVisible ? 'client-visible' : 'internal',
+            to: a.clientVisible ? 'client-visible' : 'internal',
+            at: a.now,
+            by,
+            reason: `“${doc.name}” ${a.clientVisible ? 'made visible to the client' : 'made internal'}.`,
+          }),
+        },
+        message: a.clientVisible ? 'Visible to the client.' : 'Internal again.',
+      }
+    }
+
     /* ---------------- PROOFING ---------------- */
 
     case 'requestDocumentReview': {

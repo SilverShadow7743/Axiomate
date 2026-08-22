@@ -131,6 +131,8 @@ export async function POST(req: Request) {
       body: noteBody,
       noteType: 'Client Communication',
       pinned: true,
+      // What was said to the client is client-visible by definition — the one auto-visible note.
+      clientVisible: true,
       now,
     } as Action
     /*

@@ -490,6 +490,7 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   /* Asking rides on upload (whoever may put a deliverable on the record may ask about it);
    * answering needs its own key; withdrawing is the asker's act, gated like asking. */
   requestDocumentReview: 'document.upload',
+  setDocumentVisibility: 'document.upload',
   decideDocumentReview: 'document.review',
   withdrawDocumentReview: 'document.upload',
   // The floor. Withdrawing somebody ELSE's attachment additionally needs `document.remove`,

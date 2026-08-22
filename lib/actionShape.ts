@@ -543,6 +543,7 @@ const SHAPES = {
     body: req(text),
     noteType: req(oneOf(NOTE_KINDS)),
     pinned: req(bool),
+    clientVisible: opt(bool),
     now,
   },
   updateNote: { id: req(id), patch: req(plainObject), now },
@@ -721,9 +722,11 @@ const SHAPES = {
     note: req(text),
     evidenceId: opt(idOrNull),
     supersedesId: opt(idOrNull),
+    clientVisible: opt(bool),
     now,
   },
   removeDocument: { id: req(id), now },
+  setDocumentVisibility: { id: req(id), clientVisible: req(bool), now },
   /* ---- PROOFING ---- */
   requestDocumentReview: { documentId: req(id), reviewers: req(strings), question: req(text), now },
   decideDocumentReview: {
