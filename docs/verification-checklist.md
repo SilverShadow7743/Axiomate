@@ -514,6 +514,31 @@ populated correctly under the id-first joins (32 items), and a spot check on SLG
 Remaining null ids are compounds from the imported log and placeholders, on the name
 fallback by design. The backfill script re-run reports zero remaining unique matches.
 
+## 23 · Client boundary — what a client seat receives was decided per record
+
+1. **Grant the key first.** Permissions screen → grant “See internal records”
+   (`internal.view`) to every internal role that should keep its full view. Until the grant
+   lands, non-admin internal users see the boundary-limited view — that is the fail-safe
+   working, not an outage; ADMIN's ALL covers the operator from the first deploy. The grant
+   screen must REFUSE the key on the three shipped client roles, in words ending “the client
+   boundary is the point.”
+2. **Mark one record.** Open an OAPIL record → Overview shows the `Internal` chip → “Show to
+   client” flips it to `Client-visible`, audited as an ordinary field edit in History.
+3. **Mark one note.** On the same record's Notes tab, add a note with “Show to client”
+   ticked — the chip appears on the entry; a second note without the tick stays chipless.
+   The per-note “Show to client / Make internal” button flips an existing note.
+4. **Mark one file.** Evidence panel → a stored file's “Show to client” flips its chip;
+   documents have no other update, so this is the one genuinely new arm
+   (`setDocumentVisibility`, gated by `document.upload`).
+5. **Prove the payload, not the screen.** As a reader without `internal.view` (a role-less
+   probe), the served workspace contains ONLY: marked records with their ancestor chain,
+   marked notes and files on surviving records, and audit entries about surviving records —
+   with every audit entry about notes, evidence or documents dropped whole (they carry child
+   content the entry cannot attribute). Rates, time, estimates, allocations, SoWs,
+   notifications and the rest of the machinery are empty maps. The persistence proof's
+   payload case (49/49) reads the serialized string for exactly this; the browser step
+   confirms the same boundary on the live deployment.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
