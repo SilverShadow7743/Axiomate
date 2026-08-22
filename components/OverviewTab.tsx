@@ -276,6 +276,25 @@ export default function OverviewTab({
           ) : (
             <span className="prov">{may.reason ?? 'Read only.'}</span>
           )}
+          <span className="grow" />
+          {/* The boundary, legible at a glance: every record says which side it is on. The
+              toggle is both-halves gated — hidden without work.edit, refused by the arm. */}
+          <span className={`cv-chip${(record?.clientVisible ?? false) ? ' on' : ''}`}>
+            {(record?.clientVisible ?? false) ? 'Client-visible' : 'Internal'}
+          </span>
+          {may.allowed && record && (
+            <button
+              className="btn ghost"
+              onClick={() => onSave({ clientVisible: !(record.clientVisible ?? false) }, null)}
+              title={
+                (record.clientVisible ?? false)
+                  ? 'Make this record internal again. Its notes and files keep their own flags.'
+                  : 'Let client seats see this record. Notes and files stay internal until marked themselves.'
+              }
+            >
+              {(record.clientVisible ?? false) ? 'Make internal' : 'Show to client'}
+            </button>
+          )}
         </div>
 
         {/* Absent entirely without the grant — a control someone may not use is not shown

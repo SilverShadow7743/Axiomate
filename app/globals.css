@@ -1379,6 +1379,21 @@ select.cell-editor {
   }
 }
 
+/* ---------- client boundary: which side of the line a record sits on ---------- */
+.cv-chip {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.cv-chip.on {
+  border-style: solid;
+  border-color: var(--h-ontrack, #2e7d32);
+  color: var(--h-ontrack, #2e7d32);
+}
+
 /* ---------- proofing: the review chip and its two small forms ---------- */
 .review-chip {
   font-size: 10.5px;

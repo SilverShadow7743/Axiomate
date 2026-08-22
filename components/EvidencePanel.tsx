@@ -78,6 +78,8 @@ interface Props {
    */
   onUpload: (file: File, evidenceId: string | null) => Promise<string | null>
   onWithdrawDocument: (id: string) => void
+  /** Flip whether client seats see a stored file — the one update a document record has. */
+  onSetDocumentVisibility: (id: string, clientVisible: boolean) => void
   /* ---- proofing ---- */
   /** Every document in the workspace — a version chain can reach outside this panel's list. */
   allDocuments: Record<string, DocumentRecord>
@@ -108,6 +110,7 @@ export default function EvidencePanel({
   documents,
   onUpload,
   onWithdrawDocument,
+  onSetDocumentVisibility,
   allDocuments,
   reviews,
   people,
@@ -369,6 +372,11 @@ export default function EvidencePanel({
                     <span>{formatDocBytes(d.sizeBytes)}</span>
                     <span className="mono">{formatIso(d.uploadedAt.slice(0, 10))}</span>
                     <span>{d.uploadedBy}</span>
+                    {(d.clientVisible ?? false) && (
+                      <span className="cv-chip on" title="Client seats see this file">
+                        Client-visible
+                      </span>
+                    )}
                     {latest ? (
                       <span
                         className={`review-chip rc-${latest.withdrawnAt ? 'withdrawn' : outcome}${latest && !latest.withdrawnAt && outcome === 'approved' && !coversDocument(latest, d) ? ' rc-stale' : ''}`}
@@ -481,6 +489,19 @@ export default function EvidencePanel({
                       title="Withdraw the review. Recorded verdicts stay recorded."
                     >
                       Withdraw review
+                    </button>
+                  )}
+                  {mayAttach.allowed && (
+                    <button
+                      className="btn ghost"
+                      onClick={() => onSetDocumentVisibility(d.id, !(d.clientVisible ?? false))}
+                      title={
+                        (d.clientVisible ?? false)
+                          ? 'Make this file internal again'
+                          : 'Let client seats see this file'
+                      }
+                    >
+                      {(d.clientVisible ?? false) ? 'Make internal' : 'Show to client'}
                     </button>
                   )}
                   {mayAttach.allowed && (

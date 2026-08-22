@@ -2212,8 +2212,16 @@ export default function IssueWorkspace({
           onDecideWeek={(id, decision, reason) =>
             dispatch({ t: 'decideTimesheet', id, decision, reason, now: new Date().toISOString() })
           }
-          onAddNote={(issueId, body, noteType, pinned) =>
-            dispatch({ t: 'addNote', issueId, body, noteType, pinned, now: new Date().toISOString() })
+          onAddNote={(issueId, body, noteType, pinned, clientVisible) =>
+            dispatch({
+              t: 'addNote',
+              issueId,
+              body,
+              noteType,
+              pinned,
+              clientVisible,
+              now: new Date().toISOString(),
+            })
           }
           onUpdateNote={(id, patch) =>
             dispatch({ t: 'updateNote', id, patch, now: new Date().toISOString() })
@@ -2272,6 +2280,9 @@ export default function IssueWorkspace({
           onUpload={(file, evidenceId) => uploadDocument(file, 'issue', evidenceFor, evidenceId)}
           onWithdrawDocument={(id) =>
             dispatch({ t: 'removeDocument', id, now: new Date().toISOString() })
+          }
+          onSetDocumentVisibility={(id, clientVisible) =>
+            dispatch({ t: 'setDocumentVisibility', id, clientVisible, now: new Date().toISOString() })
           }
           allDocuments={state.documents}
           reviews={state.documentReviews}

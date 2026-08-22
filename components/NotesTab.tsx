@@ -26,8 +26,11 @@ export default function NotesTab({
   issueId: string
   state: WorkspaceState
   actor: Actor
-  onAdd: (body: string, noteType: NoteType, pinned: boolean) => void
-  onUpdate: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
+  onAdd: (body: string, noteType: NoteType, pinned: boolean, clientVisible: boolean) => void
+  onUpdate: (
+    id: string,
+    patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned' | 'clientVisible'>>,
+  ) => void
   onDelete: (id: string) => void
   /**
    * Present when this record can be replied to (a claimed address, the grant, a mailbox).
@@ -42,16 +45,19 @@ export default function NotesTab({
   const [draft, setDraft] = useState('')
   const [draftType, setDraftType] = useState<NoteType>(DEFAULT_NOTE_TYPE)
   const [draftPinned, setDraftPinned] = useState(false)
+  /** Born internal unless the writer says otherwise — the boundary's default, restated here. */
+  const [draftVisible, setDraftVisible] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editBody, setEditBody] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const submit = () => {
     if (!draft.trim()) return
-    onAdd(draft, draftType, draftPinned)
+    onAdd(draft, draftType, draftPinned, draftVisible)
     setDraft('')
     setDraftType(DEFAULT_NOTE_TYPE)
     setDraftPinned(false)
+    setDraftVisible(false)
   }
 
   return (
@@ -97,6 +103,17 @@ export default function NotesTab({
               />
               Pin
             </label>
+            <label
+              className="note-pin-toggle"
+              title="Client seats see this note. Unticked, it stays internal — the default."
+            >
+              <input
+                type="checkbox"
+                checked={draftVisible}
+                onChange={(e) => setDraftVisible(e.target.checked)}
+              />
+              Show to client
+            </label>
             <span className="grow" />
             <span className="fld-hint">⌘/Ctrl + Enter</span>
             <button className="btn primary" disabled={!draft.trim()} onClick={submit}>
@@ -123,6 +140,11 @@ export default function NotesTab({
                 <div className="note-head">
                   <span className="note-type">{n.noteType}</span>
                   {n.pinned && <span className="note-pin" title="Pinned">Pinned</span>}
+                  {(n.clientVisible ?? false) && (
+                    <span className="cv-chip on" title="Client seats see this note">
+                      Client-visible
+                    </span>
+                  )}
                   <span className="note-by">{n.createdBy}</span>
                   <span className="note-at" title={new Date(n.createdAt).toLocaleString()}>
                     {new Date(n.createdAt).toLocaleString()}
@@ -153,6 +175,19 @@ export default function NotesTab({
                           title={n.pinned ? 'Unpin this note' : 'Pin this note to the top'}
                         >
                           {n.pinned ? 'Unpin' : 'Pin'}
+                        </button>
+                        <button
+                          className="btn ghost"
+                          onClick={() =>
+                            onUpdate(n.id, { clientVisible: !(n.clientVisible ?? false) })
+                          }
+                          title={
+                            (n.clientVisible ?? false)
+                              ? 'Make this note internal again'
+                              : 'Let client seats see this note'
+                          }
+                        >
+                          {(n.clientVisible ?? false) ? 'Make internal' : 'Show to client'}
                         </button>
                         {confirmDelete === n.id ? (
                           <button

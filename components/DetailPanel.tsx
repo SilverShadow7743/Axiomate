@@ -122,8 +122,17 @@ interface Props {
     /** Why, when the transition graph demands one. */
     reason?: string,
   ) => boolean
-  onAddNote: (issueId: string, body: string, noteType: NoteType, pinned: boolean) => void
-  onUpdateNote: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
+  onAddNote: (
+    issueId: string,
+    body: string,
+    noteType: NoteType,
+    pinned: boolean,
+    clientVisible: boolean,
+  ) => void
+  onUpdateNote: (
+    id: string,
+    patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned' | 'clientVisible'>>,
+  ) => void
   onDeleteNote: (id: string) => void
   /** A reply the mail endpoint sent and recorded — merged into the browser's copy upstream. */
   onMailSent: (note: IssueNote) => void
@@ -563,7 +572,9 @@ export default function DetailPanel({
             issueId={issue.id}
             state={state}
             actor={actor}
-            onAdd={(body, noteType, pinned) => onAddNote(issue.id, body, noteType, pinned)}
+            onAdd={(body, noteType, pinned, clientVisible) =>
+              onAddNote(issue.id, body, noteType, pinned, clientVisible)
+            }
             onUpdate={onUpdateNote}
             onDelete={onDeleteNote}
             onWriteReply={
