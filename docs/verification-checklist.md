@@ -539,6 +539,21 @@ fallback by design. The backfill script re-run reports zero remaining unique mat
    payload case (49/49) reads the serialized string for exactly this; the browser step
    confirms the same boundary on the live deployment.
 
+**Driven 22 Aug 2026 (steps 1–3).** The fail-safe was seen working first: on deploy, before
+any grant, Nishant's own seat received the boundary-limited view — 0 issues in a workspace of
+251 — which is the design refusing to leak rather than an outage. The grant then landed on
+all seven internal roles from the Permissions grid; ticking the key on Client User was
+refused live in the designed words ("…the client boundary is the point"). OAPIL-146 was
+marked from the Overview toggle and a note born visible from the composer checkbox — both
+chips render, both stored (confirmed by reload from Postgres). The drive caught a real
+defect the suite could not: `updateIssue`'s WIRE shape lacked `clientVisible` (CB1 drives
+the reducer directly and passed), so the toggle sat at "Not saved" until commit 828f975
+widened the patch whitelist — the queue's actions then arrived via the unload beacon and
+applied cleanly. Step 4 (document toggle) waits on the same `AXIOMATE_DOCS_DRIVE_ID` app
+setting as section 21 step 3 — no live record holds a stored file yet. Step 5's live half
+(a signed-in reader without the key) waits on a client-role account; the serialized-payload
+proof covers it meanwhile.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
