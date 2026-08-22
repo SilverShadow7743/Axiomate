@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 
 /**
  * Make an overlay behave like a real modal for keyboard and screen-reader users.
@@ -41,7 +41,17 @@ function focusableWithin(root: HTMLElement | null): HTMLElement[] {
  */
 const overlayStack: symbol[] = []
 
-export function useOverlay(containerRef: RefObject<HTMLElement | null>, active = true): void {
+export function useOverlay(
+  containerRef: RefObject<HTMLElement | null>,
+  active = true,
+  /** Close the overlay on Escape — the universal dismiss key every other dialog honors. */
+  onEscape?: () => void,
+): void {
+  // A ref rather than a dependency: callers pass inline arrows, and re-running the effect on
+  // every render would tear down and rebuild the trap — stealing focus back to the first
+  // control each time the parent re-rendered.
+  const escapeRef = useRef(onEscape)
+  escapeRef.current = onEscape
   useEffect(() => {
     if (!active) return
     const token = Symbol('overlay')
@@ -56,9 +66,15 @@ export function useOverlay(containerRef: RefObject<HTMLElement | null>, active =
     first?.focus()
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
       // Defer to whichever overlay is on top.
       if (overlayStack[overlayStack.length - 1] !== token) return
+      if (e.key === 'Escape' && escapeRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        escapeRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
       const items = focusableWithin(containerRef.current)
       if (!items.length) return
       const firstEl = items[0]

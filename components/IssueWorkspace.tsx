@@ -26,6 +26,7 @@ import {
   applyWithRules,
   clientNodeId,
   initWorkspace,
+  canParent,
   kindOf,
   moduleNodeId,
   scopeChainOf,
@@ -62,7 +63,7 @@ import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import BoardView from './BoardView'
 import CalendarView from './CalendarView'
-import { loadView, saveView, type WorkspaceView } from '@/lib/viewChoice'
+import { loadStoredView, saveView, type WorkspaceView } from '@/lib/viewChoice'
 import { applyBlueprint } from '@/lib/blueprint'
 import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
@@ -160,8 +161,6 @@ export default function IssueWorkspace({
   const [dialog, setDialog] = useState<DialogState>(null)
   /** Issue whose evidence manager is open, if any. */
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
-  const [myWorkOpen, setMyWorkOpen] = useState(false)
-  const [portfolioOpen, setPortfolioOpen] = useState(false)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
@@ -601,7 +600,18 @@ export default function IssueWorkspace({
 
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
   const [view, setViewState] = useState<WorkspaceView>('tree')
-  useEffect(() => { setViewState(loadView()) }, [])
+  useEffect(() => {
+    const stored = loadStoredView()
+    if (stored) {
+      setViewState(stored)
+      return
+    }
+    // No stored choice: land on what needs you, if anything does. The tree stays the
+    // default for an empty queue — structure beats an empty list. Deliberately once, on
+    // mount — a landing rule that kept re-firing would yank the view away mid-session.
+    if (myWork(state, actor, today).items.length > 0) setViewState('mywork')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const setView = useCallback((v: WorkspaceView) => { setViewState(v); saveView(v) }, [])
   /**
    * The configured service levels.
@@ -1282,7 +1292,12 @@ export default function IssueWorkspace({
       let ok = false
 
       if (dialog.t === 'add') {
-        ok = dispatch({ t: 'create', parentId: dialog.parentId, kind: dialog.kind, draft: p, now })
+        // The focus form may have re-picked the parent; the reducer's canParent rule still
+        // validates it. Dropped from the draft so it does not ride into the record's fields.
+        const parentId = p.parentId || dialog.parentId
+        const draft = { ...p }
+        delete draft.parentId
+        ok = dispatch({ t: 'create', parentId, kind: dialog.kind, draft, now })
       } else if (dialog.t === 'edit') {
         const id = dialog.id
         if (state.nodes[id]) {
@@ -1718,29 +1733,6 @@ export default function IssueWorkspace({
           onOpen={(issueId) => revealIssue(issueId)}
         />
 
-        <span className="sep" />
-
-        {/* Every verb below is `rowActions` applied to the selected row — the same functions
-            the ⋮ menu calls, not a second copy of them. Only `onDependency` and
-            `onMarkComplete` are the toolbar's alone: neither is on the row menu. */}
-        <SelectionToolbar
-        row={selected}
-        hasLifecycle={selected?.kind === 'issue' ? hasLifecycle(selected.id) : false}
-        onAdd={(kind: CreatableKind) => selected && rowActions.addChild(selected, kind)}
-        onEdit={() => selected && rowActions.edit(selected)}
-        onMove={() => selected && rowActions.move(selected)}
-        onLink={() => selected && rowActions.link(selected)}
-        onDependency={() => selected && setDialog({ t: 'dependency', activityId: selected.id })}
-        onMarkComplete={markComplete}
-        onDelete={() => selected && rowActions.archive(selected)}
-        onBuildLifecycle={() => selected && toggleLifecycle(selected.id)}
-        onNewIssue={() =>
-          defaultParentId
-            ? setDialog({ t: 'add', parentId: defaultParentId, kind: 'issue' })
-            : notify('Create a client first.', true)
-        }
-      />
-
         <span className="grow" />
         {/* The assistant button follows the agent registry: an agent configured off is not a
             button that explains why it is disabled, it is a button that is not there. */}
@@ -1789,15 +1781,15 @@ export default function IssueWorkspace({
           )}
         </div>
         <button
-          className={`btn${portfolioOpen ? ' primary' : ''}`}
-          onClick={() => setPortfolioOpen(true)}
+          className={`btn${view === 'portfolio' ? ' primary' : ''}`}
+          onClick={() => setView('portfolio')}
           title="Every engagement at once — what each one has overdue, blocked, unowned or quiet"
         >
           Portfolio
         </button>
         <button
-          className={`btn${myWorkOpen ? ' primary' : ''}`}
-          onClick={() => setMyWorkOpen(true)}
+          className={`btn${view === 'mywork' ? ' primary' : ''}`}
+          onClick={() => setView('mywork')}
           title="Everything waiting on you, across every engagement"
         >
           My work
@@ -1873,7 +1865,11 @@ export default function IssueWorkspace({
         onOpenArchive={() => setArchiveOpen(true)}
       />
 
-      {view === 'calendar' ? (
+      {view === 'mywork' ? (
+        <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
+      ) : view === 'portfolio' ? (
+        <PortfolioPanel state={state} today={today} onSelect={revealIssue} docked />
+      ) : view === 'calendar' ? (
         <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
       ) : view === 'board' ? (
         <BoardView
@@ -1949,6 +1945,41 @@ export default function IssueWorkspace({
       </div>
       )}
 
+      {/* The selected row's verbs, beside the record they act on. In the top bar they sat a
+          screen away from the row and pushed the global controls around with every selection;
+          here the toolbar and the panel below are about the same record. */}
+      <div className="context-bar">
+        <SelectionToolbar
+          row={selected}
+          hasLifecycle={selected?.kind === 'issue' ? hasLifecycle(selected.id) : false}
+          onAdd={(kind: CreatableKind) => selected && rowActions.addChild(selected, kind)}
+          onEdit={() => selected && rowActions.edit(selected)}
+          onMove={() => selected && rowActions.move(selected)}
+          onLink={() => selected && rowActions.link(selected)}
+          onDependency={() => selected && setDialog({ t: 'dependency', activityId: selected.id })}
+          onMarkComplete={markComplete}
+          onDelete={() => selected && rowActions.archive(selected)}
+          onBuildLifecycle={() => selected && toggleLifecycle(selected.id)}
+          onNewIssue={() => {
+            /*
+             * Selection-independent: issues arrive mid-call from any view. The parent is
+             * pre-filled from wherever the person is — the selected scope, the selected
+             * issue's own scope, or the first client — and stays changeable in the form.
+             */
+            const sel = selected
+            const fromSelection =
+              sel && state.nodes[sel.id] && canParent('issue', state.nodes[sel.id].kind)
+                ? sel.id
+                : sel && state.issues[sel.id]
+                  ? state.issues[sel.id].parentId
+                  : null
+            const parent = fromSelection ?? defaultParentId
+            if (parent) setDialog({ t: 'add', parentId: parent, kind: 'issue' })
+            else notify('Create a client first.', true)
+          }}
+        />
+      </div>
+
       {/* Everything below is about ONE record, so it uses that record's terminology rather
           than the organisation's. Nested provider, nearest wins — same rule as the resolver. */}
       <LabelProvider value={scopedLabels}>
@@ -1998,6 +2029,7 @@ export default function IssueWorkspace({
           }
           actor={actor}
           onDirtyChange={setDirty}
+          onCommitCell={commitCell}
           onSaveEstimate={(issueId, patch, reason) =>
             dispatch({ t: 'setEstimate', issueId, patch, reason, now: new Date().toISOString() })
           }
@@ -2207,38 +2239,6 @@ export default function IssueWorkspace({
           state={state}
           onRestore={(id) => dispatch({ t: 'restore', id, now: new Date().toISOString() })}
           onClose={() => setArchiveOpen(false)}
-        />
-      )}
-
-      {portfolioOpen && (
-        <PortfolioPanel
-          state={state}
-          today={today}
-          onSelect={(id) => {
-            /*
-             * Same choice the my-work drawer makes: select and stay open. Comparing engagements
-             * is the point, and closing on the first click would end the comparison.
-             */
-            revealIssue(id)
-          }}
-          onClose={() => setPortfolioOpen(false)}
-        />
-      )}
-
-      {myWorkOpen && (
-        <MyWorkPanel
-          state={state}
-          actor={actor}
-          today={today}
-          onSelect={(id) => {
-            /*
-             * Selects and leaves the drawer open. Picking one row is not finishing the list, and
-             * closing on every click would make working through eight items eight round trips
-             * through a button in the toolbar.
-             */
-            revealIssue(id)
-          }}
-          onClose={() => setMyWorkOpen(false)}
         />
       )}
 

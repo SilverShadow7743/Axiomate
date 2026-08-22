@@ -24,34 +24,39 @@ export default function PortfolioPanel({
   today,
   onSelect,
   onClose,
+  docked = false,
 }: {
   state: WorkspaceState
   today: string
   /** Select the engagement in the tree. The drawer stays open — one line is not the whole scan. */
   onSelect: (id: string) => void
-  onClose: () => void
+  onClose?: () => void
+  /** A first-class view in the main pane: no scrim, no trap, no Close — see MyWorkPanel. */
+  docked?: boolean
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  useOverlay(rootRef)
+  useOverlay(rootRef, !docked, onClose)
 
   const lines = useMemo(() => portfolio(state, today), [state, today])
 
   const panel = (
     <>
-      <div className="drawer-scrim" onMouseDown={onClose} />
+      {!docked && <div className="drawer-scrim" onMouseDown={onClose} />}
       <aside
-        className="evi mywork"
+        className={`evi mywork${docked ? ' docked' : ''}`}
         ref={rootRef}
-        role="dialog"
-        aria-modal="true"
+        role={docked ? undefined : 'dialog'}
+        aria-modal={docked ? undefined : true}
         aria-labelledby="portfolio-title"
       >
         <header className="evi-head">
           <div className="evi-head-top">
             <h2 id="portfolio-title">Portfolio</h2>
-            <button className="btn ghost" onClick={onClose} aria-label="Close portfolio">
-              ✕
-            </button>
+            {!docked && (
+              <button className="btn ghost" onClick={onClose} aria-label="Close portfolio">
+                ✕
+              </button>
+            )}
           </div>
           <div className="evi-sub sentence">{describePortfolio(lines)}</div>
         </header>
@@ -85,6 +90,7 @@ export default function PortfolioPanel({
     </>
   )
 
+  if (docked) return <div className="view-dock">{panel}</div>
   return typeof document === 'undefined' ? null : createPortal(panel, document.body)
 }
 

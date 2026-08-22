@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type {
   AuditEntry,
   IssueDependency,
@@ -9,6 +9,9 @@ import type {
   SlaPolicy,
 } from '@/lib/types'
 import type { CrpResult } from '@/lib/schedule'
+import { allowedNext } from '@/lib/statusPolicy'
+import { dropOutcome } from '@/lib/board'
+import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
 import { proposeTargetDate } from '@/lib/schedule'
 import { formatIso } from '@/lib/dates'
@@ -131,6 +134,8 @@ interface Props {
    * discarding work silently.
    */
   onDirtyChange: (dirty: boolean) => void
+  /** The same cell-commit funnel the grid and board use — status carries a reason. */
+  onCommitCell: (rowId: string, colKey: string, raw: string, reason?: string) => boolean
   onSaveEstimate: (issueId: string, patch: Partial<Estimate>, reason?: string) => boolean
   onAddTime: (
     issueId: string,
@@ -225,6 +230,7 @@ export default function DetailPanel({
   onMailSent,
   mailEnabled,
   onDirtyChange,
+  onCommitCell,
   onSaveEstimate,
   onAddTime,
   onRemoveTime,
@@ -421,6 +427,13 @@ export default function DetailPanel({
           </button>
         </div>
       </div>
+
+      {/* The record's vital signs, pinned above every tab. They lived only inside Overview's
+          edit mode, four clicks from the Time tab — and the fields a delivery manager touches
+          most must never be more than one click away, whichever tab is open. */}
+      {issue && issueRow && panelState !== 'compact' && (
+        <FieldStrip row={issueRow} issue={issue} state={state} onCommitCell={onCommitCell} />
+      )}
 
       {/*
         * Compact used to render nothing at all — the tab bar with an empty space under it, which
@@ -998,6 +1011,140 @@ function ResolutionPath({
           )}
         </dd>
       </dl>
+    </div>
+  )
+}
+
+/**
+ * Status, owner, due and severity — editable in place from every tab, through the same
+ * commit funnel as the grid and the board. A status change collects its reason here, in a
+ * line that appears when a new status is chosen: the funnel refuses reasonless moves, and a
+ * control that silently failed that rule would read as broken rather than as governed.
+ */
+function FieldStrip({
+  row,
+  issue,
+  state,
+  onCommitCell,
+}: {
+  row: ScheduleRow
+  issue: NonNullable<ScheduleRow['issue']>
+  state: WorkspaceState
+  onCommitCell: (rowId: string, colKey: string, raw: string, reason?: string) => boolean
+}) {
+  const labels = useLabels()
+  const policy = state.model.statusPolicy
+  const routes = allowedNext(policy, issue.status)
+  const hasEvidence = useMemo(
+    () => Object.values(state.evidence).some((e) => e.issueId === issue.id && !e.deletedAt),
+    [state.evidence, issue.id],
+  )
+  const [pendingStatus, setPendingStatus] = useState<IssueStatus | null>(null)
+  const [statusNote, setStatusNote] = useState('')
+  const [refusal, setRefusal] = useState<string | null>(null)
+  const [ownerDraft, setOwnerDraft] = useState(issue.owner)
+  useEffect(() => {
+    setPendingStatus(null)
+    setStatusNote('')
+    setRefusal(null)
+    setOwnerDraft(issue.owner)
+  }, [issue.id, issue.owner, issue.status])
+
+  const chooseStatus = (to: IssueStatus) => {
+    setRefusal(null)
+    if (to === issue.status) {
+      setPendingStatus(null)
+      return
+    }
+    const out = dropOutcome(policy, row, to, hasEvidence)
+    if (out.kind === 'refused') {
+      setPendingStatus(null)
+      setRefusal(out.message)
+      return
+    }
+    setPendingStatus(to)
+  }
+
+  const commitStatus = () => {
+    if (!pendingStatus || !statusNote.trim()) return
+    if (onCommitCell(row.id, 'status', pendingStatus, statusNote.trim())) {
+      setPendingStatus(null)
+      setStatusNote('')
+    }
+  }
+
+  return (
+    <div className="field-strip">
+      <label className="fs-fld">
+        <span>{labels.FIELD_STATUS}</span>
+        <select
+          value={pendingStatus ?? issue.status}
+          onChange={(e) => chooseStatus(e.target.value as IssueStatus)}
+        >
+          {[issue.status, ...routes.filter((sx) => sx !== issue.status)].map((sx) => (
+            <option key={sx}>{sx}</option>
+          ))}
+        </select>
+      </label>
+      {pendingStatus && (
+        <span className="fs-ask">
+          <input
+            autoFocus
+            value={statusNote}
+            placeholder={`Why is this “${pendingStatus}”?`}
+            onChange={(e) => setStatusNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitStatus()
+              if (e.key === 'Escape') setPendingStatus(null)
+            }}
+            aria-label="Reason for this status change"
+          />
+          <button className="btn primary" disabled={!statusNote.trim()} onClick={commitStatus}>
+            Move
+          </button>
+          <button className="btn ghost" onClick={() => setPendingStatus(null)}>
+            Cancel
+          </button>
+        </span>
+      )}
+      {refusal && <span className="fs-refusal">{refusal}</span>}
+      <label className="fs-fld">
+        <span>{labels.ISSUE_OWNER}</span>
+        <input
+          value={ownerDraft}
+          onChange={(e) => setOwnerDraft(e.target.value)}
+          onBlur={() => {
+            if (ownerDraft.trim() !== issue.owner) onCommitCell(row.id, 'owner', ownerDraft)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+          aria-label={labels.ISSUE_OWNER}
+        />
+      </label>
+      <label className="fs-fld">
+        <span>{labels.FIELD_DUE_DATE}</span>
+        <input
+          type="date"
+          value={row.plannedEndDate ?? ''}
+          onChange={(e) => {
+            if (e.target.value) onCommitCell(row.id, 'due', e.target.value)
+          }}
+          aria-label={labels.FIELD_DUE_DATE}
+        />
+      </label>
+      <label className="fs-fld">
+        <span>{labels.FIELD_SEVERITY}</span>
+        <select
+          value={issue.severity}
+          onChange={(e) => onCommitCell(row.id, 'severity', e.target.value)}
+          aria-label={labels.FIELD_SEVERITY}
+        >
+          {['High', 'Medium', 'Low'].map((sx) => (
+            <option key={sx}>{sx}</option>
+          ))}
+        </select>
+      </label>
     </div>
   )
 }

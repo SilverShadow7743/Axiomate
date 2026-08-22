@@ -33,30 +33,45 @@ export default function MyWorkPanel({
   today,
   onSelect,
   onClose,
+  docked = false,
 }: {
   state: WorkspaceState
   actor: Actor
   today: string
   /** Select a record in the tree. The drawer stays open — picking one thing is not finishing. */
   onSelect: (id: string) => void
-  onClose: () => void
+  onClose?: () => void
+  /**
+   * Rendered as a first-class view in the main pane rather than an overlay: no scrim, no
+   * focus trap, no Close — the view switcher is how you leave. Same content either way,
+   * because "what needs me" must not depend on which door it was opened through.
+   */
+  docked?: boolean
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  useOverlay(rootRef)
+  useOverlay(rootRef, !docked, onClose)
 
   const list = useMemo(() => myWork(state, actor, today), [state, actor, today])
   const groups = REASON_ORDER.filter((r) => list.counts[r] > 0)
 
   const panel = (
     <>
-      <div className="drawer-scrim" onMouseDown={onClose} />
-      <aside className="evi mywork" ref={rootRef} role="dialog" aria-modal="true" aria-labelledby="mywork-title">
+      {!docked && <div className="drawer-scrim" onMouseDown={onClose} />}
+      <aside
+        className={`evi mywork${docked ? ' docked' : ''}`}
+        ref={rootRef}
+        role={docked ? undefined : 'dialog'}
+        aria-modal={docked ? undefined : true}
+        aria-labelledby="mywork-title"
+      >
         <header className="evi-head">
           <div className="evi-head-top">
             <h2 id="mywork-title">My work</h2>
-            <button className="btn ghost" onClick={onClose} aria-label="Close my work">
-              ✕
-            </button>
+            {!docked && (
+              <button className="btn ghost" onClick={onClose} aria-label="Close my work">
+                ✕
+              </button>
+            )}
           </div>
           <div className="evi-sub sentence">{describeWork(list)}</div>
         </header>
@@ -122,5 +137,6 @@ export default function MyWorkPanel({
     </>
   )
 
+  if (docked) return <div className="view-dock">{panel}</div>
   return typeof document === 'undefined' ? panel : createPortal(panel, document.body)
 }

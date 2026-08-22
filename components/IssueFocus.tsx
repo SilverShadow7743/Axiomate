@@ -7,7 +7,7 @@ import { useOverlay } from './useOverlay'
 import { ISSUE_STATUSES, type IssueStatus, type Severity } from '@/lib/types'
 import { STATUS_PROGRESS } from '@/lib/schedule'
 import { daysBetween, formatIso } from '@/lib/dates'
-import { nameOf, type WorkspaceState } from '@/lib/workspace'
+import { canParent, nameOf, type WorkspaceState } from '@/lib/workspace'
 import { liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
 import {
@@ -80,7 +80,22 @@ export default function IssueFocus({
    */
   const reachable: string[] =
     mode === 'edit' ? allowedNext(statusPolicy, issue?.status ?? null) : [...ISSUE_STATUSES]
-  const parentName = mode === 'add' ? nameOf(state, targetId) : null
+  /*
+   * Everywhere an issue may live, so + New works from any view without first selecting a
+   * row: the parent arrives pre-filled from the caller's context and is changeable here.
+   * The list is derived from the same `canParent` rule the reducer enforces — offering a
+   * parent the create would refuse is worse than offering none.
+   */
+  const parentOptions = useMemo(
+    () =>
+      mode === 'add'
+        ? Object.values(state.nodes)
+            .filter((n) => !n.deletedAt && canParent('issue', n.kind))
+            .map((n) => ({ id: n.id, label: `${n.name} · ${n.kind}` }))
+            .sort((a, b) => a.label.localeCompare(b.label))
+        : [],
+    [mode, state.nodes],
+  )
 
   const activityCount = useMemo(
     () =>
@@ -330,7 +345,7 @@ export default function IssueFocus({
               <>
                 <h1 className="focus-title" id="focus-title">New issue</h1>
                 <div className="ident-badges">
-                  <span className="badge">Creating under {parentName}</span>
+                  <span className="badge">Creating under {nameOf(state, f.parentId || targetId)}</span>
                 </div>
               </>
             )}
@@ -352,21 +367,36 @@ export default function IssueFocus({
                 />
               </label>
               {mode === 'add' && (
-                <div className="fld-row">
+                <>
                   <label className="fld">
-                    <span className="fld-label">Issue ID</span>
-                    <input value={f.id} placeholder="auto" onChange={(e) => set('id', e.target.value)} />
-                    <span className="fld-hint">Leave blank to allocate the next free number.</span>
-                  </label>
-                  <label className="fld">
-                    <span className="fld-label">Type</span>
-                    <select value={f.type || workTypes[0] || ''} onChange={(e) => set('type', e.target.value)}>
-                      {workTypes.map((t) => (
-                        <option key={t}>{t}</option>
+                    <span className="fld-label">Files under</span>
+                    <select value={f.parentId || targetId} onChange={(e) => set('parentId', e.target.value)}>
+                      {parentOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
                       ))}
                     </select>
+                    <span className="fld-hint">
+                      Pre-filled from where you were; change it to file the issue elsewhere.
+                    </span>
                   </label>
-                </div>
+                  <div className="fld-row">
+                    <label className="fld">
+                      <span className="fld-label">Issue ID</span>
+                      <input value={f.id} placeholder="auto" onChange={(e) => set('id', e.target.value)} />
+                      <span className="fld-hint">Leave blank to allocate the next free number.</span>
+                    </label>
+                    <label className="fld">
+                      <span className="fld-label">Type</span>
+                      <select value={f.type || workTypes[0] || ''} onChange={(e) => set('type', e.target.value)}>
+                        {workTypes.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </>
               )}
               <label className="fld">
                 <span className="fld-label">Description</span>

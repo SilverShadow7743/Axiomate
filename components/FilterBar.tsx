@@ -14,6 +14,28 @@ import type { OperatingModel } from '@/lib/config'
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
 
 /**
+ * The view switcher's order and words. My work leads — it is the landing surface for a person
+ * with work waiting — and Portfolio closes as the widest lens. Labels are nouns for places,
+ * not verbs: this control is navigation, which is why it sits first in the bar rather than
+ * among the filters.
+ */
+const VIEW_ORDER: readonly WorkspaceView[] = ['mywork', 'tree', 'board', 'calendar', 'portfolio']
+const VIEW_LABEL: Record<WorkspaceView, string> = {
+  mywork: 'My work',
+  tree: 'Tree',
+  board: 'Board',
+  calendar: 'Calendar',
+  portfolio: 'Portfolio',
+}
+const VIEW_TITLE: Record<WorkspaceView, string> = {
+  mywork: 'Everything waiting on you, across every engagement',
+  tree: 'The full structure with the timeline beside it',
+  board: 'Status lanes — drag a card to move it',
+  calendar: 'Due dates on a month, with the undated on a rail',
+  portfolio: 'Every engagement at once — overdue, blocked, unowned, quiet',
+}
+
+/**
  * Declared at module scope on purpose.
  *
  * A component defined inside a render body gets a fresh identity on every render, so React
@@ -209,6 +231,11 @@ export default function FilterBar({
     k === 'search' ? v !== '' : k === 'showCompleted' ? v === true : v !== 'All',
   )
 
+  // My work and Portfolio compute their own lists; the record filters do nothing to them,
+  // and a control that does nothing must not be shown — the same rule the tree-only
+  // controls follow below.
+  const filtersApply = view === 'tree' || view === 'board' || view === 'calendar'
+
   return (
     <div className="filterbar">
       {/* Four inline, four behind the button.
@@ -220,6 +247,26 @@ export default function FilterBar({
           the long ones (23 process areas, 37 owners) and the two least reached for. None are
           hidden: the button counts how many of them are set, so a filter can never be active
           somewhere the user cannot see. */}
+      {/* Navigation first, filters after. Mid-row, this control was the 12th thing on the
+          line and two whole program phases went unnoticed behind it. */}
+      <div className="segmented view-switch" role="group" aria-label="Workspace view">
+        {VIEW_ORDER.map((v) => (
+          <button
+            key={v}
+            className={view === v ? 'active' : ''}
+            onClick={() => setView(v)}
+            title={VIEW_TITLE[v]}
+            aria-pressed={view === v}
+          >
+            {VIEW_LABEL[v]}
+          </button>
+        ))}
+      </div>
+
+      <span className="sep" />
+
+      {filtersApply && (
+      <>
       <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
       <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
       <FilterDropdown
@@ -279,6 +326,8 @@ export default function FilterBar({
           Clear
         </button>
       )}
+      </>
+      )}
 
       <span className="sep" />
 
@@ -310,14 +359,6 @@ export default function FilterBar({
           Archive · {archivedCount}
         </button>
       )}
-
-      <div className="segmented" role="group" aria-label="View">
-        {(['tree', 'board', 'calendar'] as const).map((v) => (
-          <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
-            {v === 'tree' ? 'Tree' : v === 'board' ? 'Board' : 'Calendar'}
-          </button>
-        ))}
-      </div>
 
       {view === 'tree' && (
       <div className="segmented" role="group" aria-label="Timeline zoom">
