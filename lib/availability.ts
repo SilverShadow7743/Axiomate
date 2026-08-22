@@ -1,4 +1,5 @@
 import { capacityFor, profileAt, describeCapacity, type Allocation, type Commitment, type CapacityPosition } from './capacity'
+import { directoryIdByName } from './access'
 import type { IssueRecord, WorkspaceState } from './workspace'
 
 /**
@@ -106,15 +107,16 @@ function windowPhrase(w: AssignmentWindow): string {
 }
 
 /** Live records of this person's that touch the window at all. */
-function touching<T extends { person: string; startDate: string; endDate: string; deletedAt: string | null }>(
+function touching<T extends { person: string; personId?: string | null; startDate: string; endDate: string; deletedAt: string | null }>(
   records: T[],
   key: string,
   w: AssignmentWindow,
+  personId?: string | null,
 ): T[] {
   return records.filter(
     (r) =>
       !r.deletedAt &&
-      r.person.trim().toLowerCase() === key &&
+      (r.personId && personId ? r.personId === personId : r.person.trim().toLowerCase() === key) &&
       r.startDate <= w.to &&
       r.endDate >= w.from,
   )
@@ -159,8 +161,9 @@ export function availabilityOf(
     match.id,
     window.from,
   )
-  const commitments = touching(Object.values(state.commitments) as Commitment[], key, window)
-  const allocations = touching(Object.values(state.allocations) as Allocation[], key, window)
+  const pid = directoryIdByName(state.model, name)
+  const commitments = touching(Object.values(state.commitments) as Commitment[], key, window, pid)
+  const allocations = touching(Object.values(state.allocations) as Allocation[], key, window, pid)
 
   /**
    * No working pattern, no leave, no allocations — and `capacityFor` would answer anyway, from
@@ -174,7 +177,7 @@ export function availabilityOf(
     }
   }
 
-  const position = capacityFor(name, profile, commitments, allocations, window.from, window.to)
+  const position = capacityFor(name, profile, commitments, allocations, window.from, window.to, pid)
 
   if (position.availableHours === 0) {
     return {

@@ -72,13 +72,15 @@ export function entriesInWeek(
   entries: TimeEntry[],
   person: string,
   week: string,
+  /** The person's directory id when known — id-joined rows match through a rename. */
+  personId?: string | null,
 ): TimeEntry[] {
   const end = addDays(week, 7)
   const who = person.trim().toLowerCase()
   return entries.filter(
     (e) =>
       !e.deletedAt &&
-      e.person.trim().toLowerCase() === who &&
+      (e.personId && personId ? e.personId === personId : e.person.trim().toLowerCase() === who) &&
       e.date >= week &&
       e.date < end,
   )
@@ -89,8 +91,9 @@ export function weekTotal(
   entries: TimeEntry[],
   person: string,
   week: string,
+  personId?: string | null,
 ): { hours: number; billable: number } {
-  const mine = entriesInWeek(entries, person, week)
+  const mine = entriesInWeek(entries, person, week, personId)
   const sum = (xs: TimeEntry[]) => Math.round(xs.reduce((t, e) => t + e.hours, 0) * 100) / 100
   return { hours: sum(mine), billable: sum(mine.filter((e) => e.billable)) }
 }
@@ -100,10 +103,15 @@ export function sheetFor(
   sheets: Timesheet[],
   person: string,
   week: string,
+  personId?: string | null,
 ): Timesheet | null {
   const who = person.trim().toLowerCase()
   return (
-    sheets.find((s) => s.person.trim().toLowerCase() === who && s.weekStarting === week) ?? null
+    sheets.find(
+      (s) =>
+        (s.personId && personId ? s.personId === personId : s.person.trim().toLowerCase() === who) &&
+        s.weekStarting === week,
+    ) ?? null
   )
 }
 
@@ -192,6 +200,9 @@ export function decideProblem(
   decision: ApprovalDecision,
   reason: string | undefined,
   actor: Attester,
+  /** The decider's directory id. Compared as well as the name — a rename between submit and
+   *  decide must not let somebody approve their own week. */
+  deciderId?: string | null,
 ): string | null {
   if (!sheet) return 'That timesheet no longer exists.'
   if (!actor.mayApprove) return 'Deciding a timesheet is not something this account may do.'
@@ -200,7 +211,10 @@ export function decideProblem(
       ? `The ${weekLabel(sheet.weekStarting)} has already been approved.`
       : `The ${weekLabel(sheet.weekStarting)} was returned and has not been resubmitted.`
   }
-  if (sheet.submittedBy.trim().toLowerCase() === actor.name.trim().toLowerCase()) {
+  if (
+    sheet.submittedBy.trim().toLowerCase() === actor.name.trim().toLowerCase() ||
+    (sheet.personId && deciderId && sheet.personId === deciderId)
+  ) {
     return 'A timesheet is decided by somebody other than the person who submitted it.'
   }
   /*

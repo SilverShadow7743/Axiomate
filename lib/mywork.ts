@@ -190,6 +190,14 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
 
   const holds = (key: Parameters<typeof can>[2]) => can(state.model, actor, key).allowed
   const isMe = (who: string | null | undefined) => (who ?? '').trim().toLowerCase() === mine
+  /*
+   * The id-aware join, for references that carry the id half. The id wins the moment both
+   * sides have one — a rename cannot empty this list — and the name fallback exists only
+   * for rows written before the migration. Audit-style fields (requestedBy, deliveredBy)
+   * keep the plain name compare: they record what was written, not who someone is.
+   */
+  const isMine = (who: string | null | undefined, whoId?: string | null): boolean =>
+    whoId && person ? whoId === person.id : isMe(who)
 
   /* ---------------- 1. decisions somebody is waiting on ---------------- */
 
@@ -214,7 +222,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
 
   if (holds('time.approve')) {
     for (const t of Object.values(state.timesheets)) {
-      if (t.status !== 'Submitted' || isMe(t.person)) continue
+      if (t.status !== 'Submitted' || isMine(t.person, t.personId)) continue
       items.push({
         key: `ts:${t.id}`,
         reason: 'decide',
@@ -282,7 +290,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
   /* ---------------- 2. your own work ---------------- */
 
   for (const issue of Object.values(state.issues)) {
-    if (issue.deletedAt || !isMe(issue.owner) || isTerminal(issue.status)) continue
+    if (issue.deletedAt || !isMine(issue.owner, issue.ownerId) || isTerminal(issue.status)) continue
 
     if (BLOCKED_STATUSES.includes(issue.status)) {
       items.push({
@@ -355,7 +363,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
   if (name) {
     const weeks = new Set<string>()
     for (const e of Object.values(state.timeEntries)) {
-      if (e.deletedAt || !isMe(e.person)) continue
+      if (e.deletedAt || !isMine(e.person, e.personId)) continue
       weeks.add(weekStarting(e.date))
     }
     for (const week of weeks) {
@@ -370,7 +378,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       if (weekStarting(today) === week) continue
 
       const sheet = Object.values(state.timesheets).find(
-        (t) => isMe(t.person) && t.weekStarting === week,
+        (t) => isMine(t.person, t.personId) && t.weekStarting === week,
       )
       // A returned week is unsubmitted again and belongs here; an approved one does not.
       if (sheet && sheet.status !== 'Rejected') continue

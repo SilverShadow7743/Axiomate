@@ -292,6 +292,8 @@ export function capacityFor(
   allocations: Allocation[],
   from: string,
   to: string,
+  /** The person's directory id when known — id-joined rows match through a rename. */
+  personId?: string | null,
 ): CapacityPosition {
   const hoursPerDay = profile?.hoursPerDay ?? defaultProfile('').hoursPerDay
   const daysPerWeek = profile?.daysPerWeek ?? 5
@@ -305,9 +307,11 @@ export function capacityFor(
   const grossHours = round(workingDays * hoursPerDay)
 
   const key = person.trim().toLowerCase()
+  const isPerson = (r: { person: string; personId?: string | null }) =>
+    r.personId && personId ? r.personId === personId : r.person.trim().toLowerCase() === key
   const committedHours = round(
     commitments
-      .filter((c) => !c.deletedAt && c.person.trim().toLowerCase() === key)
+      .filter((c) => !c.deletedAt && isPerson(c))
       .reduce((n, c) => n + overlapWorkingDays(c.startDate, c.endDate, from, to) * c.hoursPerDay, 0),
   )
 
@@ -315,7 +319,7 @@ export function capacityFor(
 
   const allocatedHours = round(
     allocations
-      .filter((a) => !a.deletedAt && a.person.trim().toLowerCase() === key)
+      .filter((a) => !a.deletedAt && isPerson(a))
       .reduce((n, a) => {
         const days = overlapWorkingDays(a.startDate, a.endDate, from, to)
         return n + days * hoursPerDay * (a.percentage / 100)

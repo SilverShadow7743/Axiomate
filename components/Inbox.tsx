@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import type { Actor } from '@/lib/actor'
 import { inboxFor, undelivered, unreadCount, type Notification } from '@/lib/notifications'
+import { directoryPersonFor } from '@/lib/access'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
 
@@ -36,8 +37,9 @@ export default function Inbox({
   const ref = useRef<HTMLDivElement>(null)
   useOverlay(ref, open)
 
-  const mine = useMemo(() => inboxFor(state.notifications, actor.name), [state.notifications, actor.name])
-  const unread = useMemo(() => unreadCount(state.notifications, actor.name), [state.notifications, actor.name])
+  const meId = directoryPersonFor(state.model, actor)?.id ?? null
+  const mine = useMemo(() => inboxFor(state.notifications, actor.name, meId), [state.notifications, actor.name, meId])
+  const unread = useMemo(() => unreadCount(state.notifications, actor.name, meId), [state.notifications, actor.name, meId])
   const stuck = useMemo(() => undelivered(state.notifications), [state.notifications])
 
   return (

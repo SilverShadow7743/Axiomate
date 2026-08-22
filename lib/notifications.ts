@@ -65,15 +65,26 @@ export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNot
   }
 }
 
-export function inboxFor(all: Record<string, Notification>, person: string): Notification[] {
+export function inboxFor(
+  all: Record<string, Notification>,
+  person: string,
+  /** The viewer's directory id — the join that survives a rename. Name is the fallback. */
+  personId?: string | null,
+): Notification[] {
   const key = person.trim().toLowerCase()
   return Object.values(all)
-    .filter((n) => n.to.trim().toLowerCase() === key)
+    .filter((n) =>
+      n.toId && personId ? n.toId === personId : n.to.trim().toLowerCase() === key,
+    )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-export function unreadCount(all: Record<string, Notification>, person: string): number {
-  return inboxFor(all, person).filter((n) => !n.readAt).length
+export function unreadCount(
+  all: Record<string, Notification>,
+  person: string,
+  personId?: string | null,
+): number {
+  return inboxFor(all, person, personId).filter((n) => !n.readAt).length
 }
 
 /** Everything raised that has not left the building. Shown as a count, not hidden. */

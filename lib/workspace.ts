@@ -1363,11 +1363,18 @@ function weekStateFor(state: WorkspaceState, person: string, date: string): Week
  */
 function dayWarning(state: WorkspaceState, person: string, date: string, adding: number): string {
   const named = person.trim().toLowerCase()
-  const directory = Object.values(state.model.people).find((p) => p.name.trim().toLowerCase() === named)
+  const pid = directoryIdByName(state.model, person)
+  const directory = pid ? state.model.people[pid] : undefined
   if (!directory) return ''
 
+  // Id-first over the entries, so a renamed person's old rows still count toward the day.
   const already = Object.values(state.timeEntries)
-    .filter((e) => !e.deletedAt && e.date === date && e.person.trim().toLowerCase() === named)
+    .filter(
+      (e) =>
+        !e.deletedAt &&
+        e.date === date &&
+        (e.personId ? e.personId === directory.id : e.person.trim().toLowerCase() === named),
+    )
     .reduce((n, e) => n + e.hours, 0)
 
   return dailyCapWarning(dailyCap(Object.values(state.versions), directory.id, date), already + adding) ?? ''
@@ -4373,7 +4380,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'decideTimesheet': {
       const sheet = state.timesheets[a.id] ?? null
       const attester = attesterFor(state, actor)
-      const problem = decideProblem(sheet, a.decision, a.reason, attester)
+      const problem = decideProblem(sheet, a.decision, a.reason, attester, directoryPersonFor(state.model, actor)?.id ?? null)
       if (problem) return { state, error: problem }
 
       const next: Timesheet = {
