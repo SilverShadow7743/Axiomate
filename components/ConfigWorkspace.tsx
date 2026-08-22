@@ -67,6 +67,7 @@ import { useLabels } from './labels'
 
 type Tab =
   | 'capabilities'
+  | 'timePolicy'
   | 'goals'
   | 'index'
   | 'terminology'
@@ -106,6 +107,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'approvals', label: 'Approvals', group: 'Operating model' },
   { id: 'automation', label: 'Automation', group: 'Operating model' },
   { id: 'watch', label: 'Scheduled pass', group: 'Operating model' },
+  { id: 'timePolicy', label: 'Time recording', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -305,6 +307,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
           {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
           {tab === 'watch' && <Watch state={state} signedIn={signedIn} onConfig={onConfig} pass={pass} />}
+          {tab === 'timePolicy' && <TimeRecording state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} pass={pass} />}
@@ -1432,6 +1435,61 @@ function Sizing({
 /* ================================================================== *
  * Scheduled pass
  * ================================================================== */
+
+function TimeRecording({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const policy = state.model.timePolicy
+  const [days, setDays] = useState(String(policy.backdatingAllowanceDays))
+  const parsed = Number(days)
+  const changed = parsed !== policy.backdatingAllowanceDays
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Time recording</h3>
+      <p className="cfg-note">
+        How long a time entry may lag the work before it must explain itself. Inside the
+        allowance, recording is the most ordinary act in the product and asks nothing; past it,
+        the entry is reconstruction rather than recall, and it records only with a reason on it
+        — which the week&rsquo;s approver reads before signing the number.
+      </p>
+      <div className="cfg-card">
+        <label className="fld" style={{ maxWidth: 340 }}>
+          <span className="fld-label">Backdating allowance, in calendar days</span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            step={1}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+            aria-label="Backdating allowance in days"
+          />
+        </label>
+        <p className="cfg-inherit">
+          Entries recorded more than {Number.isFinite(parsed) ? parsed : policy.backdatingAllowanceDays}{' '}
+          day{parsed === 1 ? '' : 's'} after the work need a reason. Zero is legitimate — it
+          means any entry not made the same day must explain itself.
+        </p>
+        <button
+          className="btn"
+          disabled={!changed || !Number.isInteger(parsed)}
+          onClick={() => {
+            if (onConfig({ k: 'setTimePolicy', patch: { backdatingAllowanceDays: parsed } })) {
+              setDays(String(parsed))
+            }
+          }}
+        >
+          Save allowance
+        </button>
+      </div>
+    </section>
+  )
+}
 
 function Watch({
   state,

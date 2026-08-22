@@ -1379,6 +1379,14 @@ select.cell-editor {
   }
 }
 
+/* ---------- time grace: the late entry and its reason ---------- */
+.time-late {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--h-overdue);
+}
+
 /* ---------- client boundary: which side of the line a record sits on ---------- */
 .cv-chip {
   font-size: 10.5px;

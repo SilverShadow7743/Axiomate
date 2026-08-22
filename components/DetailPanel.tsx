@@ -151,7 +151,7 @@ interface Props {
   onSaveEstimate: (issueId: string, patch: Partial<Estimate>, reason?: string) => boolean
   onAddTime: (
     issueId: string,
-    entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string },
+    entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string; justification?: string },
   ) => boolean
   onRemoveTime: (id: string) => void
   onSubmitWeek: (person: string, week: string) => boolean
@@ -183,7 +183,10 @@ interface Props {
   onCommit: (c: { person: string; kind: CommitmentKind; startDate: string; endDate: string; hoursPerDay: number; note: string }) => boolean
   onReleaseCommitment: (id: string) => void
   /** Correct an existing time entry. The reducer arm existed with no way to reach it. */
-  onUpdateTime: (id: string, patch: { hours?: number; note?: string; billable?: boolean }) => boolean
+  onUpdateTime: (
+    id: string,
+    patch: { hours?: number; note?: string; billable?: boolean; justification?: string },
+  ) => boolean
 }
 
 export default function DetailPanel({

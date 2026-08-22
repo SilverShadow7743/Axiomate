@@ -23,6 +23,7 @@ import {
   submitProblem,
   decideProblem,
 } from '@/lib/timesheet'
+import { backdated } from '@/lib/timeWindow'
 
 /**
  * Hours recorded against this issue.
@@ -60,6 +61,8 @@ export default function TimeTab({
     activity: TimeActivity
     billable: boolean
     note: string
+    /** Required by the reducer when the entry lags the work past the workspace's allowance. */
+    justification?: string
   }) => boolean
   onRemove: (id: string) => void
   /** Present a week for approval. Returns false when the reducer refused. */
@@ -73,7 +76,10 @@ export default function TimeTab({
    * dispatched it — so an hour could be logged and withdrawn but not corrected, and the only
    * way to fix a typo was to delete the record of the work and write a new one.
    */
-  onUpdate: (id: string, patch: { hours?: number; note?: string; billable?: boolean }) => boolean
+  onUpdate: (
+    id: string,
+    patch: { hours?: number; note?: string; billable?: boolean; justification?: string },
+  ) => boolean
 }) {
   const may = can(state.model, actor, 'time.record')
   const mayOthers = can(state.model, actor, 'time.recordForOthers')
@@ -99,9 +105,18 @@ export default function TimeTab({
   const [activity, setActivity] = useState<TimeActivity>('Resolution')
   const [billable, setBillable] = useState(true)
   const [note, setNote] = useState('')
+  const [justification, setJustification] = useState('')
 
   const parsed = Number(hours)
   const problem = hours.trim() ? checkEntry({ hours: parsed, date, person }, today) : null
+  /*
+   * The lateness, live as the date changes, from the same rule the reducer applies — though
+   * the reducer judges by the SERVER's clock, so this hint is a preview and the arm is the
+   * authority. The reason box appears only when the policy demands it: a reason box in front
+   * of the ordinary case is exactly what the allowance exists to avoid.
+   */
+  const lateness = backdated(date, today, state.model.timePolicy.backdatingAllowanceDays)
+  const needsReason = lateness.justificationRequired
 
   /* ---------------- the week, and whether it is still theirs ---------------- */
 
@@ -110,6 +125,15 @@ export default function TimeTab({
   const sheet = sheetFor(sheets, person, week)
   const total = useMemo(
     () => weekTotal(Object.values(state.timeEntries), person, week),
+    [state.timeEntries, person, week],
+  )
+  /** The week's late entries, every issue included — the week is attested whole. */
+  const lateInWeek = useMemo(
+    () =>
+      Object.values(state.timeEntries).filter(
+        (e) =>
+          !e.deletedAt && e.person === person && weekStarting(e.date) === week && e.justification,
+      ),
     [state.timeEntries, person, week],
   )
   const attester = {
@@ -171,6 +195,18 @@ export default function TimeTab({
         ) : null}
         {mayApprove.allowed && sheet?.status === 'Submitted' ? (
           <>
+            {/* What the design asks the approval to discharge: the late entries and their
+                reasons, read before the number is signed. Across every issue — the week is
+                attested whole. */}
+            {lateInWeek.length > 0 && (
+              <span className="est-block-note time-late">
+                {lateInWeek.length === 1 ? 'A late entry' : `${lateInWeek.length} late entries`} in
+                this week:{' '}
+                {lateInWeek
+                  .map((e) => `${formatIso(e.date)} ${e.hours}h — ${e.justification}`)
+                  .join(' · ')}
+              </span>
+            )}
             <button
               type="button"
               className="btn"
@@ -216,9 +252,21 @@ export default function TimeTab({
 
   const submit = () => {
     if (problem || !hours.trim()) return
-    if (onAdd({ person, date, hours: parsed, activity, billable, note })) {
+    if (needsReason && !justification.trim()) return
+    if (
+      onAdd({
+        person,
+        date,
+        hours: parsed,
+        activity,
+        billable,
+        note,
+        justification: needsReason ? justification.trim() : undefined,
+      })
+    ) {
       setHours('')
       setNote('')
+      setJustification('')
     }
   }
 
@@ -324,10 +372,27 @@ export default function TimeTab({
                 }}
               />
             </label>
-            <button className="btn primary" onClick={submit} disabled={!hours.trim() || Boolean(problem)}>
+            <button
+              className="btn primary"
+              onClick={submit}
+              disabled={!hours.trim() || Boolean(problem) || (needsReason && !justification.trim())}
+            >
               Record
             </button>
           </div>
+          {needsReason && (
+            <div className="time-row">
+              <label className="fld time-fld-note">
+                <span className="fld-label">Why so late</span>
+                <input
+                  value={justification}
+                  placeholder={`${lateness.days} days after the work — the allowance is ${state.model.timePolicy.backdatingAllowanceDays}. The week's approver reads this.`}
+                  onChange={(e) => setJustification(e.target.value)}
+                  aria-label="Reason for the late entry"
+                />
+              </label>
+            </div>
+          )}
           {problem && <p className="ov-gate">{problem.message}</p>}
         </section>
       )}
@@ -363,6 +428,11 @@ export default function TimeTab({
                   <td>{e.billable ? 'Yes' : <span className="prov">No</span>}</td>
                   <td>
                     {e.note || <span className="prov">—</span>}
+                    {e.justification && (
+                      <span className="time-late" title={e.justification}>
+                        late — {e.justification}
+                      </span>
+                    )}
                     {e.updatedAt && (
                       <span className="prov"> · corrected by {e.updatedBy}</span>
                     )}
@@ -391,6 +461,8 @@ export default function TimeTab({
                     <td colSpan={7}>
                       <CorrectEntry
                         entry={e}
+                        today={today}
+                        allowanceDays={state.model.timePolicy.backdatingAllowanceDays}
                         onSave={(patch) => {
                           if (onUpdate(e.id, patch)) setEditing(null)
                         }}
@@ -434,18 +506,29 @@ function mayRemove(entry: TimeEntry, actor: Actor, hasOverride: boolean): boolea
  */
 function CorrectEntry({
   entry,
+  today,
+  allowanceDays,
   onSave,
 }: {
   entry: TimeEntry
-  onSave: (patch: { hours?: number; note?: string; billable?: boolean }) => void
+  today: string
+  allowanceDays: number
+  onSave: (patch: { hours?: number; note?: string; billable?: boolean; justification?: string }) => void
 }) {
   const [hours, setHours] = useState(String(entry.hours))
   const [note, setNote] = useState(entry.note)
   const [billable, setBillable] = useState(entry.billable)
+  const [justification, setJustification] = useState('')
 
   const parsed = Number(hours)
   const problem = checkEntry({ hours: parsed, date: entry.date, person: entry.person }, entry.date)
   const changed = parsed !== entry.hours || note !== entry.note || billable !== entry.billable
+  /*
+   * Changing the HOURS of a stale entry is the same reconstruction as recording it late —
+   * the reducer gates it, so the form demands what the arm will refuse without. A relabel of
+   * the note or the billing changes no claimed number and asks nothing.
+   */
+  const staleHours = parsed !== entry.hours && backdated(entry.date, today, allowanceDays).justificationRequired
 
   return (
     <div className="time-row">
@@ -461,11 +544,29 @@ function CorrectEntry({
         <span className="fld-label">Billable</span>
         <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
       </label>
+      {staleHours && (
+        <label className="fld time-fld-note">
+          <span className="fld-label">Why the change</span>
+          <input
+            value={justification}
+            placeholder="This entry is past the allowance — the approver reads this."
+            onChange={(e) => setJustification(e.target.value)}
+            aria-label="Reason for correcting a late entry"
+          />
+        </label>
+      )}
       <button
         className="btn"
-        disabled={Boolean(problem) || !changed}
+        disabled={Boolean(problem) || !changed || (staleHours && !justification.trim())}
         title={problem?.message ?? (changed ? 'Save the correction' : 'Nothing has changed')}
-        onClick={() => onSave({ hours: parsed, note, billable })}
+        onClick={() =>
+          onSave({
+            hours: parsed,
+            note,
+            billable,
+            justification: staleHours ? justification.trim() : undefined,
+          })
+        }
       >
         Save
       </button>
