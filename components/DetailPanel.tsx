@@ -119,6 +119,8 @@ interface Props {
   onAddNote: (issueId: string, body: string, noteType: NoteType, pinned: boolean) => void
   onUpdateNote: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
   onDeleteNote: (id: string) => void
+  /** A reply the mail endpoint sent and recorded — merged into the browser's copy upstream. */
+  onMailSent: (note: IssueNote) => void
   /**
    * Raised while an Overview edit has uncommitted changes.
    *
@@ -218,6 +220,7 @@ export default function DetailPanel({
   onAddNote,
   onUpdateNote,
   onDeleteNote,
+  onMailSent,
   onDirtyChange,
   onSaveEstimate,
   onAddTime,
@@ -512,6 +515,7 @@ export default function DetailPanel({
             onSetAssignment={(rid, values) => onSetAssignment(issue.id, rid, values)}
             onSave={(patch, dates, reason) => onSaveIssue(issue.id, patch, dates, reason)}
             onDirtyChange={onDirtyChange}
+            onMailSent={onMailSent}
             onRequestApproval={(ruleId, note) => onRequestApproval(issue.id, ruleId, note)}
             onDecideApproval={onDecideApproval}
             editing={editing}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
+import type { IssueNote } from '@/lib/notes'
 import MyWorkPanel from './MyWorkPanel'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
@@ -356,6 +357,30 @@ export default function IssueWorkspace({
     },
     [notify],
   )
+
+  /**
+   * A client reply the server has already sent and recorded.
+   *
+   * Merged like an uploaded document, and for the same reason: the write happened server-side
+   * — the mail went out, the note was persisted with the server's own id — so replaying it
+   * through `dispatch` would mint a second id here and queue a duplicate write. The seq is
+   * pulled forward to the note's own so a note added next in this browser cannot locally
+   * reuse the id the server just spent.
+   */
+  const mailSent = useCallback((note: IssueNote) => {
+    const noteSeq = Number(note.id.replace(/^note-/, ''))
+    setState((s) => ({
+      ...s,
+      notes: { ...s.notes, [note.id]: note },
+      issues: s.issues[note.issueId]
+        ? {
+            ...s.issues,
+            [note.issueId]: { ...s.issues[note.issueId], lastActivity: note.createdAt.slice(0, 10) },
+          }
+        : s.issues,
+      seq: Number.isFinite(noteSeq) ? Math.max(s.seq, noteSeq) : s.seq,
+    }))
+  }, [])
 
   /**
    * The same funnel for a batch that has to land atomically.
@@ -2062,6 +2087,7 @@ export default function IssueWorkspace({
             dispatch({ t: 'updateNote', id, patch, now: new Date().toISOString() })
           }
           onDeleteNote={(id) => dispatch({ t: 'removeNote', id, now: new Date().toISOString() })}
+          onMailSent={mailSent}
           onSetAssignment={(issueId, responsibilityId, values) =>
             dispatch({ t: 'setAssignment', issueId, responsibilityId, values, now: new Date().toISOString() })
           }

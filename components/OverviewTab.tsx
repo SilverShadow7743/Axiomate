@@ -2,7 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
+import { can } from '@/lib/access'
 import { canEditIssue } from '@/lib/permissions'
+import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
+import type { IssueNote } from '@/lib/notes'
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow, type Severity } from '@/lib/types'
 import { allowedNext } from '@/lib/statusPolicy'
 import { blockingRule } from '@/lib/approval'
@@ -70,6 +73,7 @@ export default function OverviewTab({
   onDirtyChange,
   onRequestApproval,
   onDecideApproval,
+  onMailSent,
   editing,
   setEditing,
 }: {
@@ -87,6 +91,8 @@ export default function OverviewTab({
   onDirtyChange: (dirty: boolean) => void
   onRequestApproval: (ruleId: string, note: string) => void
   onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
+  /** A reply the server sent and recorded — merged into this browser's copy, never re-dispatched. */
+  onMailSent: (note: IssueNote) => void
   editing: boolean
   setEditing: (v: boolean) => void
 }) {
@@ -160,6 +166,62 @@ export default function OverviewTab({
     if (onSave(patch, dates, reason.trim() || undefined)) {
       setReason('')
       setEditing(false)
+    }
+  }
+
+  /* ---------------- reply to client ---------------- */
+
+  /**
+   * Both halves of the same gate: the button hides without `mail.send`, and the endpoint
+   * refuses without it. Resolution comes from the one place that owns it — the same
+   * `sendingMailboxFor` the endpoint asks — so the From and To shown here are the From and To
+   * the send will actually use, never a second opinion.
+   */
+  const outbound = useMemo(() => sendingMailboxFor(state, issue.id), [state, issue.id])
+  const maySendMail = can(state.model, actor, 'mail.send').allowed
+
+  const [composing, setComposing] = useState(false)
+  const [mailBody, setMailBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [mailError, setMailError] = useState<string | null>(null)
+  const [sentLine, setSentLine] = useState<string | null>(null)
+
+  const sendMail = async () => {
+    if (isOutboundRefusal(outbound)) return
+    setSending(true)
+    setMailError(null)
+    try {
+      const res = await fetch('/api/mail/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ issueId: issue.id, text: mailBody }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        to?: string
+        noteRecorded?: boolean
+        note?: IssueNote | null
+      } | null
+      if (!res.ok || !data?.ok) {
+        // The typed body stays in the box — a client email is not something to retype.
+        setMailError(
+          data?.error ?? 'The message could not be sent. Nothing was recorded, and your text is still in the box.',
+        )
+        return
+      }
+      if (data.note) onMailSent(data.note)
+      setSentLine(
+        data.noteRecorded === false
+          ? `Sent to ${data.to} — but the note could not be written. Record what was said on the Notes tab.`
+          : `Sent to ${data.to} and recorded in Notes.`,
+      )
+      setMailBody('')
+      setComposing(false)
+    } catch {
+      setMailError('The message could not be sent. Check the connection — your text is still in the box.')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -264,6 +326,68 @@ export default function OverviewTab({
             onRequest={onRequestApproval}
             onDecide={onDecideApproval}
           />
+        )}
+
+        {/* Absent entirely without the grant — a control someone may not use is not shown
+            disabled, the same choice ApprovalsBlock makes about self-approval. */}
+        {maySendMail && (
+          <section className="appr-block">
+            <h4 className="est-h">Reply to client</h4>
+            {isOutboundRefusal(outbound) ? (
+              <p className="prov">{outbound.reason}</p>
+            ) : !composing ? (
+              <div className="ov-actions">
+                <button className="btn" onClick={() => { setSentLine(null); setComposing(true) }}>
+                  {mailBody.trim() ? 'Continue the reply…' : 'Write a reply'}
+                </button>
+                {sentLine && <span className="prov">{sentLine}</span>}
+              </div>
+            ) : (
+              <>
+                <dl className="kv">
+                  <dt>From</dt>
+                  <dd className="mono">
+                    {outbound.mailbox.address}
+                    <span className="prov"> · the intake mailbox that covers this record</span>
+                  </dd>
+                  <dt>To</dt>
+                  <dd className="mono">
+                    {outbound.recipient}
+                    <span className="prov"> · whoever raised it, as they stated</span>
+                  </dd>
+                  <dt>Subject</dt>
+                  <dd>
+                    {outbound.subject}
+                    <span className="prov"> · the reference threads their answer back here</span>
+                  </dd>
+                  <dt>Message</dt>
+                  <dd>
+                    <textarea
+                      rows={6}
+                      value={mailBody}
+                      onChange={(e) => setMailBody(e.target.value)}
+                      aria-label="Message to the client"
+                      placeholder="Sent as plain text, exactly as written here."
+                    />
+                    {mailError && <p className="ov-gate">{mailError}</p>}
+                  </dd>
+                </dl>
+                <div className="ov-actions">
+                  {/* Close keeps the draft; only a successful send clears it. */}
+                  <button className="btn" disabled={sending} onClick={() => setComposing(false)}>
+                    Close
+                  </button>
+                  <button
+                    className="btn primary"
+                    disabled={sending || !mailBody.trim()}
+                    onClick={sendMail}
+                  >
+                    {sending ? 'Sending…' : 'Send'}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
         )}
       </>
     )
