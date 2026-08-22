@@ -504,6 +504,16 @@ account (Tarun) for steps 5–6.
 7. Withdraw a fresh review as its asker: chip **review withdrawn**; recorded verdicts stay
    visible in the audit trail.
 
+## 22 · Identity ids — the rename that cannot orphan
+
+Driven 22 Aug 2026. The persistence proof drives the full counter-case against Postgres (a
+person created, hours and ownership recorded with their id, renamed in one field edit, and
+their My Work still whole). In the live workspace after deploy and backfill: My Work
+populated correctly under the id-first joins (32 items), and a spot check on SLG-037 showed
+`owner "Nishant Sekhar" → ownerId PERSON_8` — the same entry the session joins by email.
+Remaining null ids are compounds from the imported log and placeholders, on the name
+fallback by design. The backfill script re-run reports zero remaining unique matches.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
