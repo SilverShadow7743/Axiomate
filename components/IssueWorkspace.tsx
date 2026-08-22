@@ -778,6 +778,8 @@ export default function IssueWorkspace({
 
   /* ---------------- configuration screen ---------------- */
   const [configOpen, setConfigOpen] = useState(false)
+  /** A section the Configuration dialog should open on — the blueprint row-menu entry. */
+  const [configIntent, setConfigIntent] = useState<{ tab: 'blueprints'; source: string } | null>(null)
 
   /** Configuration changes take the same funnel as everything else, audit included. */
   const applyConfigOp = useCallback(
@@ -1228,6 +1230,10 @@ export default function IssueWorkspace({
       move: (row) => setDialog({ t: 'move', id: row.id }),
       link: (row) => setDialog({ t: 'link', issueId: row.id }),
       archive: (row) => setDialog({ t: 'delete', id: row.id }),
+      saveBlueprint: (row) => {
+        setConfigIntent({ tab: 'blueprints', source: row.id })
+        setConfigOpen(true)
+      },
       /**
        * Duplicate mints the copy AND the `DUPLICATE_OF` back to the original — that is the
        * arm's own guarantee (design §5), not something this menu arranges, which is why there
@@ -1297,7 +1303,50 @@ export default function IssueWorkspace({
         const parentId = p.parentId || dialog.parentId
         const draft = { ...p }
         delete draft.parentId
-        ok = dispatch({ t: 'create', parentId, kind: dialog.kind, draft, now })
+        const blueprintId = draft.blueprintId
+        delete draft.blueprintId
+        const bp = blueprintId ? state.model.blueprints[blueprintId] : undefined
+        if (dialog.kind === 'engagement' && bp) {
+          /*
+           * Create-and-apply as ONE batch. The blueprint is planned against a simulation of
+           * the create (apply is pure), so the plan's ids match what the batch will mint;
+           * the batch then folds the create, every step, and the provenance record
+           * atomically — a refusal anywhere leaves nothing half-built.
+           */
+          const createAction = { t: 'create', parentId, kind: dialog.kind, draft, now } as Action
+          const sim = applyWithRules(state, createAction, actor)
+          if (!sim.error && sim.createdId) {
+            const anchor = now.slice(0, 10)
+            const run = applyBlueprint(sim.state, bp, sim.createdId, anchor, actor, new Set(bp.entries.map((e) => e.id)), now)
+            const batch: Action[] = [createAction, ...run.steps.map((st) => st.action)]
+            batch.push({
+              t: 'config',
+              op: {
+                k: 'upsertBlueprint',
+                id: bp.id,
+                patch: {
+                  applications: [
+                    ...bp.applications,
+                    { at: now, by: actor.name, targetId: sim.createdId, version: bp.version },
+                  ],
+                },
+              },
+              now,
+            } as Action)
+            const res = dispatchMany(batch)
+            ok = res.ok
+            if (res.ok) {
+              notify(
+                `${bp.name} applied — ${run.steps.length} steps${run.refusals.length ? `, ${run.refusals.length} skipped` : ''}.`,
+              )
+              if (res.state && sim.createdId) revealIssue(sim.createdId, buildTree(res.state, today))
+            }
+          } else {
+            ok = dispatch(createAction)
+          }
+        } else {
+          ok = dispatch({ t: 'create', parentId, kind: dialog.kind, draft, now })
+        }
       } else if (dialog.t === 'edit') {
         const id = dialog.id
         if (state.nodes[id]) {
@@ -1374,7 +1423,7 @@ export default function IssueWorkspace({
 
       if (ok) setDialog(null)
     },
-    [dialog, dispatch, state, selectedId],
+    [dialog, dispatch, dispatchMany, notify, revealIssue, state, selectedId, actor, today],
   )
 
   /* ---------------- toolbar handlers ---------------- */
@@ -2267,6 +2316,8 @@ export default function IssueWorkspace({
           actor={actor}
           signedIn={Boolean(verified)}
           pass={pass}
+          initialTab={configIntent?.tab}
+          initialBlueprintSource={configIntent?.source}
           onConfig={applyConfigOp}
           onApplyBlueprint={(blueprintId, targetIdArg, anchorArg, keepIds) => {
             /*
@@ -2301,7 +2352,10 @@ export default function IssueWorkspace({
             }
             return { applied, refused: run.refusals.map((r) => ({ entryName: r.entryName, error: r.error })) }
           }}
-          onClose={() => setConfigOpen(false)}
+          onClose={() => {
+            setConfigOpen(false)
+            setConfigIntent(null)
+          }}
           onRecordRate={(r) =>
             dispatch({ t: 'recordRate', ...r, now: new Date().toISOString() })
           }

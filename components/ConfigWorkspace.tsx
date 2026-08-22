@@ -123,6 +123,10 @@ interface Props {
   signedIn: boolean
   /** When the scheduled pass last ran (null: never), read from the database at page load. */
   pass: { lastRunAt: string | null; lastSummary: string | null }
+  /** Open on a section — the row menu's "Save as blueprint" lands on Blueprints directly. */
+  initialTab?: Tab
+  /** Pre-select the blueprint extract source, for the same entry point. */
+  initialBlueprintSource?: string
   onConfig: (op: ConfigOp) => boolean
   /** Applying creates records, not configuration - the rates precedent. Returns a summary. */
   onApplyBlueprint: (blueprintId: string, targetId: string, anchor: string, keep: string[]) => { applied: number; refused: { entryName: string; error: string }[] }
@@ -149,12 +153,13 @@ interface Props {
 }
 
 export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig,
-  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>('index')
+  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose,
+  initialTab, initialBlueprintSource }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
   const [confirmReset, setConfirmReset] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  useOverlay(ref)
+  useOverlay(ref, true, onClose)
 
   const model = state.model
 
@@ -289,7 +294,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} pass={pass} />}
-          {tab === 'blueprints' && <Blueprints state={state} onConfig={onConfig} onApply={onApplyBlueprint} />}
+          {tab === 'blueprints' && <Blueprints state={state} onConfig={onConfig} onApply={onApplyBlueprint} initialSource={initialBlueprintSource} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
@@ -2512,10 +2517,12 @@ function Blueprints({
   state,
   onConfig,
   onApply,
+  initialSource,
 }: {
   state: WorkspaceState
   onConfig: (op: ConfigOp) => boolean
   onApply: (blueprintId: string, targetId: string, anchor: string, keep: string[]) => { applied: number; refused: { entryName: string; error: string }[] }
+  initialSource?: string
 }) {
   const blueprints = Object.values(state.model.blueprints ?? {})
   const engagements = useMemo(
@@ -2528,7 +2535,7 @@ function Blueprints({
   )
 
   /* ---- extract flow ---- */
-  const [sourceId, setSourceId] = useState('')
+  const [sourceId, setSourceId] = useState(initialSource ?? '')
   const [proposal, setProposal] = useState<BlueprintProposal | null>(null)
   const [ticked, setTicked] = useState<Set<string>>(new Set())
   const [bpName, setBpName] = useState('')

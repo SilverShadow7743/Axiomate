@@ -277,93 +277,6 @@ export default function OverviewTab({
             <span className="prov">{may.reason ?? 'Read only.'}</span>
           )}
         </div>
-        <div className="cols-2">
-          <dl className="kv">
-            <dt>Issue</dt>
-            <dd className="mono">{issue.id}</dd>
-            <dt>Subject</dt>
-            <dd>{issue.subject}</dd>
-            <dt>Description</dt>
-            <dd className="ov-prose">{issue.description || '—'}</dd>
-            <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
-            <dd>
-              {issue.client} · {issue.module}
-              <span className="prov"> · follows its place in the tree; use Move to change it</span>
-            </dd>
-            <dt>Type</dt>
-            <dd>
-              {issue.type}
-              {issue.sourceType && issue.sourceType !== issue.type && (
-                <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
-              )}
-            </dd>
-            <dt>{labels.FIELD_SEVERITY}</dt>
-            <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
-            <dt>{labels.FIELD_STATUS}</dt>
-            <dd>{issue.status}</dd>
-          </dl>
-          <dl className="kv">
-            <dt>{labels.ISSUE_OWNER}</dt>
-            <dd>{issue.owner}</dd>
-            <dt>{labels.ISSUE_RAISED_BY}</dt>
-            <dd>{issue.raisedBy || '—'}</dd>
-            <dt>{labels.ISSUE_ACCOUNTABLE}</dt>
-            <dd>{issue.accountable}</dd>
-            <dt>{labels.FIELD_NEXT_ACTION}</dt>
-            <dd className="ov-prose">{issue.nextAction || '—'}</dd>
-            <dt>{labels.FIELD_START_DATE} / {labels.FIELD_DUE_DATE}</dt>
-            <dd className="mono">
-              {row.plannedStartDate ? formatIso(row.plannedStartDate) : '—'} ·{' '}
-              {row.plannedEndDate ? formatIso(row.plannedEndDate) : '—'}
-              {row.plannedOrigin === 'derived' && (
-                <span className="prov"> · rolled up from its lifecycle</span>
-              )}
-            </dd>
-            <dt>Raised</dt>
-            <dd className="mono">
-              {formatIso(issue.raised)}{' '}
-              <span style={{ color: 'var(--text-faint)' }}>({issue.age}d ago)</span>
-            </dd>
-            <dt>Last activity</dt>
-            <dd className="mono">
-              {formatIso(issue.lastActivity)}{' '}
-              <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
-            </dd>
-            {customResponsibilities.map((t) => (
-              <Fragment key={t.id}>
-                <dt>
-                  {t.label}
-                  {t.requiredHere && <span style={{ color: 'var(--h-overdue)' }}> *</span>}
-                </dt>
-                <dd>
-                  <input
-                    className="resp-input"
-                    defaultValue={t.values.join(', ')}
-                    onBlur={(e) => {
-                      const next = e.target.value
-                        .split(',')
-                        .map((v) => v.trim())
-                        .filter(Boolean)
-                      if (next.join(', ') !== t.values.join(', ')) onSetAssignment(t.id, next)
-                    }}
-                  />
-                </dd>
-              </Fragment>
-            ))}
-          </dl>
-        </div>
-
-        {/* Under the record rather than on a tab of its own: an approval here is never an
-            abstract fact, it is the reason a particular move is blocked. */}
-        {record && (
-          <ApprovalsBlock
-            issue={record}
-            state={state}
-            actor={actor}
-            onRequest={onRequestApproval}
-            onDecide={onDecideApproval}
-          />
-        )}
 
         {/* Absent entirely without the grant — a control someone may not use is not shown
             disabled, the same choice ApprovalsBlock makes about self-approval. Absent too
@@ -452,6 +365,94 @@ export default function OverviewTab({
             )}
           </section>
         )}
+        <div className="cols-2">
+          <dl className="kv">
+            <dt>Issue</dt>
+            <dd className="mono">{issue.id}</dd>
+            <dt>Subject</dt>
+            <dd>{issue.subject}</dd>
+            <dt>Description</dt>
+            <dd className="ov-prose">{issue.description || '—'}</dd>
+            <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
+            <dd>
+              {issue.client} · {issue.module}
+              <span className="prov"> · follows its place in the tree; use Move to change it</span>
+            </dd>
+            <dt>Type</dt>
+            <dd>
+              {issue.type}
+              {issue.sourceType && issue.sourceType !== issue.type && (
+                <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
+              )}
+            </dd>
+            <dt>{labels.FIELD_SEVERITY}</dt>
+            <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
+            <dt>{labels.FIELD_STATUS}</dt>
+            <dd>{issue.status}</dd>
+          </dl>
+          <dl className="kv">
+            <dt>{labels.ISSUE_OWNER}</dt>
+            <dd>{issue.owner}</dd>
+            <dt>{labels.ISSUE_RAISED_BY}</dt>
+            <dd>{issue.raisedBy || '—'}</dd>
+            <dt>{labels.ISSUE_ACCOUNTABLE}</dt>
+            <dd>{issue.accountable}</dd>
+            <dt>{labels.FIELD_NEXT_ACTION}</dt>
+            <dd className="ov-prose">{issue.nextAction || '—'}</dd>
+            <dt>{labels.FIELD_START_DATE} / {labels.FIELD_DUE_DATE}</dt>
+            <dd className="mono">
+              {row.plannedStartDate ? formatIso(row.plannedStartDate) : '—'} ·{' '}
+              {row.plannedEndDate ? formatIso(row.plannedEndDate) : '—'}
+              {row.plannedOrigin === 'derived' && (
+                <span className="prov"> · rolled up from its lifecycle</span>
+              )}
+            </dd>
+            <dt>Raised</dt>
+            <dd className="mono">
+              {formatIso(issue.raised)}{' '}
+              <span style={{ color: 'var(--text-faint)' }}>({issue.age}d ago)</span>
+            </dd>
+            <dt>Last activity</dt>
+            <dd className="mono">
+              {formatIso(issue.lastActivity)}{' '}
+              <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
+            </dd>
+            {customResponsibilities.map((t) => (
+              <Fragment key={t.id}>
+                <dt>
+                  {t.label}
+                  {t.requiredHere && <span style={{ color: 'var(--h-overdue)' }}> *</span>}
+                </dt>
+                <dd>
+                  <input
+                    className="resp-input"
+                    defaultValue={t.values.join(', ')}
+                    onBlur={(e) => {
+                      const next = e.target.value
+                        .split(',')
+                        .map((v) => v.trim())
+                        .filter(Boolean)
+                      if (next.join(', ') !== t.values.join(', ')) onSetAssignment(t.id, next)
+                    }}
+                  />
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+
+        {/* Under the record rather than on a tab of its own: an approval here is never an
+            abstract fact, it is the reason a particular move is blocked. */}
+        {record && (
+          <ApprovalsBlock
+            issue={record}
+            state={state}
+            actor={actor}
+            onRequest={onRequestApproval}
+            onDecide={onDecideApproval}
+          />
+        )}
+
       </>
     )
   }

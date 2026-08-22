@@ -40,6 +40,8 @@ export interface RowActions {
   /** Work types this issue could be reclassified as; empty for anything that is not an issue. */
   convertTypes: (row: ScheduleRow) => string[]
   convert: (row: ScheduleRow, type: string) => void
+  /** Store an engagement's shape for reuse — opens the blueprint screen on this source. */
+  saveBlueprint?: (row: ScheduleRow) => void
 }
 
 /**
@@ -210,6 +212,19 @@ export default function RowMenu({
             Convert to {t}
           </button>
         ))}
+
+        {/* Templates surface where the finished work is: the engagement that just ran is the
+            one worth storing, and its row is where somebody is standing when they think so. */}
+        {row.kind === 'engagement' && actions.saveBlueprint && (
+          <button
+            role="menuitem"
+            className="menu-item"
+            onClick={() => run(() => actions.saveBlueprint!(row))}
+          >
+            Save as blueprint…
+            <span className="menu-sub">Store this engagement's shape for the next one</span>
+          </button>
+        )}
 
         <button
           role="menuitem"

@@ -11,6 +11,8 @@ import type {
 import type { CrpResult } from '@/lib/schedule'
 import { allowedNext } from '@/lib/statusPolicy'
 import { dropOutcome } from '@/lib/board'
+import { can } from '@/lib/access'
+import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
 import { proposeTargetDate } from '@/lib/schedule'
@@ -60,6 +62,7 @@ export type Tab =
   | 'Lifecycle'
   | 'Relationships'
   | 'Resolution Path'
+  | 'Links'
   | 'Evidence'
   | 'History'
   | 'Data Source'
@@ -271,23 +274,18 @@ export default function DetailPanel({
    * Issues keep the full set. Structural rows get what they have: Capacity for a project,
    * History everywhere (they are audited like everything else), and Data Source always.
    */
+  /*
+   * Seven, down from twelve. The scheduling story was split across four tabs that
+   * cross-referenced each other's empty states; it is one tab with sections now. Links holds
+   * what connects this record to others (relationships, evidence). Data Source rendered the
+   * same app-level import provenance for every record, so it lives with the empty-selection
+   * state instead of costing every record a tab.
+   */
   const TABS: Tab[] = issue
-    ? [
-        'Overview',
-        'Notes',
-        'Estimation',
-        'Time',
-        'Schedule',
-        'Lifecycle',
-        'Relationships',
-        'Resolution Path',
-        'Evidence',
-        'History',
-        'Data Source',
-      ]
+    ? ['Overview', 'Notes', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
-      ? ['Capacity', 'History', 'Data Source']
-      : ['Overview', 'History', 'Data Source']
+      ? ['Capacity', 'History']
+      : ['Overview', 'History']
 
   /**
    * Land on a tab this row actually has.
@@ -466,9 +464,10 @@ export default function DetailPanel({
             Select a row to see its detail. {liveIssues} issues here
             {liveIssues === meta.issueCount ? '' : `, ${meta.issueCount} of them imported`} from{' '}
             {meta.source}.
+            <div style={{ marginTop: 14 }}>
+              <DataSource meta={meta} />
+            </div>
           </div>
-        ) : tab === 'Data Source' ? (
-          <DataSource meta={meta} />
         ) : tab === 'History' && !issue ? (
           // Engagement and client edits are audited like everything else, so History has to
           // work on these rows too — otherwise the tab is visible and inert, which reads as
@@ -567,8 +566,19 @@ export default function DetailPanel({
             onAdd={(body, noteType, pinned) => onAddNote(issue.id, body, noteType, pinned)}
             onUpdate={onUpdateNote}
             onDelete={onDeleteNote}
+            onWriteReply={
+              mailEnabled &&
+              can(state.model, actor, 'mail.send').allowed &&
+              !isOutboundRefusal(sendingMailboxFor(state, issue.id))
+                ? () => {
+                    setTab('Overview')
+                    onTabChange('Overview')
+                  }
+                : undefined
+            }
           />
         ) : tab === 'Schedule' ? (
+          <>
           <div className="cols-2">
             <dl className="kv">
               <dt>Schedule mode</dt>
@@ -646,44 +656,56 @@ export default function DetailPanel({
               )}
             </div>
           </div>
-        ) : tab === 'Lifecycle' ? (
-          <Lifecycle
-            issueRow={issueRow!}
-            allRows={allRows}
-            hasLifecycle={hasLifecycle(issue.id)}
-            onBuild={() => onBuildLifecycle(issue.id)}
-            onClear={() => onClearLifecycle(issue.id)}
-            sla={sla}
-            severity={issue.severity}
-          />
-        ) : tab === 'Relationships' ? (
-          <Relationships
-            issueId={issue.id}
-            relationships={relationships}
-            dependencies={dependencies}
-            allRows={allRows}
-            onUnlink={onUnlink}
-            onRemoveDependency={onRemoveDependency}
-          />
-        ) : tab === 'Evidence' ? (
-          <Evidence
-            issue={issue}
-            items={evidence.filter((e) => e.issueId === issue.id && !e.deletedAt)}
-            onManage={() => onManageEvidence(issue.id)}
-          />
-        ) : tab === 'Resolution Path' ? (
-          <ResolutionPath
-            crp={crp}
-            allRows={allRows}
-            issueRow={issueRow!}
-            today={today}
-            activityCount={allRows.filter((r) => r.parentId === issueRow!.id).length}
-            dependencyCount={
-              dependencies.filter((d) => d.predecessorId.startsWith(`${issue.id}#`)).length
-            }
-            hasLifecycle={hasLifecycle(issue.id)}
-            onBuildLifecycle={() => onBuildLifecycle(issue.id)}
-          />
+          <section className="tab-sect">
+            <h4 className="est-h">Lifecycle</h4>
+            <Lifecycle
+              issueRow={issueRow!}
+              allRows={allRows}
+              hasLifecycle={hasLifecycle(issue.id)}
+              onBuild={() => onBuildLifecycle(issue.id)}
+              onClear={() => onClearLifecycle(issue.id)}
+              sla={sla}
+              severity={issue.severity}
+            />
+          </section>
+          <section className="tab-sect">
+            <h4 className="est-h">Resolution path</h4>
+            <ResolutionPath
+              crp={crp}
+              allRows={allRows}
+              issueRow={issueRow!}
+              today={today}
+              activityCount={allRows.filter((r) => r.parentId === issueRow!.id).length}
+              dependencyCount={
+                dependencies.filter((d) => d.predecessorId.startsWith(`${issue.id}#`)).length
+              }
+              hasLifecycle={hasLifecycle(issue.id)}
+              onBuildLifecycle={() => onBuildLifecycle(issue.id)}
+            />
+          </section>
+          </>
+        ) : tab === 'Links' ? (
+          <>
+          <section className="tab-sect">
+            <h4 className="est-h">Relationships</h4>
+            <Relationships
+              issueId={issue.id}
+              relationships={relationships}
+              dependencies={dependencies}
+              allRows={allRows}
+              onUnlink={onUnlink}
+              onRemoveDependency={onRemoveDependency}
+            />
+          </section>
+          <section className="tab-sect">
+            <h4 className="est-h">Evidence</h4>
+            <Evidence
+              issue={issue}
+              items={evidence.filter((e) => e.issueId === issue.id && !e.deletedAt)}
+              onManage={() => onManageEvidence(issue.id)}
+            />
+          </section>
+          </>
         ) : (
           <History audit={audit} forId={issue.id} />
         )}

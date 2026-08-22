@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { boardLanes, describeBoard, dropOutcome } from '@/lib/board'
-import type { StatusPolicy } from '@/lib/statusPolicy'
+import { allowedNext, type StatusPolicy } from '@/lib/statusPolicy'
 import type { IssueStatus, ScheduleRow } from '@/lib/types'
 
 /**
@@ -42,14 +42,13 @@ export default function BoardView({
   const [asking, setAsking] = useState<{ rowId: string; to: IssueStatus; note: string | null } | null>(null)
   const [reason, setReason] = useState('')
 
-  const drop = (to: IssueStatus) => {
-    const id = dragId.current
-    dragId.current = null
-    if (!id) return
-    const row = rows.find((r) => r.id === id)
-    if (!row || row.status === to) return
+  /** Which card's Move menu is open, if any — the keyboard and touch path to a lane change. */
+  const [menuFor, setMenuFor] = useState<string | null>(null)
 
-    const outcome = dropOutcome(policy, row, to, hasEvidence(id))
+  /** One entry point for drag AND menu: the pre-check, then the reason collection. */
+  const begin = (row: ScheduleRow, to: IssueStatus) => {
+    if (row.status === to) return
+    const outcome = dropOutcome(policy, row, to, hasEvidence(row.id))
     if (outcome.kind === 'refused') {
       setRefusal({ lane: to, message: outcome.message })
       return
@@ -57,7 +56,15 @@ export default function BoardView({
     // Legal — but every status change carries a reason, so both 'ok' and 'ask' collect one.
     setRefusal(null)
     setReason('')
-    setAsking({ rowId: id, to, note: outcome.kind === 'ask' ? outcome.message : null })
+    setAsking({ rowId: row.id, to, note: outcome.kind === 'ask' ? outcome.message : null })
+  }
+
+  const drop = (to: IssueStatus) => {
+    const id = dragId.current
+    dragId.current = null
+    if (!id) return
+    const row = rows.find((r) => r.id === id)
+    if (row) begin(row, to)
   }
 
   const submitReason = () => {
@@ -112,6 +119,43 @@ export default function BoardView({
                   title="Open in the detail panel. Drag to another lane to change status."
                 >
                   <span className="board-card-id mono">{row.displayId}</span>
+                  {/* The board's one verb, reachable without a mouse drag: drag-and-drop is
+                      unavailable to keyboard and touch users, and this menu runs the same
+                      begin() pre-check-and-reason path a drop does. */}
+                  <span className="board-card-move">
+                    <button
+                      className="btn ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={menuFor === row.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuFor((cur) => (cur === row.id ? null : row.id))
+                      }}
+                      title="Move to another status"
+                    >
+                      Move ▾
+                    </button>
+                    {menuFor === row.id && (
+                      <div className="menu" role="menu" style={{ top: 22, right: 0, left: 'auto' }}>
+                        {allowedNext(policy, row.status)
+                          .filter((s) => s !== row.status)
+                          .map((s) => (
+                            <button
+                              key={s}
+                              role="menuitem"
+                              className="menu-item"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setMenuFor(null)
+                                begin(row, s)
+                              }}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </span>
                   <span className="board-card-name">{row.name}</span>
                   <span className="board-card-meta">
                     {row.severity && <span>{row.severity}</span>}

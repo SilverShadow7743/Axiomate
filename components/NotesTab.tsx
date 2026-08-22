@@ -21,6 +21,7 @@ export default function NotesTab({
   onAdd,
   onUpdate,
   onDelete,
+  onWriteReply,
 }: {
   issueId: string
   state: WorkspaceState
@@ -28,6 +29,12 @@ export default function NotesTab({
   onAdd: (body: string, noteType: NoteType, pinned: boolean) => void
   onUpdate: (id: string, patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned'>>) => void
   onDelete: (id: string) => void
+  /**
+   * Present when this record can be replied to (a claimed address, the grant, a mailbox).
+   * The sent replies land in this thread as pinned notes, so the place they are READ offers
+   * the way to CONTINUE them — the compose itself has one home, on Overview.
+   */
+  onWriteReply?: () => void
 }) {
   const notes = useMemo(() => notesFor(state.notes, issueId), [state.notes, issueId])
   const mayAdd = canAddNote(state.model, actor)
@@ -49,6 +56,14 @@ export default function NotesTab({
 
   return (
     <div className="notes">
+      {onWriteReply && (
+        <p className="prov" style={{ marginBottom: 6 }}>
+          <button className="btn ghost" onClick={onWriteReply}>
+            Write a reply to the client →
+          </button>{' '}
+          Replies send as the engagement's mailbox and are recorded in this thread.
+        </p>
+      )}
       {mayAdd.allowed ? (
         <div className="note-compose">
           <textarea

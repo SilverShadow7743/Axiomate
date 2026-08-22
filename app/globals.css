@@ -1176,6 +1176,12 @@ select.cell-editor {
   display: flex;
   gap: 2px;
   height: 100%;
+  /* Narrow windows scroll the strip instead of silently clipping whole tabs off the edge. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 .tabs button {
   padding: 0 11px;
@@ -1357,6 +1363,26 @@ select.cell-editor {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- merged detail tabs ----------
+   Schedule and Links carry sections where four tabs used to cross-reference each other. */
+.tab-sect {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.tab-sect > .est-h {
+  margin-bottom: 8px;
+}
+
+/* Board cards get a keyboard/touch path to a lane change; the menu anchors to the card. */
+.board-card-move {
+  position: relative;
+  float: right;
+}
+.board-card-move .menu {
+  min-width: 180px;
 }
 
 /* ---------- views promoted from drawers ----------

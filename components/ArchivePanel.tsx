@@ -41,7 +41,7 @@ export default function ArchivePanel({
 }) {
   const labels = useLabels()
   const ref = useRef<HTMLDivElement>(null)
-  useOverlay(ref)
+  useOverlay(ref, true, onClose)
 
   const items = useMemo<Archived[]>(() => {
     const isArchived = (id: string) =>

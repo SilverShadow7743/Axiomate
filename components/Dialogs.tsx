@@ -98,7 +98,7 @@ function DialogShell({
   children: React.ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  useOverlay(rootRef)
+  useOverlay(rootRef, true, onClose)
 
   const shell = (
     <div className="modal-scrim" onMouseDown={onClose}>
@@ -174,6 +174,7 @@ function AddForm({
   const workTypes = liveWorkTypes(state.model).map((t) => t.label)
   const disciplines = liveDisciplines(state.model)
   const parties = state.model.parties
+  const blueprints = Object.values(state.model.blueprints ?? {})
 
   return (
     <form
@@ -187,6 +188,24 @@ function AddForm({
         Adding under <b>{nameOf(state, dialog.parentId)}</b> — the parent is taken from your
         selection.
       </div>
+
+      {/* Templates surface at the moment of need: an engagement being created is the one
+          moment a stored shape helps, and Configuration is not where anyone is standing. */}
+      {dialog.kind === 'engagement' && blueprints.length > 0 && (
+        <Field
+          label="Start from a blueprint"
+          hint="The stored shape is created under the new engagement, dated from today. Undated entries stay undated."
+        >
+          <select value={f.blueprintId ?? ''} onChange={(e) => set('blueprintId', e.target.value)}>
+            <option value="">— none —</option>
+            {blueprints.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} · v{b.version}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
       <Field label={isIssue ? 'Subject' : 'Name'}>
         <input autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} required />

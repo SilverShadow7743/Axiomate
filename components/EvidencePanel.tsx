@@ -89,7 +89,7 @@ export default function EvidencePanel({
   onClose,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
-  useOverlay(rootRef)
+  useOverlay(rootRef, true, onClose)
 
   const fileInput = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<EvidenceKind | 'all'>('all')

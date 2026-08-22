@@ -32,7 +32,7 @@ export default function SlaPlanPanel({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useOverlay(ref)
+  useOverlay(ref, true, onClose)
 
   const { rows, skipped, bySeverity, past, policy } = plan
   const sample = rows.slice(0, 12)
