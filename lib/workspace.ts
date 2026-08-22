@@ -47,10 +47,13 @@ import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdBy
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   LOG_FOR_OTHERS,
+  backdated,
   dailyCap,
   dailyCapWarning,
   refusesTimeEntry,
   timeEntryAllowed,
+  timePolicyProblem,
+  type TimePolicy,
   type WeekState,
 } from './timeWindow'
 import { checkPersonSkill, type PersonSkill, type Skill, type SkillLevel, type SkillSource } from './skills'
@@ -785,6 +788,8 @@ export type Action =
       activity: TimeActivity
       billable: boolean
       note: string
+      /** Required by the arm when the entry lags the work past the workspace's allowance. */
+      justification?: string
       now: string
     }
   | { t: 'updateTime'; id: string; patch: Partial<TimeEntry>; now: string }
@@ -1101,6 +1106,7 @@ export type ConfigOp =
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
+  | { k: 'setTimePolicy'; patch: Partial<TimePolicy> }
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
@@ -3219,6 +3225,22 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       )
       if (refusesTimeEntry(verdict)) return { state, error: verdict.message }
 
+      /*
+       * The grace gate. Lateness is judged by the SERVER's clock (`a.now`), never the
+       * browser's — the form's live hint may disagree by a timezone, and this is the
+       * authoritative half. Past the workspace's allowance the entry is reconstruction
+       * rather than recall, and it records only with a reason on it; the week's decider
+       * sees that reason at approval time, which is the second person the rule asks for.
+       */
+      const lateness = backdated(a.date, today, state.model.timePolicy.backdatingAllowanceDays)
+      const justification = (a.justification ?? '').trim()
+      if (lateness.justificationRequired && !justification) {
+        return {
+          state,
+          error: `${lateness.message} Add a reason to record it.`,
+        }
+      }
+
       const seq = state.seq + 1
       const id = `time-${seq}`
       const entry: TimeEntry = {
@@ -3231,6 +3253,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         activity: a.activity,
         billable: a.billable,
         note: a.note.trim(),
+        justification: lateness.justificationRequired ? justification : null,
         createdBy: by,
         createdAt: a.now,
         updatedBy: null,
@@ -3248,7 +3271,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             rowId: a.issueId,
             field: 'time',
             from: '',
-            to: `${a.hours}h · ${a.activity} · ${a.person}${a.billable ? '' : ' · non-billable'}`,
+            to: `${a.hours}h · ${a.activity} · ${a.person}${a.billable ? '' : ' · non-billable'}${lateness.justificationRequired ? ` · ${lateness.days} days late` : ''}`,
             at: a.now,
             by,
           }),
@@ -3329,6 +3352,27 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           )
           if (refusesTimeEntry(windowVerdict)) return { state, error: windowVerdict.message }
         }
+      }
+
+      /*
+       * The grace gate, on the STORED entry's date first and the destination if the patch
+       * moves it — the same both-ends rule as the freeze check above, and for the same
+       * reason: editing is the two-step around any gate on adding. Only a patch that
+       * changes the date or the hours is a reconstruction; relabelling the activity or
+       * the billing of an old entry changes no claimed number.
+       */
+      if (next.date !== entry.date || next.hours !== entry.hours) {
+        const allowance = state.model.timePolicy.backdatingAllowanceDays
+        const today2 = a.now.slice(0, 10)
+        const staleFrom = backdated(entry.date, today2, allowance)
+        const staleTo = backdated(next.date, today2, allowance)
+        const stale = staleFrom.justificationRequired || staleTo.justificationRequired
+        const offered = (a.patch.justification ?? '').trim()
+        if (stale && !offered) {
+          const worst = staleFrom.days >= staleTo.days ? staleFrom : staleTo
+          return { state, error: `${worst.message} Add a reason to change it.` }
+        }
+        if (stale) next.justification = offered
       }
 
       const changed = (Object.keys(a.patch) as (keyof TimeEntry)[]).filter((k) => entry[k] !== next[k])
@@ -5774,6 +5818,32 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sla: next },
         { rowId: 'SLA', field: 'sla', from: before, to: after, at: now, by },
         `Service levels updated — ${after}.`,
+      )
+    }
+
+    case 'setTimePolicy': {
+      /*
+       * Validated in the module that owns the rule, refused in its words. Zero is
+       * legitimate — any entry not made the same day must explain itself — and past two
+       * months "grace" has stopped describing anything.
+       */
+      const problem = timePolicyProblem(op.patch)
+      if (problem) return { state, error: problem }
+      const next = { ...m.timePolicy, ...op.patch }
+      if (next.backdatingAllowanceDays === m.timePolicy.backdatingAllowanceDays) {
+        return { state, message: 'Nothing changed.' }
+      }
+      return done(
+        { ...m, timePolicy: next },
+        {
+          rowId: 'TIME_POLICY',
+          field: 'timePolicy',
+          from: `${m.timePolicy.backdatingAllowanceDays} days`,
+          to: `${next.backdatingAllowanceDays} days`,
+          at: now,
+          by,
+        },
+        `Backdating allowance set to ${next.backdatingAllowanceDays} days.`,
       )
     }
 

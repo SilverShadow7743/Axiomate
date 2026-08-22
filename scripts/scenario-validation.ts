@@ -2336,7 +2336,7 @@ scenario(
 
     const withHours = okAs(
       BASE,
-      { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW } as Action,
+      { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: '', justification: 'Catch-up after site week.', now: NOW } as Action,
       priya,
     )
     const entryId = Object.values(withHours.timeEntries).find((e) => e.date === '2026-08-05')!.id
@@ -2357,7 +2357,7 @@ scenario(
 
     /* Outside the week, another person, and another week: all still open. */
     const addNextWeek = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-12', hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, priya)
-    const addOtherPerson = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Nishant', date: '2026-08-05', hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, lead)
+    const addOtherPerson = actAs(submittedState, { t: 'addTime', issueId: 'OAPIL-1', person: 'Nishant', date: '2026-08-05', hours: 3, activity: 'Investigation', billable: true, note: '', justification: 'Recorded from the visit log.', now: NOW } as Action, lead)
 
     /* And after the week is returned, the person can fix it — the whole point of returning it. */
     const sheetId = Object.values(submittedState.timesheets)[0]!.id
@@ -2366,7 +2366,7 @@ scenario(
       { t: 'decideTimesheet', id: sheetId, decision: 'rejected', reason: 'Thursday is on the wrong issue.', now: NOW } as Action,
       lead,
     )
-    const editAfterReturn = actAs(returned, { t: 'updateTime', id: entryId, patch: { hours: 6 }, now: NOW } as Action, priya)
+    const editAfterReturn = actAs(returned, { t: 'updateTime', id: entryId, patch: { hours: 6, justification: 'Thursday moved to the right issue.' }, now: NOW } as Action, priya)
 
     /* Approved is frozen too, and says so differently. */
     const resubmitted = okAs(returned, { t: 'submitTimesheet', person: 'Priya', weekStarting: week, now: NOW } as Action, priya)
@@ -2768,7 +2768,8 @@ scenario(
      */
     const onOpeningDay = apply(BASE, {
       t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-03',
-      hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW,
+      hours: 3, activity: 'Investigation', billable: true, note: '',
+      justification: 'Opening-day hours entered after the fact.', now: NOW,
     } as Action, A)
     const beforeOpening = apply(BASE, {
       t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-01',
@@ -3830,7 +3831,8 @@ scenario(
     /* Hours recorded and not submitted. */
     const withHours = ok(blocked, {
       t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05',
-      hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW,
+      hours: 4, activity: 'Investigation', billable: true, note: '',
+      justification: 'Backfilled for the blocked stretch.', now: NOW,
     } as Action)
 
     /* And a change request somebody ELSE raised, which she may decide. */
@@ -4893,6 +4895,70 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'Internal creation is born internal; Carol\u2019s own submission and an intake arrival are born visible; the flag flips through ordinary edits and the one new document arm; the withheld view keeps the marked record with its ancestor chain, the marked note and the flagged document, empties every commercial and people table, filters audit to surviving records, and the grant screen refuses internal.view on a client role.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `bornInternal=${bornInternal} bornVisibleClient=${bornVisibleClient} bornVisibleIntake=${bornVisibleIntake} flipped=${flipped} noteDefaults=${noteDefaults} docFlagged=${docFlagged} keptIssue=${keptIssue} droppedInternal=${droppedInternalIssues} ancestors=${ancestors} notesRight=${notesRight} docsRight=${docsRight} machineryEmpty=${machineryEmpty} auditFiltered=${auditFiltered} refused=${refused}`, stops: 'the boundary disagrees with the design', severity: 'P1', impact: 'internal content one guest sign-in away from a client' } as const
+  },
+)
+
+/* ================================================================== *
+ * Time grace (design 2026-08-22)
+ * ================================================================== */
+
+scenario(
+  'TG1',
+  'A late entry explains itself, at whatever allowance the firm set',
+  'The allowance is policy, not a constant: set to 3, an entry 3 days late records freely, 4 days late is refused without a reason and recorded with one, and a correction to a stale entry is gated the same way \u2014 the audit row saying how late.',
+  () => {
+    /* The op validates in the module's words; 90 is refused, 3 is set. */
+    const refused = act(BASE, { t: 'config', op: { k: 'setTimePolicy', patch: { backdatingAllowanceDays: 90 } }, now: NOW } as Action)
+    const badRefused = Boolean(refused.error && /between 0 and 60/.test(refused.error))
+
+    const tuned = ok(BASE, { t: 'config', op: { k: 'setTimePolicy', patch: { backdatingAllowanceDays: 3 } }, now: NOW } as Action)
+    const policySet = tuned.model.timePolicy.backdatingAllowanceDays === 3
+    const defaultStands = BASE.model.timePolicy.backdatingAllowanceDays === 7
+
+    /* TODAY is 2026-08-15. Three days late \u2014 exactly at the allowance \u2014 asks nothing. */
+    const inTime = ok(tuned, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-12',
+      hours: 2, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const quiet = Object.values(inTime.timeEntries).find((e) => e.date === '2026-08-12')
+    const insideFree = Boolean(quiet) && (quiet!.justification ?? null) === null
+
+    /* Four days late: refused without a reason, in words that name both numbers. */
+    const bare = act(inTime, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-11',
+      hours: 3, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const lateRefused = Boolean(bare.error && /4 days after/.test(bare.error) && /allowance is 3/.test(bare.error))
+
+    const withReason = ok(inTime, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-11',
+      hours: 3, activity: 'Resolution', billable: true, note: '',
+      justification: 'Site week \u2014 hours reconstructed from the visit log.', now: NOW,
+    } as Action)
+    const late = Object.values(withReason.timeEntries).find((e) => e.date === '2026-08-11')
+    const reasonStored = late?.justification === 'Site week \u2014 hours reconstructed from the visit log.'
+    const auditSaysLate = withReason.audit.some((row) => row.field === 'time' && /4 days late/.test(row.to ?? ''))
+
+    /* Correcting a stale entry's hours is the same reconstruction. */
+    const bumpBare = act(withReason, { t: 'updateTime', id: late!.id, patch: { hours: 5 }, now: NOW } as Action)
+    const updateRefused = Boolean(bumpBare.error && /Add a reason to change it/.test(bumpBare.error))
+    const bumped = ok(withReason, {
+      t: 'updateTime', id: late!.id,
+      patch: { hours: 5, justification: 'Visit log corrected \u2014 the Tuesday session ran long.' },
+      now: NOW,
+    } as Action)
+    const corrected = bumped.timeEntries[late!.id]
+    const updateRecorded = corrected.hours === 5 && corrected.justification === 'Visit log corrected \u2014 the Tuesday session ran long.'
+
+    /* A relabel on the same stale entry changes no claimed number and passes untouched. */
+    const relabel = act(bumped, { t: 'updateTime', id: late!.id, patch: { billable: false }, now: NOW } as Action)
+    const relabelFree = !relabel.error
+
+    const good = badRefused && policySet && defaultStands && insideFree && lateRefused &&
+      reasonStored && auditSaysLate && updateRefused && updateRecorded && relabelFree
+    return good
+      ? { verdict: 'PASS', actual: 'The allowance is read from the operating model, refused outside 0\u201360 in the module\u2019s words, and the shipped default stays 7. At an allowance of 3: exactly 3 days late records with no reason asked; 4 days late is refused naming both numbers and records with a reason, which is stored on the entry and stamped on the audit row as \u201c4 days late\u201d. Correcting a stale entry\u2019s hours is gated identically \u2014 refused bare, recorded with its reason \u2014 while relabelling its billing passes untouched, because it changes no claimed number.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `badRefused=${badRefused} policySet=${policySet} defaultStands=${defaultStands} insideFree=${insideFree} lateRefused=${lateRefused} reasonStored=${reasonStored} auditSaysLate=${auditSaysLate} updateRefused=${updateRefused} updateRecorded=${updateRecorded} relabelFree=${relabelFree}`, stops: 'the grace gate disagrees with the design', severity: 'P1', impact: 'late hours recorded silently, or honest hours refused' } as const
   },
 )
 

@@ -872,6 +872,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "TG1",
+      "title": "A late entry explains itself, at whatever allowance the firm set",
+      "expected": "The allowance is policy, not a constant: set to 3, an entry 3 days late records freely, 4 days late is refused without a reason and recorded with one, and a correction to a stale entry is gated the same way — the audit row saying how late.",
+      "verdict": "PASS",
+      "actual": "The allowance is read from the operating model, refused outside 0–60 in the module’s words, and the shipped default stays 7. At an allowance of 3: exactly 3 days late records with no reason asked; 4 days late is refused naming both numbers and records with a reason, which is stored on the entry and stamped on the audit row as “4 days late”. Correcting a stale entry’s hours is gated identically — refused bare, recorded with its reason — while relabelling its billing passes untouched, because it changes no claimed number.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

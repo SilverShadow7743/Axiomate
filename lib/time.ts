@@ -68,6 +68,12 @@ export interface TimeEntry {
    */
   billable: boolean
   note: string
+  /**
+   * Why the entry lagged the work past the workspace's allowance. Null on an entry recorded
+   * in time — the field's presence is what marks an entry late, so the reader never has to
+   * re-derive lateness from dates whose policy may since have changed.
+   */
+  justification?: string | null
   createdBy: string
   createdAt: string
   updatedBy: string | null
