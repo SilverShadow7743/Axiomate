@@ -469,6 +469,7 @@ const SHAPES = {
         evidence: text, evidenceDate: textOrNull, verification: text, source: text,
         reference: text, clientImpact: text, plannedStart: textOrNull, plannedEnd: textOrNull,
         percentOverride: numOrNull, scheduleMode: text, assignments: plainObject,
+        clientVisible: bool,
         deletedAt: textOrNull,
       }),
     ),
