@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-22T15:53:56.586Z",
+  "at": "2026-08-22T17:04:17.155Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 49,
+  "passed": 50,
   "failed": 0,
   "checks": [
     {
@@ -43,6 +43,11 @@
       "what": "quarter hours survive as a decimal, not a float",
       "ok": true,
       "detail": "6.25h, billable=false"
+    },
+    {
+      "what": "a late entry’s justification survives the round trip",
+      "ok": true,
+      "detail": "justification=\"Proof entry — dated fixture, recorded late by design.\""
     },
     {
       "what": "a zero size is zero rather than nothing",
@@ -142,7 +147,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 33576 chars · 1 visible issues · 6 audit rows"
+      "detail": "payload 33649 chars · 1 visible issues · 6 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",

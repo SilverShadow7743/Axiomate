@@ -268,7 +268,7 @@ async function main() {
     { t: 'setDates', id: 'PROOF-1', start: '2026-08-01', end: '2026-08-10', now: NOW, reason: 'Client moved UAT — “quotes” and a\nnewline' },
     { t: 'addNote', issueId: 'PROOF-1', body: 'Note with “smart quotes”, an em—dash and a\nnewline.', noteType: 'Client Communication', pinned: true, now: NOW },
     { t: 'addEvidence', issueId: 'PROOF-1', kind: 'document', name: 'signoff.pdf', purpose: 'Client confirmation', url: null, mimeType: 'application/pdf', sizeBytes: 0, note: '', now: NOW },
-    { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-04', hours: 6.25, activity: 'Investigation', billable: false, note: 'Quarter hours', now: NOW },
+    { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-04', hours: 6.25, activity: 'Investigation', billable: false, note: 'Quarter hours', justification: 'Proof entry — dated fixture, recorded late by design.', now: NOW },
     { t: 'setEstimate', issueId: 'PROOF-1', patch: { scores: { business: 3, technical: 4, integration: 2, testing: 3, data: 1 }, waitDays: 2, assumptions: 'Assumes the client answers' }, now: NOW },
     { t: 'baselineEstimate', issueId: 'PROOF-1', now: NOW },
     { t: 'upsertSow', id: null, engagementId, patch: { reference: 'SOW-PROOF-1', title: 'Proof', effortHours: 40, value: 12345.67, status: 'Signed' }, now: NOW },
@@ -296,6 +296,11 @@ async function main() {
     'quarter hours survive as a decimal, not a float',
     entry?.hours === 6.25 && entry.billable === false,
     entry ? `${entry.hours}h, billable=${entry.billable}` : 'no entry',
+  )
+  check(
+    'a late entry’s justification survives the round trip',
+    entry?.justification === 'Proof entry — dated fixture, recorded late by design.',
+    entry ? `justification=${JSON.stringify(entry.justification)}` : 'no entry',
   )
 
   const evidence = Object.values(state.evidence).find((e) => e.name === 'signoff.pdf')
@@ -439,7 +444,7 @@ async function main() {
     const approver: Actor = { id: 'proof-lead', name: 'Persistence Proof' }
 
     await persistActions(TENANT, submitter, [
-      { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: 'Inside the week', now: NOW },
+      { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-05', hours: 4, activity: 'Investigation', billable: true, note: 'Inside the week', justification: 'Proof entry — dated fixture, recorded late by design.', now: NOW },
     ])
     const submitted = await persistActions(TENANT, submitter, [
       { t: 'submitTimesheet', person: 'Priya', weekStarting: WEEK, now: NOW },
@@ -482,7 +487,9 @@ async function main() {
     const returned = afterReturn.state.timesheets[sheet!.id]
     const editable = apply(
       afterReturn.state,
-      { t: 'updateTime', id: entry!.id, patch: { hours: 6 }, now: NOW },
+      // The correction carries its reason: the entry's work date lags the real clock past
+      // the allowance, and the grace gate reads the stored date exactly as the freeze does.
+      { t: 'updateTime', id: entry!.id, patch: { hours: 6, justification: 'Corrected after the week came back.' }, now: NOW },
       submitter,
     )
     check(

@@ -805,6 +805,8 @@ model TimeEntry {
   activity String
   billable Boolean @default(true)
   note     String  @db.Text
+  /// Why the entry lagged the work past the workspace's allowance. Null when recorded in time.
+  justification String? @db.Text
 
   createdBy String
   createdAt DateTime
