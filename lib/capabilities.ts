@@ -190,7 +190,9 @@ export const CAPABILITIES: Capability[] = [
     id: 'clientMail',
     name: 'Client mail',
     what: 'Replies sent as the engagement’s own mailbox, recorded on the record, threading back through intake.',
-    needs: ['mail.send'],
+    // note.add as well: the flow IS send-and-record, and the endpoint refuses at the door
+    // rather than sending mail whose record would be refused on every try.
+    needs: ['mail.send', 'note.add'],
     switchedAt: null,
   },
   {

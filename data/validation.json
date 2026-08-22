@@ -838,7 +838,7 @@
       "title": "A reply resolves to the nearest mailbox, a real recipient, and a threaded subject",
       "expected": "The engagement mailbox beats a client-wide one; no covering mailbox refuses naming the configuration; a display-name-only claim gets no compose; the subject carries the id",
       "verdict": "PASS",
-      "actual": "client-wide resolves alone; the engagement mailbox wins once it exists; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes",
+      "actual": "client-wide resolves alone; the engagement mailbox wins once it exists and is skipped once disabled; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes",
       "stops": "",
       "severity": "P2",
       "impact": "none"

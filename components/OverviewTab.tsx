@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { canEditIssue } from '@/lib/permissions'
@@ -74,6 +74,7 @@ export default function OverviewTab({
   onRequestApproval,
   onDecideApproval,
   onMailSent,
+  mailEnabled,
   editing,
   setEditing,
 }: {
@@ -93,6 +94,8 @@ export default function OverviewTab({
   onDecideApproval: (id: string, decision: ApprovalDecision, note: string) => void
   /** A reply the server sent and recorded — merged into this browser's copy, never re-dispatched. */
   onMailSent: (note: IssueNote) => void
+  /** False when no database backs the workspace — a send that can never be recorded is not offered. */
+  mailEnabled: boolean
   editing: boolean
   setEditing: (v: boolean) => void
 }) {
@@ -134,9 +137,7 @@ export default function OverviewTab({
     return (Object.keys(base) as (keyof IssueDraft)[]).some((k) => base[k] !== draft[k])
   }, [record, draft])
 
-  useEffect(() => {
-    onDirtyChange(editing && dirty)
-  }, [editing, dirty, onDirtyChange])
+  // The unsaved-work signal lives below the compose state it also reads — see after sendMail.
 
   const set = <K extends keyof IssueDraft>(k: K, v: IssueDraft[K]) =>
     setDraft((d) => ({ ...d, [k]: v }))
@@ -185,9 +186,30 @@ export default function OverviewTab({
   const [sending, setSending] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
   const [sentLine, setSentLine] = useState<string | null>(null)
+  /** The mail went but the note did not — the one state where Send must NOT be offered again. */
+  const [sentUnrecorded, setSentUnrecorded] = useState(false)
+
+  /*
+   * The compose belongs to one record. Without this, the component instance survives an issue
+   * switch (nothing keys it on issue.id) and a reply typed to client A would sit in the box
+   * while From/To silently recompute to client B — one click from sending A's words to B.
+   * The generation counter makes an in-flight send's continuation stale the moment the issue
+   * changes, so its success line, error, or button state cannot land on the wrong record.
+   */
+  const composeGen = useRef(0)
+  useEffect(() => {
+    composeGen.current += 1
+    setComposing(false)
+    setMailBody('')
+    setSending(false)
+    setMailError(null)
+    setSentLine(null)
+    setSentUnrecorded(false)
+  }, [issue.id])
 
   const sendMail = async () => {
     if (isOutboundRefusal(outbound)) return
+    const gen = composeGen.current
     setSending(true)
     setMailError(null)
     try {
@@ -203,6 +225,12 @@ export default function OverviewTab({
         noteRecorded?: boolean
         note?: IssueNote | null
       } | null
+      if (composeGen.current !== gen) {
+        // The person moved to another record while this was in flight. The note merge below
+        // is still safe (it carries its own issueId), but nothing else here may touch state.
+        if (data?.ok && data.note) onMailSent(data.note)
+        return
+      }
       if (!res.ok || !data?.ok) {
         // The typed body stays in the box — a client email is not something to retype.
         setMailError(
@@ -211,19 +239,28 @@ export default function OverviewTab({
         return
       }
       if (data.note) onMailSent(data.note)
-      setSentLine(
-        data.noteRecorded === false
-          ? `Sent to ${data.to} — but the note could not be written. Record what was said on the Notes tab.`
-          : `Sent to ${data.to} and recorded in Notes.`,
-      )
+      if (data.noteRecorded === false) {
+        // The mail went; only the record failed. Keep the text on screen for copying into a
+        // note by hand — and take Send away, because pressing it again would mail the client twice.
+        setSentUnrecorded(true)
+        return
+      }
+      setSentLine(`Sent to ${data.to} and recorded in Notes.`)
       setMailBody('')
       setComposing(false)
     } catch {
-      setMailError('The message could not be sent. Check the connection — your text is still in the box.')
+      if (composeGen.current === gen)
+        setMailError('The message could not be sent. Check the connection — your text is still in the box.')
     } finally {
-      setSending(false)
+      if (composeGen.current === gen) setSending(false)
     }
   }
+
+  useEffect(() => {
+    // A part-typed client reply counts as unsaved work exactly like a half-edited form:
+    // leaving the row would discard it silently, and the workspace's guard stops that.
+    onDirtyChange((editing && dirty) || (composing && mailBody.trim() !== ''))
+  }, [editing, dirty, composing, mailBody, onDirtyChange])
 
   /* ---------------- view ---------------- */
 
@@ -329,8 +366,10 @@ export default function OverviewTab({
         )}
 
         {/* Absent entirely without the grant — a control someone may not use is not shown
-            disabled, the same choice ApprovalsBlock makes about self-approval. */}
-        {maySendMail && (
+            disabled, the same choice ApprovalsBlock makes about self-approval. Absent too
+            when no database backs the workspace: a send that can never be recorded is not
+            offered a button that can never succeed. */}
+        {mailEnabled && maySendMail && (
           <section className="appr-block">
             <h4 className="est-h">Reply to client</h4>
             {isOutboundRefusal(outbound) ? (
@@ -368,22 +407,46 @@ export default function OverviewTab({
                       onChange={(e) => setMailBody(e.target.value)}
                       aria-label="Message to the client"
                       placeholder="Sent as plain text, exactly as written here."
+                      readOnly={sentUnrecorded}
                     />
                     {mailError && <p className="ov-gate">{mailError}</p>}
+                    {sentUnrecorded && (
+                      <p className="ov-gate">
+                        This message DID reach {outbound.recipient} — do not send it again. Only
+                        the note failed to write: copy the text above into a note on the Notes
+                        tab, then discard it here.
+                      </p>
+                    )}
                   </dd>
                 </dl>
                 <div className="ov-actions">
-                  {/* Close keeps the draft; only a successful send clears it. */}
-                  <button className="btn" disabled={sending} onClick={() => setComposing(false)}>
-                    Close
-                  </button>
-                  <button
-                    className="btn primary"
-                    disabled={sending || !mailBody.trim()}
-                    onClick={sendMail}
-                  >
-                    {sending ? 'Sending…' : 'Send'}
-                  </button>
+                  {sentUnrecorded ? (
+                    /* Send is gone, not disabled: pressing it again would mail the client twice. */
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setSentUnrecorded(false)
+                        setMailBody('')
+                        setComposing(false)
+                      }}
+                    >
+                      Done — discard text
+                    </button>
+                  ) : (
+                    <>
+                      {/* Close keeps the draft; only a successful send clears it. */}
+                      <button className="btn" disabled={sending} onClick={() => setComposing(false)}>
+                        Close
+                      </button>
+                      <button
+                        className="btn primary"
+                        disabled={sending || !mailBody.trim()}
+                        onClick={sendMail}
+                      >
+                        {sending ? 'Sending…' : 'Send'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}

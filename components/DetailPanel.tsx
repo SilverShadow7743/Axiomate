@@ -121,6 +121,8 @@ interface Props {
   onDeleteNote: (id: string) => void
   /** A reply the mail endpoint sent and recorded — merged into the browser's copy upstream. */
   onMailSent: (note: IssueNote) => void
+  /** False when no database backs the workspace, where a send could never be recorded. */
+  mailEnabled: boolean
   /**
    * Raised while an Overview edit has uncommitted changes.
    *
@@ -221,6 +223,7 @@ export default function DetailPanel({
   onUpdateNote,
   onDeleteNote,
   onMailSent,
+  mailEnabled,
   onDirtyChange,
   onSaveEstimate,
   onAddTime,
@@ -516,6 +519,7 @@ export default function DetailPanel({
             onSave={(patch, dates, reason) => onSaveIssue(issue.id, patch, dates, reason)}
             onDirtyChange={onDirtyChange}
             onMailSent={onMailSent}
+            mailEnabled={mailEnabled}
             onRequestApproval={(ruleId, note) => onRequestApproval(issue.id, ruleId, note)}
             onDecideApproval={onDecideApproval}
             editing={editing}

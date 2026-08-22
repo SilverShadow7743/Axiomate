@@ -369,17 +369,27 @@ export default function IssueWorkspace({
    */
   const mailSent = useCallback((note: IssueNote) => {
     const noteSeq = Number(note.id.replace(/^note-/, ''))
-    setState((s) => ({
-      ...s,
-      notes: { ...s.notes, [note.id]: note },
-      issues: s.issues[note.issueId]
-        ? {
-            ...s.issues,
-            [note.issueId]: { ...s.issues[note.issueId], lastActivity: note.createdAt.slice(0, 10) },
-          }
-        : s.issues,
-      seq: Number.isFinite(noteSeq) ? Math.max(s.seq, noteSeq) : s.seq,
-    }))
+    setState((s) => {
+      /*
+       * A note typed here moments ago may have minted this very id locally while its action
+       * still sits in the save queue — the server, unaware, spent the same number on the mail
+       * note. Overwriting would make the typed note vanish from the screen it was written on.
+       * Skip the merge instead: the mail note is durably stored and appears on reload, which
+       * is the reconciliation this workspace already lives with when ids diverge.
+       */
+      if (s.notes[note.id]) return s
+      return {
+        ...s,
+        notes: { ...s.notes, [note.id]: note },
+        issues: s.issues[note.issueId]
+          ? {
+              ...s.issues,
+              [note.issueId]: { ...s.issues[note.issueId], lastActivity: note.createdAt.slice(0, 10) },
+            }
+          : s.issues,
+        seq: Number.isFinite(noteSeq) ? Math.max(s.seq, noteSeq) : s.seq,
+      }
+    })
   }, [])
 
   /**
@@ -2088,6 +2098,7 @@ export default function IssueWorkspace({
           }
           onDeleteNote={(id) => dispatch({ t: 'removeNote', id, now: new Date().toISOString() })}
           onMailSent={mailSent}
+          mailEnabled={persistence.enabled}
           onSetAssignment={(issueId, responsibilityId, values) =>
             dispatch({ t: 'setAssignment', issueId, responsibilityId, values, now: new Date().toISOString() })
           }

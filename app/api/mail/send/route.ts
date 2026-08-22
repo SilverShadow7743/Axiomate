@@ -77,8 +77,19 @@ export async function POST(req: Request) {
     )
   }
 
+  /*
+   * The other doors accept the unverified single-operator mode; this one must not. Every
+   * other endpoint writes inward, where the worst case is a misattributed record — here the
+   * worst case is anything on the network sending real email to a client as the firm.
+   */
+  if (!identityEstablished()) {
+    return NextResponse.json(
+      { ok: false, error: 'Writing to clients needs sign-in to be configured for this deployment.' },
+      { status: 503 },
+    )
+  }
   const session = getSession(req)
-  if (identityEstablished() && !session.verified) {
+  if (!session.verified) {
     return NextResponse.json(
       { ok: false, error: 'Sign in to write to a client.', signInRequired: true },
       { status: 401 },
@@ -99,6 +110,22 @@ export async function POST(req: Request) {
     const verdict = can(state.model, session.actor, 'mail.send')
     if (!verdict.allowed) {
       return NextResponse.json({ ok: false, error: verdict.reason ?? 'Not permitted.' }, { status: 403 })
+    }
+
+    /*
+     * Checked BEFORE the send, not discovered after it: a role granted mail.send without
+     * note.add would otherwise send real client mail whose record is refused on every try —
+     * "sent but never recorded" as a standing configuration rather than a transient fault.
+     */
+    const noteVerdict = can(state.model, session.actor, 'note.add')
+    if (!noteVerdict.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `A sent message is recorded as a note on the record, and that needs its own grant. ${noteVerdict.reason ?? 'Not permitted.'}`,
+        },
+        { status: 403 },
+      )
     }
 
     const resolved = sendingMailboxFor(state, issueId)
@@ -124,6 +151,9 @@ export async function POST(req: Request) {
       },
     )
     if (!res.ok) {
+      // A refused token may reflect consent that has since been fixed — drop the cache so
+      // the next attempt asks for a fresh one instead of replaying the stale claim for an hour.
+      if (res.status === 401 || res.status === 403) cached = null
       // The full error names tenant internals; the caller gets one honest sentence.
       console.error(`mail send refused for ${issueId}: ${res.status} ${await res.text()}`)
       return NextResponse.json(
@@ -149,20 +179,36 @@ export async function POST(req: Request) {
       pinned: true,
       now,
     } as Action
-    const recorded = await persistActions(tenantId, session.actor, [note])
-
     /*
-     * Read back what was written rather than reconstructing it: the reducer mints the note's
-     * id from its own counter, and the browser needs the real record to merge — the same
-     * shape as a document upload, the other write that happens server-side first.
+     * From here on the mail HAS gone, and no failure below may claim otherwise: a thrown
+     * database error escaping to the outer catch would report "nothing was sent", the person
+     * would naturally retry, and the client would receive the email twice. Whatever the
+     * database does after the 2xx, the answer is ok:true — with noteRecorded saying honestly
+     * whether the record was made.
      */
+    let noteRecorded = false
     let stored: IssueNote | null = null
-    if (recorded.ok) {
-      const after = await loadWorkspace(tenantId)
-      stored =
-        Object.values(after.state.notes)
-          .filter((n) => n.issueId === issueId && n.body === noteBody && !n.deletedAt)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+    try {
+      const recorded = await persistActions(tenantId, session.actor, [note])
+      noteRecorded = recorded.ok
+      if (recorded.ok) {
+        /*
+         * Read back what was written rather than reconstructing it: the reducer mints the
+         * note's id from its own counter, and the browser needs the real record to merge —
+         * the same shape as a document upload, the other write that happens server-side
+         * first. Matched on the exact timestamp as well as the body, so a concurrent send of
+         * identical text from the same record cannot hand back somebody else's note.
+         */
+        const after = await loadWorkspace(tenantId)
+        stored =
+          Object.values(after.state.notes)
+            .filter(
+              (n) => n.issueId === issueId && n.body === noteBody && n.createdAt === now && !n.deletedAt,
+            )
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+      }
+    } catch (err) {
+      console.error(`mail sent for ${issueId} but recording failed: ${describeDbError(err)}`)
     }
 
     return NextResponse.json({
@@ -172,7 +218,7 @@ export async function POST(req: Request) {
       subject: resolved.subject,
       // Reported rather than hidden: the mail went, and a note that failed to write is a
       // different fact from a send that failed.
-      noteRecorded: recorded.ok,
+      noteRecorded,
       note: stored,
     })
   } catch (err) {

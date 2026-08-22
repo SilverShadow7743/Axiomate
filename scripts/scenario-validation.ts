@@ -3992,6 +3992,9 @@ scenario(
     const others = stripped.filter((c) => c.capability.id !== 'timesheets')
 
     const good =
+      /* the catalogue is written by hand, so its size is asserted: a capability built
+         and never added here must surface as a failing count, not as silence */
+      healthy.length === 20 &&
       /* a healthy workspace reports every capability reachable */
       healthy.every((c) => c.usable) &&
       /not built but unreachable|every one of them is held/.test(describeCapabilities(healthy)) &&
@@ -4608,6 +4611,13 @@ scenario(
     const threaded = !isOutboundRefusal(near) && /^RE: .+ \[OAPIL-1\]$/.test(near.subject)
     const toClaim = !isOutboundRefusal(near) && near.recipient === 'ravi@client.example'
 
+    /* Disable the engagement's mailbox: a switched-off mailbox must not speak, so
+       resolution falls back to the client-wide one. */
+    const engBox = s2.model.intake.find((m) => m.address === 'engagement@axiocloud.example')!
+    const s2b = ok(s2, { t: 'config', op: { k: 'upsertIntake', id: engBox.id, patch: { enabled: false } }, now: NOW } as Action)
+    const off = sendingMailboxFor(s2b, 'OAPIL-1')
+    const disabledSkipped = !isOutboundRefusal(off) && off.mailbox.address === 'client-wide@axiocloud.example'
+
     /* No mailbox anywhere: refuse naming the configuration screen. */
     const bare = sendingMailboxFor(claimed, 'OAPIL-1')
     const noBox = isOutboundRefusal(bare) && bare.code === 'no-mailbox' && /Routing & intake/.test(bare.reason)
@@ -4620,10 +4630,10 @@ scenario(
     const bareEmail = recipientOf('ravi@client.example') === 'ravi@client.example'
     const subjectShape = outboundSubjectFor('OAPIL-9', '  Inventory fails  ') === 'RE: Inventory fails [OAPIL-9]'
 
-    const okAll = clientWide && nearest && threaded && toClaim && noBox && noRecipient && bareEmail && subjectShape
+    const okAll = clientWide && nearest && threaded && toClaim && disabledSkipped && noBox && noRecipient && bareEmail && subjectShape
     return okAll
-      ? { verdict: 'PASS', actual: 'client-wide resolves alone; the engagement mailbox wins once it exists; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes', stops: '', severity: 'P2', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `clientWide=${clientWide} nearest=${nearest} threaded=${threaded} toClaim=${toClaim} noBox=${noBox} noRecipient=${noRecipient} bareEmail=${bareEmail} subjectShape=${subjectShape}`, stops: 'outbound resolution disagrees with the design', severity: 'P1', impact: 'a reply could go out as the wrong mailbox or to nobody stated' } as const
+      ? { verdict: 'PASS', actual: 'client-wide resolves alone; the engagement mailbox wins once it exists and is skipped once disabled; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `clientWide=${clientWide} nearest=${nearest} threaded=${threaded} toClaim=${toClaim} disabledSkipped=${disabledSkipped} noBox=${noBox} noRecipient=${noRecipient} bareEmail=${bareEmail} subjectShape=${subjectShape}`, stops: 'outbound resolution disagrees with the design', severity: 'P1', impact: 'a reply could go out as the wrong mailbox or to nobody stated' } as const
   },
 )
 
