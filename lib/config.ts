@@ -33,6 +33,7 @@ import type { Recurrence } from './recurrence'
 import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
+import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
 import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
@@ -674,6 +675,14 @@ export interface OperatingModel {
   resourceProfiles: Record<string, ResourceProfile>
   /** What the scheduled pass looks for, and how sensitive it is. See `./watch`. */
   watch: WatchPolicy
+  /**
+   * How long a time entry may lag the work before it must explain itself.
+   *
+   * Configuration rather than a constant for the same reason the service levels are: the
+   * allowance is a governance term, not a property of the software. `lib/timeWindow.ts`
+   * ships the default; this is where a firm changes it.
+   */
+  timePolicy: TimePolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -1024,6 +1033,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     automationRules: defaultAutomationRules(),
     resourceProfiles: {},
     watch: defaultWatchPolicy(),
+    timePolicy: { ...DEFAULT_TIME_POLICY },
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1289,6 +1299,10 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
       ...(stored.watch ?? {}),
       conditions: stored.watch?.conditions ?? seed.watch.conditions,
     },
+    // Explicit like `sla`: a model stored before this key existed has no `timePolicy`, and
+    // the spread above would leave it undefined — a crash the first time the addTime arm
+    // reads the allowance, in production, on the workspace that has data.
+    timePolicy: { ...seed.timePolicy, ...(stored.timePolicy ?? {}) },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

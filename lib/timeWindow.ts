@@ -326,8 +326,46 @@ export function timeEntryNote(v: TimeEntryVerdict): string | undefined {
  * reason box in front of the most ordinary act in the product. Past a week the entry is
  * reconstruction rather than recall, which is precisely when somebody should have to say why —
  * and when a second person should see it.
+ *
+ * The SHIPPED DEFAULT, no longer the rule. The rule reads the workspace's `timePolicy`
+ * (`lib/config.ts`), because how long an entry may lag before explaining itself is a
+ * governance term two firms will not agree on — the same reason the service levels stopped
+ * being a constant. This number survives as what `DEFAULT_TIME_POLICY` carries and what
+ * `backdated` assumes when nobody passes an allowance.
  */
 export const BACKDATING_ALLOWANCE_DAYS = 7
+
+/**
+ * The workspace's time-recording policy — the piece of the operating model this module reads.
+ *
+ * Declared here rather than in `lib/config.ts` because this module owns the rule the policy
+ * parameterises, and `config.ts` already imports shapes from the modules that own them
+ * (`StatusPolicy`, `WatchPolicy`). Calendar days, inclusive boundary: exactly at the
+ * allowance is inside.
+ */
+export interface TimePolicy {
+  backdatingAllowanceDays: number
+}
+
+export const DEFAULT_TIME_POLICY: TimePolicy = {
+  backdatingAllowanceDays: BACKDATING_ALLOWANCE_DAYS,
+}
+
+/**
+ * What a stored allowance must be to be applied: an integer between 0 and 60.
+ *
+ * Zero is legitimate — it means any entry not made the same day must explain itself. The cap
+ * is not taste: past two months, "grace" has stopped describing anything and the policy is
+ * really "off", which a firm should have to say by other means than a large number.
+ */
+export function timePolicyProblem(patch: Partial<TimePolicy>): string | null {
+  const n = patch.backdatingAllowanceDays
+  if (n === undefined) return null
+  if (!Number.isInteger(n) || n < 0 || n > 60) {
+    return `The backdating allowance must be a whole number of days between 0 and 60 — received ${String(n)}.`
+  }
+  return null
+}
 
 export interface Backdating {
   /**
@@ -343,18 +381,23 @@ export interface Backdating {
   message: string | null
 }
 
-export function backdated(workDate: string, entryDate: string): Backdating {
+export function backdated(
+  workDate: string,
+  entryDate: string,
+  /** The workspace's allowance. Defaulted so the pure boundary is checkable without a model. */
+  allowanceDays: number = BACKDATING_ALLOWANCE_DAYS,
+): Backdating {
   // Negative when the entry precedes the work, which `checkEntry` already refuses as a day that
   // has not happened. Reported as not backdated rather than as a large negative lateness.
   const days = daysBetween(workDate, entryDate) - 1
-  const over = days > BACKDATING_ALLOWANCE_DAYS
+  const over = days > allowanceDays
   return {
     days,
     backdated: over,
     justificationRequired: over,
     approvalRequired: over,
     message: over
-      ? `Recorded ${days} days after the work happened, and the allowance is ${BACKDATING_ALLOWANCE_DAYS}. An entry this late needs a reason on it and an approval behind it — a week reconstructed from memory is exactly what an auditor asks about.`
+      ? `Recorded ${days} days after the work happened, and the allowance is ${allowanceDays}. An entry this late needs a reason on it and an approval behind it — a week reconstructed from memory is exactly what an auditor asks about.`
       : null,
   }
 }
