@@ -87,6 +87,9 @@ import { classifyForm } from '../lib/intake'
 import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
 import { isOutboundRefusal, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
+import { clientView } from '../lib/clientBoundary'
+import { accessProblems } from '../lib/access'
+import { INTAKE_ACTOR } from '../lib/actor'
 import { ISSUE_STATUSES } from '../lib/types'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
@@ -4031,7 +4034,7 @@ scenario(
     const good =
       /* the catalogue is written by hand, so its size is asserted: a capability built
          and never added here must surface as a failing count, not as silence */
-      healthy.length === 21 &&
+      healthy.length === 22 &&
       /* a healthy workspace reports every capability reachable */
       healthy.every((c) => c.usable) &&
       /not built but unreachable|every one of them is held/.test(describeCapabilities(healthy)) &&
@@ -4820,6 +4823,76 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'Assigning Priya stores her directory id on the issue and on the assignment notice; two entries sharing a name resolve to null rather than a guess; after a rename her My Work and inbox still hold the records by id while the abandoned name honestly matches nothing; a pre-migration row with a null id still joins by name; a role-addressed notification keeps toId null.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `stored=${stored} noticeId=${noticeId} ambiguous=${ambiguous} unique=${unique} unassigned=${unassigned} workSurvives=${workSurvives} inboxSurvives=${inboxSurvives} oldNameHonest=${oldNameHonest} legacyJoins=${legacyJoins} roleNull=${roleNull}`, stops: 'the identity join disagrees with the design', severity: 'P1', impact: 'a renamed person loses their queue, their inbox, or both — the Tarun incident class' } as const
+  },
+)
+
+/* ================================================================== *
+ * Client boundary (design 2026-08-22)
+ * ================================================================== */
+
+scenario(
+  'CB1',
+  'What the client sees was decided per record, and nothing else leaves',
+  'Internal creation is born internal; a client\u2019s own submission and an intake arrival are born visible; marking is editing; the withheld view keeps marked content with its ancestors and empties the machinery.',
+  () => {
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    /* Birth rules. */
+    const internalBorn = ok(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Internal work' }, now: NOW } as Action)
+    const internalIssue = Object.values(internalBorn.issues).find((i) => i.subject === 'Internal work')!
+    const bornInternal = internalIssue.clientVisible === false
+
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: null, name: 'Client Carol', roleIds: ['ROLE_CLIENT_SPONSOR'] }, now: NOW } as Action)
+    const carolCreates = apply(staffed, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Carol asks' }, now: NOW } as Action, { id: 'cc', name: 'Client Carol' }).state
+    const carolIssue = Object.values(carolCreates.issues).find((i) => i.subject === 'Carol asks')
+    const bornVisibleClient = carolIssue?.clientVisible === true
+
+    const intakeCreates = apply(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Mailed in' }, now: NOW } as Action, INTAKE_ACTOR).state
+    const intakeIssue = Object.values(intakeCreates.issues).find((i) => i.subject === 'Mailed in')
+    const bornVisibleIntake = intakeIssue?.clientVisible === true
+
+    /* Marking is editing; the flag audits like any field. */
+    const marked = ok(internalBorn, { t: 'updateIssue', id: internalIssue.id, patch: { clientVisible: true }, now: NOW } as Action)
+    const flipped = marked.issues[internalIssue.id].clientVisible === true
+
+    /* Notes: default internal; the explicit flag rides addNote; updateNote flips it. */
+    let s1 = ok(marked, { t: 'addNote', issueId: internalIssue.id, body: 'internal working note', noteType: 'Investigation', pinned: false, now: NOW } as Action)
+    s1 = ok(s1, { t: 'addNote', issueId: internalIssue.id, body: 'what we told the client', noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
+    const visNote = Object.values(s1.notes).find((n) => n.body === 'what we told the client')!
+    const intNote = Object.values(s1.notes).find((n) => n.body === 'internal working note')!
+    const noteDefaults = intNote.clientVisible !== true && visNote.clientVisible === true
+
+    /* A document flagged after upload, through the one new arm. */
+    s1 = ok(s1, { t: 'recordDocument', subjectKind: 'issue', subjectId: internalIssue.id, name: 'Plan.pdf', mimeType: 'application/pdf', sizeBytes: 10, checksum: 'cb'.repeat(32), locator: 't/cb', store: 'graph', note: '', now: NOW } as Action)
+    const doc = Object.values(s1.documents).find((d) => d.name === 'Plan.pdf')!
+    s1 = ok(s1, { t: 'setDocumentVisibility', id: doc.id, clientVisible: true, now: NOW } as Action)
+    const docFlagged = s1.documents[doc.id].clientVisible === true
+
+    /* The withheld view: marked content with ancestors; machinery empty; audit filtered. */
+    const view = clientView(s1)
+    const keptIssue = Boolean(view.issues[internalIssue.id])
+    const droppedInternalIssues = Object.values(view.issues).every((i) => i.clientVisible)
+    const ancestors = view.issues[internalIssue.id] ? Boolean(view.nodes[view.issues[internalIssue.id].parentId]) : false
+    const notesRight = Boolean(Object.values(view.notes).find((n) => n.body === 'what we told the client')) &&
+      !Object.values(view.notes).some((n) => n.body === 'internal working note')
+    const docsRight = Boolean(view.documents[doc.id])
+    const machineryEmpty =
+      Object.keys(view.rates).length === 0 && Object.keys(view.timeEntries).length === 0 &&
+      Object.keys(view.estimates).length === 0 && Object.keys(view.allocations).length === 0 &&
+      Object.keys(view.sows).length === 0 && Object.keys(view.notifications).length === 0
+    const auditFiltered = view.audit.every((a) => Boolean(view.issues[a.rowId]))
+
+    /* The key is ungrantable to a shipped client role. */
+    const refused = accessProblems(
+      { ...BASE.model.access, grants: { ...BASE.model.access.grants, ROLE_CLIENT_USER: ['work.create', 'internal.view'] } },
+      Object.keys(BASE.model.roles),
+    ).some((p) => /client role/i.test(p))
+
+    const okAll = bornInternal && bornVisibleClient && bornVisibleIntake && flipped && noteDefaults && docFlagged &&
+      keptIssue && droppedInternalIssues && ancestors && notesRight && docsRight && machineryEmpty && auditFiltered && refused
+    return okAll
+      ? { verdict: 'PASS', actual: 'Internal creation is born internal; Carol\u2019s own submission and an intake arrival are born visible; the flag flips through ordinary edits and the one new document arm; the withheld view keeps the marked record with its ancestor chain, the marked note and the flagged document, empties every commercial and people table, filters audit to surviving records, and the grant screen refuses internal.view on a client role.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `bornInternal=${bornInternal} bornVisibleClient=${bornVisibleClient} bornVisibleIntake=${bornVisibleIntake} flipped=${flipped} noteDefaults=${noteDefaults} docFlagged=${docFlagged} keptIssue=${keptIssue} droppedInternal=${droppedInternalIssues} ancestors=${ancestors} notesRight=${notesRight} docsRight=${docsRight} machineryEmpty=${machineryEmpty} auditFiltered=${auditFiltered} refused=${refused}`, stops: 'the boundary disagrees with the design', severity: 'P1', impact: 'internal content one guest sign-in away from a client' } as const
   },
 )
 

@@ -196,6 +196,13 @@ export const CAPABILITIES: Capability[] = [
     switchedAt: null,
   },
   {
+    id: 'clientBoundary',
+    name: 'Client boundary',
+    what: 'What a client may see is decided per record and enforced by withholding from the payload — internal seats hold the key, client seats never can.',
+    needs: ['internal.view'],
+    switchedAt: null,
+  },
+  {
     id: 'proofing',
     name: 'Proofing',
     what: 'A deliverable sent to named colleagues for approve or request-changes, pinned to the exact bytes reviewed.',
