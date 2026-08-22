@@ -141,6 +141,7 @@ async function scrub() {
   await prisma.personSkill.deleteMany({ where })
   await prisma.scopeItem.deleteMany({ where })
   await prisma.milestone.deleteMany({ where })
+  await prisma.documentReview.deleteMany({ where })
   await prisma.document.deleteMany({ where })
   await prisma.changeRequest.deleteMany({ where })
   await prisma.engagement.deleteMany({ where })
@@ -590,6 +591,56 @@ async function main() {
       'and a redacted row is refused by the mapper rather than saved as an erased level',
       refused.includes('Refusing to persist a redacted person-skill'),
       refused || 'IT WAS ACCEPTED, which would erase a level',
+    )
+  }
+
+  /* ---------------- a deliverable review: pinned bytes, replaced verdicts ---------------- */
+  {
+    const issueId = Object.values((await loadWorkspace(TENANT)).state.issues)[0]!.id
+    const up = await persistActions(TENANT, A, [
+      {
+        t: 'recordDocument', subjectKind: 'issue', subjectId: issueId, name: 'Cutover plan.pdf',
+        mimeType: 'application/pdf', sizeBytes: 1000, checksum: 'c'.repeat(64),
+        locator: 'graph-item-proof-rev', store: 'graph', note: '', now: NOW,
+      } as Action,
+    ])
+    const docId = Object.values((await loadWorkspace(TENANT)).state.documents).find(
+      (d) => d.name === 'Cutover plan.pdf',
+    )!.id
+    const asked = await persistActions(TENANT, A, [
+      {
+        t: 'requestDocumentReview', documentId: docId,
+        reviewers: ['Priya Proof', 'Tarun Proof'], question: 'Ready for the client?', now: NOW,
+      } as Action,
+    ])
+    const revId = Object.values((await loadWorkspace(TENANT)).state.documentReviews)[0]!.id
+    /* One reviewer answers twice — the replacement rule, driven through Postgres — and the
+       second reviewer completes it, which also lands the pinned Decision note. */
+    const priya = { id: 'proof-p', name: 'Priya Proof' }
+    const tarun = { id: 'proof-t', name: 'Tarun Proof' }
+    await persistActions(TENANT, priya, [
+      { t: 'decideDocumentReview', reviewId: revId, verdict: 'changes', note: 'Wrong environment named.', now: NOW } as Action,
+    ])
+    await persistActions(TENANT, priya, [
+      { t: 'decideDocumentReview', reviewId: revId, verdict: 'approved', note: 'Fixed in the call.', now: NOW } as Action,
+    ])
+    await persistActions(TENANT, tarun, [
+      { t: 'decideDocumentReview', reviewId: revId, verdict: 'approved', note: '', now: NOW } as Action,
+    ])
+    const backState = (await loadWorkspace(TENANT)).state
+    const back = backState.documentReviews[revId]
+    check(
+      'a review round-trips with its pinned checksum, and a replaced verdict replaces',
+      up.ok && asked.ok && back?.checksum === 'c'.repeat(64) && back.verdicts.length === 2 &&
+        back.verdicts.every((v) => v.verdict === 'approved') && back.reviewers.length === 2,
+      back
+        ? `${back.verdicts.length} verdicts: ${back.verdicts.map((v) => `${v.by}(${v.verdict})`).join(', ')}`
+        : `no review — ${asked.error ?? ''}`,
+    )
+    check(
+      'and completing the review left its pinned Decision note on the record',
+      Object.values(backState.notes).some((n) => n.pinned && n.noteType === 'Decision' && /Cutover plan/.test(n.body)),
+      'looked for a pinned Decision note naming the document',
     )
   }
 

@@ -15,6 +15,7 @@ import {
   changeFromRow,
   personSkillFromRow,
   documentFromRow,
+  reviewFromRow,
   milestoneFromRow,
   scopeItemFromRow,
   auditToRow,
@@ -122,6 +123,7 @@ type Reader = Pick<
   | 'timeEntry'
   | 'approval'
   | 'notification'
+  | 'documentReview'
   | 'sow'
   | 'allocation'
   | 'commitment'
@@ -164,7 +166,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -230,6 +232,7 @@ export async function loadWorkspace(
       db.document.findMany({ where: { tenantId }, orderBy: { uploadedAt: 'asc' } }),
       db.milestone.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
       db.scopeItem.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
+      db.documentReview.findMany({ where: { tenantId } }),
     ])
 
   const state: WorkspaceState = {
@@ -247,9 +250,7 @@ export async function loadWorkspace(
     timeEntries: Object.fromEntries(timeEntries.map((e) => [e.id, timeFromRow(e)])),
     approvals: Object.fromEntries(approvals.map((a) => [a.id, approvalFromRow(a)])),
     notifications: Object.fromEntries(notifications.map((n) => [n.id, notificationFromRow(n)])),
-    // Placeholder until the DocumentReview table lands (plan step 5) — reviews created
-    // before then exist only in the browser session, and the screens ship after step 5.
-    documentReviews: {},
+    documentReviews: Object.fromEntries(documentReviews.map((r) => [r.id, reviewFromRow(r)])),
     sows: Object.fromEntries(sows.map((s) => [s.id, sowFromRow(s)])),
     allocations: Object.fromEntries(allocations.map((a) => [a.id, allocationFromRow(a)])),
     commitments: Object.fromEntries(commitments.map((c) => [c.id, commitmentFromRow(c)])),

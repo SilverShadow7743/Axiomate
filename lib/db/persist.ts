@@ -28,6 +28,7 @@ import {
   rateToRow,
   personSkillToRow,
   documentToRow,
+  reviewToRow,
   milestoneToRow,
   scopeItemToRow,
   changeToRow,
@@ -587,6 +588,34 @@ export async function persistSteps(
         if (before.milestones[id] === m) continue
         const row = milestoneToRow(tenantId, m)
         await tx.milestone.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    /**
+     * A review, and the verdicts on one. The completing verdict also mints a pinned note
+     * inside the arm, so the note diff persists here with it.
+     */
+    case 'requestDocumentReview':
+    case 'decideDocumentReview':
+    case 'withdrawDocumentReview': {
+      for (const [id, r] of Object.entries(after.documentReviews)) {
+        if (before.documentReviews[id] === r) continue
+        const row = reviewToRow(tenantId, r)
+        await tx.documentReview.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      for (const [id, n] of Object.entries(after.notes)) {
+        if (before.notes[id] === n) continue
+        const row = noteToRow(tenantId, n)
+        await tx.issueNote.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

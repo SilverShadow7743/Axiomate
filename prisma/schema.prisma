@@ -145,6 +145,7 @@ model Tenant {
   changes       ChangeRequest[]
   personSkills  PersonSkill[]
   documents     Document[]
+  documentReviews DocumentReview[]
   milestones    Milestone[]
   scopeItems    ScopeItem[]
 
@@ -1185,6 +1186,10 @@ model Document {
   /// graph.
   store     String
 
+  /// The document this one replaces — the version chain, linear by the reducer's refusal
+  /// of a second successor. Null on originals and on rows stored before phase 6.
+  supersedesId String?
+
   note         String   @db.Text
   uploadedBy   String
   uploadedById String?
@@ -1196,6 +1201,37 @@ model Document {
   @@index([tenantId, subjectKind, subjectId])
   /// And the duplicate check, which is per subject and never across the tenant.
   @@index([tenantId, checksum])
+}
+
+/// A deliverable review — proofing. See `lib/proofing.ts`.
+///
+/// `reviewers` and `verdicts` are JSON, read whole and written whole: the screens always
+/// arrive holding the review, and no query needs to reach inside a verdict — the design
+/// says so, and the send-back list names the day that stops being true.
+model DocumentReview {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `rev-12`, minted from the workspace counter.
+  id         String
+  documentId String
+  /// The bytes under review — the stored document's checksum at the moment of asking.
+  checksum   String
+  /// Where the review surfaces and is audited.
+  issueId    String
+  question   String   @db.Text
+  askedBy    String
+  askedAt    DateTime
+  /// string[] — directory names. The asker may not appear; the reducer refuses the ask.
+  reviewers  Json
+  /// { by, verdict, note, at }[] — one per reviewer; a re-answer replaces.
+  verdicts   Json
+  withdrawnAt DateTime?
+  deletedAt   DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, documentId])
+  @@index([tenantId, issueId])
 }
 
 /// A line of what a statement of work says it will deliver.

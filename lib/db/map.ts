@@ -25,12 +25,14 @@ import type {
   ChangeRequest as ChangeRequestRow,
   PersonSkill as PersonSkillRow,
   Document as DocumentRow,
+  DocumentReview as DocumentReviewRow,
   Milestone as MilestoneRow,
   ScopeItem as ScopeItemRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
+import type { DocumentReview, DocumentReviewAnswer } from '../proofing'
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
 import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
@@ -1152,6 +1154,7 @@ export function documentToRow(tenantId: TenantId, d: DocumentRecord): Prisma.Doc
     uploadedBy: d.uploadedBy,
     uploadedById: d.uploadedById ?? null,
     uploadedAt: new Date(d.uploadedAt),
+    supersedesId: d.supersedesId ?? null,
     deletedAt: d.deletedAt ? new Date(d.deletedAt) : null,
   }
 }
@@ -1172,6 +1175,40 @@ export function documentFromRow(r: DocumentRow): DocumentRecord {
     // The same asymmetry as `byId` elsewhere: the optional field has no null in it.
     uploadedById: r.uploadedById ?? undefined,
     uploadedAt: r.uploadedAt.toISOString(),
+    supersedesId: r.supersedesId ?? null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function reviewToRow(tenantId: TenantId, r: DocumentReview): Prisma.DocumentReviewUncheckedCreateInput {
+  return {
+    tenantId,
+    id: r.id,
+    documentId: r.documentId,
+    checksum: r.checksum,
+    issueId: r.issueId,
+    question: r.question,
+    askedBy: r.askedBy,
+    askedAt: new Date(r.askedAt),
+    reviewers: r.reviewers,
+    verdicts: r.verdicts as unknown as Prisma.InputJsonValue,
+    withdrawnAt: r.withdrawnAt ? new Date(r.withdrawnAt) : null,
+    deletedAt: r.deletedAt ? new Date(r.deletedAt) : null,
+  }
+}
+
+export function reviewFromRow(r: DocumentReviewRow): DocumentReview {
+  return {
+    id: r.id,
+    documentId: r.documentId,
+    checksum: r.checksum,
+    issueId: r.issueId,
+    question: r.question,
+    askedBy: r.askedBy,
+    askedAt: r.askedAt.toISOString(),
+    reviewers: (r.reviewers as unknown as string[]) ?? [],
+    verdicts: (r.verdicts as unknown as DocumentReviewAnswer[]) ?? [],
+    withdrawnAt: r.withdrawnAt ? r.withdrawnAt.toISOString() : null,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
