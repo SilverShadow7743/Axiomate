@@ -244,6 +244,9 @@ model Issue {
   /// transform is the only thing entitled to interpret them.
   status      String
   owner       String
+  /// The directory id half of the person reference, resolved at write time. Null when the
+  /// name did not uniquely resolve, and on rows written before the identity-id migration.
+  ownerId     String?
   raisedBy    String
   /// String, not an enum. The accountable-party vocabulary is configurable
   /// (`OperatingModel.parties`), so an enum here would reject any party a user adds.
@@ -603,6 +606,7 @@ model Allocation {
 
   id        String        @default(cuid())
   person    String
+  personId  String?
   projectId String
   project   HierarchyNode @relation("ProjectAllocation", fields: [tenantId, projectId], references: [tenantId, id], onDelete: Cascade)
 
@@ -630,6 +634,7 @@ model Commitment {
 
   id     String @default(cuid())
   person String
+  personId String?
   kind   String
 
   startDate   DateTime
@@ -708,6 +713,7 @@ model Notification {
   id      String @default(cuid())
   /// Who it is for, by name — the same join used everywhere until people have keys.
   to      String
+  toId    String?
   channel String
 
   subject String @db.Text
@@ -787,6 +793,7 @@ model TimeEntry {
 
   /// Who did the work, by name — the same join the rest of the model uses until people have keys.
   person String
+  personId String?
   /// The day the work happened, not the day it was typed in.
   date   DateTime
   hours  Decimal @db.Decimal(5, 2)
@@ -972,6 +979,7 @@ model Timesheet {
   /// `ts-12`, minted from the durable workspace counter.
   id     String
   person String
+  personId String?
   /// ISO date, always a Monday. Not a week number: ISO and US numbering disagree about which
   /// week is which, and neither is readable in a database row.
   weekStarting String

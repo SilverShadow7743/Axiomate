@@ -198,6 +198,7 @@ export function issueToRow(
     severity: SEVERITY_TO_DB[i.severity],
     status: i.status,
     owner: i.owner,
+    ownerId: i.ownerId ?? null,
     raisedBy: i.raisedBy,
     accountable: i.accountable,
     scheduleMode: i.scheduleMode,
@@ -239,6 +240,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     severity: SEVERITY_FROM_DB[r.severity],
     status: r.status as IssueStatus,
     owner: r.owner,
+    ownerId: r.ownerId ?? null,
     raisedBy: r.raisedBy,
     accountable: r.accountable as AccountableParty,
     raised: fromDateOrEmpty(r.raisedDate),
@@ -663,6 +665,7 @@ export function timeToRow(tenantId: TenantId, e: TimeEntry): Prisma.TimeEntryUnc
     id: e.id,
     issueId: e.issueId,
     person: e.person,
+    personId: e.personId ?? null,
     // A plain day, so it uses the date helper — unlike the timestamps below, which carry a
     // moment and would be silently destroyed by `toDate`'s midnight suffix.
     date: toDate(e.date) ?? new Date(0),
@@ -683,6 +686,7 @@ export function timeFromRow(r: TimeRow): TimeEntry {
     id: r.id,
     issueId: r.issueId,
     person: r.person,
+    personId: r.personId ?? null,
     date: fromDate(r.date) ?? '',
     // Decimal on the way out, number in the domain. `Number()` is exact here because the
     // column is (5,2) — five digits total — and every such value is representable.
@@ -751,6 +755,7 @@ export function notificationToRow(
     tenantId,
     id: n.id,
     to: n.to,
+    toId: n.toId ?? null,
     channel: n.channel,
     subject: n.subject,
     body: n.body,
@@ -767,6 +772,7 @@ export function notificationFromRow(r: NotificationRow): Notification {
   return {
     id: r.id,
     to: r.to,
+    toId: r.toId ?? null,
     channel: r.channel as Channel,
     subject: r.subject,
     body: r.body,
@@ -841,6 +847,7 @@ export function allocationToRow(tenantId: TenantId, a: Allocation): Prisma.Alloc
     tenantId,
     id: a.id,
     person: a.person,
+    personId: a.personId ?? null,
     projectId: a.projectId,
     startDate: toDate(a.startDate) ?? new Date(0),
     endDate: toDate(a.endDate) ?? new Date(0),
@@ -856,6 +863,7 @@ export function allocationFromRow(r: AllocationRow): Allocation {
   return {
     id: r.id,
     person: r.person,
+    personId: r.personId ?? null,
     projectId: r.projectId,
     startDate: fromDate(r.startDate) ?? '',
     endDate: fromDate(r.endDate) ?? '',
@@ -872,6 +880,7 @@ export function commitmentToRow(tenantId: TenantId, c: Commitment): Prisma.Commi
     tenantId,
     id: c.id,
     person: c.person,
+    personId: c.personId ?? null,
     kind: c.kind,
     startDate: toDate(c.startDate) ?? new Date(0),
     endDate: toDate(c.endDate) ?? new Date(0),
@@ -887,6 +896,7 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
   return {
     id: r.id,
     person: r.person,
+    personId: r.personId ?? null,
     kind: r.kind as CommitmentKind,
     startDate: fromDate(r.startDate) ?? '',
     endDate: fromDate(r.endDate) ?? '',
@@ -1284,6 +1294,7 @@ export function timesheetToRow(tenantId: TenantId, t: Timesheet): Prisma.Timeshe
     tenantId,
     id: t.id,
     person: t.person,
+    personId: t.personId ?? null,
     weekStarting: t.weekStarting,
     status: t.status,
     submittedAt: new Date(t.submittedAt),
@@ -1300,6 +1311,7 @@ export function timesheetFromRow(r: TimesheetRow): Timesheet {
   return {
     id: r.id,
     person: r.person,
+    personId: r.personId ?? null,
     weekStarting: r.weekStarting,
     status: r.status as TimesheetStatus,
     submittedAt: r.submittedAt.toISOString(),

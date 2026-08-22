@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-22T09:52:59.722Z",
+  "at": "2026-08-22T14:32:06.683Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 46,
+  "passed": 48,
   "failed": 0,
   "checks": [
     {
@@ -140,6 +140,16 @@
       "detail": "Refusing to persist a redacted person-skill (pskill-17). Levels are stripped for reading only."
     },
     {
+      "what": "the person-id half of a reference round-trips on entries and owners",
+      "ok": true,
+      "detail": "entry.personId=PERSON_5, ownerId=PERSON_5, expected PERSON_5"
+    },
+    {
+      "what": "a rename is one field edit and the renamed person still owns their records",
+      "ok": true,
+      "detail": "1 items, first PROOF-1"
+    },
+    {
       "what": "a review round-trips with its pinned checksum, and a replaced verdict replaces",
       "ok": true,
       "detail": "2 verdicts: Priya Proof(approved), Tarun Proof(approved)"
@@ -157,7 +167,7 @@
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
       "ok": true,
-      "detail": "Refusing to persist document doc-21 with no locator. The locator is stripped for reading only."
+      "detail": "Refusing to persist document doc-24 with no locator. The locator is stripped for reading only."
     },
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
@@ -182,22 +192,22 @@
     {
       "what": "a timeline comes back out of Postgres with its boundaries and reasons intact",
       "ok": true,
-      "detail": "ver-23 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-24 2026-07-01→open \"Moved to a four-day week\" by proof"
+      "detail": "ver-26 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-27 2026-07-01→open \"Moved to a four-day week\" by proof"
     },
     {
       "what": "and the exclusive boundary survives it — 30 June is the old week, 1 July the new",
       "ok": true,
-      "detail": "30 Jun → ver-23, 1 Jul → ver-24, before any period → null"
+      "detail": "30 Jun → ver-26, 1 Jul → ver-27, before any period → null"
     },
     {
       "what": "a correction moves the timeline and does not move a stamp",
       "ok": true,
-      "detail": "the period now starts 2025-12-01 and December resolves to ver-23; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-23. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
+      "detail": "the period now starts 2025-12-01 and December resolves to ver-26; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-26. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
     },
     {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 24, state seq 14"
+      "detail": "stored seq 27, state seq 14"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",

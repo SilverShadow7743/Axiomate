@@ -34,6 +34,7 @@ loadEnv()
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { importWorkspace, loadWorkspace } from '../lib/db/repo'
+import { myWork } from '../lib/mywork'
 import { persistActions } from '../lib/db/persist'
 import { runScheduledPass } from '../lib/db/schedule'
 import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
@@ -591,6 +592,39 @@ async function main() {
       'and a redacted row is refused by the mapper rather than saved as an erased level',
       refused.includes('Refusing to persist a redacted person-skill'),
       refused || 'IT WAS ACCEPTED, which would erase a level',
+    )
+  }
+
+  /* ---------------- identity ids: the join half round-trips and survives a rename ------- */
+  {
+    const before = await loadWorkspace(TENANT)
+    const issueId = Object.values(before.state.issues)[0]!.id
+    const added = await persistActions(TENANT, A, [
+      { t: 'config', op: { k: 'upsertPerson', id: null, name: 'Join Proof', roleIds: [] }, now: NOW } as Action,
+    ])
+    const withPerson = await loadWorkspace(TENANT)
+    const joinProof = Object.values(withPerson.state.model.people).find((pp) => pp.name === 'Join Proof')!
+    await persistActions(TENANT, A, [
+      { t: 'addTime', issueId, person: 'Join Proof', date: NOW.slice(0, 10), hours: 1.5, activity: 'Investigation', billable: true, note: '', now: NOW } as Action,
+      { t: 'updateIssue', id: issueId, patch: { owner: 'Join Proof' }, now: NOW } as Action,
+    ])
+    const back = await loadWorkspace(TENANT)
+    const entry = Object.values(back.state.timeEntries).find((e) => e.person === 'Join Proof')
+    check(
+      'the person-id half of a reference round-trips on entries and owners',
+      entry?.personId === joinProof.id && back.state.issues[issueId]?.ownerId === joinProof.id,
+      `entry.personId=${entry?.personId}, ownerId=${back.state.issues[issueId]?.ownerId}, expected ${joinProof.id}`,
+    )
+
+    await persistActions(TENANT, A, [
+      { t: 'config', op: { k: 'upsertPerson', id: joinProof.id, name: 'Join Proof Renamed', roleIds: [] }, now: NOW } as Action,
+    ])
+    const renamed = await loadWorkspace(TENANT)
+    const mine = myWork(renamed.state, { id: 'proof-x', name: 'Join Proof Renamed' }, NOW.slice(0, 10))
+    check(
+      'a rename is one field edit and the renamed person still owns their records',
+      added.ok && mine.items.some((i) => i.subjectId === issueId),
+      mine.items.length ? `${mine.items.length} items, first ${mine.items[0]?.subjectId}` : 'my work came back empty — the Tarun incident class',
     )
   }
 
