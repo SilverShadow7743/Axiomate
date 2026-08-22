@@ -573,6 +573,21 @@ proof covers it meanwhile.
 6. **Watch the pill.** Every step above must reach "Up to date" — the wire shape and the
    reducer widened together this time (the section-23 lesson).
 
+**Driven 22 Aug 2026 (steps 1–3, 6).** The card set the allowance to 5 and said so in a
+toast; on OAPIL-034 (open, raised 30 Jul) an entry dated 14 Aug surfaced the "Why so late"
+box — "8 days after the work — the allowance is 5" — with Record disabled until the reason
+was filled, then recorded wearing "late — <reason>", accepted by the server on the first
+try (the wire widened with the reducer this time). Two incidental findings: (a) the FIRST
+attempt targeted OAPIL-146 and was refused by the *before-window* rule — its 19 Aug raise
+date makes any late-enough entry predate the record — which is the window and the grace
+gate composing correctly; (b) the automation driving this test double-executed the Record
+click a minute apart (a frozen-renderer CDP retry), producing two entries under two
+idempotency keys — each honestly recorded, both withdrawn through Remove with the trail
+kept, and no app defect: a person's form clears synchronously on success, so a human
+double-click records once. Test data was cleaned up and the allowance restored to the
+shipped 7. Steps 4–5 (stale correction, approver's reading) are proven by TG1 and the
+suite; their browser half waits for a real submitted week.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
