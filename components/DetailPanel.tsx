@@ -672,7 +672,7 @@ export default function DetailPanel({
             onBuildLifecycle={() => onBuildLifecycle(issue.id)}
           />
         ) : (
-          <History audit={audit} />
+          <History audit={audit} forId={issue.id} />
         )}
       </div>
       )}
@@ -1002,18 +1002,26 @@ function ResolutionPath({
   )
 }
 
-function History({ audit }: { audit: AuditEntry[] }) {
-  if (!audit.length) {
+function History({ audit, forId }: { audit: AuditEntry[]; forId?: string }) {
+  /*
+   * Scoped to the selected record when one is given. Unfiltered, a tab sitting inside issue
+   * A's detail pane showed every change ever made to issues B through Z — read as A's
+   * history by anyone who did not study the ids. Structural rows still get the global view:
+   * their changes are sparse and the whole log is the honest answer there.
+   */
+  const shown = forId ? audit.filter((a) => a.rowId === forId) : audit
+  if (!shown.length) {
     return (
       <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>
-        No schedule changes recorded in this session. Dragging a bar, committing a target date or
-        building a lifecycle plan is logged here.
+        {forId
+          ? `No changes recorded for ${forId} in this session. Editing a field, moving a date or changing its status is logged here.`
+          : 'No schedule changes recorded in this session. Dragging a bar, committing a target date or building a lifecycle plan is logged here.'}
       </div>
     )
   }
   return (
     <ul style={{ listStyle: 'none', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {[...audit].reverse().map((a) => (
+      {[...shown].reverse().map((a) => (
         <li key={a.id} style={{ borderLeft: '2px solid var(--border-strong)', paddingLeft: 9 }}>
           <span className="mono" style={{ color: 'var(--text-faint)', fontSize: 11 }}>
             {a.at.slice(0, 19).replace('T', ' ')}

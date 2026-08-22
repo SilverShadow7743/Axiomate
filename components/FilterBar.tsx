@@ -282,15 +282,22 @@ export default function FilterBar({
 
       <span className="sep" />
 
-      <button className="btn ghost" onClick={onExpandAll}>
-        Expand all
-      </button>
-      <button className="btn ghost" onClick={onCollapseAll}>
-        Collapse all
-      </button>
-      <button className="btn ghost" onClick={onToday}>
-        Today
-      </button>
+      {/* Tree-only verbs, hidden with the tree. Rendered in Board or Calendar they acted on
+          an unmounted grid — Today scrolled a null ref, Expand mutated a set nothing read —
+          and a visible control that silently does nothing teaches people not to trust any. */}
+      {view === 'tree' && (
+        <>
+          <button className="btn ghost" onClick={onExpandAll}>
+            Expand all
+          </button>
+          <button className="btn ghost" onClick={onCollapseAll}>
+            Collapse all
+          </button>
+          <button className="btn ghost" onClick={onToday}>
+            Today
+          </button>
+        </>
+      )}
 
       {/* Only when there is something to go back to. A permanent control over an empty
           archive is a button that does nothing; this one appears the moment it can help. */}
@@ -322,6 +329,7 @@ export default function FilterBar({
       </div>
       )}
 
+      {view === 'tree' && (
       <div ref={menuWrap} style={{ position: 'relative' }}>
         <button className="btn ghost" onClick={() => setColMenu((v) => !v)}>
           Columns ▾
@@ -392,8 +400,9 @@ export default function FilterBar({
           </div>
         )}
       </div>
+      )}
 
-      <Legend />
+      {view === 'tree' && <Legend />}
 
       <span className="grow" />
 

@@ -121,6 +121,8 @@ interface Props {
   actor: Actor
   /** Whether this deployment verifies who somebody is, rather than taking their word. */
   signedIn: boolean
+  /** When the scheduled pass last ran (null: never), read from the database at page load. */
+  pass: { lastRunAt: string | null; lastSummary: string | null }
   onConfig: (op: ConfigOp) => boolean
   /** Applying creates records, not configuration - the rates precedent. Returns a summary. */
   onApplyBlueprint: (blueprintId: string, targetId: string, anchor: string, keep: string[]) => { applied: number; refused: { entryName: string; error: string }[] }
@@ -146,7 +148,7 @@ interface Props {
   onClose: () => void
 }
 
-export default function ConfigWorkspace({ state, actor, signedIn, onConfig,
+export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig,
   onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
@@ -286,7 +288,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig,
           {tab === 'roles' && <RolesAndPeople state={state} onConfig={onConfig} />}
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
-          {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} />}
+          {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} pass={pass} />}
           {tab === 'blueprints' && <Blueprints state={state} onConfig={onConfig} onApply={onApplyBlueprint} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
@@ -297,10 +299,10 @@ export default function ConfigWorkspace({ state, actor, signedIn, onConfig,
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
           {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
-          {tab === 'watch' && <Watch state={state} signedIn={signedIn} onConfig={onConfig} />}
+          {tab === 'watch' && <Watch state={state} signedIn={signedIn} onConfig={onConfig} pass={pass} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
-          {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} />}
+          {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} pass={pass} />}
           {tab === 'scopes' && (
             <Scopes
               state={state}
@@ -1430,10 +1432,12 @@ function Watch({
   state,
   signedIn,
   onConfig,
+  pass,
 }: {
   state: WorkspaceState
   signedIn: boolean
   onConfig: (op: ConfigOp) => boolean
+  pass: { lastRunAt: string | null; lastSummary: string | null }
 }) {
   const policy = state.model.watch
   const [result, setResult] = useState<string | null>(null)
@@ -1588,6 +1592,11 @@ function Watch({
           </button>
           {result && <span className="prov">{result}</span>}
         </div>
+        <p className="cfg-inherit">
+          {pass.lastRunAt
+            ? `Last ran ${pass.lastRunAt.slice(0, 16).replace('T', ' ')} UTC — ${pass.lastSummary ?? 'no summary recorded'}`
+            : 'This pass has NEVER run in this deployment — nothing has called the endpoint yet. Rules that depend on it (recurring work, staleness raises) are written down but not firing.'}
+        </p>
         <p className="cfg-inherit">
           A run by hand is attributed to the pass rather than to you: asking what the clock would
           say is not the same as deciding it, and your name on a week of overdue notices would
@@ -2328,9 +2337,11 @@ function Goals({
 function Recurring({
   state,
   onConfig,
+  pass,
 }: {
   state: WorkspaceState
   onConfig: (op: ConfigOp) => boolean
+  pass: { lastRunAt: string | null; lastSummary: string | null }
 }) {
   const rules = state.model.recurrences ?? []
   const types = liveWorkTypes(state.model)
@@ -2396,7 +2407,11 @@ function Recurring({
           <div className="cfg-card-head">
             <b>{r.name}</b>
             <span className="grow" />
-            <Badge kind={r.enabled ? 'seeded' : 'p0'}>{r.enabled ? 'firing' : 'off'}</Badge>
+            {/* "firing" is only claimed when the pass has actually run; an enabled rule with
+                no run behind it is a promise, and the badge says so. */}
+            <Badge kind={r.enabled ? (pass.lastRunAt ? 'seeded' : 'p0') : 'p0'}>
+              {r.enabled ? (pass.lastRunAt ? 'firing' : 'enabled — pass has never run') : 'off'}
+            </Badge>
             <button
               className="btn ghost"
               onClick={() => onConfig({ k: 'upsertRecurrence', id: r.id, patch: { enabled: !r.enabled } })}
@@ -3450,14 +3465,48 @@ function Workflows({
  * Routing & intake
  * ================================================================== */
 
+/**
+ * The full shareable URL for a request form — with the one-click copy that is the entire
+ * distribution mechanism. The relative path it replaced made every operator assemble the
+ * origin by hand, and a mistyped token 404s indistinguishably from a disabled form by design.
+ */
+function FormLink({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false)
+  const url = `${typeof window === 'undefined' ? '' : window.location.origin}/intake/form/${token}`
+  return (
+    <p className="cfg-inherit sentence mono">
+      {url}{' '}
+      <button
+        className="btn ghost"
+        onClick={() => {
+          void navigator.clipboard.writeText(url).then(
+            () => {
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 2000)
+            },
+            () => undefined,
+          )
+        }}
+      >
+        {copied ? 'Copied' : 'Copy link'}
+      </button>{' '}
+      <a className="btn ghost" href={url} target="_blank" rel="noreferrer">
+        Open
+      </a>
+    </p>
+  )
+}
+
 function Routing({
   state,
   onConfig,
   scopes,
+  pass,
 }: {
   state: WorkspaceState
   onConfig: (op: ConfigOp) => boolean
   scopes: ScopeOption[]
+  pass: { lastRunAt: string | null; lastSummary: string | null }
 }) {
   const model = state.model
   const types = liveResponsibilities(model)
@@ -3469,12 +3518,18 @@ function Routing({
   return (
     <>
       <section className="cfg-section">
+        {/* Status, not a disclaimer. The old banner predated phases 2–5 and told a new team
+            member the shipped intake system did not exist — so nobody handed out a form link
+            or trusted the mailbox. What is stated now is checkable per surface. */}
         <div className="cfg-warn">
-          Everything on this page is a <strong>configuration record</strong>. Nothing reads a
-          mailbox and nothing applies a rule — there is no mail connection and no scheduler in
-          this build. The records are here so the routing policy can be written down and
-          reviewed; they are not a running system, and this page will not pretend they are by
-          showing a preview of work that never happened.
+          What runs, stated per surface: <strong>request forms</strong> are live at their URLs
+          the moment they are switched on — a submission files a record immediately.{' '}
+          <strong>Mailboxes</strong> are read by a connector wired outside this application,
+          which posts arriving mail to <code>/api/intake</code>; routing rules below are
+          applied at that moment. <strong>The scheduled pass</strong>{' '}
+          {pass.lastRunAt
+            ? `last ran ${pass.lastRunAt.slice(0, 16).replace('T', ' ')} UTC.`
+            : 'has never run in this deployment — rules that depend on it are written down but not firing.'}
         </div>
       </section>
 
@@ -3678,7 +3733,7 @@ function Routing({
                 Remove
               </button>
             </div>
-            <p className="cfg-inherit sentence mono">/intake/form/{f.token}</p>
+            <FormLink token={f.token} />
             <div className="cfg-fld-row">
               <label className="cfg-fld">
                 <span>Files under</span>

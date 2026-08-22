@@ -97,6 +97,8 @@ interface Props {
   /** Supplied when a database served the workspace; null means the seed file did. */
   initialState: WorkspaceState | null
   persistence: { enabled: boolean; note: string; error?: string }
+  /** When the scheduled pass last ran (null: never), read from the database at page load. */
+  pass: { lastRunAt: string | null; lastSummary: string | null }
   /**
    * Which tenant this workspace belongs to, resolved on the server.
    *
@@ -141,6 +143,7 @@ export default function IssueWorkspace({
   relationships,
   initialState,
   persistence,
+  pass,
   tenantId,
   actor,
   signInRequired,
@@ -153,7 +156,7 @@ export default function IssueWorkspace({
   const [state, setState] = useState<WorkspaceState>(
     () => initialState ?? initWorkspace(issues, relationships),
   )
-  const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null)
+  const [toasts, setToasts] = useState<{ id: number; msg: string; error: boolean }[]>([])
   const [dialog, setDialog] = useState<DialogState>(null)
   /** Issue whose evidence manager is open, if any. */
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
@@ -181,22 +184,30 @@ export default function IssueWorkspace({
    */
   const [dirty, setDirty] = useState(false)
 
-  // Track the timer so a second message gets its own full duration instead of inheriting
-  // the first one's remaining time, and so nothing fires after unmount.
-  const toastTimer = useRef<number | null>(null)
   /** The owner change awaiting a second press. See the owner case in the cell editor. */
   const pendingAssign = useRef<{ rowId: string; owner: string } | null>(null)
+  /*
+   * Stacked, not replaced: the old single slot meant a refusal could be overwritten by the
+   * save confirmation that landed half a second later, and the person never saw why their
+   * change did not stick. Each toast gets its own full duration; a burst is capped at four
+   * so a batch of automation misses cannot wallpaper the screen.
+   */
+  const toastSeq = useRef(0)
+  const toastTimers = useRef(new Map<number, number>())
   const notify = useCallback((msg: string, error = false) => {
-    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
-    setToast({ msg, error })
-    toastTimer.current = window.setTimeout(() => {
-      setToast(null)
-      toastTimer.current = null
-    }, 4500)
+    const id = ++toastSeq.current
+    setToasts((prev) => [...prev.slice(-3), { id, msg, error }])
+    toastTimers.current.set(
+      id,
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id))
+        toastTimers.current.delete(id)
+      }, 4500),
+    )
   }, [])
   useEffect(
     () => () => {
-      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+      for (const t of toastTimers.current.values()) window.clearTimeout(t)
     },
     [],
   )
@@ -436,7 +447,7 @@ export default function IssueWorkspace({
         for (const miss of res.automation.misses) missed.push(`${miss.label}: ${miss.why}`)
         for (const r of res.automation.refusals) missed.push(`${r.action.t}: ${r.error}`)
       }
-      if (missed.length) notify(missed[0], true)
+      for (const miss of missed) notify(miss, true)
       setState(cur)
       if (createdId) setSelectedId(createdId)
       if (message) notify(message)
@@ -845,6 +856,10 @@ export default function IssueWorkspace({
         notify(`${id} is no longer in the workspace.`, true)
         return
       }
+      // The same unsaved-work guard every selection path must pass. A notification click or
+      // a My-work row used to bypass it with a raw setSelectedId, silently discarding a
+      // half-edited form or a typed client reply.
+      if (!requestSelect(id)) return
       setCollapsed((prev) => {
         const next = new Set(prev)
         let cursor: string | null = row.parentId
@@ -858,10 +873,9 @@ export default function IssueWorkspace({
         setFilters(EMPTY_FILTERS)
         notify(`Filters cleared so ${id} is visible.`)
       }
-      setSelectedId(id)
       setRevealTarget(id)
     },
-    [allRows, filters, notify],
+    [allRows, filters, notify, requestSelect],
   )
 
   useEffect(() => {
@@ -1701,7 +1715,7 @@ export default function IssueWorkspace({
           state={state}
           actor={actor}
           onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
-          onOpen={(issueId) => setSelectedId(issueId)}
+          onOpen={(issueId) => revealIssue(issueId)}
         />
 
         <span className="sep" />
@@ -2205,7 +2219,7 @@ export default function IssueWorkspace({
              * Same choice the my-work drawer makes: select and stay open. Comparing engagements
              * is the point, and closing on the first click would end the comparison.
              */
-            setSelectedId(id)
+            revealIssue(id)
           }}
           onClose={() => setPortfolioOpen(false)}
         />
@@ -2222,7 +2236,7 @@ export default function IssueWorkspace({
              * closing on every click would make working through eight items eight round trips
              * through a button in the toolbar.
              */
-            setSelectedId(id)
+            revealIssue(id)
           }}
           onClose={() => setMyWorkOpen(false)}
         />
@@ -2233,6 +2247,7 @@ export default function IssueWorkspace({
           state={state}
           actor={actor}
           signedIn={Boolean(verified)}
+          pass={pass}
           onConfig={applyConfigOp}
           onApplyBlueprint={(blueprintId, targetIdArg, anchorArg, keepIds) => {
             /*
@@ -2286,7 +2301,15 @@ export default function IssueWorkspace({
         />
       )}
 
-      {toast && <div className={`toast${toast.error ? ' error' : ''}`}>{toast.msg}</div>}
+      {/* aria-live on the container so refusals reach assistive tech; errors are also
+          role=alert for immediate announcement. */}
+      <div className="toast-stack" role="status" aria-live="polite">
+        {toasts.map((t) => (
+          <div key={t.id} role={t.error ? 'alert' : undefined} className={`toast${t.error ? ' error' : ''}`}>
+            {t.msg}
+          </div>
+        ))}
+      </div>
     </div>
     </LabelProvider>
   )

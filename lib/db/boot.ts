@@ -3,7 +3,7 @@ import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
 import { loadSeed, type SeedFile } from '../data'
-import { databaseConfigured, describeDbError } from './client'
+import { databaseConfigured, describeDbError, prisma } from './client'
 import { importWorkspace, loadWorkspace } from './repo'
 import { currentTenantId } from '../tenant'
 import { getSessionFromCookies, identityEstablished } from '../principal'
@@ -50,6 +50,13 @@ export interface Boot {
     /** Set when a database was configured but could not be used. */
     error?: string
   }
+  /**
+   * When the scheduled pass last ran, and what it said — a stored fact from `scheduleWatch`,
+   * written on every run. Null when it has never run (or nothing is stored), which is exactly
+   * what the configuration screens must be able to say out loud: a recurrence rule marked
+   * "firing" with no run behind it is a promise, not a report.
+   */
+  pass: { lastRunAt: string | null; lastSummary: string | null }
 }
 
 export async function boot(): Promise<Boot> {
@@ -114,6 +121,7 @@ export async function boot(): Promise<Boot> {
         enabled: false,
         note: 'Sign in to see this workspace.',
       },
+      pass: { lastRunAt: null, lastSummary: null },
     }
   }
 
@@ -129,6 +137,7 @@ export async function boot(): Promise<Boot> {
         enabled: false,
         note: 'In-memory session. Set DATABASE_URL and run `npm run db:push` to save changes.',
       },
+      pass: { lastRunAt: null, lastSummary: null },
     }
   }
 
@@ -138,6 +147,12 @@ export async function boot(): Promise<Boot> {
     // a second firm arriving later gets its own import, not a refusal.
     const imported = await importWorkspace(tenantId, initWorkspace(seed.issues, seed.relationships))
     const { state, orphans } = await loadWorkspace(tenantId)
+    // What the scheduled pass last did, so the screens report a run rather than promise one.
+    const watch = await prisma.scheduleWatch.findUnique({ where: { tenantId } })
+    const pass = {
+      lastRunAt: watch?.lastRunAt ? watch.lastRunAt.toISOString() : null,
+      lastSummary: watch?.lastSummary ?? null,
+    }
 
     const note = imported.imported
       ? `Saved to Postgres. Imported ${imported.counts.issues} issues from the log.`
@@ -169,6 +184,7 @@ export async function boot(): Promise<Boot> {
           ? `${note} ${orphans.length} issues have no parent and are not shown in the tree.`
           : note,
       },
+      pass,
     }
   } catch (err) {
     // A configured-but-unreachable database falls back to the seed file rather than failing
@@ -185,6 +201,7 @@ export async function boot(): Promise<Boot> {
         note: 'Running from the issue log. Changes are not being saved.',
         error: describeDbError(err),
       },
+      pass: { lastRunAt: null, lastSummary: null },
     }
   }
 }

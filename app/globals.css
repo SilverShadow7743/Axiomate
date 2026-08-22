@@ -1359,6 +1359,25 @@ select.cell-editor {
   white-space: nowrap;
 }
 
+/* Toasts stack instead of replacing each other: a refusal must survive the save
+   confirmation that lands right after it. The stack owns the fixed position; each toast
+   is a static row inside it. */
+.toast-stack {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.toast-stack .toast {
+  position: static;
+  transform: none;
+}
 .toast {
   position: fixed;
   bottom: 16px;

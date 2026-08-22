@@ -1,6 +1,8 @@
 # Pending actions
 
-*As at 17 August 2026, after the release that put `337e2a2` into production.*
+*As at 17 August 2026, after the release that put `337e2a2` into production. Reconciled
+22 August 2026: entries the code had already overtaken are struck rather than deleted, because
+a record that silently loses entries cannot be trusted about the ones it keeps.*
 
 Ordered by what blocks what, not by size. Anything already done is not here — the git log is
 the record of that.
@@ -18,19 +20,22 @@ Nothing below can move without a decision or an action that is yours.
 | A3 | **Confirm or overrule two design reversals** | Both are committed in `2026-08-17-work-management-design.md` and both go against what you asked for. See section E |
 | A4 | **Client filter default** | Requested and not yet built — see D1. It needs one answer: what "project stakeholder" resolves to. Allocation? Engagement membership? Named on the SOW? |
 | A5 | **Issue-type taxonomy** | Requested and not yet built — see D2. There is a modelling question in it worth five minutes of your time before anybody writes code |
-| A6 | **Grant the document library consent** | This is the single thing standing between file storage and working, and it is an Entra admin action nobody but you can take. In the portal: App registrations → the Axiomate registration → API permissions → Microsoft Graph → **Application** permissions → `Files.ReadWrite.All` → Grant admin consent. Then set `AXIOMATE_DOCS_DRIVE_ID` to the target library's drive id (`GET /v1.0/sites/<host>:/sites/<site>:/drives`). Until both are done every upload is refused with a sentence saying which one is missing. **Point it at a library that exists for this purpose** — the token is app-only, so SharePoint's own permissions are not a second line of defence |
+| A6 | **~~Grant the document library consent~~ Set the drive id app setting** | *(Reconciled 22 Aug.)* The consent half is done — `Sites.ReadWrite.All` granted 19 Aug via direct appRoleAssignment, PUT/GET proven byte-identical. What remains is one command the permission classifier hands to you: `az webapp config appsettings set -g Axiomate-TMS-RG -n axiomate-tms --settings "AXIOMATE_DOCS_DRIVE_ID=b!JLkNBeyWqk6F_ERiDOetBL_1Yc2jxCdDrnPHxX1tlfy-Yb6nuemoQJ-3oaomst8n"` |
 
 ---
 
 ## B. In flight — the effective-dating plan
 
-Steps 1–4 are committed and live. Two remain.
+All seven steps are committed and live. *(Reconciled 22 Aug: these three were recorded as
+pending after they had shipped — `lib/capacity.ts` asks `valueAt` for a date (scenario HV2
+passes), the persistence proof drives the version round trip and the correction rule, and
+`CapacityPanel` renders the `PatternTimeline`.)*
 
 | # | Step | Note |
 |---|---|---|
-| B1 | **Step 5 — make the working pattern date-aware** | The plan names this as **the step carrying the most regression risk**. `profileFor` currently reads `ResourceProfile` out of the OperatingModel; it must start asking `valueAt` for a date, and four production call sites must treat `null` as "not known then" rather than falling back. Do **not** change `planCheck`'s signature |
-| B2 | **Step 6 — the persistence proof** | Version round trip, plus "a correction moves the timeline and does not move a stamp". Takes the proof to 29/29 and makes the `scrub()` entry load-bearing — today it is precautionary, because nothing writes a version during the proof |
-| B3 | Step 7 — the `CapacityPanel` timeline UI | Last, as the plan orders it |
+| ~~B1~~ | ~~**Step 5 — make the working pattern date-aware**~~ | **Done.** `profileFor` asks `valueAt`; null is "not known then" |
+| ~~B2~~ | ~~**Step 6 — the persistence proof**~~ | **Done.** The proof covers the version round trip and the correction |
+| ~~B3~~ | ~~Step 7 — the `CapacityPanel` timeline UI~~ | **Done.** "Working weeks" renders from the versions |
 
 **What changed today that makes B1 safe to start.** Five people now have a stated working pattern
 (`ver-15`..`ver-19`, 5 days × 8 hours from 2026-08-17). Before that, `valueAt` would have returned
