@@ -26,6 +26,8 @@ export interface Notification {
   id: string
   /** Who it is for, by name — or a role label, when a rule addressed a role rather than a person. */
   to: string
+  /** The directory id when `to` uniquely resolved to a person; null for role labels and unknowns. */
+  toId?: string | null
   channel: Channel
   subject: string
   body: string

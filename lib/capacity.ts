@@ -199,6 +199,8 @@ export interface Commitment {
   /** `commit-12`, minted from the workspace counter. */
   id: string
   person: string
+  /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
+  personId?: string | null
   kind: CommitmentKind
   startDate: string
   endDate: string
@@ -218,6 +220,8 @@ export interface Allocation {
   /** `alloc-12`, minted from the workspace counter. */
   id: string
   person: string
+  /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
+  personId?: string | null
   /** The project node. Allocation is to a project, like a SOW attribution. */
   projectId: string
   startDate: string

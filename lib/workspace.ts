@@ -43,7 +43,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   LOG_FOR_OTHERS,
@@ -238,6 +238,8 @@ export interface IssueRecord {
   severity: Severity
   status: IssueStatus
   owner: string
+  /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
+  ownerId?: string | null
   raisedBy: string
   accountable: AccountableParty
   raised: string
@@ -1598,6 +1600,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           severity: (a.draft.severity as Severity) || 'Medium',
           status,
           owner: a.draft.owner || 'Unassigned',
+          ownerId: directoryIdByName(state.model, a.draft.owner || ''),
           raisedBy: a.draft.raisedBy || by,
           accountable: (a.draft.accountable as AccountableParty) || 'Unassigned',
           raised: a.draft.raised || a.now.slice(0, 10),
@@ -1649,6 +1652,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               [nid]: {
                 id: nid,
                 to: p.name,
+                toId: p.id,
                 channel: 'in-app',
                 subject: `New request ${id}`,
                 body: `${issue.raisedBy} raised “${issue.subject}” — it is unowned until somebody takes it.`,
@@ -1821,6 +1825,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         severity: original.severity,
         status: 'Open',
         owner: original.owner,
+        ownerId: directoryIdByName(state.model, original.owner),
         raisedBy: by,
         accountable: original.accountable,
         raised: a.now.slice(0, 10),
@@ -2058,6 +2063,11 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         )
       }
       const next = { ...i, ...a.patch, lastActivity: a.now.slice(0, 10) }
+      // The join half of the reference, re-resolved ONLY when the owner actually moves —
+      // re-resolving on every save would let a later directory change rewrite old joins.
+      if (a.patch.owner != null && a.patch.owner !== i.owner) {
+        next.ownerId = directoryIdByName(state.model, a.patch.owner)
+      }
 
       // Closing an issue records its completion date; reopening clears it.
       //
@@ -2124,6 +2134,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           [nid]: {
             id: nid,
             to: newOwner,
+            toId: directoryIdByName(state.model, newOwner),
             channel: 'in-app',
             subject: `${a.id} is now yours`,
             body: `${by} assigned you ${a.id} — “${next.subject}”.`,
@@ -3181,6 +3192,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         id,
         issueId: a.issueId,
         person: a.person.trim(),
+        personId: directoryIdByName(state.model, a.person),
         date: a.date,
         hours: a.hours,
         activity: a.activity,
@@ -3240,6 +3252,8 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
 
       const next: TimeEntry = { ...entry, ...a.patch, updatedBy: by, updatedAt: a.now }
+      // Only when the person actually moves — the same only-on-change rule as ownerId.
+      if (next.person !== entry.person) next.personId = directoryIdByName(state.model, next.person)
       const problem = checkEntry(
         { hours: next.hours, date: next.date, person: next.person },
         a.now.slice(0, 10),
@@ -4319,6 +4333,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const sheet: Timesheet = {
         id,
         person: a.person.trim(),
+        personId: directoryIdByName(state.model, a.person),
         weekStarting: a.weekStarting,
         status: 'Submitted',
         submittedAt: a.now,
@@ -4660,6 +4675,8 @@ Question: ${review.question}`,
       const notification: Notification = {
         id,
         to: a.to,
+        // Role labels and unknowns stay null by design — see directoryIdByName.
+        toId: directoryIdByName(state.model, a.to),
         channel: a.channel,
         subject: a.subject,
         body: a.body,
@@ -5077,6 +5094,7 @@ Question: ${review.question}`,
       const next: Allocation = {
         id,
         person: a.person.trim(),
+        personId: directoryIdByName(state.model, a.person),
         projectId: a.projectId,
         startDate: a.startDate,
         endDate: a.endDate,
@@ -5172,6 +5190,7 @@ Question: ${review.question}`,
       const next: Commitment = {
         id,
         person: a.person.trim(),
+        personId: directoryIdByName(state.model, a.person),
         kind: a.kind,
         startDate: a.startDate,
         endDate: a.endDate,

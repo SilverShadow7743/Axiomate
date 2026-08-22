@@ -34,6 +34,8 @@ export interface Timesheet {
   /** `ts-12`, minted from the workspace counter. */
   id: string
   person: string
+  /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
+  personId?: string | null
   /** Always a Monday. */
   weekStarting: string
   status: TimesheetStatus

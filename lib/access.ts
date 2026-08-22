@@ -308,6 +308,23 @@ export function rolesFor(model: OperatingModel, actor: Actor): string[] {
  * Returns undefined for a machine actor. A machine is not a person, and giving it somebody's
  * directory entry because a name happened to match would hand it that person's private rows.
  */
+/**
+ * The directory id a typed name resolves to — or null, honestly.
+ *
+ * Null for empty names, "Unassigned", role labels, unknown names, and — crucially —
+ * AMBIGUOUS names: two directory entries sharing a name must never resolve, because a wrong
+ * join is worse than a stated absence. The directory refuses duplicate names on write, so
+ * ambiguity only arises from historical data; it is guarded all the same.
+ */
+export function directoryIdByName(model: OperatingModel, name: string): string | null {
+  const wanted = (name ?? '').trim().toLowerCase()
+  if (!wanted || wanted === 'unassigned' || wanted.startsWith('role:')) return null
+  const matches = Object.values(model.people ?? {}).filter(
+    (p) => p.name.trim().toLowerCase() === wanted,
+  )
+  return matches.length === 1 ? matches[0].id : null
+}
+
 export function directoryPersonFor(model: OperatingModel, actor: Actor): Person | undefined {
   if (isMachineActor(actor)) return undefined
   const people = Object.values(model.people ?? {})

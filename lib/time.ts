@@ -51,8 +51,10 @@ export interface TimeEntry {
   /** `time-12`, minted from the workspace counter. */
   id: string
   issueId: string
-  /** Who did the work, by name — the same join the rest of the product uses until people have real keys. */
+  /** Who did the work, by name — the display half of the reference. */
   person: string
+  /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
+  personId?: string | null
   /** The day the work happened, `YYYY-MM-DD`. Not when it was typed in. */
   date: string
   hours: number
