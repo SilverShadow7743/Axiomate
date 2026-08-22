@@ -6,7 +6,7 @@ import type {
   Severity,
   SlaPolicy,
 } from './types'
-import { addWorkingDays, daysBetween, maxIso, minIso, toUtc, workingDaysBetween } from './dates'
+import { addWorkingDays, daysBetween, maxIso, minIso, toUtc, workingDaysBetween, addDays } from './dates'
 
 /**
  * Status -> % complete.
@@ -63,23 +63,49 @@ export function computeHealth(
     'status' | 'plannedEndDate' | 'plannedStartDate' | 'percentComplete' | 'actualEndDate'
   >,
   today: string,
-  opts: { blockedByDependency?: boolean } = {},
+  opts: { blockedByDependency?: boolean; pausedDays?: number } = {},
 ): ScheduleHealth {
   if (isTerminal(row.status) || row.percentComplete >= 100) return 'Completed'
   if (opts.blockedByDependency) return 'Blocked'
   if (row.status && BLOCKED_STATUSES.includes(row.status)) return 'Blocked'
   if (!row.plannedEndDate) return 'Unscheduled'
 
-  if (row.plannedEndDate < today) return 'Overdue'
+  /*
+   * The clock the client held. Days banked in client-waiting statuses shift the due
+   * comparison, so work that comes back from “Needs clarification” does not arrive
+   * pre-breached on time nobody could have spent. The COMMITTED date itself never moves —
+   * it stays what was promised; what moves is the judgment about whose time was consumed.
+   */
+  const paused = opts.pausedDays ?? 0
+  const effectiveEnd = paused > 0 ? addDays(row.plannedEndDate, paused) : row.plannedEndDate
+
+  if (effectiveEnd < today) return 'Overdue'
 
   // At Risk: inside the final third of the window with progress lagging elapsed time.
   if (row.plannedStartDate && row.plannedStartDate <= today) {
-    const total = daysBetween(row.plannedStartDate, row.plannedEndDate)
-    const elapsed = daysBetween(row.plannedStartDate, today)
+    const total = daysBetween(row.plannedStartDate, effectiveEnd)
+    const elapsed = daysBetween(row.plannedStartDate, today) - paused
     const elapsedPct = total > 0 ? (elapsed / total) * 100 : 0
     if (elapsedPct >= 66 && row.percentComplete < elapsedPct - 15) return 'At Risk'
   }
   return 'On Track'
+}
+
+/**
+ * Calendar days this issue has spent waiting on the client — the banked total plus the
+ * current stay, when it is sitting in a blocked status right now. `daysBetween` is an
+ * INCLUSIVE span, so one is subtracted: entering and leaving on the same day pauses nothing.
+ */
+export function pausedCalendarDays(
+  issue: { status: IssueStatus; statusSince?: string | null; pausedDays?: number },
+  today: string,
+): number {
+  const banked = issue.pausedDays ?? 0
+  const current =
+    BLOCKED_STATUSES.includes(issue.status) && issue.statusSince
+      ? Math.max(0, daysBetween(issue.statusSince, today) - 1)
+      : 0
+  return banked + current
 }
 
 /**

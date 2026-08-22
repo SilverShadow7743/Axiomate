@@ -261,6 +261,10 @@ model Issue {
   /// Completion date. Derived from the status change that closed the issue, and rewritten
   /// only when the status actually changes.
   actualEndDate    DateTime?
+  /// When the current status was entered — anchors the client-waiting pause clock.
+  statusSince      DateTime?
+  /// Calendar days banked in client-waiting statuses; health shifts the due comparison.
+  pausedDays       Int       @default(0)
   /// Days since raised / since last activity, as recorded by the transform.
   age              Int @default(0)
   daysSinceActivity Int @default(0)

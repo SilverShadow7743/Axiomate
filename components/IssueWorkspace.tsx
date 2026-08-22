@@ -632,6 +632,11 @@ export default function IssueWorkspace({
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
 
   const [treeWidth, setTreeWidth] = useState(760)
+  // Clamped to the viewport on mount: 760px of tree on a 1000px window left the Gantt a
+  // sliver, and nothing else ever corrected the initial guess. The drag already clamps.
+  useEffect(() => {
+    setTreeWidth((w) => Math.min(w, Math.max(320, Math.floor(window.innerWidth * 0.55))))
+  }, [])
 
   /* ---------------- adaptive detail pane ---------------- */
   const [panelPref, setPanelPref] = useState<PanelPref>('auto')

@@ -2,7 +2,7 @@ import type { FilterState, ScheduleRow } from './types'
 import { isGroupRow } from './types'
 import { disciplineLabel, kindLabel, resolveLabels } from './config'
 import type { IssueRecord, WorkspaceState } from './workspace'
-import { computeDurations, computeHealth, isTerminal, rollUp, STATUS_PROGRESS } from './schedule'
+import { computeDurations, computeHealth, isTerminal, pausedCalendarDays, rollUp, STATUS_PROGRESS } from './schedule'
 import { maxIso, minIso } from './dates'
 
 /**
@@ -177,7 +177,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
       row.progressOrigin = 'status-derived'
     }
 
-    row.scheduleHealth = computeHealth(row, today)
+    row.scheduleHealth = computeHealth(row, today, { pausedDays: pausedCalendarDays(issue, today) })
     row.projectedCompletionDate = row.plannedEndDate
     row.issue = {
       id: issue.id,

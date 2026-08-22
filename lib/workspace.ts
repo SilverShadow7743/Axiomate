@@ -153,8 +153,8 @@ import {
   type SizeBand,
 } from './estimation'
 import { blankEngagement, type EngagementDetail } from './engagement'
-import { addWorkingDays } from './dates'
-import { isTerminal, STATUS_PROGRESS } from './schedule'
+import { addWorkingDays, daysBetween } from './dates'
+import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,
   KIND_LABEL_KEY,
@@ -242,6 +242,10 @@ export interface IssueRecord {
   raised: string
   lastActivity: string
   actualEnd: string | null
+  /** When the current status was entered — anchors the client-waiting pause clock. Null on imported rows. */
+  statusSince: string | null
+  /** Calendar days banked in client-waiting statuses. Health shifts the due comparison by these; the committed date never moves. */
+  pausedDays: number
   age: number
   daysSinceActivity: number
   nextAction: string
@@ -595,6 +599,8 @@ export function initWorkspace(
       percentOverride: null,
       scheduleMode: 'AUTO',
       assignments: {},
+      statusSince: null,
+      pausedDays: 0,
       deletedAt: null,
     }
   }
@@ -1600,6 +1606,8 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           percentOverride: null,
           scheduleMode: a.draft.plannedEnd ? 'MANUAL' : 'AUTO',
           assignments: {},
+          statusSince: a.now.slice(0, 10),
+          pausedDays: 0,
           deletedAt: null,
         }
         /*
@@ -1807,6 +1815,8 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         raised: a.now.slice(0, 10),
         lastActivity: a.now.slice(0, 10),
         actualEnd: null,
+        statusSince: a.now.slice(0, 10),
+        pausedDays: 0,
         age: 0,
         daysSinceActivity: 0,
         nextAction: '',
@@ -2047,6 +2057,19 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const terminal = ['Closed - confirmed', 'Closed - no defect', 'Superseded']
       const statusChanged = a.patch.status != null && a.patch.status !== i.status
       if (statusChanged) {
+        /*
+         * The clock stops while the client holds the ball. Leaving a client-waiting status
+         * banks the calendar days spent in it (inclusive span, minus one — in and out the
+         * same day banks nothing); health computations shift the due comparison by the bank.
+         * The committed date itself never moves. Entry uses statusSince when it exists and
+         * falls back to lastActivity for imported rows that predate the field.
+         */
+        if (BLOCKED_STATUSES.includes(i.status)) {
+          const entered = i.statusSince ?? i.lastActivity
+          const banked = Math.max(0, daysBetween(entered, a.now.slice(0, 10)) - 1)
+          if (banked > 0) next.pausedDays = (i.pausedDays ?? 0) + banked
+        }
+        next.statusSince = a.now.slice(0, 10)
         const derivedEnd = terminal.includes(a.patch.status!) ? a.now.slice(0, 10) : null
         if (derivedEnd !== i.actualEnd) {
           next.actualEnd = derivedEnd
@@ -3225,6 +3248,29 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       if (next.date !== entry.date || next.person !== entry.person) {
         const frozenTo = frozenProblem(state, next.person, next.date)
         if (frozenTo) return { state, error: frozenTo }
+        /*
+         * The window, against the DESTINATION. `addTime` refuses a closed issue and a date
+         * before the work existed — and without this, the same entry could be added on a
+         * legal date and edited onto an illegal one: a two-step around the refusal, which
+         * TW1 recorded as making the control decorative.
+         */
+        const issueFor = state.issues[entry.issueId]
+        if (issueFor) {
+          const windowVerdict = timeEntryAllowed(
+            {
+              id: issueFor.id,
+              status: issueFor.status,
+              owner: issueFor.owner,
+              raised: issueFor.raised,
+              plannedStart: issueFor.plannedStart,
+              plannedEnd: issueFor.plannedEnd,
+            },
+            { name: next.person, permissions: [LOG_FOR_OTHERS] },
+            next.date,
+            weekStateFor(state, next.person, next.date),
+          )
+          if (refusesTimeEntry(windowVerdict)) return { state, error: windowVerdict.message }
+        }
       }
 
       const changed = (Object.keys(a.patch) as (keyof TimeEntry)[]).filter((k) => entry[k] !== next[k])

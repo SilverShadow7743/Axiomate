@@ -1365,6 +1365,20 @@ select.cell-editor {
   white-space: nowrap;
 }
 
+/* ---------- small-viewport fallback ----------
+   Below ~1100px the timeline has no honest width to draw in: the tree takes the row and the
+   Gantt steps aside, stated by media query rather than left to crush itself. Board, Calendar,
+   My work and Portfolio are unaffected — they already fit. */
+@media (max-width: 1100px) {
+  .split .pane-gantt,
+  .split .splitter {
+    display: none;
+  }
+  .split .pane-tree {
+    width: 100% !important;
+  }
+}
+
 /* ---------- merged detail tabs ----------
    Schedule and Links carry sections where four tabs used to cross-reference each other. */
 .tab-sect {

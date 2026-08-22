@@ -87,7 +87,7 @@ import { classifyForm } from '../lib/intake'
 import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
 import { isOutboundRefusal, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { ISSUE_STATUSES } from '../lib/types'
-import { computeHealth, isTerminal } from '../lib/schedule'
+import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
@@ -367,23 +367,55 @@ scenario(
 scenario(
   'C',
   'Client sends an ambiguous request',
-  'The system marks it as needing clarification, asks the client, and does not start an SLA clock on work nobody has defined.',
+  'The system marks it as needing clarification, and the SLA clock stops while the client holds the ball — without the committed date ever moving.',
   () => {
     const dated = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-03', end: '2026-08-10', now: NOW } as Action)
     const dueBefore = rowFor(dated, 'OAPIL-1').plannedEndDate
-    const s = ok(dated, {
-      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Needs clarification' }, now: NOW,
+
+    /* Into the client's hands on the 5th… */
+    const waiting = ok(dated, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Needs clarification' }, now: '2026-08-05T09:00:00.000Z',
     } as Action)
-    const row = rowFor(s, 'OAPIL-1')
-    // Measured, not asserted: does waiting on the client move the committed date?
-    const dueAfter = row.plannedEndDate
-    return {
-      verdict: 'PARTIAL',
-      actual: `The status exists and the row reports health "${row.scheduleHealth}" — blocked statuses are excluded from at-risk, so the issue stops being counted as slipping. The due date does not move: ${dueBefore} before, ${dueAfter} after. Waiting on a client consumes the same clock as working on it, and nothing asks the client anything.`,
-      stops: 'at the clock — waiting on a client still consumes the SLA',
-      severity: 'P1',
-      impact: 'Issues breach on client time. The report calls it our failure.',
+    const blockedWhileWaiting = rowFor(waiting, 'OAPIL-1').scheduleHealth === 'Blocked'
+
+    /* …and back on the 15th: ten calendar days banked, the stamp advanced. */
+    const back = ok(waiting, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'In Progress' }, now: '2026-08-15T09:00:00.000Z',
+    } as Action)
+    const issue = back.issues['OAPIL-1']
+    const banked = issue.pausedDays === 10 && issue.statusSince === '2026-08-15'
+
+    /* The committed date never moves; what moves is whose time the breach judgment counts. */
+    const committedHeld = dueBefore === '2026-08-10' && rowFor(back, 'OAPIL-1').plannedEndDate === '2026-08-10'
+
+    /* On the 18th the naked comparison calls this Overdue; the paused-shifted one does not. */
+    const probe = {
+      status: 'In Progress' as const,
+      plannedStartDate: '2026-08-03',
+      plannedEndDate: '2026-08-10',
+      percentComplete: 30,
+      actualEndDate: null,
     }
+    const naked = computeHealth(probe, '2026-08-18')
+    const shifted = computeHealth(probe, '2026-08-18', { pausedDays: pausedCalendarDays(issue, '2026-08-18') })
+    const clockStopped = naked === 'Overdue' && shifted !== 'Overdue'
+
+    const okAll = blockedWhileWaiting && banked && committedHeld && clockStopped
+    return okAll
+      ? {
+          verdict: 'PASS',
+          actual: `Waiting shows Blocked; leaving after ten days banks pausedDays=${issue.pausedDays} with statusSince=${issue.statusSince}; the committed date stays 2026-08-10; and on the 18th the health comparison shifted by the bank reads "${shifted}" where the naked one reads "${naked}". Nothing asks the client automatically — the reply is written from the record (phase 5), which is a person's act, not the clock's.`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        } as const
+      : {
+          verdict: 'FAIL',
+          actual: `blockedWhileWaiting=${blockedWhileWaiting} banked=${banked} (pausedDays=${issue.pausedDays}, statusSince=${issue.statusSince}) committedHeld=${committedHeld} clockStopped=${clockStopped} (naked=${naked}, shifted=${shifted})`,
+          stops: 'at the clock — the pause bank disagrees with the design',
+          severity: 'P1',
+          impact: 'Issues breach on client time. The report calls it our failure.',
+        } as const
   },
 )
 
@@ -2397,16 +2429,18 @@ scenario(
       { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
       A,
     )
-    const message = Object.values(run.state.notifications)[0]
+    /* The rule's own message — the reducer also mints an in-app assignment notification on
+       an owner change now, which is the feature working, not the thing under test here. */
+    const message = Object.values(run.state.notifications).find((n) => n.channel === 'email')
     const stuck = undelivered(run.state.notifications)
 
-    const good = Boolean(message) && message.delivery === 'pending' && stuck.length === 1
+    const good = Boolean(message) && message!.delivery === 'pending' && stuck.length === 1
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `The message is recorded with an outcome rather than attempted and lost: delivery is "${message?.delivery}" because "${message?.deliveryNote}" The count of undelivered messages is shown in the inbox and on the automation screen to everybody, rather than hidden behind a setting — a firm that configured email escalation and has never sent one should not discover it from a client asking why nobody called.`,
-      stops: 'at the transport — in-app is delivered because the inbox is the delivery; email and Teams have nowhere to go',
-      severity: 'P1',
-      impact: 'Non-delivery is visible and counted. It is still non-delivery: nothing leaves the building.',
+      actual: `The message is recorded with an outcome rather than attempted and lost: delivery is "${message?.delivery}" because "${message?.deliveryNote}" The scheduled pass drains this queue through the same Graph client as client mail and stamps what actually happened; the raise itself stays honest about not having sent anything yet. The undelivered count is shown to everybody rather than hidden behind a setting.`,
+      stops: 'at the live send — the drain runs in production through Graph, which this harness cannot drive; Teams still has nowhere to go',
+      severity: 'P2',
+      impact: 'Non-delivery is visible, counted, and — for email — drained by the next pass.',
     }
   },
 )
@@ -2465,7 +2499,9 @@ scenario(
       A,
     )
 
-    const raised = Object.values(run.state.notifications).length
+    const raised = Object.values(run.state.notifications).filter((n) => n.ruleId === 'AUTO_TEST').length
+    /* The reducer's own assignment notice rides along — minted by the arm, not the rule. */
+    const assignmentNoticed = Object.values(run.state.notifications).some((n) => n.ruleId === 'assignment' && n.to === 'Sam')
     const refused = run.automation.refusals.length
     const stateIsWhole = run.state.issues['OAPIL-1'].owner === 'Sam'
 
@@ -2490,7 +2526,7 @@ scenario(
       A,
     )
 
-    const good = raised === 1 && refused === 1 && stateIsWhole && missed.automation.misses.length === 1
+    const good = raised === 1 && assignmentNoticed && refused === 1 && stateIsWhole && missed.automation.misses.length === 1
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `The working step ran and the impossible one did not: ${raised} notification raised, ${refused} step refused ("${run.automation.refusals[0]?.error}"), and the original change stands. A rule addressed to a role nobody holds reports it — "${missed.automation.misses[0]?.why}" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.`,
