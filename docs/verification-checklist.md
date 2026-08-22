@@ -554,6 +554,25 @@ setting as section 21 step 3 — no live record holds a stored file yet. Step 5'
 (a signed-in reader without the key) waits on a client-role account; the serialized-payload
 proof covers it meanwhile.
 
+## 24 · Time grace — the late entry explains itself
+
+1. **Set the allowance.** Configuration → Time recording → set the backdating allowance
+   (calendar days, 0–60; refused outside that range in words). The shipped default is 7.
+2. **Record inside it.** On a record's Time tab, an entry dated within the allowance records
+   with no reason asked — the ordinary act stays ordinary.
+3. **Record past it.** Date the entry beyond the allowance: the form shows the lateness and
+   a "Why so late" box, and Record stays disabled until it is filled — the arm refuses the
+   same entry sent bare, naming both numbers ("Recorded N days after… the allowance is M").
+   With a reason, it records; the entry wears "late — <reason>" in the table and the audit
+   row carries "N days late".
+4. **Correct a stale entry.** Changing the HOURS of an entry past the allowance asks for a
+   reason the same way; relabelling its note or billing asks nothing.
+5. **The approver reads the reasons.** Submit the week; the decider's strip lists the week's
+   late entries with their reasons above Approve — that reading is where the rule's "second
+   person" requirement is discharged.
+6. **Watch the pill.** Every step above must reach "Up to date" — the wire shape and the
+   reducer widened together this time (the section-23 lesson).
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.

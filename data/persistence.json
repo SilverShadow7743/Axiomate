@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-22T17:04:17.155Z",
+  "at": "2026-08-22T17:14:23.559Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 50,
   "failed": 0,
