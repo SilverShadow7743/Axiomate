@@ -492,8 +492,18 @@ On 18 August 2026 three faults were found by opening screens, and **none of them
 | My work and Portfolio summaries cut off mid-word | The text was in the DOM; nothing failed |
 | Capabilities and Goals descriptions cut off mid-word | Same cause, a second single-line class |
 
-Sections **1, 11, 12, 13, 14a, 15, 16, 17, 18 and 19 (extract half)** have been driven end to end against
-production. Section 18 on 19 Aug 2026: the OAPIL request form was created on screen, rendered
+Sections **1, 11, 12, 13, 14a, 15, 16, 17, 18, 19 (extract half) and 20 (steps 1–7)** have been
+driven end to end against production. Section 20 on 22 Aug 2026: Client mail observed
+UNREACHABLE with `lostInMerge` naming `mail.send`, granted to Platform Administrator on the
+Permissions screen, the no-recipient refusal observed on an internal record, and one real
+message sent from OAPIL-147 — From `OAPILCatalyst@`, To the operator's claimed address,
+subject `RE: Mail round-trip test [OAPIL-147]` — with the pinned Client Communication note
+appearing in Notes without a reload, attributed to the person. The access policy was proven
+both ways before the send (`Test-ApplicationAccessPolicy`: Granted for `OAPILCatalyst@`,
+**Denied** for another mailbox), after the tenant refused to scope the policy to the shared
+mailbox directly and a mail-enabled security group `axiomate-mail-scope@` containing only the
+intake mailbox was created to carry it. Step 8 (the emailed reply threading back through
+intake) was not driven — the test record was archived first at the operator's direction. Section 18 on 19 Aug 2026: the OAPIL request form was created on screen, rendered
 anonymously with zero workspace strings in the HTML, refused a wrong token and a switched-off
 form with the identical sentence and status, and a genuine submission filed OAPIL-146 under
 OAPIL Engagement — severity High from the stated urgency, the claimed sender on raisedBy, and
