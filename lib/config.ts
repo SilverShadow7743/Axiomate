@@ -1012,6 +1012,20 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     if (workTypes[id]) continue
     workTypes[id] = { id, label: clean, description: '', fromSource: true, deletedAt: null }
   }
+  /*
+   * The two shipped inventions — every consultancy recognises a risk and a decision, the
+   * same universality argument as the shipped roles. Skipped when the source log already
+   * discovered the label, so no workspace ever carries two WT_RISK entries. `lib/raid.ts`
+   * keys their semantics on these stable ids, never on the renameable labels.
+   */
+  for (const [id, label, description] of [
+    ['WT_RISK', 'Risk', 'Something that may go wrong. Carries a 1–5 likelihood and impact; exposure is computed, never stored.'],
+    ['WT_DECISION', 'Decision', 'Something the engagement had to choose. Carries its recorded outcome.'],
+  ] as const) {
+    if (!workTypes[id]) {
+      workTypes[id] = { id, label, description, fromSource: false, deletedAt: null }
+    }
+  }
 
   const disciplines: Record<string, Discipline> = {}
   for (const s of SEED_DISCIPLINES) disciplines[s.id] = { ...s, seeded: true, deletedAt: null }
