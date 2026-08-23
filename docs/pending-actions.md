@@ -15,7 +15,9 @@ Nothing below can move without a decision or an action that is yours.
 
 | # | Action | Why it needs you |
 |---|---|---|
-| A1 | **`gh auth login`** — run it as `! gh auth login` in the session | GitHub CLI 2.97.0 is installed and unauthenticated. Signing in is not something I can do on your behalf. Then the repo is one command: `gh repo create axiomate-tms --private --source=. --push` |
+| ~~A1~~ | ~~**`gh auth login`**~~ | **Done, 23 Aug.** Signed in as SilverShadow7743; the repo lives at github.com/SilverShadow7743/Axiomate and every deploy since is pushed |
+| A7 | **Invite the guest** *(added 23 Aug, deferred by you the same day)* | Checklist §32: Entra admin center → Users → Invite external user → `nishant.ax@gmail.com`, accept from the gmail inbox, then sign in from a separate browser profile. The app side is DONE and waiting: PERSON_85 sits in the directory (Client User, that exact email, scoped to OAPIL), the scoped boundary is deployed, and GA1 proves it. This one action is also where the `#EXT#` email-claim question gets its real answer |
+| A8 | **The Tarun half of checklist §21** | The proofing browser test's second-account half, blocked with A6 (the drive id) for the upload step |
 | ~~A2~~ | ~~**Tarun's permission role**~~ | **Done, 18 Aug.** This entry was stale well before it was closed: the August identity fix created a NEW record (`PERSON_63`) rather than correcting `PERSON_61`, so he had held `ROLE_PROJECT_MANAGER` and been able to sign in for some time, while a stub carrying his grade sat beside it as a second "Tarun" in every dropdown. Consolidated onto `PERSON_63`, `PERSON_61` removed, its orphaned working pattern `ver-19` withdrawn, and the role raised to **Engagement Leader** — see G7 for why that was more than Project Manager |
 | A3 | **Confirm or overrule two design reversals** | Both are committed in `2026-08-17-work-management-design.md` and both go against what you asked for. See section E |
 | A4 | **Client filter default** | Requested and not yet built — see D1. It needs one answer: what "project stakeholder" resolves to. Allocation? Engagement membership? Named on the SOW? |
