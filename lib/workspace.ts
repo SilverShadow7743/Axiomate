@@ -139,6 +139,7 @@ import {
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
+import { mentionsIn } from './mentions'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
@@ -3013,21 +3014,97 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         updatedAt: null,
         deletedAt: null,
       }
+      /*
+       * Naming a colleague tells them. One mint per DISTINCT person, never the author
+       * (excluded by directory id — a name comparison would break on a rename), each
+       * person's own preference consulted exactly as the other mints do, in sorted-by-id
+       * order so the server's replay mints the same ids the optimistic copy did.
+       */
+      let seqAfter = seq
+      let notifications = state.notifications
+      let audit = log(actor, state, {
+        rowId: a.issueId,
+        field: 'note',
+        from: null,
+        to: note.noteType,
+        at: a.now,
+        by,
+        reason: body.length > 120 ? `${body.slice(0, 117)}…` : body,
+      })
+      {
+        const selfId = directoryPersonFor(state.model, actor)?.id ?? null
+        const named = mentionsIn(body, Object.values(state.model.people))
+          .filter((mn) => mn.id !== selfId)
+          .sort((x, y) => x.id.localeCompare(y.id))
+        for (const mn of named) {
+          const mode = modeFor(state.model.notificationPrefs, mn.id, 'mention')
+          if (mode === 'mute') {
+            audit = log(
+              actor,
+              { ...state, audit },
+              {
+                rowId: a.issueId,
+                field: 'notification',
+                from: '',
+                to: `in-app → ${mn.name} (muted by their preference)`,
+                at: a.now,
+                by,
+                reason: 'mention',
+              },
+            )
+            continue
+          }
+          seqAfter += 1
+          const nid = `notif-${seqAfter}`
+          notifications = {
+            ...notifications,
+            [nid]: {
+              id: nid,
+              to: mn.name,
+              toId: mn.id,
+              channel: 'in-app',
+              subject: `You were mentioned on ${a.issueId}`,
+              body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+              aboutId: a.issueId,
+              ruleId: 'mention',
+              createdAt: a.now,
+              delivery: 'delivered',
+              deliveryNote: '',
+              readAt: null,
+            },
+          }
+          if (mode === 'in-app+email') {
+            seqAfter += 1
+            const eid = `notif-${seqAfter}`
+            const { delivery, deliveryNote } = deliveryFor('email')
+            notifications = {
+              ...notifications,
+              [eid]: {
+                id: eid,
+                to: mn.name,
+                toId: mn.id,
+                channel: 'email',
+                subject: `You were mentioned on ${a.issueId}`,
+                body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                aboutId: a.issueId,
+                ruleId: 'mention',
+                createdAt: a.now,
+                delivery,
+                deliveryNote,
+                readAt: null,
+              },
+            }
+          }
+        }
+      }
       return {
         state: {
           ...state,
           notes: { ...state.notes, [id]: note },
           issues: { ...state.issues, [a.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } },
-          seq,
-          audit: log(actor, state, {
-            rowId: a.issueId,
-            field: 'note',
-            from: null,
-            to: note.noteType,
-            at: a.now,
-            by,
-            reason: body.length > 120 ? `${body.slice(0, 117)}…` : body,
-          }),
+          seq: seqAfter,
+          notifications,
+          audit,
         },
         // Deliberately no `createdId`. That field means "a row appeared, select it", and the
         // workspace acts on it — so returning a note id selected the note as though it were a
@@ -3072,13 +3149,15 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
 
       const issue = state.issues[note.issueId]
       return {
-        state: {
-          ...state,
-          notes: { ...state.notes, [a.id]: next },
-          issues: issue
-            ? { ...state.issues, [note.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } }
-            : state.issues,
-          audit: log(actor, state, {
+        state: (() => {
+          /*
+           * Only the NEWLY named are told: an edit that keeps a name does not re-ping it.
+           * Diffed by directory id, not by offset — moving a name within the body is not a
+           * new mention. Same per-person preference walk as addNote's mint.
+           */
+          let seqAfter = state.seq
+          let notifications = state.notifications
+          let audit = log(actor, state, {
             rowId: note.issueId,
             field: 'note',
             from: String(note[changed[0]] ?? ''),
@@ -3086,8 +3165,86 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             at: a.now,
             by,
             reason: `Note edited (${changed.join(', ')}).`,
-          }),
-        },
+          })
+          if (changed.includes('body')) {
+            const selfId = directoryPersonFor(state.model, actor)?.id ?? null
+            const people = Object.values(state.model.people)
+            const before = new Set(mentionsIn(note.body, people).map((mn) => mn.id))
+            const added = mentionsIn(body, people)
+              .filter((mn) => !before.has(mn.id) && mn.id !== selfId)
+              .sort((x, y) => x.id.localeCompare(y.id))
+            for (const mn of added) {
+              const mode = modeFor(state.model.notificationPrefs, mn.id, 'mention')
+              if (mode === 'mute') {
+                audit = log(
+                  actor,
+                  { ...state, audit },
+                  {
+                    rowId: note.issueId,
+                    field: 'notification',
+                    from: '',
+                    to: `in-app → ${mn.name} (muted by their preference)`,
+                    at: a.now,
+                    by,
+                    reason: 'mention',
+                  },
+                )
+                continue
+              }
+              seqAfter += 1
+              const nid = `notif-${seqAfter}`
+              notifications = {
+                ...notifications,
+                [nid]: {
+                  id: nid,
+                  to: mn.name,
+                  toId: mn.id,
+                  channel: 'in-app',
+                  subject: `You were mentioned on ${note.issueId}`,
+                  body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                  aboutId: note.issueId,
+                  ruleId: 'mention',
+                  createdAt: a.now,
+                  delivery: 'delivered',
+                  deliveryNote: '',
+                  readAt: null,
+                },
+              }
+              if (mode === 'in-app+email') {
+                seqAfter += 1
+                const eid = `notif-${seqAfter}`
+                const { delivery, deliveryNote } = deliveryFor('email')
+                notifications = {
+                  ...notifications,
+                  [eid]: {
+                    id: eid,
+                    to: mn.name,
+                    toId: mn.id,
+                    channel: 'email',
+                    subject: `You were mentioned on ${note.issueId}`,
+                    body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                    aboutId: note.issueId,
+                    ruleId: 'mention',
+                    createdAt: a.now,
+                    delivery,
+                    deliveryNote,
+                    readAt: null,
+                  },
+                }
+              }
+            }
+          }
+          return {
+            ...state,
+            notes: { ...state.notes, [a.id]: next },
+            issues: issue
+              ? { ...state.issues, [note.issueId]: { ...issue, lastActivity: a.now.slice(0, 10) } }
+              : state.issues,
+            seq: seqAfter,
+            notifications,
+            audit,
+          }
+        })(),
         message: 'Note updated.',
       }
     }

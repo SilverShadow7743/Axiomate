@@ -922,6 +922,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "MN1",
+      "title": "Naming a colleague tells them — once, never the author, and only the newly named",
+      "expected": "One parser feeds the highlight and the mint; longest name first, word-boundary guarded, unknown tokens left as text; the edit pings only the addition; the mute preference answers in the audit.",
+      "verdict": "PASS",
+      "actual": "The parser takes the longest matching directory name at each @, holds the word boundary (so @Sample is not Sam), and leaves an unknown token as text. A note naming Priya twice pings her once with her directory id on the record; Priya naming herself pings nobody; an edit that keeps her name and adds Sam’s pings only Sam. Her mute preference turns the ping into the audit line that answers why, and a note with no @ mints nothing — the default path untouched.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

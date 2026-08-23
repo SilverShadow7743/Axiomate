@@ -32,6 +32,7 @@ import { runRecurrences,
   type WorkspaceState,
 } from '../lib/workspace'
 import { inboxFor, undelivered } from '../lib/notifications'
+import { mentionsIn } from '../lib/mentions'
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
@@ -5325,6 +5326,84 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The engagement\u2019s own word answers \u201cset here\u201d, the client\u2019s answers \u201corganisation default\u201d, the module inherits the engagement\u2019s and says from whom, and an untouched key answers the shipped default \u2014 each source equal to its resolver, so the twins cannot fork. A change at the organisation reaches the client but is shielded from the engagement by its own pin and from the module by the same pin, named; a change at the client reaches only the client.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `sourcesRight=${sourcesRight} booleansRight=${booleansRight} radiusRight=${radiusRight}`, stops: 'the provenance disagrees with the resolution', severity: 'P2', impact: 'a screen naming the wrong source for a value, or previewing the wrong reach' } as const
+  },
+)
+
+/* ================================================================== *
+ * Mentions (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'MN1',
+  'Naming a colleague tells them \u2014 once, never the author, and only the newly named',
+  'One parser feeds the highlight and the mint; longest name first, word-boundary guarded, unknown tokens left as text; the edit pings only the addition; the mute preference answers in the audit.',
+  () => {
+    /* ---- the parser, pure ---- */
+    const people = [
+      { id: 'p1', name: 'Sam' },
+      { id: 'p2', name: 'Sam Carter' },
+      { id: 'p3', name: 'Nishant Sekhar' },
+    ]
+    const parsed = mentionsIn('@Sam Carter and @sam, plus @Nishant Sekhar. @Nobody too', people)
+    const boundary = mentionsIn('@Sample text', people)
+    const parserRight =
+      parsed.length === 3 &&
+      parsed[0].id === 'p2' && parsed[1].id === 'p1' && parsed[2].id === 'p3' &&
+      boundary.length === 0
+
+    /* ---- the mint ---- */
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const mentionsOf = (st: WorkspaceState) =>
+      Object.values(st.notifications).filter((n) => n.ruleId === 'mention')
+
+    const once = ok(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya please look at this \u2014 and again @Priya.',
+      noteType: 'Investigation', pinned: false, now: NOW,
+    } as Action)
+    const mintedOnce = mentionsOf(once)
+    const distinctRight = mintedOnce.length === 1 && mintedOnce[0].toId === priyaId &&
+      /mentioned on OAPIL-1/.test(mintedOnce[0].subject)
+
+    const priya: Actor = { id: 'mn-priya', name: 'Priya' }
+    const selfNote = apply(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya \u2014 note to self.',
+      noteType: 'Investigation', pinned: false, now: NOW,
+    } as Action, priya).state
+    const authorExcluded = mentionsOf(selfNote).length === 0
+
+    /* The edit pings only the newly named. */
+    let ed = ok(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: 'plain start', noteType: 'Investigation', pinned: false, now: NOW,
+    } as Action)
+    const noteId = Object.values(ed.notes).find((n) => n.body === 'plain start')!.id
+    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: '@Priya now involved' }, now: NOW } as Action)
+    const afterFirst = mentionsOf(ed).length
+    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: '@Priya now involved, and @Sam too' }, now: NOW } as Action)
+    const afterSecond = mentionsOf(ed)
+    const editRight = afterFirst === 1 && afterSecond.length === 2 &&
+      afterSecond.filter((n) => n.toId === priyaId).length === 1
+
+    /* The preference answers in the audit. */
+    const muted = ok(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'mention', mode: 'mute', now: NOW,
+    } as Action)
+    const quiet = ok(muted, {
+      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya \u2014 you will not be pinged.',
+      noteType: 'Investigation', pinned: false, now: NOW,
+    } as Action)
+    const muteRight = mentionsOf(quiet).length === 0 &&
+      quiet.audit.some((e) => e.field === 'notification' && e.reason === 'mention' && /muted by their preference/.test(e.to ?? ''))
+
+    /* The default path: no @, nothing minted. */
+    const plain = ok(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: 'no names here', noteType: 'Investigation', pinned: false, now: NOW,
+    } as Action)
+    const defaultRight = mentionsOf(plain).length === 0
+
+    const good = parserRight && distinctRight && authorExcluded && editRight && muteRight && defaultRight
+    return good
+      ? { verdict: 'PASS', actual: 'The parser takes the longest matching directory name at each @, holds the word boundary (so @Sample is not Sam), and leaves an unknown token as text. A note naming Priya twice pings her once with her directory id on the record; Priya naming herself pings nobody; an edit that keeps her name and adds Sam\u2019s pings only Sam. Her mute preference turns the ping into the audit line that answers why, and a note with no @ mints nothing \u2014 the default path untouched.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `parserRight=${parserRight} distinctRight=${distinctRight} authorExcluded=${authorExcluded} editRight=${editRight} muteRight=${muteRight} defaultRight=${defaultRight}`, stops: 'the mention disagrees with the design', severity: 'P2', impact: 'colleagues pinged wrongly, repeatedly, or not at all' } as const
   },
 )
 

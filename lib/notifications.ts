@@ -74,7 +74,7 @@ export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNot
  * kind; everything a rule raises is `automation` — per-rule granularity was considered and
  * rejected while nobody has asked for it.
  */
-export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation'] as const
+export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation', 'mention'] as const
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
 /**
