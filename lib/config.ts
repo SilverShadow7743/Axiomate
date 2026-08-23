@@ -35,6 +35,7 @@ import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
+import type { NotificationPrefs } from './notifications'
 import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
@@ -691,6 +692,12 @@ export interface OperatingModel {
    * allocator deciding under deadline. See `lib/capacity.ts`.
    */
   allocationPolicy: AllocationPolicy
+  /**
+   * Each person's own say over what they are told and how, keyed by directory id. Absent
+   * means in-app for every kind — the shipped behaviour. Self-served through
+   * `setNotificationPref`, whose arm is the gate. See `lib/notifications.ts`.
+   */
+  notificationPrefs: NotificationPrefs
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -1043,6 +1050,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     watch: defaultWatchPolicy(),
     timePolicy: { ...DEFAULT_TIME_POLICY },
     allocationPolicy: { ...DEFAULT_ALLOCATION_POLICY },
+    notificationPrefs: {},
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1313,6 +1321,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // reads the allowance, in production, on the workspace that has data.
     timePolicy: { ...seed.timePolicy, ...(stored.timePolicy ?? {}) },
     allocationPolicy: { ...seed.allocationPolicy, ...(stored.allocationPolicy ?? {}) },
+    notificationPrefs: { ...seed.notificationPrefs, ...(stored.notificationPrefs ?? {}) },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

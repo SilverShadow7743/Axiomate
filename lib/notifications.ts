@@ -65,6 +65,59 @@ export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNot
   }
 }
 
+/* ================================================================== *
+ * Preferences — the person's own say over each kind
+ * ================================================================== */
+
+/**
+ * The classes a person can have an opinion about. The two built-in mints carry their own
+ * kind; everything a rule raises is `automation` — per-rule granularity was considered and
+ * rejected while nobody has asked for it.
+ */
+export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation'] as const
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
+
+/**
+ * What the person chose. `in-app` is the shipped behaviour and the meaning of silence;
+ * `in-app+email` adds a second record for the scheduled pass's drain to send and stamp;
+ * `mute` mints nothing — though the audit line still writes, because "why didn't I get
+ * this" must have a stored answer.
+ */
+export const NOTIFICATION_MODES = ['mute', 'in-app', 'in-app+email'] as const
+export type NotificationMode = (typeof NOTIFICATION_MODES)[number]
+
+/** Keyed by directory person id. Absent anything means `in-app` — today's behaviour. */
+export type NotificationPrefs = Record<string, Partial<Record<NotificationKind, NotificationMode>>>
+
+/**
+ * The mode in force for one person and one kind.
+ *
+ * Everything absent — a null id (role labels, unknowns), a person with no prefs, a kind
+ * never chosen, even a stored mode outside the union — answers `'in-app'`, so a future
+ * kind or a hand-edited document degrades to the shipped behaviour rather than crashing
+ * or, worse, silently muting.
+ */
+export function modeFor(
+  prefs: NotificationPrefs,
+  personId: string | null | undefined,
+  kind: NotificationKind,
+): NotificationMode {
+  if (!personId) return 'in-app'
+  const mode = prefs[personId]?.[kind]
+  return mode && (NOTIFICATION_MODES as readonly string[]).includes(mode) ? mode : 'in-app'
+}
+
+/** What a stored preference must be to be written: both halves inside their unions. */
+export function notificationPrefProblem(kind: string, mode: string): string | null {
+  if (!(NOTIFICATION_KINDS as readonly string[]).includes(kind)) {
+    return `Notification preferences cover ${NOTIFICATION_KINDS.join(', ')} — received ${JSON.stringify(kind)}.`
+  }
+  if (!(NOTIFICATION_MODES as readonly string[]).includes(mode)) {
+    return `A notification preference is one of ${NOTIFICATION_MODES.join(', ')} — received ${JSON.stringify(mode)}.`
+  }
+  return null
+}
+
 export function inboxFor(
   all: Record<string, Notification>,
   person: string,
