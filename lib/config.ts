@@ -34,6 +34,7 @@ import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
+import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
 import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
@@ -683,6 +684,13 @@ export interface OperatingModel {
    * ships the default; this is where a firm changes it.
    */
   timePolicy: TimePolicy
+  /**
+   * Whether an over-capacity allocation is refused outright or accepted on a recorded
+   * decision. Shipped hard — 100% enforcement is the product's stated rule — and the firm
+   * that staffs through go-lives switches to advisory once, here, rather than every
+   * allocator deciding under deadline. See `lib/capacity.ts`.
+   */
+  allocationPolicy: AllocationPolicy
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -1034,6 +1042,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     resourceProfiles: {},
     watch: defaultWatchPolicy(),
     timePolicy: { ...DEFAULT_TIME_POLICY },
+    allocationPolicy: { ...DEFAULT_ALLOCATION_POLICY },
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1303,6 +1312,7 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // the spread above would leave it undefined — a crash the first time the addTime arm
     // reads the allowance, in production, on the workspace that has data.
     timePolicy: { ...seed.timePolicy, ...(stored.timePolicy ?? {}) },
+    allocationPolicy: { ...seed.allocationPolicy, ...(stored.allocationPolicy ?? {}) },
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

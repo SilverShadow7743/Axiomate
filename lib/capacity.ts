@@ -422,6 +422,32 @@ export interface AllocationProblem {
   field: 'percentage' | 'dates' | 'person'
 }
 
+/**
+ * How the workspace treats an over-capacity allocation — the policy over `capacityFor`'s
+ * judgement, never the judgement itself.
+ *
+ * `hard` refuses the commitment outright: nobody can be committed past their capacity, and
+ * `acceptOverallocation` stops being an override. `advisory` is the original behaviour —
+ * warn once, accept on an explicit second step, and record the acceptance as a deliberate
+ * decision. Shipped hard: 100% enforcement is the product's stated rule, and the firm that
+ * staffs through go-lives says so once, on the Configuration screen, rather than every
+ * allocator deciding under deadline.
+ */
+export interface AllocationPolicy {
+  cap: 'hard' | 'advisory'
+}
+
+export const DEFAULT_ALLOCATION_POLICY: AllocationPolicy = { cap: 'hard' }
+
+/** What a stored cap must be to be applied: one of the two modes, nothing else. */
+export function allocationPolicyProblem(patch: Partial<AllocationPolicy>): string | null {
+  if (patch.cap === undefined) return null
+  if (patch.cap !== 'hard' && patch.cap !== 'advisory') {
+    return `The allocation cap is either “hard” or “advisory” — received ${JSON.stringify(patch.cap)}.`
+  }
+  return null
+}
+
 export function checkAllocation(a: Pick<Allocation, 'person' | 'startDate' | 'endDate' | 'percentage'>): AllocationProblem | null {
   if (!a.person.trim()) return { field: 'person', message: 'An allocation is of somebody.' }
   if (!a.startDate || !a.endDate) return { field: 'dates', message: 'An allocation needs a start and an end.' }
