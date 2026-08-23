@@ -624,6 +624,22 @@ suite; their browser half waits for a real submitted week.
    landed together, and the preference survives a reload because `setNotificationPref` is
    the one non-config action that writes the model document.
 
+## 27 · The week grid and the approvals queue
+
+1. **The button.** The toolbar's Timesheets button opens the panel; its badge counts
+   submitted weeks awaiting a decision, and shows only to holders of "Approve time".
+2. **The gathering.** My week shows one row per record with hours that week, day columns,
+   totals both ways; ‹ › moves weeks. A row click lands on that record's Time tab — the
+   grid gathers, it never edits.
+3. **The attestation.** Submit week from the panel, gated by the same rule as the Time tab;
+   the status line says submitted/approved/returned in the same words.
+4. **The queue.** For an approver: every submitted week — person, label, totals, and the
+   week's late entries with their justifications, read before deciding. Approve and Return
+   (reason required) per row.
+5. **Approve all, minus your own.** The batch button counts only what `decideProblem`
+   allows — the approver's own submitted week is excluded with a note, because the batch is
+   atomic and one self-approval would abort every approval in it.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
