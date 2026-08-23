@@ -755,6 +755,16 @@ Two halves; the first needs an Entra admin, the second a separate browser profil
 5. **A deploy updates cleanly.** After the next release, a reload picks up the new build;
    the SW version bump clears the old cache on activate.
 
+**Driven 23 Aug 2026 (steps 1–4's drivable halves).** All four assets probe 200 — after the
+drive caught its packaging fault: standalone output carries no `public/`, so the first
+deploy served a 404 worker and icons; `--extra public=public` joined the release command
+and the runbook says why. Live: the worker active at root scope, the version cache holding
+EXACTLY the offline page — `/api/*` absent from it after real requests, which is the hard
+rule observed rather than assumed. The phone tier proven at a genuine 390px viewport (a
+same-origin iframe, after the OS refused the window resize): the tier active, the timeline
+gone, the tree at full width. Still waiting on a real phone in a hand: the install itself,
+the standalone launch, and Lighthouse — yours to run when convenient.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
