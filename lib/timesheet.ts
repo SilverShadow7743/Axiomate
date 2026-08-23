@@ -86,6 +86,48 @@ export function entriesInWeek(
   )
 }
 
+/**
+ * One person's week, gathered — the thing scenario U said nothing did.
+ *
+ * Aggregation only: `entriesInWeek` owns the filtering and the id-first join, and this
+ * must not re-filter locally or the join rule forks. The grid GATHERS; it never edits —
+ * a cell aggregates several entries, and corrections belong on the entry, where the grace
+ * gate collects its justifications.
+ */
+export interface WeekGridRow {
+  issueId: string
+  /** Monday..Sunday, rounded as `weekTotal` rounds. */
+  byDay: number[]
+  total: number
+}
+
+export function weekGrid(
+  entries: TimeEntry[],
+  person: string,
+  week: string,
+  personId?: string | null,
+): { rows: WeekGridRow[]; byDay: number[]; total: number } {
+  const mine = entriesInWeek(entries, person, week, personId)
+  const days = daysOfWeek(week)
+  const round = (n: number) => Math.round(n * 100) / 100
+  const byIssue = new Map<string, number[]>()
+  for (const e of mine) {
+    const slot = days.indexOf(e.date)
+    if (slot < 0) continue
+    const row = byIssue.get(e.issueId) ?? Array(7).fill(0)
+    row[slot] += e.hours
+    byIssue.set(e.issueId, row)
+  }
+  const rows: WeekGridRow[] = [...byIssue.entries()]
+    .map(([issueId, raw]) => {
+      const byDay = raw.map(round)
+      return { issueId, byDay, total: round(raw.reduce((t, h) => t + h, 0)) }
+    })
+    .sort((a, b) => a.issueId.localeCompare(b.issueId))
+  const byDay = days.map((_, i) => round(rows.reduce((t, r) => t + r.byDay[i], 0)))
+  return { rows, byDay, total: round(rows.reduce((t, r) => t + r.total, 0)) }
+}
+
 /** Hours in the week, and how many of them are chargeable. */
 export function weekTotal(
   entries: TimeEntry[],

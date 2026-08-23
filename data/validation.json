@@ -902,6 +902,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "WG1",
+      "title": "A week gathered in one place, and a queue the approver can clear",
+      "expected": "The grid aggregates without re-filtering — the id-join rule stays where it lives; approve-all decides every week but the approver’s own, which stays refused in the rule’s words.",
+      "verdict": "PASS",
+      "actual": "The grid gathers a week across issues without re-filtering: quarter hours sum per day and per issue, a withdrawn entry is excluded, another person’s hours never land, and the id-join matches an entry whose display name went stale. Three submitted weeks make a queue; the panel’s pre-filter — decideProblem per row — excludes the approver’s own week, the remaining two approve as an atomic fold, and the own week asked individually is refused in the rule’s words and stays Submitted.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

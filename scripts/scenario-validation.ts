@@ -143,7 +143,7 @@ import {
 } from '../lib/changeRequest'
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
-  weekStarting, weekLabel, weekTotal, isFrozen, submitProblem, decideProblem, statusAfter,
+  weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, submitProblem, decideProblem, statusAfter,
   type Timesheet, type Attester,
 } from '../lib/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
@@ -5169,6 +5169,88 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'With no preference set an assignment mints exactly one delivered in-app record \u2014 the guard, asserted first. in-app+email adds a second record queued pending for the scheduled pass\u2019s drain; mute mints nothing while the audit line answers \u201cwhy didn\u2019t I get this\u201d in so many words. Each intake triager\u2019s own preference is consulted inside the loop; a rule\u2019s notify is suppressed by its target\u2019s mute but a role label \u2014 nobody\u2019s preference \u2014 is untouched, and a rule already emailing plus an email preference stays one record. A client-role actor may set her own preferences and not Priya\u2019s, the admin may set anybody\u2019s, and a kind outside the vocabulary is refused naming all three.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `defaultUntouched=${defaultUntouched} emailAdded=${emailAdded} mutedHolds=${mutedHolds} intakeHolds=${intakeHolds} ruleSuppressed=${ruleSuppressed} roleUntouched=${roleUntouched} noDoubling=${noDoubling} gateHolds=${gateHolds} badRefused=${badRefused}`, stops: 'the preference overlay disagrees with the design', severity: 'P1', impact: 'notifications silently swallowed, or preferences ignored' } as const
+  },
+)
+
+/* ================================================================== *
+ * Week grid and bulk approvals (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'WG1',
+  'A week gathered in one place, and a queue the approver can clear',
+  'The grid aggregates without re-filtering \u2014 the id-join rule stays where it lives; approve-all decides every week but the approver\u2019s own, which stays refused in the rule\u2019s words.',
+  () => {
+    /* ---- the pure grid ---- */
+    const te = (over: Partial<TimeEntry> & Pick<TimeEntry, 'id' | 'issueId' | 'date' | 'hours'>): TimeEntry => ({
+      person: 'Priya', personId: 'P-1', activity: 'Investigation', billable: true, note: '',
+      createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null, deletedAt: null,
+      ...over,
+    })
+    const week = '2026-08-10'
+    const entries: TimeEntry[] = [
+      te({ id: 't1', issueId: 'OAPIL-1', date: '2026-08-10', hours: 2.25 }),
+      te({ id: 't2', issueId: 'OAPIL-1', date: '2026-08-10', hours: 1.5 }),
+      te({ id: 't3', issueId: 'OAPIL-1', date: '2026-08-13', hours: 4 }),
+      /* The rename case: the id matches, the display name is stale. */
+      te({ id: 't4', issueId: 'OAPIL-2', date: '2026-08-14', hours: 3, person: 'Priya (old name)' }),
+      /* Withdrawn hours are not part of what anybody attests to. */
+      te({ id: 't5', issueId: 'OAPIL-2', date: '2026-08-14', hours: 5, deletedAt: NOW }),
+      /* Another person's entry never lands in this grid. */
+      te({ id: 't6', issueId: 'OAPIL-1', date: '2026-08-11', hours: 8, person: 'Sam', personId: 'P-2' }),
+    ]
+    const grid = weekGrid(entries, 'Priya', week, 'P-1')
+    const rowA = grid.rows.find((r) => r.issueId === 'OAPIL-1')
+    const rowB = grid.rows.find((r) => r.issueId === 'OAPIL-2')
+    const gridRight =
+      grid.rows.length === 2 &&
+      rowA?.byDay[0] === 3.75 && rowA.byDay[3] === 4 && rowA.total === 7.75 &&
+      rowB?.byDay[4] === 3 && rowB.total === 3 &&
+      grid.byDay[0] === 3.75 && grid.byDay[4] === 3 && grid.total === 10.75
+
+    /* ---- the queue, through the reducer ---- */
+    const priya: Actor = { id: 'wg-priya', name: 'Priya' }
+    const sam: Actor = { id: 'wg-sam', name: 'Sam' }
+    let st = BASE
+    const add = (person: string, who: Actor) =>
+      (st = ok(st, {
+        t: 'addTime', issueId: 'OAPIL-1', person, date: '2026-08-12', hours: 4,
+        activity: 'Investigation', billable: true, note: '', now: NOW,
+      } as Action))
+    /* addTime as each person themselves \u2014 recordForOthers is not the point here. */
+    st = apply(st, { t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-12', hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, priya).state
+    st = apply(st, { t: 'addTime', issueId: 'OAPIL-1', person: 'Sam', date: '2026-08-12', hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, sam).state
+    st = apply(st, { t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-12', hours: 4, activity: 'Investigation', billable: true, note: '', now: NOW } as Action, A).state
+    const wk = weekStarting('2026-08-12')
+    st = apply(st, { t: 'submitTimesheet', person: 'Priya', weekStarting: wk, now: NOW } as Action, priya).state
+    st = apply(st, { t: 'submitTimesheet', person: 'Sam', weekStarting: wk, now: NOW } as Action, sam).state
+    st = apply(st, { t: 'submitTimesheet', person: A.name, weekStarting: wk, now: NOW } as Action, A).state
+    const sheets = Object.values(st.timesheets)
+    const submittedAll = sheets.length === 3 && sheets.every((t) => t.status === 'Submitted')
+
+    /* The pre-filter the panel performs: everything decidable, which excludes A's own. */
+    const attester = { name: A.name, maySubmit: true, mayApprove: true }
+    const decidable = sheets.filter((t) => !decideProblem(t, 'approved', undefined, attester))
+    const preFilterRight = decidable.length === 2 && !decidable.some((t) => t.person === A.name)
+
+    /* The batch, folded like dispatchMany \u2014 every step must hold. */
+    let batch = st
+    for (const t of decidable) {
+      batch = ok(batch, { t: 'decideTimesheet', id: t.id, decision: 'approved', now: NOW } as Action)
+    }
+    const own = Object.values(batch.timesheets).find((t) => t.person === A.name)!
+    const others = Object.values(batch.timesheets).filter((t) => t.person !== A.name)
+    const batchRight = others.every((t) => t.status === 'Approved') && own.status === 'Submitted'
+
+    /* And the own week, asked individually, refused in the rule's words. */
+    const selfTry = act(batch, { t: 'decideTimesheet', id: own.id, decision: 'approved', now: NOW } as Action)
+    const selfRefused = Boolean(selfTry.error && /submitted/i.test(selfTry.error))
+
+    void add
+    const good = gridRight && submittedAll && preFilterRight && batchRight && selfRefused
+    return good
+      ? { verdict: 'PASS', actual: 'The grid gathers a week across issues without re-filtering: quarter hours sum per day and per issue, a withdrawn entry is excluded, another person\u2019s hours never land, and the id-join matches an entry whose display name went stale. Three submitted weeks make a queue; the panel\u2019s pre-filter \u2014 decideProblem per row \u2014 excludes the approver\u2019s own week, the remaining two approve as an atomic fold, and the own week asked individually is refused in the rule\u2019s words and stays Submitted.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `gridRight=${gridRight} submittedAll=${submittedAll} preFilterRight=${preFilterRight} batchRight=${batchRight} selfRefused=${selfRefused}`, stops: 'the gathering disagrees with the design', severity: 'P1', impact: 'a week attested from a partial picture, or an approver deciding their own hours' } as const
   },
 )
 
