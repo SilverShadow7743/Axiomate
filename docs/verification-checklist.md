@@ -716,6 +716,28 @@ Critical", cleared back to "not yet judged — exposure is computed, never store
 reverted; the exposure line appeared and disappeared with the type, riding the stable id.
 All test data cleaned up; the pill reached Saved after every step.
 
+## 32 · Guest access — one client's marked content, and nothing else
+
+Two halves; the first needs an Entra admin, the second a separate browser profile.
+
+1. **The invite (operator).** Entra admin center → Users → Invite external user:
+   `nishant.ax@gmail.com`. Accept the invitation from that mailbox once.
+2. **The seat.** Configuration → Roles & people → add the person with that exact email, a
+   client role, and the Client column set to OAPIL. (Until the Client column is set, the
+   seat honestly "sees nothing" — the select says so.)
+3. **The sign-in.** From a separate browser profile, sign in as the guest. The workspace
+   shows ONLY OAPIL's marked records (OAPIL-146 and its marked note today) with their
+   ancestor chain — no SLG, no internal records, no rates/time/commercial anywhere in the
+   payload (view-source the boot state to check the claim, not the screen).
+4. **The two deny cases, read from the banner.** Before step 2's directory entry exists,
+   the guest's workspace is empty and the banner says "matches no directory entry"; with
+   the entry but no Client set, empty again and the banner says "not attached to a client
+   yet". Neither case ever widens to every client's content — that hole is closed
+   (GA1, deny-by-default).
+5. **The token check.** If the guest's sign-in works but the join fails with the email
+   recorded correctly, the id token likely carries only the `#EXT#` UPN — that is the one
+   case where the callback grows a normalization, built against this real token.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
