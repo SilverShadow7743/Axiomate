@@ -188,6 +188,7 @@ function PrefRows({
       show: can(state.model, actor, 'work.assign').allowed,
     },
     { kind: 'automation', label: 'When a watch rule fires for me', show: true },
+    { kind: 'mention', label: 'When somebody mentions me', show: true },
   ]
   const MODES: { mode: NotificationMode; label: string }[] = [
     { mode: 'in-app', label: 'tell me here' },

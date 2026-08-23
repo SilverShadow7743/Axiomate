@@ -1379,6 +1379,12 @@ select.cell-editor {
   }
 }
 
+/* ---------- mentions ---------- */
+.note-mention {
+  color: var(--accent, #c22f26);
+  font-weight: 600;
+}
+
 /* ---------- override provenance ---------- */
 .cfg-chip {
   font-size: 10.5px;

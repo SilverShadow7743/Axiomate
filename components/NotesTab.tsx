@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { canAddNote, canEditNote } from '@/lib/permissions'
 import { NOTE_TYPES, DEFAULT_NOTE_TYPE, notesFor, wasEdited, type IssueNote, type NoteType } from '@/lib/notes'
+import { mentionSegments } from '@/lib/mentions'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -252,8 +253,20 @@ export default function NotesTab({
                   </div>
                 ) : (
                   // `white-space: pre-wrap` in the stylesheet: notes are structured plain text,
-                  // and paragraph breaks someone typed are part of what they wrote.
-                  <p className="note-body">{n.body}</p>
+                  // and paragraph breaks someone typed are part of what they wrote. Mentions
+                  // render through the same parser the mint reads, so the highlight and the
+                  // ping cannot disagree.
+                  <p className="note-body">
+                    {mentionSegments(n.body, Object.values(state.model.people)).map((seg, i) =>
+                      seg.kind === 'mention' ? (
+                        <span key={i} className="note-mention" title="They were told">
+                          {seg.text}
+                        </span>
+                      ) : (
+                        <span key={i}>{seg.text}</span>
+                      ),
+                    )}
+                  </p>
                 )}
               </li>
             )
