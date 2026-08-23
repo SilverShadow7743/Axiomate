@@ -109,11 +109,13 @@ export default function RowMenu({
     <>
       {/* The background is `inert` while this is open, so a click out there reaches nothing.
           A scrim is what turns that into a dismissal instead of a dead click. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
       <div className="row-menu-scrim" onMouseDown={onClose} />
       <div
         className="menu row-menu"
         ref={ref}
         role="menu"
+        tabIndex={-1}
         aria-label={`Actions for ${row.displayId || row.name}`}
         style={{ top: at.top, left: at.left }}
         onKeyDown={onKeyDown}

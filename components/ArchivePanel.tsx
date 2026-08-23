@@ -92,11 +92,18 @@ export default function ArchivePanel({
   }, [items])
 
   const body = (
-    <div className="modal-scrim" onMouseDown={onClose}>
+    // Pointer-only dismissal; Escape via useOverlay is the keyboard path, and the target
+    // guard means clicks inside the dialog never bubble into a close.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal is Escape (useOverlay)
+    <div
+        className="modal-scrim"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose()
+        }}
+      >
       <div
         className="modal archive-modal"
         ref={ref}
-        onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="archive-title"

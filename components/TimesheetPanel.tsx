@@ -97,13 +97,20 @@ export default function TimesheetPanel({
     entriesInWeek(entries, t.person, t.weekStarting, t.personId).filter((e) => e.justification)
 
   const body = (
-    <div className="modal-scrim" onMouseDown={onClose}>
+    // Pointer-only dismissal; Escape via useOverlay is the keyboard path, and the target
+    // guard means clicks inside the dialog never bubble into a close.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal is Escape (useOverlay)
+    <div
+        className="modal-scrim"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose()
+        }}
+      >
       <div
         className="modal timesheet-modal"
         ref={ref}
         role="dialog"
         aria-label="Timesheets"
-        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
           <b>Timesheets</b>

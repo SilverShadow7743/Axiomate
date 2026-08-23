@@ -1998,6 +1998,7 @@ export default function IssueWorkspace({
           />
         </div>
 
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- resize is a pointer comfort affordance; every pane's content stays keyboard-reachable at any width */}
         <div
           className={`splitter${dragSplit ? ' dragging' : ''}`}
           onMouseDown={() => setDragSplit(true)}

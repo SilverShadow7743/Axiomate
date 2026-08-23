@@ -426,6 +426,8 @@ export default function TreeGrid({
             return (
               <div
                 key={c.key}
+                role="columnheader"
+                tabIndex={c.sortable ? 0 : -1}
                 className={`gh-cell${c.sortable ? ' sortable' : ''}${frozen ? ' sticky-col' : ''}`}
                 style={{
                   width: widthOf(c),
@@ -433,6 +435,12 @@ export default function TreeGrid({
                   justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start',
                 }}
                 onClick={() => toggleSort(c)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    toggleSort(c)
+                  }
+                }}
                 draggable
                 onDragStart={() => setDragKey(c.key)}
                 onDragOver={(e) => e.preventDefault()}
@@ -443,6 +451,7 @@ export default function TreeGrid({
                 {sort?.key === c.key && (
                   <span className="sort-ind">{sort.dir === 'asc' ? '▲' : '▼'}</span>
                 )}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- drag-resize is pointer-only; column widths are also managed from the Columns menu */}
                 <span
                   className="resize"
                   onMouseDown={(e) => {
@@ -466,12 +475,14 @@ export default function TreeGrid({
           <div
             style={{ width: totalWidth }}
             role="treegrid"
+            tabIndex={0}
             aria-label="Issue tree"
             aria-rowcount={rows.length}
             aria-colcount={columns.length}
             onKeyDown={onGridKeyDown}
           >
             {rows.map((r, rowIdx) => (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the treegrid container owns keyboard navigation (onGridKeyDown); the row click is its pointer twin
               <div
                 key={r.id}
                 data-row-id={r.id}
@@ -502,6 +513,7 @@ export default function TreeGrid({
                     <div
                       key={c.key}
                       role="gridcell"
+                      tabIndex={-1}
                       aria-colindex={i + 1}
                       className={`gc${frozen ? ' sticky-col' : ''}${spec || opensEditor ? ' editable' : ''}${isEditing ? ' editing' : ''}`}
                       style={{

@@ -190,6 +190,7 @@ export default function EvidencePanel({
 
   const panel = (
     <>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
       <div className="drawer-scrim" onMouseDown={onClose} />
       <aside
         className="evi"
@@ -726,9 +727,12 @@ function Lightbox({ item, onClose }: { item: EvidenceItem; onClose: () => void }
   }, [onClose])
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- backdrop click-away; keyboard path is the Close button and Escape
     <div
       className="lightbox"
-      onMouseDown={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={`Preview of ${item.name}`}
@@ -736,7 +740,7 @@ function Lightbox({ item, onClose }: { item: EvidenceItem; onClose: () => void }
       <button ref={closeRef} className="lightbox-close" onClick={onClose} aria-label="Close preview">
         ✕
       </button>
-      <img src={item.url ?? ''} alt={item.name} onMouseDown={(e) => e.stopPropagation()} />
+      <img src={item.url ?? ''} alt={item.name} />
       <div className="lightbox-cap">
         {item.name}
         {item.purpose ? ` · ${item.purpose}` : ''}

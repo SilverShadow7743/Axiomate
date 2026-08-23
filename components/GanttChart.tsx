@@ -242,6 +242,7 @@ export default function GanttChart({
 
             {/* row bands */}
             {rows.map((r, i) => (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer duplicate of row selection; the keyboard path is the grid's own navigation
               <div
                 key={r.id}
                 className={`tl-rowline kind-${r.kind}${selectedId === r.id ? ' selected' : ''}`}
@@ -536,6 +537,7 @@ function RowBars({
     out.push(
       // Informational, not operable: the elapsed span is recorded fact and cannot be
       // rescheduled, so it is exposed as an image with a description rather than a control.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- the click is a pointer duplicate of row selection; the keyboard path is the grid
       <div
         key="actual"
         role="img"

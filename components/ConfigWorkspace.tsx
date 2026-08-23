@@ -1874,9 +1874,10 @@ function Automation({
                     ))}
                   </select>
                 </label>
-                <label className="cfg-fld">
+                <div className="cfg-fld">
                   <span>&nbsp;</span>
                   <input
+                    aria-label="Condition value"
                     defaultValue={cond.value}
                     placeholder="value"
                     onBlur={(e) =>
@@ -1885,7 +1886,7 @@ function Automation({
                       })
                     }
                   />
-                </label>
+                </div>
               </Fragment>
             ))}
           </div>

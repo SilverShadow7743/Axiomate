@@ -389,6 +389,7 @@ export default function DetailPanel({
 
   return (
     <div className="detail" style={{ height }}>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- resize is a pointer comfort affordance; the panel's content stays keyboard-reachable at any height */}
       <div
         className={`detail-grip${resizing ? ' dragging' : ''}`}
         onMouseDown={() => setResizing(true)}

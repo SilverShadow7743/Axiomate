@@ -98,7 +98,9 @@ export default function StatusCellEditor({
       {/* The shell is `inert` while this is up, so a click outside would otherwise land on
           nothing at all. It abandons rather than commits: an unexplained status change is the
           one edit this workspace would rather lose than record. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
       <div className="row-menu-scrim" onMouseDown={onCancel} />
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the keydown is the editor's own keyboard handling (Enter commits, Escape abandons); the click merely stops the scrim's dismissal */}
       <div
         className="menu status-editor"
         ref={pop}
