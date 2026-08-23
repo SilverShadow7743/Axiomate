@@ -681,6 +681,22 @@ suite; their browser half waits for a real submitted week.
 4. **The rename survives.** Rename the Risk work type to "Threat" on Work types: the
    Exposure row stays on Threat-typed records — the semantics ride the stable id.
 
+## 31 · The accessibility gate — and the walk it cannot do
+
+1. **The gate.** `npm run audit:a11y` exits 0. It runs beside the other audits on every
+   sweep; a new structural violation (a click with no keyboard path, a control with no
+   name, misused ARIA) fails it loudly. Its first honest count was 46, cleared in ef1090f.
+2. **What a reasoned disable means.** Every `eslint-disable` in the components names the
+   rule AND the keyboard path that justifies it in place — a bare `off` is forbidden by the
+   design.
+3. **The manual keyboard walk** (what a static gate cannot see):
+   - Tab into the tree: the grid takes focus; arrows move; sortable headers take focus and
+     sort on Enter/Space.
+   - Open any modal (Archive, Timesheets, a dialog): focus moves in, Tab wraps inside,
+     Escape closes, focus returns to where it was — the useOverlay contract.
+   - The Inbox and its Preferences rows are reachable and operable by keyboard.
+   - Spot-check contrast on the chips (cv-chip, cfg-chip, raid bands) in both themes.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
