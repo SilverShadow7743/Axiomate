@@ -16,6 +16,10 @@ import {
   liveRoles,
   liveSkills,
   skillName,
+  agentEnabledSource,
+  blastRadius,
+  labelSource,
+  requiredSource,
   resolveAgentEnabled,
   resolveLabel,
   resolveLabels,
@@ -411,6 +415,22 @@ function Terminology({
   /** Local edits, so typing does not dispatch a reducer action per keystroke. */
   const [draft, setDraft] = useState<Record<string, string>>({})
 
+  /* The reach of a term set at this scope, previewed BEFORE the save. */
+  const options = useMemo(
+    () =>
+      scopes
+        .filter((sc) => sc.id !== ROOT_SCOPE)
+        .map((sc) => ({ id: sc.id, chain: scopeChainOf(state, sc.id) })),
+    [scopes, state],
+  )
+  const reachOf = (key: LabelKey): string => {
+    const r = blastRadius(options, scopeId, (sid) => Boolean(model.overrides[sid]?.labels?.[key]))
+    const shields = [...new Set(r.shielded.map((x) => nameOf(state, x.by)))]
+    return r.shielded.length
+      ? `Would reach ${r.affected.length} scope${r.affected.length === 1 ? '' : 's'} · ${r.shielded.length} set their own (${shields.join(', ')}) and will not move.`
+      : `Would reach ${r.affected.length} scope${r.affected.length === 1 ? '' : 's'}.`
+  }
+
   const overrideAt = (key: LabelKey) => model.overrides[scopeId]?.labels?.[key] ?? ''
   /** What this term would read as if the override here were removed. */
   const inheritedFor = (key: LabelKey) =>
@@ -480,6 +500,7 @@ function Terminology({
                     {overrideAt(key)
                       ? `overrides “${inherited}”`
                       : `inherits “${inherited}”${inherited === LABEL_KEYS[key] ? '' : ' (configured above)'}`}
+                    {(draft[key] !== undefined || overrideAt(key)) && ` · ${reachOf(key)}`}
                   </span>
                 </div>
               )
@@ -3938,6 +3959,37 @@ function Scopes({
   const override = model.overrides[scopeId]
   const parentChain = chain.filter((c) => c !== scopeId)
 
+  /* Every configurable scope with its chain, once per render — the radius walks these. */
+  const options = useMemo(
+    () =>
+      scopes
+        .filter((sc) => sc.id !== ROOT_SCOPE)
+        .map((sc) => ({ id: sc.id, chain: scopeChainOf(state, sc.id) })),
+    [scopes, state],
+  )
+
+  /** One line saying what a change to this key, here, would actually reach. */
+  const radiusLine = (sets: (sid: string) => boolean): string => {
+    const r = blastRadius(options, scopeId, sets)
+    const shields = [...new Set(r.shielded.map((x) => nameOf(state, x.by)))]
+    const reach = `reaches ${r.affected.length} scope${r.affected.length === 1 ? '' : 's'}`
+    return r.shielded.length
+      ? `${reach} · ${r.shielded.length} set their own (${shields.join(', ')}) and will not move`
+      : reach
+  }
+
+  /** The chip: where a resolved value actually came from. */
+  const sourceChip = (at: string | null) =>
+    at === null ? (
+      <span className="cfg-chip">shipped default</span>
+    ) : at === ROOT_SCOPE ? (
+      <span className="cfg-chip">organisation default</span>
+    ) : at === scopeId ? (
+      <span className="cfg-chip cfg-chip-own">set here</span>
+    ) : (
+      <span className="cfg-chip cfg-chip-from">from {nameOf(state, at)}</span>
+    )
+
   return (
     <>
       <ScopeBar
@@ -3981,6 +4033,9 @@ function Scopes({
                 <tr key={key}>
                   <td>
                     <code className="cfg-key">{key}</code>
+                    <div className="cfg-inherit">
+                      {radiusLine((sid) => Boolean(model.overrides[sid]?.labels?.[key as LabelKey]))}
+                    </div>
                   </td>
                   <td>{value}</td>
                   <td className="cfg-inherit">{resolveLabel(model, key as LabelKey, parentChain)}</td>
@@ -4033,6 +4088,55 @@ function Scopes({
             </tbody>
           </table>
         )}
+      </section>
+
+      <section className="cfg-section">
+        <h3 className="cfg-h">Effective here</h3>
+        <p className="cfg-note">
+          What this scope actually sees, and who decided each value — the resolved picture,
+          not just the local edits. “Set here” is this scope’s own; “from …” names the
+          ancestor whose word applies; the organisation default and the shipped default are
+          the two backstops.
+        </p>
+        <h4 className="est-h">Terminology</h4>
+        <div className="cfg-effective">
+          {(Object.keys(LABEL_KEYS) as LabelKey[]).map((key) => {
+            const src = labelSource(model, key, chain)
+            return (
+              <div className="cfg-effective-row" key={key}>
+                <code className="cfg-key">{key}</code>
+                <span>{src.value}</span>
+                {sourceChip(src.at)}
+              </div>
+            )
+          })}
+        </div>
+        <h4 className="est-h">Agents on here</h4>
+        <div className="cfg-effective">
+          {Object.values(model.agents)
+            .map((ag) => ({ ag, src: agentEnabledSource(model, ag.id, chain) }))
+            .filter(({ src }) => src.value || src.at !== null)
+            .map(({ ag, src }) => (
+              <div className="cfg-effective-row" key={ag.id}>
+                <span>{ag.name}</span>
+                <span>{src.value ? 'on' : 'off'}</span>
+                {sourceChip(src.at)}
+              </div>
+            ))}
+        </div>
+        <h4 className="est-h">Responsibilities</h4>
+        <div className="cfg-effective">
+          {liveResponsibilities(model).map((t) => {
+            const src = requiredSource(model, t.id, chain)
+            return (
+              <div className="cfg-effective-row" key={t.id}>
+                <span>{t.label}</span>
+                <span>{src.value ? 'required' : 'optional'}</span>
+                {sourceChip(src.at)}
+              </div>
+            )
+          })}
+        </div>
       </section>
 
       <section className="cfg-section">

@@ -1379,6 +1379,38 @@ select.cell-editor {
   }
 }
 
+/* ---------- override provenance ---------- */
+.cfg-chip {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.cfg-chip-own {
+  border-style: solid;
+  border-color: var(--h-ontrack, #2e7d32);
+  color: var(--h-ontrack, #2e7d32);
+}
+.cfg-chip-from {
+  border-style: solid;
+}
+.cfg-effective {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 10px;
+}
+.cfg-effective-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
 /* ---------- timesheets: the week grid and the queue ---------- */
 .timesheet-modal {
   width: min(860px, 92vw);
