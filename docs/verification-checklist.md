@@ -738,6 +738,23 @@ Two halves; the first needs an Entra admin, the second a separate browser profil
    recorded correctly, the id token likely carries only the `#EXT#` UPN — that is the one
    case where the callback grows a normalization, built against this real token.
 
+## 33 · Mobile — installed from the browser, honest offline
+
+1. **Installable.** `/manifest.webmanifest` serves with the four icons resolving; Chrome
+   offers Install (desktop: the address-bar icon; Android: Add to Home screen; iOS Safari:
+   Share → Add to Home Screen). The installed app launches standalone in the carmine
+   chrome.
+2. **The one hard rule.** DevTools → Network with the SW active: every `/api/*` request
+   reads "(from network)" always — never the worker, never a cache. A `/_next/static`
+   asset reads "(from ServiceWorker)" on second load.
+3. **Honest offline.** Airplane mode → reload: the offline page, which says out loud why
+   nothing is cached and that queued writes are held. Nothing renders from yesterday.
+4. **The phone pass** (a real phone, or 390×844 emulation): the app lands usefully — the
+   timeline absent, the tree full-width, the detail panel the primary surface; record an
+   hour through the grace gate, read the Inbox, open Timesheets as a sheet.
+5. **A deploy updates cleanly.** After the next release, a reload picks up the new build;
+   the SW version bump clears the old cache on activate.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
