@@ -667,6 +667,20 @@ suite; their browser half waits for a real submitted week.
 5. **Unknown tokens stay text.** `@Nobody` matching no directory person renders plain and
    mints nothing — the parser refuses to guess.
 
+## 30 · Risks and decisions — the judgement and the outcome, first-class
+
+1. **The types are there.** Configuration → Work types shows Risk and Decision among the
+   registry (not from the source log); a new record can be created or retyped as either.
+2. **Judging a risk.** On a Risk-typed record's Overview, the Exposure row: pick
+   Likelihood and Impact (1–5) — the product and band compute beside them
+   ("= 20 · Critical"); clearing a half reads "not yet judged — exposure is computed,
+   never stored". Out-of-range values cannot be sent; the reducer refuses them in words.
+3. **Recording a decision.** On a Decision-typed record, Edit → Outcome — the sentence
+   people ask for months later; emptied, it stores null and reads "no outcome recorded
+   yet".
+4. **The rename survives.** Rename the Risk work type to "Threat" on Work types: the
+   Exposure row stays on Threat-typed records — the semantics ride the stable id.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
