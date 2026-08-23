@@ -145,6 +145,13 @@ interface Props {
   /** How many records are archived. The control hides itself when there are none. */
   archivedCount: number
   onOpenArchive: () => void
+  /**
+   * Submitted weeks awaiting a decision — null for a viewer without time.approve, so the
+   * badge never leaks the queue's size to somebody who cannot act on it. The permission is
+   * decided in IssueWorkspace; this bar stays dumb.
+   */
+  timesheetQueue: number | null
+  onOpenTimesheets: () => void
   /** How many open records would get a due date. The action hides itself at zero. */
   slaCandidates: number
   onPlanSla: () => void
@@ -174,6 +181,8 @@ export default function FilterBar({
   sla,
   archivedCount,
   onOpenArchive,
+  timesheetQueue,
+  onOpenTimesheets,
   slaCandidates,
   onPlanSla,
 }: Props) {
@@ -359,6 +368,14 @@ export default function FilterBar({
           Archive · {archivedCount}
         </button>
       )}
+
+      <button
+        className="btn ghost"
+        onClick={onOpenTimesheets}
+        title="Your week, gathered — and for approvers, the queue of submitted weeks"
+      >
+        Timesheets{timesheetQueue ? ` · ${timesheetQueue}` : ''}
+      </button>
 
       {view === 'tree' && (
       <div className="segmented" role="group" aria-label="Timeline zoom">

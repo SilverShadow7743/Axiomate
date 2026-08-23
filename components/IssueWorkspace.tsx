@@ -77,6 +77,7 @@ import EvidencePanel, { type AddEvidenceInput } from './EvidencePanel'
 import ChatPanel, { type ApplyOutcome } from './ChatPanel'
 import ConfigWorkspace from './ConfigWorkspace'
 import ArchivePanel from './ArchivePanel'
+import TimesheetPanel from './TimesheetPanel'
 import { useAutosave } from './useAutosave'
 import {
   describeSave,
@@ -163,6 +164,7 @@ export default function IssueWorkspace({
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [timesheetsOpen, setTimesheetsOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
   const [slaOpen, setSlaOpen] = useState(false)
   const exportWrap = useRef<HTMLDivElement>(null)
@@ -1939,6 +1941,12 @@ export default function IssueWorkspace({
         setShowProposed={setShowProposed}
         sla={sla}
         archivedCount={archivedCount}
+        timesheetQueue={
+          can(state.model, actor, 'time.approve').allowed
+            ? Object.values(state.timesheets).filter((t) => t.status === 'Submitted').length
+            : null
+        }
+        onOpenTimesheets={() => setTimesheetsOpen(true)}
         slaCandidates={slaPlan.rows.length}
         onPlanSla={() => setSlaOpen(true)}
         onOpenArchive={() => setArchiveOpen(true)}
@@ -2346,6 +2354,32 @@ export default function IssueWorkspace({
           state={state}
           onRestore={(id) => dispatch({ t: 'restore', id, now: new Date().toISOString() })}
           onClose={() => setArchiveOpen(false)}
+        />
+      )}
+
+      {timesheetsOpen && (
+        <TimesheetPanel
+          state={state}
+          actor={actor}
+          today={today}
+          onSubmitWeek={(person, week) =>
+            dispatch({ t: 'submitTimesheet', person, weekStarting: week, now: new Date().toISOString() })
+          }
+          onDecideWeek={(id, decision, reason) =>
+            dispatch({ t: 'decideTimesheet', id, decision, reason, now: new Date().toISOString() })
+          }
+          onDecideMany={(ids) => {
+            /* ONE atomic batch — the panel pre-filtered with decideProblem, because a
+               single refused self-approval would abort every approval in it. */
+            const now = new Date().toISOString()
+            dispatchMany(ids.map((tid) => ({ t: 'decideTimesheet', id: tid, decision: 'approved', now }) as Action))
+          }}
+          onOpen={(issueId) => {
+            revealIssue(issueId)
+            setRequestTab('Time' as DetailTab)
+            setTimesheetsOpen(false)
+          }}
+          onClose={() => setTimesheetsOpen(false)}
         />
       )}
 
