@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import RegisterSW from '@/components/RegisterSW'
 import './globals.css'
 
 export const viewport: Viewport = {
@@ -30,7 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <RegisterSW />
+        {children}
+      </body>
     </html>
   )
 }
