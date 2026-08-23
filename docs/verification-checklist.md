@@ -604,6 +604,26 @@ suite; their browser half waits for a real submitted week.
 5. **The judgement never moved.** A single allocation over 100% refuses identically in
    both modes — that bound was never the policy's to change.
 
+## 26 · Notification preferences — the person's own say over each kind
+
+1. **The block, in your own inbox.** The bell → Preferences… shows three rows in words
+   ("When work is assigned to me…"), each on "tell me here" — the default, which is exactly
+   yesterday's behaviour. The intake row shows only if you hold "Assign work"; the email
+   choice warns when the directory holds no address for you.
+2. **Email me my assignments.** Set "also email me" on the first row; have somebody assign
+   you a record. Two notifications exist: the in-app one in your bell, and an email one
+   `pending` — "Queued for the scheduled pass to email." The next pass run sends and stamps
+   it.
+3. **Mute intake.** "Don't tell me" on the intake row; a new request arriving through the
+   door mints nothing for you — and the record's History still carries the notification
+   line marked "(muted by their preference)", so "why didn't I get this" has a stored
+   answer.
+4. **Only yours.** Another signed-in person setting *your* preferences is refused in words
+   ("Preferences are the person's own…") unless they hold "Configure the platform".
+5. **The pill.** Every change reaches "Up to date" — the four wire registration points
+   landed together, and the preference survives a reload because `setNotificationPref` is
+   the one non-config action that writes the model document.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
