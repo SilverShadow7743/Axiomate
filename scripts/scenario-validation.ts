@@ -4884,7 +4884,8 @@ scenario(
     const docFlagged = s1.documents[doc.id].clientVisible === true
 
     /* The withheld view: marked content with ancestors; machinery empty; audit filtered. */
-    const view = clientView(s1)
+    const cb1Client = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const view = clientView(s1, cb1Client)
     const keptIssue = Boolean(view.issues[internalIssue.id])
     const droppedInternalIssues = Object.values(view.issues).every((i) => i.clientVisible)
     const ancestors = view.issues[internalIssue.id] ? Boolean(view.nodes[view.issues[internalIssue.id].parentId]) : false
@@ -5470,6 +5471,81 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'Risk and Decision ship by stable id and survive a rename to “Threat” — the word changes, the semantics do not, and the old word stops matching. The bands turn exactly where stated (4 Low, 5 Medium, 14 High, 15 Critical), null propagates as not-yet-judged rather than becoming a number, 0 and 6 are refused in words that name the scale and the way back, and no exposure field exists on the stored record — it is computed from the halves every time. A decision’s outcome rides the ordinary audited edit.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `shipped=${shipped} renameHolds=${renameHolds} bands=${bands} judgedRight=${judgedRight} bounded=${bounded} nullBack=${nullBack} outcomeRight=${outcomeRight}`, stops: 'the RAID semantics disagree with the design', severity: 'P2', impact: 'risks unsortable by exposure, or a stored exposure free to lie' } as const
+  },
+)
+
+/* ================================================================== *
+ * Guest access (design 2026-08-23, phase 7)
+ * ================================================================== */
+
+scenario(
+  'GA1',
+  'A guest sees one client\u2019s marked content, and an unattached seat sees nothing',
+  'The withheld view is scoped to the reader\u2019s own client node; null \u2014 no directory entry, or a client seat nobody attached \u2014 empties everything rather than widening to every client; the directory refuses a scope that is not a client node.',
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    /* A second client with its own engagement and a marked record of its own. */
+    let st = ok(BASE, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = Object.values(st.nodes).find((n) => n.kind === 'client' && n.name === 'Rival Ltd')!.id
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'engagement', draft: { name: 'Rival Engagement' }, now: NOW } as Action)
+    const rivalEngId = Object.values(st.nodes).find((n) => n.kind === 'engagement' && n.name === 'Rival Engagement')!.id
+    st = ok(st, { t: 'create', parentId: rivalEngId, kind: 'issue', draft: { name: 'Rival secret ask' }, now: NOW } as Action)
+    const rivalIssue = Object.values(st.issues).find((i) => i.subject === 'Rival secret ask')!
+    st = ok(st, { t: 'updateIssue', id: rivalIssue.id, patch: { clientVisible: true }, now: NOW } as Action)
+
+    /* And a marked record under OAPIL. */
+    st = ok(st, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'OAPIL open question' }, now: NOW } as Action)
+    const oapilIssue = Object.values(st.issues).find((i) => i.subject === 'OAPIL open question')!
+    st = ok(st, { t: 'updateIssue', id: oapilIssue.id, patch: { clientVisible: true }, now: NOW } as Action)
+
+    /* The OAPIL guest: their client\u2019s marked record, its ancestors, and nothing of Rival. */
+    const asOapil = clientView(st, oapilId)
+    const oapilRight =
+      Boolean(asOapil.issues[oapilIssue.id]) &&
+      !asOapil.issues[rivalIssue.id] &&
+      Boolean(asOapil.nodes[oapilId]) &&
+      !asOapil.nodes[rivalId] &&
+      !asOapil.nodes[rivalEngId]
+
+    /* The Rival guest, symmetrically. */
+    const asRival = clientView(st, rivalId)
+    const rivalRight =
+      Boolean(asRival.issues[rivalIssue.id]) &&
+      !asRival.issues[oapilIssue.id] &&
+      Boolean(asRival.nodes[rivalId]) &&
+      !asRival.nodes[oapilId]
+
+    /* Null empties everything \u2014 both deny cases share it. */
+    const asNobody = clientView(st, null)
+    const denyRight =
+      Object.keys(asNobody.issues).length === 0 &&
+      Object.keys(asNobody.nodes).length === 0 &&
+      Object.keys(asNobody.notes).length === 0 &&
+      Object.keys(asNobody.documents).length === 0 &&
+      asNobody.audit.length === 0
+
+    /* The directory: a scope must be a client node, and it survives an unrelated edit. */
+    const badScope = act(st, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Guest Gina', roleIds: ['ROLE_CLIENT_USER'], clientScopeId: rivalEngId }, now: NOW,
+    } as Action)
+    const scopeValidated = Boolean(badScope.error && /client nodes/.test(badScope.error))
+    const withGina = ok(st, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Guest Gina', roleIds: ['ROLE_CLIENT_USER'], email: 'gina@rival.example', clientScopeId: rivalId }, now: NOW,
+    } as Action)
+    const ginaId = Object.values(withGina.model.people).find((pp) => pp.name === 'Guest Gina')!.id
+    const renamed = ok(withGina, {
+      t: 'config', op: { k: 'upsertPerson', id: ginaId, name: 'Gina Malhotra', roleIds: ['ROLE_CLIENT_USER'] }, now: NOW,
+    } as Action)
+    const scopeSurvives = renamed.model.people[ginaId].clientScopeId === rivalId &&
+      renamed.model.people[ginaId].email === 'gina@rival.example'
+
+    const good = oapilRight && rivalRight && denyRight && scopeValidated && scopeSurvives
+    return good
+      ? { verdict: 'PASS', actual: 'The OAPIL guest\u2019s view holds OAPIL\u2019s marked record with its ancestor chain and nothing of Rival \u2014 not the marked record, not even the nodes; Rival\u2019s guest sees the mirror image. A null scope \u2014 a sign-in matching no directory entry, or a client seat nobody attached \u2014 empties every table rather than widening to every client, which is the deny-by-default the design demands. The directory refuses an engagement node as a scope in words naming what it must be, and both the scope and the email survive an unrelated rename.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `oapilRight=${oapilRight} rivalRight=${rivalRight} denyRight=${denyRight} scopeValidated=${scopeValidated} scopeSurvives=${scopeSurvives}`, stops: 'the scope disagrees with the design', severity: 'P1', impact: 'one client\u2019s guest reading another client\u2019s marked content' } as const
   },
 )
 

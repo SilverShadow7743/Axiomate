@@ -942,6 +942,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "GA1",
+      "title": "A guest sees one client’s marked content, and an unattached seat sees nothing",
+      "expected": "The withheld view is scoped to the reader’s own client node; null — no directory entry, or a client seat nobody attached — empties everything rather than widening to every client; the directory refuses a scope that is not a client node.",
+      "verdict": "PASS",
+      "actual": "The OAPIL guest’s view holds OAPIL’s marked record with its ancestor chain and nothing of Rival — not the marked record, not even the nodes; Rival’s guest sees the mirror image. A null scope — a sign-in matching no directory entry, or a client seat nobody attached — empties every table rather than widening to every client, which is the deny-by-default the design demands. The directory refuses an engagement node as a scope in words naming what it must be, and both the scope and the email survive an unrelated rename.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

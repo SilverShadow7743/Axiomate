@@ -1144,6 +1144,8 @@ export type ConfigOp =
       name: string
       roleIds: string[]
       email?: string
+      /** The client node a client-role seat belongs to; null clears it. See Person. */
+      clientScopeId?: string | null
       /** Seniority and specialism. See `Person` — deliberately not the same thing as a role. */
       grade?: string
       track?: string
@@ -6403,6 +6405,15 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         : undefined
       if (sameEmail) return { state, error: `${sameEmail.name} already has that address.` }
 
+      /* The scope must be a real client node — a typo here would silently scope a guest
+         to nothing, which the deny-default turns into an empty view nobody can explain. */
+      if (op.clientScopeId) {
+        const node = state.nodes[op.clientScopeId]
+        if (!node || node.kind !== 'client') {
+          return { state, error: 'The client scope must be one of the client nodes in the tree.' }
+        }
+      }
+
       const person: Person = {
         id,
         name,
@@ -6411,6 +6422,14 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         // Undefined when cleared rather than an empty string, so "no address recorded" is one
         // state rather than two that compare unequal.
         ...(email ? { email } : existing?.email && op.email === undefined ? { email: existing.email } : {}),
+        // Absent-versus-cleared, like the address: undefined keeps what was there, null clears.
+        ...(op.clientScopeId !== undefined
+          ? op.clientScopeId
+            ? { clientScopeId: op.clientScopeId }
+            : {}
+          : existing?.clientScopeId
+            ? { clientScopeId: existing.clientScopeId }
+            : {}),
         /*
          * Grade, track and target follow the same absent-versus-empty rule as the address, and
          * for the same reason: `undefined` means nothing was recorded, `''` would mean somebody

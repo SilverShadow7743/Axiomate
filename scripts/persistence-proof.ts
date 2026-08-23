@@ -622,7 +622,8 @@ async function main() {
       { t: 'addNote', issueId, body: 'CLIENT-SAFE-MARKER reply', noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action,
     ])
     const st = (await loadWorkspace(TENANT)).state
-    const view = clientView(st)
+    const proofClient = Object.values(st.nodes).find((n) => n.kind === 'client' && !n.deletedAt)!.id
+    const view = clientView(st, proofClient)
     const payload = JSON.stringify(view)
     /* Read from the STRING — "the screen would not have shown it" is the claim this refuses. */
     const internalSubjects = Object.values(st.issues)

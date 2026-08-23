@@ -13,10 +13,32 @@ import type { WorkspaceState } from './workspace'
  * machinery. Counts recompute downstream from this subset — withholding the records and
  * shipping the summary of them is the same disclosure.
  */
-export function clientView(state: WorkspaceState): WorkspaceState {
-  const issues = Object.fromEntries(
-    Object.entries(state.issues).filter(([, i]) => (i.clientVisible ?? false) && !i.deletedAt),
-  )
+export function clientView(
+  state: WorkspaceState,
+  /**
+   * The reader's client node, from their directory entry. NULL EMPTIES EVERYTHING — the
+   * two deny cases (a reader matching no directory entry, and a client seat nobody has
+   * attached to a client yet) share it, and only the boot banner distinguishes them,
+   * never the payload. Scoped, a surviving record must additionally carry the scope node
+   * on its ancestor chain: a guest of one client never sees another's marked content.
+   */
+  clientScopeId: string | null,
+): WorkspaceState {
+  const underScope = (issueParentId: string | null | undefined): boolean => {
+    let cur = issueParentId
+    while (cur) {
+      if (cur === clientScopeId) return true
+      cur = state.nodes[cur]?.parentId
+    }
+    return false
+  }
+  const issues = clientScopeId
+    ? Object.fromEntries(
+        Object.entries(state.issues).filter(
+          ([, i]) => (i.clientVisible ?? false) && !i.deletedAt && underScope(i.parentId),
+        ),
+      )
+    : {}
   const keepNodes = new Set<string>()
   for (const i of Object.values(issues)) {
     let cur: string | null | undefined = i.parentId
@@ -25,8 +47,19 @@ export function clientView(state: WorkspaceState): WorkspaceState {
       cur = state.nodes[cur].parentId
     }
   }
+  /*
+   * Documents are subject-joined, so the scope applies through the subject: a marked file
+   * survives only on a SURVIVING issue. Files on SoWs, nodes and change requests are
+   * commercial machinery and are withheld from every client view regardless of flags.
+   */
   const docsVisible = Object.fromEntries(
-    Object.entries(state.documents).filter(([, d]) => (d.clientVisible ?? false) && !d.deletedAt),
+    Object.entries(state.documents).filter(
+      ([, d]) =>
+        (d.clientVisible ?? false) &&
+        !d.deletedAt &&
+        d.subjectKind === 'issue' &&
+        Boolean(issues[d.subjectId]),
+    ),
   )
   return {
     ...state,

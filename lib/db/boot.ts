@@ -155,9 +155,26 @@ export async function boot(): Promise<Boot> {
       lastSummary: watch?.lastSummary ?? null,
     }
 
-    const note = imported.imported
+    const noteBase = imported.imported
       ? `Saved to Postgres. Imported ${imported.counts.issues} issues from the log.`
       : 'Saved to Postgres.'
+    /*
+     * The one distinction the payload deliberately cannot carry: an emptied client view is
+     * either a seat nobody attached to a client, or a sign-in matching no directory entry.
+     * Both get nothing; the banner says which, because a blank workspace with no sentence
+     * is a support ticket.
+     */
+    const reader = state ? directoryPersonFor(state.model, actor) : null
+    const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+    const scopeNote =
+      state && !can(state.model, actor, 'internal.view').allowed
+        ? reader
+          ? reader.roleIds.some((r) => clientRoles.includes(r)) && !reader.clientScopeId
+            ? ' Your seat holds a client role but is not attached to a client yet — ask the firm to set it on your directory entry.'
+            : ''
+          : ' This sign-in matches no directory entry, so there is nothing to show — ask the firm to add you.'
+        : ''
+    const note = noteBase + scopeNote
 
     return {
       seed,
@@ -281,5 +298,10 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
    * of them is the same disclosure.
    */
   if (can(state.model, actor, 'internal.view').allowed) return base
-  return clientView(base)
+  /*
+   * The reader's own client, from their directory entry — null (no entry, or a client
+   * seat nobody has attached yet) EMPTIES the view rather than widening it to every
+   * client's marked content. The banner in boot() says which case it was.
+   */
+  return clientView(base, mine ? state.model.people[mine]?.clientScopeId ?? null : null)
 }

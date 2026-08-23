@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-23T07:29:18.648Z",
+  "at": "2026-08-23T13:56:44.083Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 51,
   "failed": 0,
@@ -152,7 +152,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 34729 chars · 1 visible issues · 9 audit rows"
+      "detail": "payload 36452 chars · 1 visible issues · 8 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",

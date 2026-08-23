@@ -228,6 +228,13 @@ export interface Person {
    * person can change. Optional, because the imported log carries names and no addresses.
    */
   email?: string
+  /**
+   * The CLIENT NODE this person belongs to — set for client-role seats, and what scopes
+   * their withheld view to one client's subtree. Absent means unattached: for a client
+   * seat that is deny-by-default (an empty view, with the banner saying why), never
+   * every-client. Internal seats ignore it.
+   */
+  clientScopeId?: string | null
   /** People discovered in the imported log rather than entered here. */
   fromSource: boolean
 
