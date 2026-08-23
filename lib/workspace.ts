@@ -110,12 +110,14 @@ import {
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import {
+  allocationPolicyProblem,
   capacityFor,
   profileAt,
   checkAllocation,
   defaultProfile,
   describeCapacity,
   type Allocation,
+  type AllocationPolicy,
   type Commitment,
   type CommitmentKind,
   type ResourceProfile,
@@ -1107,6 +1109,7 @@ export type ConfigOp =
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
   | { k: 'setTimePolicy'; patch: Partial<TimePolicy> }
+  | { k: 'setAllocationPolicy'; patch: Partial<AllocationPolicy> }
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
@@ -5225,6 +5228,19 @@ Question: ${review.question}`,
         a.startDate,
         a.endDate,
       )
+      /*
+       * The cap, as the workspace has it set. HARD refuses regardless of the override flag
+       * — the policy is read from stored state at apply time, never from the wire, so a
+       * queued allocation drained after a mode flip is judged by the mode in force when it
+       * applies. ADVISORY is the original two-step, byte for byte: warn once, accept on an
+       * explicit second ask, record the acceptance as a deliberate decision.
+       */
+      if (position.overallocated && state.model.allocationPolicy.cap === 'hard') {
+        return {
+          state,
+          error: `${describeCapacity(position)} This workspace enforces the allocation cap — free up the person, shorten the window, or lower the share. The cap is set on the Configuration screen, under Allocation.`,
+        }
+      }
       if (position.overallocated && !a.acceptOverallocation) {
         return {
           state,
@@ -5844,6 +5860,28 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           by,
         },
         `Backdating allowance set to ${next.backdatingAllowanceDays} days.`,
+      )
+    }
+
+    case 'setAllocationPolicy': {
+      // Validated in the module that owns the judgement, refused in its words.
+      const problem = allocationPolicyProblem(op.patch)
+      if (problem) return { state, error: problem }
+      const next = { ...m.allocationPolicy, ...op.patch }
+      if (next.cap === m.allocationPolicy.cap) return { state, message: 'Nothing changed.' }
+      const word = (c: AllocationPolicy['cap']) =>
+        c === 'hard' ? 'hard — nobody past capacity' : 'advisory — accepted overruns are recorded'
+      return done(
+        { ...m, allocationPolicy: next },
+        {
+          rowId: 'ALLOCATION_POLICY',
+          field: 'allocationPolicy',
+          from: word(m.allocationPolicy.cap),
+          to: word(next.cap),
+          at: now,
+          by,
+        },
+        `Allocation cap set to ${next.cap}.`,
       )
     }
 

@@ -882,6 +882,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "AC1",
+      "title": "The allocation cap holds, at whichever hardness the firm set",
+      "expected": "Shipped hard, nobody can be committed past capacity — the override flag included; advisory restores the recorded two-step; the judgement underneath never moves.",
+      "verdict": "PASS",
+      "actual": "The cap ships hard and an over-capacity allocation is refused with and without the override flag, the refusal naming the Configuration screen. Advisory, set through the real op, restores the recorded two-step — warned bare, accepted with the flag, the acceptance audited as “Deliberately overallocated” with the numbers. Hard again shuts the door on the same flag, both mode changes sit in the audit trail, an invalid mode is refused by the op, and a single allocation past 100% refuses identically in both modes because the judgement underneath never moved.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

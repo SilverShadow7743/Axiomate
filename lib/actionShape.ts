@@ -131,6 +131,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'setSizeBands',
   'setStatusPolicy',
   'setTimePolicy',
+  'setAllocationPolicy',
   'setAccess',
   'setApprovalRules',
   'setAutomationRules',

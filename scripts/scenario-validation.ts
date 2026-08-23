@@ -588,8 +588,14 @@ scenario(
       now: NOW,
     } as Action)
 
+    /* The cap ships HARD; this scenario is about the advisory two-step, so the firm's
+       choice is made first, through the real op — AC1 proves the hard side. */
+    const advisory = ok(profiled, {
+      t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'advisory' } }, now: NOW,
+    } as Action)
+
     /* 60% on one project for a fortnight. */
-    const committed = ok(profiled, {
+    const committed = ok(advisory, {
       t: 'upsertAllocation', id: null, person: 'Priya', projectId: first.id,
       startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
     } as Action)
@@ -4959,6 +4965,87 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The allowance is read from the operating model, refused outside 0\u201360 in the module\u2019s words, and the shipped default stays 7. At an allowance of 3: exactly 3 days late records with no reason asked; 4 days late is refused naming both numbers and records with a reason, which is stored on the entry and stamped on the audit row as \u201c4 days late\u201d. Correcting a stale entry\u2019s hours is gated identically \u2014 refused bare, recorded with its reason \u2014 while relabelling its billing passes untouched, because it changes no claimed number.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `badRefused=${badRefused} policySet=${policySet} defaultStands=${defaultStands} insideFree=${insideFree} lateRefused=${lateRefused} reasonStored=${reasonStored} auditSaysLate=${auditSaysLate} updateRefused=${updateRefused} updateRecorded=${updateRecorded} relabelFree=${relabelFree}`, stops: 'the grace gate disagrees with the design', severity: 'P1', impact: 'late hours recorded silently, or honest hours refused' } as const
+  },
+)
+
+/* ================================================================== *
+ * Allocation cap (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'AC1',
+  'The allocation cap holds, at whichever hardness the firm set',
+  'Shipped hard, nobody can be committed past capacity \u2014 the override flag included; advisory restores the recorded two-step; the judgement underneath never moves.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    let s1 = BASE
+    for (const name of ['Cap North', 'Cap South']) {
+      s1 = ok(s1, { t: 'create', parentId: engagementId, kind: 'project', draft: { name }, now: NOW } as Action)
+    }
+    const [pA, pB] = Object.values(s1.nodes).filter((n) => n.kind === 'project' && /^Cap /.test(n.name))
+
+    /* The default is the PRD's rule, and an invalid mode is refused by the op. */
+    const shippedHard = BASE.model.allocationPolicy.cap === 'hard'
+    const badMode = act(BASE, { t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'firm' } }, now: NOW } as unknown as Action)
+    const badRefused = Boolean(badMode.error && /hard.*advisory/.test(badMode.error))
+
+    /* 60% committed; 60% more over the same window is more than exists. */
+    const first = ok(s1, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pA.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
+    } as Action)
+
+    /* Hard: refused BARE and refused WITH the override \u2014 the flag stopped being a key. */
+    const bare = act(first, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
+    } as Action)
+    const flagged = act(first, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '',
+      acceptOverallocation: true, now: NOW,
+    } as Action)
+    const hardHolds =
+      Boolean(bare.error && /enforces the allocation cap/.test(bare.error)) &&
+      Boolean(flagged.error && /Configuration screen, under Allocation/.test(flagged.error))
+
+    /* Advisory: the original two-step, the acceptance audited as a decision. */
+    const advisory = ok(first, { t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'advisory' } }, now: NOW } as Action)
+    const warned = act(advisory, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '', now: NOW,
+    } as Action)
+    const accepted = ok(advisory, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: 'Go-live fortnight, agreed.',
+      acceptOverallocation: true, now: NOW,
+    } as Action)
+    const advisoryHolds =
+      Boolean(warned.error && /Commit it anyway/.test(warned.error)) &&
+      accepted.audit.some((e) => e.field === 'allocation' && /Deliberately overallocated/.test(e.reason ?? ''))
+
+    /* Back to hard, the door shuts again; the audit trail carries both mode changes. */
+    const rehardened = ok(advisory, { t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'hard' } }, now: NOW } as Action)
+    const shutAgain = Boolean(
+      act(rehardened, {
+        t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+        startDate: '2026-09-01', endDate: '2026-09-11', percentage: 60, note: '',
+        acceptOverallocation: true, now: NOW,
+      } as Action).error,
+    )
+    const modeAudited = rehardened.audit.filter((e) => e.field === 'allocationPolicy').length === 2
+
+    /* The judgement underneath is untouched: >100% on a single allocation refuses in both modes. */
+    const tooBig = act(advisory, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: pB.id,
+      startDate: '2026-09-01', endDate: '2026-09-11', percentage: 150, note: '', now: NOW,
+    } as Action)
+    const boundsHold = Boolean(tooBig.error && /between 1 and 100/.test(tooBig.error))
+
+    const good = shippedHard && badRefused && hardHolds && advisoryHolds && shutAgain && modeAudited && boundsHold
+    return good
+      ? { verdict: 'PASS', actual: 'The cap ships hard and an over-capacity allocation is refused with and without the override flag, the refusal naming the Configuration screen. Advisory, set through the real op, restores the recorded two-step \u2014 warned bare, accepted with the flag, the acceptance audited as \u201cDeliberately overallocated\u201d with the numbers. Hard again shuts the door on the same flag, both mode changes sit in the audit trail, an invalid mode is refused by the op, and a single allocation past 100% refuses identically in both modes because the judgement underneath never moved.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `shippedHard=${shippedHard} badRefused=${badRefused} hardHolds=${hardHolds} advisoryHolds=${advisoryHolds} shutAgain=${shutAgain} modeAudited=${modeAudited} boundsHold=${boundsHold}`, stops: 'the cap disagrees with the design', severity: 'P1', impact: 'people committed past capacity silently, or honest staffing refused' } as const
   },
 )
 
