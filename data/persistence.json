@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-22T17:14:23.559Z",
+  "at": "2026-08-23T05:32:43.600Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 50,
   "failed": 0,
@@ -147,7 +147,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 33649 chars · 1 visible issues · 6 audit rows"
+      "detail": "payload 33683 chars · 1 visible issues · 6 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -182,7 +182,7 @@
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-08-22T09:00:00.000Z"
+      "detail": "deletedAt 2026-08-23T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",

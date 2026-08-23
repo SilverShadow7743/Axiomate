@@ -588,6 +588,22 @@ double-click records once. Test data was cleaned up and the allowance restored t
 shipped 7. Steps 4–5 (stale correction, approver's reading) are proven by TG1 and the
 suite; their browser half waits for a real submitted week.
 
+## 25 · Allocation cap — nobody past capacity, unless the firm says otherwise
+
+1. **The card reads hard on first load.** Configuration → Allocation shows the two modes in
+   words with Hard selected — the merged default on a stored model that predates the key.
+2. **The refusal, with no way past it.** On Capacity (or a project's people panel), commit
+   somebody to more than they have: refused with the arithmetic AND the policy —
+   "…enforces the allocation cap — free up the person, shorten the window, or lower the
+   share." No "Commit anyway" appears anywhere; the form keeps its values.
+3. **Advisory restores the recorded two-step.** Set Advisory on the card; the same
+   commitment warns, "Commit anyway" appears, and accepting it lands in History as
+   "Deliberately overallocated" with the numbers.
+4. **Hard again shuts the door.** Back on the card, Hard; the same override is refused.
+   Both mode changes sit in the audit trail. Release any test allocation.
+5. **The judgement never moved.** A single allocation over 100% refuses identically in
+   both modes — that bound was never the policy's to change.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
