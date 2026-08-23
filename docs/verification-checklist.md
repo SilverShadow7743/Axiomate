@@ -697,6 +697,25 @@ suite; their browser half waits for a real submitted week.
    - The Inbox and its Preferences rows are reachable and operable by keyboard.
    - Spot-check contrast on the chips (cv-chip, cfg-chip, raid bands) in both themes.
 
+**Sections 25–31 driven 23 Aug 2026, one pass, after the Chrome extension reconnected:**
+§25 — the Allocation card reads Hard on first load (the merged default), both modes in the
+designed words; the refusal flow itself stays covered by AC1. §26 — all four preference
+rows render in the bell with the current mode marked; "also email me" set on mentions,
+shown current, reverted, every change reaching Saved. §27 — the Timesheets panel gathered
+a real week (AXM-026 8h + TEST-001 6h, totals both ways), Submit offered, the approver
+queue present with its honest "nothing submitted"; Escape closed it and returned focus —
+the §31 contract seen working. §28 — every chip kind live: `shipped default` across the
+organisation view, a term set at OAPIL Engagement chipping `set here`, the Data Migration
+process area beneath chipping `from OAPIL Engagement`, the local row reading "reaches 14
+scopes", and the Terminology editor previewing "Would reach 14 scopes." while typing —
+then the test term cleared. §29 — `@Dharmendra Kumar Dwivedi` (three words, longest-match)
+highlighted in a live note while `@Nobody` stayed plain; a first attempt with a
+scenario-fixture name was correctly left as plain text, the parser refusing to guess —
+the design working, not a miss. §30 — OAPIL-146 retyped Risk, judged L4×I5 → "= 20 ·
+Critical", cleared back to "not yet judged — exposure is computed, never stored", type
+reverted; the exposure line appeared and disappeared with the type, riding the stable id.
+All test data cleaned up; the pill reached Saved after every step.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
