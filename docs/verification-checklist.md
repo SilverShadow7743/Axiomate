@@ -640,6 +640,19 @@ suite; their browser half waits for a real submitted week.
    allows — the approver's own submitted week is excluded with a note, because the batch is
    atomic and one self-approval would abort every approval in it.
 
+## 28 · Override provenance — who decided each value, and what a change reaches
+
+1. **Effective here.** Configuration → Scope overrides → pick an engagement: every term,
+   live agent and responsibility shows its resolved value and a chip — `set here`,
+   `from <scope>`, `organisation default`, or `shipped default`.
+2. **The radius on a local override.** A row in "What this scope changes" says what it
+   reaches — "reaches N scopes · M set their own (<names>) and will not move."
+3. **The preview before the save.** On Terminology at a scope, typing into a term shows
+   the same reach line before the save commits anything.
+4. **The chips agree with the walk.** Set a term at the organisation, override it at an
+   engagement: the engagement chips `set here`, a process area beneath it chips
+   `from <engagement>`, a sibling client chips `organisation default`.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
