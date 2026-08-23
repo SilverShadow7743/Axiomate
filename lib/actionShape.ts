@@ -5,6 +5,7 @@ import type { DependencyType } from './types'
 import { ACTIVITY_PHASES } from './types'
 import { SNAPSHOT_PURPOSES } from './evidence'
 import { NOTE_TYPES } from './notes'
+import { NOTIFICATION_KINDS, NOTIFICATION_MODES } from './notifications'
 import { TIME_ACTIVITIES } from './time'
 import { COMMITMENT_KINDS } from './capacity'
 import { SKILL_ORDER, SKILL_SOURCES } from './skills'
@@ -573,6 +574,12 @@ const SHAPES = {
   decideApproval: { id: req(id), decision: req(oneOf(DECISIONS)), note: req(text), now },
   /* ---- NOTIFICATION ---- */
   markNotificationRead: { id: req(id), now },
+  setNotificationPref: {
+    personId: req(id),
+    kind: req(oneOf(new Set(NOTIFICATION_KINDS))),
+    mode: req(oneOf(new Set(NOTIFICATION_MODES))),
+    now,
+  },
   markNotificationDelivery: {
     id: req(id),
     delivery: req(oneOf(new Set(['delivered', 'pending', 'failed']))),

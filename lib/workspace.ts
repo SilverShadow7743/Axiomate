@@ -138,7 +138,7 @@ import {
   type WatchDiff,
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
-import { deliveryFor, type Channel, type Delivery, type Notification } from './notifications'
+import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
@@ -980,6 +980,7 @@ export type Action =
       now: string
     }
   | { t: 'markNotificationRead'; id: string; now: string }
+  | { t: 'setNotificationPref'; personId: string; kind: NotificationKind; mode: NotificationMode; now: string }
   /** The drain stamping what actually happened to a queued message. Server-internal, like `notify`. */
   | { t: 'markNotificationDelivery'; id: string; delivery: Delivery; note: string; now: string }
   /* ---- COMMERCIAL ---- */
@@ -1683,6 +1684,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             .sort((x, y) => x.name.localeCompare(y.name))
             .slice(0, 8)
           for (const p of triagers) {
+            // Each triager's OWN preference; one person's mute must not silence the rest.
+            const mode = modeFor(state.model.notificationPrefs, p.id, 'intake-arrival')
+            if (mode === 'mute') continue
             seqAfter += 1
             const nid = `notif-${seqAfter}`
             notifications = {
@@ -1701,6 +1705,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
                 deliveryNote: '',
                 readAt: null,
               },
+            }
+            if (mode === 'in-app+email') {
+              seqAfter += 1
+              const eid = `notif-${seqAfter}`
+              const { delivery, deliveryNote } = deliveryFor('email')
+              notifications = {
+                ...notifications,
+                [eid]: {
+                  id: eid,
+                  to: p.name,
+                  toId: p.id,
+                  channel: 'email',
+                  subject: `New request ${id}`,
+                  body: `${issue.raisedBy} raised “${issue.subject}” — it is unowned until somebody takes it.`,
+                  aboutId: id,
+                  ruleId: 'intake-arrival',
+                  createdAt: a.now,
+                  delivery,
+                  deliveryNote,
+                  readAt: null,
+                },
+              }
             }
           }
         }
@@ -2168,24 +2194,70 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         newOwner !== 'Unassigned' &&
         newOwner.trim().toLowerCase() !== by.trim().toLowerCase()
       ) {
-        seqAfter += 1
-        const nid = `notif-${seqAfter}`
-        notifications = {
-          ...notifications,
-          [nid]: {
-            id: nid,
-            to: newOwner,
-            toId: directoryIdByName(state.model, newOwner),
-            channel: 'in-app',
-            subject: `${a.id} is now yours`,
-            body: `${by} assigned you ${a.id} — “${next.subject}”.`,
-            aboutId: a.id,
-            ruleId: 'assignment',
-            createdAt: a.now,
-            delivery: 'delivered',
-            deliveryNote: '',
-            readAt: null,
-          },
+        /*
+         * The person's own preference, consulted at the mint. Mute skips the record but
+         * NEVER the audit line — "why didn't I get this" must have a stored answer — and
+         * in-app+email adds a second record for the scheduled pass's drain to send.
+         */
+        const ownerId = directoryIdByName(state.model, newOwner)
+        const mode = modeFor(state.model.notificationPrefs, ownerId, 'assignment')
+        if (mode !== 'mute') {
+          seqAfter += 1
+          const nid = `notif-${seqAfter}`
+          notifications = {
+            ...notifications,
+            [nid]: {
+              id: nid,
+              to: newOwner,
+              toId: ownerId,
+              channel: 'in-app',
+              subject: `${a.id} is now yours`,
+              body: `${by} assigned you ${a.id} — “${next.subject}”.`,
+              aboutId: a.id,
+              ruleId: 'assignment',
+              createdAt: a.now,
+              delivery: 'delivered',
+              deliveryNote: '',
+              readAt: null,
+            },
+          }
+        }
+        if (mode === 'in-app+email') {
+          seqAfter += 1
+          const nid = `notif-${seqAfter}`
+          const { delivery, deliveryNote } = deliveryFor('email')
+          notifications = {
+            ...notifications,
+            [nid]: {
+              id: nid,
+              to: newOwner,
+              toId: ownerId,
+              channel: 'email',
+              subject: `${a.id} is now yours`,
+              body: `${by} assigned you ${a.id} — “${next.subject}”.`,
+              aboutId: a.id,
+              ruleId: 'assignment',
+              createdAt: a.now,
+              delivery,
+              deliveryNote,
+              readAt: null,
+            },
+          }
+        }
+        if (mode === 'mute') {
+          audit = log(
+            actor,
+            { ...state, audit },
+            {
+              rowId: a.id,
+              field: 'notification',
+              from: '',
+              to: `in-app → ${newOwner} (muted by their preference)`,
+              at: a.now,
+              by,
+              reason: 'assignment',
+            },
+          )
         }
       }
       // The warning rides back on the success message, because a note only the audit trail
@@ -4772,6 +4844,30 @@ Question: ${review.question}`,
     /* ---------------- NOTIFICATION ---------------- */
 
     case 'notify': {
+      /*
+       * The person's overlay on a rule's channel — only when the target resolves to a
+       * directory person, because a preference belongs to a person and a role label is
+       * not one. Mute suppresses whatever the rule chose, with the audit line saying so;
+       * in-app+email adds the email record only when the rule was not already emailing.
+       */
+      const prefId = directoryIdByName(state.model, a.to)
+      const prefMode = modeFor(state.model.notificationPrefs, prefId, 'automation')
+      if (prefMode === 'mute') {
+        return {
+          state: {
+            ...state,
+            audit: log(actor, state, {
+              rowId: a.aboutId,
+              field: 'notification',
+              from: '',
+              to: `${a.channel} → ${a.to} (muted by their preference)`,
+              at: a.now,
+              by,
+              reason: a.ruleId,
+            }),
+          },
+        }
+      }
       const seq = state.seq + 1
       const id = `notif-${seq}`
       const { delivery, deliveryNote } = deliveryFor(a.channel)
@@ -4790,11 +4886,28 @@ Question: ${review.question}`,
         deliveryNote,
         readAt: null,
       }
+      let notifications: Record<string, Notification> = { ...state.notifications, [id]: notification }
+      let seqAfter = seq
+      if (prefMode === 'in-app+email' && a.channel !== 'email') {
+        seqAfter += 1
+        const eid = `notif-${seqAfter}`
+        const emailOutcome = deliveryFor('email')
+        notifications = {
+          ...notifications,
+          [eid]: {
+            ...notification,
+            id: eid,
+            channel: 'email',
+            delivery: emailOutcome.delivery,
+            deliveryNote: emailOutcome.deliveryNote,
+          },
+        }
+      }
       return {
         state: {
           ...state,
-          notifications: { ...state.notifications, [id]: notification },
-          seq,
+          notifications,
+          seq: seqAfter,
           // Audited against the record it is about, and carrying the rule that caused it, so
           // "why did I get this" and "why did this record change" have the same answer.
           audit: log(actor, state, {
@@ -4807,6 +4920,53 @@ Question: ${review.question}`,
             reason: a.ruleId,
           }),
         },
+      }
+    }
+
+    case 'setNotificationPref': {
+      const problem = notificationPrefProblem(a.kind, a.mode)
+      if (problem) return { state, error: problem }
+      const person = state.model.people[a.personId]
+      if (!person) {
+        return { state, error: 'Preferences belong to a directory person, and that id resolves to nobody.' }
+      }
+      /*
+       * Self-service is the gate, not a grant: preferences are the person's own, and the
+       * one exception is the operator who configures the platform. The same shape as note
+       * authorship — the arm knows whose record this is, the permission table cannot.
+       */
+      const self = directoryPersonFor(state.model, actor)?.id === a.personId
+      if (!self && !can(state.model, actor, 'config.manage').allowed) {
+        return {
+          state,
+          error: `Preferences are the person's own. Changing ${person.name}'s needs “Configure the platform”.`,
+        }
+      }
+      const current = modeFor(state.model.notificationPrefs, a.personId, a.kind)
+      if (current === a.mode) return { state, message: 'Nothing changed.' }
+      return {
+        state: {
+          ...state,
+          model: {
+            ...state.model,
+            notificationPrefs: {
+              ...state.model.notificationPrefs,
+              [a.personId]: {
+                ...(state.model.notificationPrefs[a.personId] ?? {}),
+                [a.kind]: a.mode,
+              },
+            },
+          },
+          audit: log(actor, state, {
+            rowId: a.personId,
+            field: 'notification.prefs',
+            from: `${a.kind}: ${current}`,
+            to: `${a.kind}: ${a.mode}`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `Noted — ${a.kind} is now ${a.mode} for ${person.name}.`,
       }
     }
 

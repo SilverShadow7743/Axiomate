@@ -892,6 +892,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "NP1",
+      "title": "The person’s own say over each kind, with the default path untouched",
+      "expected": "No pref means exactly today’s behaviour — the regression guard runs first; email adds a pending record for the drain; mute mints nothing but the audit still answers why; preferences are self-or-admin; role labels have no preferences.",
+      "verdict": "PASS",
+      "actual": "With no preference set an assignment mints exactly one delivered in-app record — the guard, asserted first. in-app+email adds a second record queued pending for the scheduled pass’s drain; mute mints nothing while the audit line answers “why didn’t I get this” in so many words. Each intake triager’s own preference is consulted inside the loop; a rule’s notify is suppressed by its target’s mute but a role label — nobody’s preference — is untouched, and a rule already emailing plus an email preference stays one record. A client-role actor may set her own preferences and not Priya’s, the admin may set anybody’s, and a kind outside the vocabulary is refused naming all three.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

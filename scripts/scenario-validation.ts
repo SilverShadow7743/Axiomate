@@ -5050,6 +5050,129 @@ scenario(
 )
 
 /* ================================================================== *
+ * Notification preferences (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'NP1',
+  'The person\u2019s own say over each kind, with the default path untouched',
+  'No pref means exactly today\u2019s behaviour \u2014 the regression guard runs first; email adds a pending record for the drain; mute mints nothing but the audit still answers why; preferences are self-or-admin; role labels have no preferences.',
+  () => {
+    const notifsOf = (st: WorkspaceState, rule: string) =>
+      Object.values(st.notifications).filter((n) => n.ruleId === rule)
+
+    /* THE GUARD, FIRST: no pref set, an assignment mints exactly one in-app record. */
+    const plain = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { owner: 'Priya' }, now: NOW,
+    } as Action)
+    const plainMints = notifsOf(plain, 'assignment')
+    const defaultUntouched =
+      plainMints.length === 1 && plainMints[0].channel === 'in-app' && plainMints[0].delivery === 'delivered'
+
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+
+    /* in-app+email: two records, the email one pending for the scheduled pass. */
+    const wantsMail = ok(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'assignment', mode: 'in-app+email', now: NOW,
+    } as Action)
+    const mailed = ok(wantsMail, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { owner: 'Priya' }, now: NOW,
+    } as Action)
+    const mailMints = notifsOf(mailed, 'assignment')
+    const emailRec = mailMints.find((n) => n.channel === 'email')
+    const emailAdded =
+      mailMints.length === 2 &&
+      mailMints.some((n) => n.channel === 'in-app' && n.delivery === 'delivered') &&
+      emailRec?.delivery === 'pending' && /scheduled pass/.test(emailRec.deliveryNote)
+
+    /* mute: nothing minted, and the audit line still answers why. */
+    const muted = ok(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'assignment', mode: 'mute', now: NOW,
+    } as Action)
+    const silent = ok(muted, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { owner: 'Priya' }, now: NOW,
+    } as Action)
+    const mutedHolds =
+      notifsOf(silent, 'assignment').length === 0 &&
+      silent.audit.some((e) => e.field === 'notification' && /muted by their preference/.test(e.to ?? ''))
+
+    /* Intake: each triager\u2019s OWN preference, inside the loop. */
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    const staffed = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_SUPPORT'] },
+      now: NOW,
+    } as Action)
+    const arrived = apply(staffed, {
+      t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Prefs mail-in' }, now: NOW,
+    } as Action, INTAKE_ACTOR).state
+    const intakeDefault = notifsOf(arrived, 'intake-arrival').some((n) => n.toId === priyaId)
+    const intakeMuted = ok(staffed, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'intake-arrival', mode: 'mute', now: NOW,
+    } as Action)
+    const quietArrival = apply(intakeMuted, {
+      t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Prefs mail-in 2' }, now: NOW,
+    } as Action, INTAKE_ACTOR).state
+    const intakeHolds = intakeDefault && !notifsOf(quietArrival, 'intake-arrival').some((n) => n.toId === priyaId)
+
+    /* The notify arm: mute suppresses a rule\u2019s choice; a role label is nobody\u2019s pref. */
+    const autoMuted = ok(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'automation', mode: 'mute', now: NOW,
+    } as Action)
+    const ruleFired = ok(autoMuted, {
+      t: 'notify', to: 'Priya', channel: 'in-app', subject: 'Watch', body: 'Overdue.', aboutId: 'OAPIL-1', ruleId: 'RULE_X', now: NOW,
+    } as Action)
+    const ruleSuppressed =
+      Object.values(ruleFired.notifications).length === 0 &&
+      ruleFired.audit.some((e) => e.field === 'notification' && /muted by their preference/.test(e.to ?? ''))
+    const roleLabel = ok(autoMuted, {
+      t: 'notify', to: 'Delivery Lead', channel: 'in-app', subject: 'Watch', body: 'Overdue.', aboutId: 'OAPIL-1', ruleId: 'RULE_X', now: NOW,
+    } as Action)
+    const roleUntouched = Object.values(roleLabel.notifications).length === 1
+
+    /* No doubling: a rule already emailing plus an in-app+email pref is ONE email record. */
+    const autoMail = ok(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'automation', mode: 'in-app+email', now: NOW,
+    } as Action)
+    const alreadyEmail = ok(autoMail, {
+      t: 'notify', to: 'Priya', channel: 'email', subject: 'Watch', body: 'Overdue.', aboutId: 'OAPIL-1', ruleId: 'RULE_X', now: NOW,
+    } as Action)
+    const noDoubling =
+      Object.values(alreadyEmail.notifications).filter((n) => n.channel === 'email').length === 1 &&
+      Object.values(alreadyEmail.notifications).length === 1
+
+    /* Self-or-admin: a client-role actor may set her own, not Priya\u2019s; the admin may. */
+    const withCarol = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Pref Carol', roleIds: ['ROLE_CLIENT_USER'] }, now: NOW,
+    } as Action)
+    const carolId = Object.values(withCarol.model.people).find((pp) => pp.name === 'Pref Carol')!.id
+    const carol: Actor = { id: 'np-carol', name: 'Pref Carol' }
+    const carolOwn = apply(withCarol, {
+      t: 'setNotificationPref', personId: carolId, kind: 'assignment', mode: 'mute', now: NOW,
+    } as Action, carol)
+    const carolCross = apply(withCarol, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'assignment', mode: 'mute', now: NOW,
+    } as Action, carol)
+    const gateHolds =
+      !carolOwn.error &&
+      Boolean(carolCross.error && /person's own/.test(carolCross.error)) &&
+      !act(BASE, { t: 'setNotificationPref', personId: priyaId, kind: 'assignment', mode: 'mute', now: NOW } as Action).error
+
+    /* Validation, in words. */
+    const badKind = apply(BASE, {
+      t: 'setNotificationPref', personId: priyaId, kind: 'digest', mode: 'mute', now: NOW,
+    } as unknown as Action, A)
+    const badRefused = Boolean(badKind.error && /assignment, intake-arrival, automation/.test(badKind.error))
+
+    const good = defaultUntouched && emailAdded && mutedHolds && intakeHolds && ruleSuppressed &&
+      roleUntouched && noDoubling && gateHolds && badRefused
+    return good
+      ? { verdict: 'PASS', actual: 'With no preference set an assignment mints exactly one delivered in-app record \u2014 the guard, asserted first. in-app+email adds a second record queued pending for the scheduled pass\u2019s drain; mute mints nothing while the audit line answers \u201cwhy didn\u2019t I get this\u201d in so many words. Each intake triager\u2019s own preference is consulted inside the loop; a rule\u2019s notify is suppressed by its target\u2019s mute but a role label \u2014 nobody\u2019s preference \u2014 is untouched, and a rule already emailing plus an email preference stays one record. A client-role actor may set her own preferences and not Priya\u2019s, the admin may set anybody\u2019s, and a kind outside the vocabulary is refused naming all three.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `defaultUntouched=${defaultUntouched} emailAdded=${emailAdded} mutedHolds=${mutedHolds} intakeHolds=${intakeHolds} ruleSuppressed=${ruleSuppressed} roleUntouched=${roleUntouched} noDoubling=${noDoubling} gateHolds=${gateHolds} badRefused=${badRefused}`, stops: 'the preference overlay disagrees with the design', severity: 'P1', impact: 'notifications silently swallowed, or preferences ignored' } as const
+  },
+)
+
+/* ================================================================== *
  * Report
  * ================================================================== */
 
