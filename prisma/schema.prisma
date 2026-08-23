@@ -249,6 +249,11 @@ model Issue {
   ownerId     String?
   /// Whether a client-facing surface may show this record. Default false — marked by a person.
   clientVisible Boolean @default(false)
+  /// A risk's judged halves, 1-5; null = not yet judged. Exposure is computed, never stored.
+  riskLikelihood Int?
+  riskImpact     Int?
+  /// A decision's recorded outcome.
+  decisionOutcome String? @db.Text
   raisedBy    String
   /// String, not an enum. The accountable-party vocabulary is configurable
   /// (`OperatingModel.parties`), so an enum here would reject any party a user adds.

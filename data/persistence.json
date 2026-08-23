@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-23T06:24:58.200Z",
+  "at": "2026-08-23T07:29:18.648Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 50,
+  "passed": 51,
   "failed": 0,
   "checks": [
     {
@@ -32,7 +32,7 @@
     {
       "what": "a batch across every table applies",
       "ok": true,
-      "detail": "12 audit rows"
+      "detail": "15 audit rows"
     },
     {
       "what": "a note keeps its text exactly, quotes and newline included",
@@ -43,6 +43,11 @@
       "what": "quarter hours survive as a decimal, not a float",
       "ok": true,
       "detail": "6.25h, billable=false"
+    },
+    {
+      "what": "a risk’s judged halves and a decision’s outcome survive — and no exposure column exists",
+      "ok": true,
+      "detail": "L=4 I=5"
     },
     {
       "what": "a late entry’s justification survives the round trip",
@@ -147,7 +152,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 33706 chars · 1 visible issues · 6 audit rows"
+      "detail": "payload 34729 chars · 1 visible issues · 9 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",

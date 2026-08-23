@@ -266,6 +266,7 @@ async function main() {
    */
   const batch: Action[] = [
     { t: 'setDates', id: 'PROOF-1', start: '2026-08-01', end: '2026-08-10', now: NOW, reason: 'Client moved UAT — “quotes” and a\nnewline' },
+    { t: 'updateIssue', id: 'PROOF-1', patch: { riskLikelihood: 4, riskImpact: 5, decisionOutcome: 'Interim mapping shipped.' }, now: NOW },
     { t: 'addNote', issueId: 'PROOF-1', body: 'Note with “smart quotes”, an em—dash and a\nnewline.', noteType: 'Client Communication', pinned: true, now: NOW },
     { t: 'addEvidence', issueId: 'PROOF-1', kind: 'document', name: 'signoff.pdf', purpose: 'Client confirmation', url: null, mimeType: 'application/pdf', sizeBytes: 0, note: '', now: NOW },
     { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-04', hours: 6.25, activity: 'Investigation', billable: false, note: 'Quarter hours', justification: 'Proof entry — dated fixture, recorded late by design.', now: NOW },
@@ -296,6 +297,14 @@ async function main() {
     'quarter hours survive as a decimal, not a float',
     entry?.hours === 6.25 && entry.billable === false,
     entry ? `${entry.hours}h, billable=${entry.billable}` : 'no entry',
+  )
+  check(
+    'a risk’s judged halves and a decision’s outcome survive — and no exposure column exists',
+    state.issues['PROOF-1']?.riskLikelihood === 4 &&
+      state.issues['PROOF-1']?.riskImpact === 5 &&
+      state.issues['PROOF-1']?.decisionOutcome === 'Interim mapping shipped.' &&
+      !('riskExposure' in (state.issues['PROOF-1'] ?? {})),
+    `L=${state.issues['PROOF-1']?.riskLikelihood} I=${state.issues['PROOF-1']?.riskImpact}`,
   )
   check(
     'a late entry’s justification survives the round trip',
