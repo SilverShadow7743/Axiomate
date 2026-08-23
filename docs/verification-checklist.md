@@ -653,6 +653,20 @@ suite; their browser half waits for a real submitted week.
    engagement: the engagement chips `set here`, a process area beneath it chips
    `from <engagement>`, a sibling client chips `organisation default`.
 
+## 29 · Mentions — naming a colleague tells them
+
+1. **The ping.** On a record's Notes tab, write a note naming a directory person with
+   `@Their Name`. The name renders highlighted, and one notification lands in their bell —
+   "You were mentioned on <record>" — however many times the note repeats the name.
+2. **Never the author.** Naming yourself pings nobody.
+3. **Only the newly named.** Edit the note to add a second name: only the addition is
+   pinged; the kept name is not re-pinged.
+4. **The preference.** The Inbox preferences row "When somebody mentions me" — mute turns
+   the ping into the History line "(muted by their preference)"; "also email me" queues
+   the email record for the scheduled pass.
+5. **Unknown tokens stay text.** `@Nobody` matching no directory person renders plain and
+   mints nothing — the parser refuses to guess.
+
 ## What has actually been opened in a browser
 
 Recorded because the distinction turned out to matter more than anything else in this document.
