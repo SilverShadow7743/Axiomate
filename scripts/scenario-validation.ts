@@ -26,11 +26,16 @@ import { runRecurrences,
   applyWithRules,
   initWorkspace,
   runWatch,
+  scopeChainOf,
   type Action,
   type SeedIssueInput,
   type WorkspaceState,
 } from '../lib/workspace'
 import { inboxFor, undelivered } from '../lib/notifications'
+import {
+  blastRadius, labelSource, agentEnabledSource, requiredSource,
+  resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
+} from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
 import { directoryIdByName, rolesFor } from '../lib/access'
@@ -5251,6 +5256,75 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The grid gathers a week across issues without re-filtering: quarter hours sum per day and per issue, a withdrawn entry is excluded, another person\u2019s hours never land, and the id-join matches an entry whose display name went stale. Three submitted weeks make a queue; the panel\u2019s pre-filter \u2014 decideProblem per row \u2014 excludes the approver\u2019s own week, the remaining two approve as an atomic fold, and the own week asked individually is refused in the rule\u2019s words and stays Submitted.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `gridRight=${gridRight} submittedAll=${submittedAll} preFilterRight=${preFilterRight} batchRight=${batchRight} selfRefused=${selfRefused}`, stops: 'the gathering disagrees with the design', severity: 'P1', impact: 'a week attested from a partial picture, or an approver deciding their own hours' } as const
+  },
+)
+
+/* ================================================================== *
+ * Override provenance (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'OV1',
+  'Every resolved value can say where it came from, and a change can say what it reaches',
+  'The sources are the resolvers\u2019 annotated twins \u2014 same walk, compared for equality so they cannot fork; the radius names the scopes a change reaches and the ones shielded by their own pin.',
+  () => {
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const engId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    /* An org-wide word, and a nearer one at the engagement. */
+    let st = ok(BASE, { t: 'config', op: { k: 'setLabel', scopeId: ROOT_SCOPE, key: 'ISSUE_OWNER', label: 'Org Owner' }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'setLabel', scopeId: engId, key: 'ISSUE_OWNER', label: 'Eng Owner' }, now: NOW } as Action)
+    const m = st.model
+
+    const chainEng = scopeChainOf(st, engId)
+    const chainClient = scopeChainOf(st, clientId)
+    const chainModule = scopeChainOf(st, moduleId)
+
+    /* All four source kinds, each equal to its resolver \u2014 the anti-fork check. */
+    const own = labelSource(m, 'ISSUE_OWNER', chainEng)
+    const org = labelSource(m, 'ISSUE_OWNER', chainClient)
+    const inherited = labelSource(m, 'ISSUE_OWNER', chainModule)
+    const shipped = labelSource(m, 'FIELD_SEVERITY', chainEng)
+    const sourcesRight =
+      own.at === engId && own.value === 'Eng Owner' &&
+      org.at === ROOT_SCOPE && org.value === 'Org Owner' &&
+      inherited.at === engId && inherited.value === 'Eng Owner' &&
+      shipped.at === null && shipped.value === LABEL_KEYS.FIELD_SEVERITY &&
+      own.value === resolveLabel(m, 'ISSUE_OWNER', chainEng) &&
+      org.value === resolveLabel(m, 'ISSUE_OWNER', chainClient) &&
+      inherited.value === resolveLabel(m, 'ISSUE_OWNER', chainModule) &&
+      shipped.value === resolveLabel(m, 'FIELD_SEVERITY', chainEng)
+
+    /* The boolean families walk the same way. */
+    const agentId = Object.keys(m.agents)[0]
+    const withAgent = ok(st, { t: 'config', op: { k: 'setScopeAgent', scopeId: clientId, agentId, value: true }, now: NOW } as Action)
+    const agentPinned = agentEnabledSource(withAgent.model, agentId, chainEng)
+    const agentDefault = agentEnabledSource(m, agentId, chainEng)
+    const respId = Object.keys(m.responsibilities)[0]
+    const respDefault = requiredSource(m, respId, chainEng)
+    const booleansRight =
+      agentPinned.at === clientId && agentPinned.value === true &&
+      agentPinned.value === resolveAgentEnabled(withAgent.model, agentId, chainEng) &&
+      agentDefault.at === null && respDefault.at === null
+
+    /* The radius. Eng pins the key; the module sits beneath it, the client above it. */
+    const options = [clientId, engId, moduleId].map((id) => ({ id, chain: scopeChainOf(st, id) }))
+    const sets = (sid: string) => Boolean(m.overrides[sid]?.labels?.ISSUE_OWNER)
+    const fromRoot = blastRadius(options, ROOT_SCOPE, sets)
+    const fromClient = blastRadius(options, clientId, sets)
+    const radiusRight =
+      fromRoot.affected.includes(clientId) &&
+      fromRoot.shielded.some((x) => x.id === engId && x.by === engId) &&
+      fromRoot.shielded.some((x) => x.id === moduleId && x.by === engId) &&
+      !fromRoot.affected.includes(engId) &&
+      fromClient.affected.length === 1 && fromClient.affected[0] === clientId &&
+      fromClient.shielded.some((x) => x.id === moduleId && x.by === engId)
+
+    const good = sourcesRight && booleansRight && radiusRight
+    return good
+      ? { verdict: 'PASS', actual: 'The engagement\u2019s own word answers \u201cset here\u201d, the client\u2019s answers \u201corganisation default\u201d, the module inherits the engagement\u2019s and says from whom, and an untouched key answers the shipped default \u2014 each source equal to its resolver, so the twins cannot fork. A change at the organisation reaches the client but is shielded from the engagement by its own pin and from the module by the same pin, named; a change at the client reaches only the client.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `sourcesRight=${sourcesRight} booleansRight=${booleansRight} radiusRight=${radiusRight}`, stops: 'the provenance disagrees with the resolution', severity: 'P2', impact: 'a screen naming the wrong source for a value, or previewing the wrong reach' } as const
   },
 )
 

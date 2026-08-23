@@ -912,6 +912,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "OV1",
+      "title": "Every resolved value can say where it came from, and a change can say what it reaches",
+      "expected": "The sources are the resolvers’ annotated twins — same walk, compared for equality so they cannot fork; the radius names the scopes a change reaches and the ones shielded by their own pin.",
+      "verdict": "PASS",
+      "actual": "The engagement’s own word answers “set here”, the client’s answers “organisation default”, the module inherits the engagement’s and says from whom, and an untouched key answers the shipped default — each source equal to its resolver, so the twins cannot fork. A change at the organisation reaches the client but is shielded from the engagement by its own pin and from the module by the same pin, named; a change at the client reaches only the client.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

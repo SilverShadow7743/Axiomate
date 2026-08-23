@@ -1085,6 +1085,92 @@ export function resolveLabel(model: OperatingModel, key: LabelKey, chain: string
   return LABEL_KEYS[key]
 }
 
+/**
+ * The annotated twins — the same walk as each resolver, carrying WHERE the value came from.
+ *
+ * `at` is the scope id that supplied it, ROOT_SCOPE for the organisation default, and null
+ * for the shipped default (or the agent's / responsibility type's own flag). The resolvers
+ * stay as they are; a divergence between a resolver and its source would be a bug, and the
+ * scenario suite compares them so a future change has to move both.
+ */
+export interface SourcedValue<T> {
+  value: T
+  at: string | null
+}
+
+export function labelSource(
+  model: OperatingModel,
+  key: LabelKey,
+  chain: string[] = [],
+): SourcedValue<string> {
+  for (const scopeId of chain) {
+    const v = model.overrides[scopeId]?.labels?.[key]
+    if (v) return { value: v, at: scopeId }
+  }
+  const root = model.overrides[ROOT_SCOPE]?.labels?.[key]
+  if (root) return { value: root, at: ROOT_SCOPE }
+  return { value: LABEL_KEYS[key], at: null }
+}
+
+export function agentEnabledSource(
+  model: OperatingModel,
+  agentId: string,
+  chain: string[] = [],
+): SourcedValue<boolean> {
+  for (const scopeId of [...chain, ROOT_SCOPE]) {
+    const v = model.overrides[scopeId]?.agentEnabled?.[agentId]
+    if (typeof v === 'boolean') return { value: v, at: scopeId }
+  }
+  return { value: model.agents[agentId]?.enabled ?? false, at: null }
+}
+
+export function requiredSource(
+  model: OperatingModel,
+  responsibilityId: string,
+  chain: string[] = [],
+): SourcedValue<boolean> {
+  for (const scopeId of [...chain, ROOT_SCOPE]) {
+    const v = model.overrides[scopeId]?.responsibilityRequired?.[responsibilityId]
+    if (typeof v === 'boolean') return { value: v, at: scopeId }
+  }
+  return { value: model.responsibilities[responsibilityId]?.required ?? false, at: null }
+}
+
+/**
+ * What a change at one scope would actually reach.
+ *
+ * Pure over the configurable scopes (chain fine → coarse, as `scopeChainOf` builds it), a
+ * change point, and a predicate saying whether a scope pins the key itself. A scope is in
+ * the radius when `at` is itself or on its chain; walking outward from the scope, the
+ * first pin met BEFORE `at` shields it — a scope that pins the key is shielded BY ITSELF.
+ * The organisation default is the backstop, not an option in the radius.
+ */
+export function blastRadius(
+  options: { id: string; chain: string[] }[],
+  at: string,
+  sets: (scopeId: string) => boolean,
+): { affected: string[]; shielded: { id: string; by: string }[] } {
+  const affected: string[] = []
+  const shielded: { id: string; by: string }[] = []
+  for (const opt of options) {
+    if (opt.id === ROOT_SCOPE) continue
+    const path = [opt.id, ...opt.chain.filter((c) => c !== opt.id)]
+    const beneath = at === ROOT_SCOPE || path.includes(at)
+    if (!beneath) continue
+    let verdict: 'affected' | null = 'affected'
+    for (const step of path) {
+      if (step === at) break
+      if (sets(step)) {
+        shielded.push({ id: opt.id, by: step })
+        verdict = null
+        break
+      }
+    }
+    if (verdict) affected.push(opt.id)
+  }
+  return { affected, shielded }
+}
+
 /** Every label at once, for a scope. Handy for the grid and for prompting. */
 export function resolveLabels(model: OperatingModel, chain: string[] = []): Record<LabelKey, string> {
   const out = {} as Record<LabelKey, string>
