@@ -756,6 +756,7 @@ function RolesAndPeople({
               <th>Name</th>
               <th>Work address</th>
               <th>Roles</th>
+              <th>Client</th>
               <th>Source</th>
               <th />
             </tr>
@@ -782,6 +783,35 @@ function RolesAndPeople({
                       }
                     }}
                   />
+                </td>
+                <td>
+                  {p.roleIds.some((r) => ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER'].includes(r)) ? (
+                    <select
+                      value={p.clientScopeId ?? ''}
+                      aria-label={`Client for ${p.name}`}
+                      onChange={(e) =>
+                        onConfig({
+                          k: 'upsertPerson',
+                          id: p.id,
+                          name: p.name,
+                          roleIds: p.roleIds,
+                          clientScopeId: e.target.value || null,
+                        })
+                      }
+                    >
+                      {/* Unattached is deny-by-default: the seat sees nothing until this is set. */}
+                      <option value="">not attached — sees nothing</option>
+                      {Object.values(state.nodes)
+                        .filter((n) => n.kind === 'client' && !n.deletedAt)
+                        .map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <span className="prov">—</span>
+                  )}
                 </td>
                 <td>
                   <select
