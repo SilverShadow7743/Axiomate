@@ -68,6 +68,7 @@ import { useLabels } from './labels'
 type Tab =
   | 'capabilities'
   | 'timePolicy'
+  | 'allocationPolicy'
   | 'goals'
   | 'index'
   | 'terminology'
@@ -108,6 +109,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'automation', label: 'Automation', group: 'Operating model' },
   { id: 'watch', label: 'Scheduled pass', group: 'Operating model' },
   { id: 'timePolicy', label: 'Time recording', group: 'Operating model' },
+  { id: 'allocationPolicy', label: 'Allocation', group: 'Operating model' },
   { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
@@ -308,6 +310,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'automation' && <Automation state={state} onConfig={onConfig} />}
           {tab === 'watch' && <Watch state={state} signedIn={signedIn} onConfig={onConfig} pass={pass} />}
           {tab === 'timePolicy' && <TimeRecording state={state} onConfig={onConfig} />}
+          {tab === 'allocationPolicy' && <AllocationCap state={state} onConfig={onConfig} />}
           {tab === 'sizing' && <Sizing state={state} onConfig={onConfig} />}
           {tab === 'workflows' && <Workflows state={state} onConfig={onConfig} scopes={scopes} />}
           {tab === 'routing' && <Routing state={state} onConfig={onConfig} scopes={scopes} pass={pass} />}
@@ -1435,6 +1438,54 @@ function Sizing({
 /* ================================================================== *
  * Scheduled pass
  * ================================================================== */
+
+function AllocationCap({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const cap = state.model.allocationPolicy.cap
+
+  const choose = (next: 'hard' | 'advisory') => {
+    if (next !== cap) onConfig({ k: 'setAllocationPolicy', patch: { cap: next } })
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Allocation</h3>
+      <p className="cfg-note">
+        What happens when committing somebody to a project would take them past their
+        capacity. The judgement itself never changes — hours from their working pattern,
+        minus leave and other commitments — only what the workspace does about the answer.
+      </p>
+      <div className="cfg-card">
+        <label className="cfg-check">
+          <input type="radio" name="alloc-cap" checked={cap === 'hard'} onChange={() => choose('hard')} />
+          <span>
+            <b>Hard.</b> Nobody can be committed past their capacity, full stop. The
+            “commit anyway” step disappears, and the reducer refuses the override
+            wherever it comes from.
+          </span>
+        </label>
+        <label className="cfg-check">
+          <input type="radio" name="alloc-cap" checked={cap === 'advisory'} onChange={() => choose('advisory')} />
+          <span>
+            <b>Advisory.</b> Over-capacity commitments warn, and can be accepted — each
+            acceptance is recorded as a deliberate decision, with the numbers, in the
+            record&rsquo;s history.
+          </span>
+        </label>
+        <p className="cfg-inherit">
+          Ships hard. Existing over-allocations stand as records either way — the cap runs
+          when an allocation is written, never as a retroactive sweep — but editing one
+          under the hard cap is a new decision and has to fit.
+        </p>
+      </div>
+    </section>
+  )
+}
 
 function TimeRecording({
   state,

@@ -320,6 +320,7 @@ export default function CapacityPanel({
           people={Object.values(state.model.people).map((p) => p.name)}
           defaultFrom={from}
           defaultTo={to}
+          capMode={state.model.allocationPolicy.cap}
           onAllocate={onAllocate}
         />
       ) : (
@@ -363,11 +364,15 @@ function AllocateForm({
   people,
   defaultFrom,
   defaultTo,
+  capMode,
   onAllocate,
 }: {
   people: string[]
   defaultFrom: string
   defaultTo: string
+  /** The workspace's cap. Under hard the second-step override is never offered — the
+   *  reducer refuses it anyway; the button's absence is the UI half of both-halves. */
+  capMode: 'hard' | 'advisory'
   onAllocate: (a: {
     person: string
     startDate: string
@@ -449,7 +454,7 @@ function AllocateForm({
           Commit
         </button>
       </div>
-      {refused && (
+      {refused && capMode === 'advisory' && (
         <div className="time-row">
           <p className="ov-gate" style={{ flex: 1 }}>
             That is more time than they have. If it is the decision, say so — it will be recorded
@@ -458,6 +463,16 @@ function AllocateForm({
           <button className="btn" onClick={() => submit(true)}>
             Commit anyway
           </button>
+        </div>
+      )}
+      {refused && capMode === 'hard' && (
+        <div className="time-row">
+          {/* No second step: the reducer refuses the override too. The form keeps its values
+              so the share or the window can be adjusted in place. */}
+          <p className="ov-gate" style={{ flex: 1 }}>
+            That is more time than they have, and this workspace enforces the cap. Lower the
+            share, shorten the window, or free them up first.
+          </p>
         </div>
       )}
     </div>
