@@ -151,7 +151,11 @@ The full sequence from a clean checkout:
     git archive HEAD | tar -x -C <build-dir>      # so uncommitted work cannot ship
     cd <build-dir> && npm ci && npx prisma generate
     npx tsc --noEmit && npm run build
-    python scripts/package-release.py .next/standalone <out>/release.zip         --extra .next/static=.next/static
+    python scripts/package-release.py .next/standalone <out>/release.zip         --extra .next/static=.next/static --extra public=public
+
+(`public=public` since the PWA landed: standalone output does not carry `public/`, and a
+package without it deploys a 404 manifest icon set, service worker and offline page — found
+by probing the four URLs after the phase-8 deploy, which is now checklist §33 step 1.)
     az webapp deploy --name axiomate-tms --resource-group Axiomate-TMS-RG         --src-path <out>/release.zip --type zip
 
 Building from `git archive HEAD` rather than the working tree is not fussiness. It is the only
