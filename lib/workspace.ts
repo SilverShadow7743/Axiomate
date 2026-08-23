@@ -140,6 +140,7 @@ import {
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
 import { mentionsIn } from './mentions'
+import { raidProblem } from './raid'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
@@ -252,6 +253,12 @@ export interface IssueRecord {
    * request from them would be absurd. Absent (pre-boundary rows) reads as false.
    */
   clientVisible?: boolean
+  /** A risk's judged halves, 1–5 each; null = not yet judged, never a default. Exposure is
+   *  computed from these and NEVER stored — see `lib/raid.ts`. */
+  riskLikelihood?: number | null
+  riskImpact?: number | null
+  /** A decision's recorded outcome. Meaningful on Decision-typed records; plain text. */
+  decisionOutcome?: string | null
   raisedBy: string
   accountable: AccountableParty
   raised: string
@@ -2003,6 +2010,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'updateIssue': {
       const i = state.issues[a.id]
       if (!i) return { state, error: 'Issue not found.' }
+
+      /* The RAID judgement's bounds, on the PATCH before any spread — validating the merged
+         record would refuse an unrelated edit over stored values that were already fine. */
+      {
+        const raidBad = raidProblem(a.patch)
+        if (raidBad) return { state, error: raidBad }
+      }
 
       /**
        * Has somebody else changed this since it was read?

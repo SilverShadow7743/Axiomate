@@ -932,6 +932,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "RD1",
+      "title": "A risk carries its judgement, a decision its outcome — and exposure is never stored",
+      "expected": "Two shipped types recognised by stable id through the live registry, so a rename keeps the semantics; the judgement bounded 1–5 with null meaning not-yet-judged; the bands turn at their stated boundaries.",
+      "verdict": "PASS",
+      "actual": "Risk and Decision ship by stable id and survive a rename to “Threat” — the word changes, the semantics do not, and the old word stops matching. The bands turn exactly where stated (4 Low, 5 Medium, 14 High, 15 Critical), null propagates as not-yet-judged rather than becoming a number, 0 and 6 are refused in words that name the scale and the way back, and no exposure field exists on the stored record — it is computed from the halves every time. A decision’s outcome rides the ordinary audited edit.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

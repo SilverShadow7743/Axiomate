@@ -33,6 +33,7 @@ import { runRecurrences,
 } from '../lib/workspace'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
+import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
@@ -5404,6 +5405,71 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The parser takes the longest matching directory name at each @, holds the word boundary (so @Sample is not Sam), and leaves an unknown token as text. A note naming Priya twice pings her once with her directory id on the record; Priya naming herself pings nobody; an edit that keeps her name and adds Sam\u2019s pings only Sam. Her mute preference turns the ping into the audit line that answers why, and a note with no @ mints nothing \u2014 the default path untouched.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `parserRight=${parserRight} distinctRight=${distinctRight} authorExcluded=${authorExcluded} editRight=${editRight} muteRight=${muteRight} defaultRight=${defaultRight}`, stops: 'the mention disagrees with the design', severity: 'P2', impact: 'colleagues pinged wrongly, repeatedly, or not at all' } as const
+  },
+)
+
+/* ================================================================== *
+ * RAID (design 2026-08-23)
+ * ================================================================== */
+
+scenario(
+  'RD1',
+  'A risk carries its judgement, a decision its outcome — and exposure is never stored',
+  'Two shipped types recognised by stable id through the live registry, so a rename keeps the semantics; the judgement bounded 1–5 with null meaning not-yet-judged; the bands turn at their stated boundaries.',
+  () => {
+    /* The shipped types, by id. */
+    const m = BASE.model
+    const shipped =
+      m.workTypes[RISK_TYPE_ID]?.label === 'Risk' &&
+      m.workTypes[DECISION_TYPE_ID]?.label === 'Decision' &&
+      raidKindOf(m, 'Risk') === 'risk' &&
+      raidKindOf(m, 'decision') === 'decision' &&
+      raidKindOf(m, 'Defect') === null
+
+    /* A renamed label keeps its semantics — recognition is the id, not the word. */
+    const renamed = ok(BASE, {
+      t: 'config', op: { k: 'upsertWorkType', id: RISK_TYPE_ID, label: 'Threat', description: '' }, now: NOW,
+    } as Action)
+    const renameHolds = raidKindOf(renamed.model, 'Threat') === 'risk' && raidKindOf(renamed.model, 'Risk') === null
+
+    /* The bands, at their boundaries; null propagates. */
+    const bands =
+      exposure(2, 2)!.band === 'Low' && exposure(1, 5)!.band === 'Medium' &&
+      exposure(3, 3)!.band === 'Medium' && exposure(2, 5)!.band === 'High' &&
+      exposure(2, 7 as number)!.score === 14 && exposure(3, 5)!.band === 'Critical' &&
+      exposure(5, 5)!.score === 25 && exposure(null, 5) === null && exposure(4, null) === null
+
+    /* The judgement through the ordinary edit, bounded in words, null-back allowed. */
+    const judged = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { type: 'Risk', riskLikelihood: 4, riskImpact: 5 }, now: NOW,
+    } as Action)
+    const stored = judged.issues['OAPIL-1']
+    const judgedRight = stored.riskLikelihood === 4 && stored.riskImpact === 5 &&
+      exposure(stored.riskLikelihood, stored.riskImpact)!.score === 20 &&
+      !('riskExposure' in stored)
+
+    const tooBig = act(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { riskImpact: 6 }, now: NOW } as Action)
+    const tooSmall = act(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { riskLikelihood: 0 }, now: NOW } as Action)
+    const bounded = Boolean(tooBig.error && /between 1 and 5/.test(tooBig.error)) &&
+      Boolean(tooSmall.error && /not been judged yet/.test(tooSmall.error))
+
+    const unjudged = ok(judged, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { riskLikelihood: null }, now: NOW,
+    } as Action)
+    const nullBack = unjudged.issues['OAPIL-1'].riskLikelihood === null &&
+      exposure(unjudged.issues['OAPIL-1'].riskLikelihood, unjudged.issues['OAPIL-1'].riskImpact) === null
+
+    /* A decision's outcome rides the same edit. */
+    const decided = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-2',
+      patch: { type: 'Decision', decisionOutcome: 'Ship the interim mapping; revisit after UAT.' }, now: NOW,
+    } as Action)
+    const outcomeRight = decided.issues['OAPIL-2'].decisionOutcome === 'Ship the interim mapping; revisit after UAT.'
+
+    const good = shipped && renameHolds && bands && judgedRight && bounded && nullBack && outcomeRight
+    return good
+      ? { verdict: 'PASS', actual: 'Risk and Decision ship by stable id and survive a rename to “Threat” — the word changes, the semantics do not, and the old word stops matching. The bands turn exactly where stated (4 Low, 5 Medium, 14 High, 15 Critical), null propagates as not-yet-judged rather than becoming a number, 0 and 6 are refused in words that name the scale and the way back, and no exposure field exists on the stored record — it is computed from the halves every time. A decision’s outcome rides the ordinary audited edit.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `shipped=${shipped} renameHolds=${renameHolds} bands=${bands} judgedRight=${judgedRight} bounded=${bounded} nullBack=${nullBack} outcomeRight=${outcomeRight}`, stops: 'the RAID semantics disagree with the design', severity: 'P2', impact: 'risks unsortable by exposure, or a stored exposure free to lie' } as const
   },
 )
 

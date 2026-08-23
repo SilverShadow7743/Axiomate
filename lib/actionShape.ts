@@ -473,6 +473,7 @@ const SHAPES = {
         reference: text, clientImpact: text, plannedStart: textOrNull, plannedEnd: textOrNull,
         percentOverride: numOrNull, scheduleMode: text, assignments: plainObject,
         clientVisible: bool,
+        riskLikelihood: numOrNull, riskImpact: numOrNull, decisionOutcome: textOrNull,
         deletedAt: textOrNull,
       }),
     ),
