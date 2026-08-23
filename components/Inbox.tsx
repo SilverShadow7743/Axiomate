@@ -4,8 +4,16 @@ import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import type { Actor } from '@/lib/actor'
-import { inboxFor, undelivered, unreadCount, type Notification } from '@/lib/notifications'
-import { directoryPersonFor } from '@/lib/access'
+import {
+  inboxFor,
+  modeFor,
+  undelivered,
+  unreadCount,
+  type Notification,
+  type NotificationKind,
+  type NotificationMode,
+} from '@/lib/notifications'
+import { can, directoryPersonFor } from '@/lib/access'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
 
@@ -24,6 +32,7 @@ export default function Inbox({
   onRead,
   onReadAll,
   onOpen,
+  onSetPref,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -32,8 +41,11 @@ export default function Inbox({
   onReadAll: (ids: string[]) => void
   /** The whole notification rides along so the workspace can land on the right tab for it. */
   onOpen: (issueId: string, notification: Notification) => void
+  /** The viewer's own preference for one kind — the reducer refuses anybody else's. */
+  onSetPref: (personId: string, kind: NotificationKind, mode: NotificationMode) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [prefsOpen, setPrefsOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useOverlay(ref, open)
 
@@ -117,9 +129,101 @@ export default function Inbox({
                 and nowhere else.
               </div>
             )}
+
+            {/* The person's own say. Absent entirely for a viewer the directory cannot
+                place — there is no id to store a preference under, and the block says so. */}
+            <div className="inbox-prefs">
+              {meId ? (
+                <>
+                  <button className="btn ghost" onClick={() => setPrefsOpen((v) => !v)}>
+                    {prefsOpen ? 'Hide preferences' : 'Preferences…'}
+                  </button>
+                  {prefsOpen && (
+                    <PrefRows
+                      state={state}
+                      actor={actor}
+                      meId={meId}
+                      onSetPref={onSetPref}
+                    />
+                  )}
+                </>
+              ) : (
+                <p className="prov">
+                  Preferences need a directory entry, and this sign-in matches none.
+                </p>
+              )}
+            </div>
           </div>,
           document.body,
         )}
+    </div>
+  )
+}
+
+/**
+ * Three kinds, three modes each, in words. The intake row shows only to people the intake
+ * mint can address — those holding work.assign — so nobody configures a notification they
+ * can never receive. The email choice says out loud when the directory holds no address:
+ * the record would queue and the drain would fail honestly, but saying so before the
+ * choice beats a pending row after it.
+ */
+function PrefRows({
+  state,
+  actor,
+  meId,
+  onSetPref,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  meId: string
+  onSetPref: (personId: string, kind: NotificationKind, mode: NotificationMode) => void
+}) {
+  const prefs = state.model.notificationPrefs
+  const hasEmail = Boolean(directoryPersonFor(state.model, actor)?.email)
+  const rows: { kind: NotificationKind; label: string; show: boolean }[] = [
+    { kind: 'assignment', label: 'When work is assigned to me', show: true },
+    {
+      kind: 'intake-arrival',
+      label: 'When a new request arrives',
+      show: can(state.model, actor, 'work.assign').allowed,
+    },
+    { kind: 'automation', label: 'When a watch rule fires for me', show: true },
+  ]
+  const MODES: { mode: NotificationMode; label: string }[] = [
+    { mode: 'in-app', label: 'tell me here' },
+    { mode: 'in-app+email', label: 'also email me' },
+    { mode: 'mute', label: "don't tell me" },
+  ]
+  return (
+    <div className="inbox-pref-rows">
+      {rows
+        .filter((r) => r.show)
+        .map((r) => {
+          const current = modeFor(prefs, meId, r.kind)
+          return (
+            <div key={r.kind} className="inbox-pref-row">
+              <span className="inbox-pref-label">{r.label}</span>
+              <span>
+                {MODES.map((m) => (
+                  <button
+                    key={m.mode}
+                    className={`btn ghost${current === m.mode ? ' inbox-pref-on' : ''}`}
+                    onClick={() => onSetPref(meId, r.kind, m.mode)}
+                    aria-pressed={current === m.mode}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </span>
+            </div>
+          )
+        })}
+      {!hasEmail && (
+        <p className="prov">
+          The directory holds no email address for you, so “also email me” would queue mail
+          that cannot be sent until one is recorded.
+        </p>
+      )}
     </div>
   )
 }

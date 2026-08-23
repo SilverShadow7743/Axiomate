@@ -1379,6 +1379,33 @@ select.cell-editor {
   }
 }
 
+/* ---------- notification preferences ---------- */
+.inbox-prefs {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.inbox-pref-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.inbox-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.inbox-pref-label {
+  color: var(--text-muted);
+}
+.inbox-pref-on {
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  font-weight: 600;
+}
+
 /* ---------- time grace: the late entry and its reason ---------- */
 .time-late {
   display: inline-block;

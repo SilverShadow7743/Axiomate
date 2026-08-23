@@ -1787,6 +1787,9 @@ export default function IssueWorkspace({
           state={state}
           actor={actor}
           onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
+          onSetPref={(personId, kind, mode) =>
+            dispatch({ t: 'setNotificationPref', personId, kind, mode, now: new Date().toISOString() })
+          }
           onReadAll={(ids) => {
             // One batch through dispatchMany: successive dispatch calls in one tick each
             // read the pre-change state and the last setState wins — the documented trap.
