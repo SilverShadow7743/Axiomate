@@ -1379,6 +1379,15 @@ select.cell-editor {
   }
 }
 
+/* ---------- RAID: the exposure band ---------- */
+.raid-band {
+  font-weight: 700;
+}
+.raid-low { color: var(--h-ontrack, #2e7d32); }
+.raid-medium { color: var(--text-muted); }
+.raid-high { color: var(--h-atrisk, #b26a00); }
+.raid-critical { color: var(--h-overdue); }
+
 /* ---------- mentions ---------- */
 .note-mention {
   color: var(--accent, #c22f26);

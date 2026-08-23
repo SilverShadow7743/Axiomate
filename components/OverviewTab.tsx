@@ -13,6 +13,7 @@ import type { ApprovalDecision } from '@/lib/approval'
 import ApprovalsBlock from './ApprovalsBlock'
 import { liveWorkTypes } from '@/lib/config'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
+import { exposure, raidKindOf, RAID_SCALE_MAX } from '@/lib/raid'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 
@@ -45,6 +46,8 @@ export interface IssueDraft {
   nextAction: string
   plannedStart: string
   plannedEnd: string
+  /** A decision's recorded outcome — meaningful on Decision-typed records. */
+  decisionOutcome: string
 }
 
 function draftOf(i: IssueRecord): IssueDraft {
@@ -59,6 +62,7 @@ function draftOf(i: IssueRecord): IssueDraft {
     nextAction: i.nextAction,
     plannedStart: i.plannedStart ?? '',
     plannedEnd: i.plannedEnd ?? '',
+    decisionOutcome: i.decisionOutcome ?? '',
   }
 }
 
@@ -154,7 +158,11 @@ export default function OverviewTab({
     const patch: Partial<IssueRecord> = {}
     for (const k of Object.keys(base) as (keyof IssueDraft)[]) {
       if (k === 'plannedStart' || k === 'plannedEnd') continue
-      if (base[k] !== draft[k]) (patch as Record<string, unknown>)[k] = draft[k]
+      if (base[k] !== draft[k]) {
+        // An emptied outcome is "no outcome recorded", which is null — not the empty string.
+        ;(patch as Record<string, unknown>)[k] =
+          k === 'decisionOutcome' && draft[k] === '' ? null : draft[k]
+      }
     }
     // Dates go through their own action so the schedule's validation and reason-tracking
     // apply — writing them as plain fields would bypass both.
@@ -180,6 +188,11 @@ export default function OverviewTab({
    */
   const outbound = useMemo(() => sendingMailboxFor(state, issue.id), [state, issue.id])
   const maySendMail = can(state.model, actor, 'mail.send').allowed
+
+  /* Which RAID kind this record is, by stable id through the live registry — a renamed
+     label keeps its semantics. Null for ordinary work, and every RAID surface below hides. */
+  const raidKind = raidKindOf(state.model, record?.type ?? issue.type)
+  const judged = exposure(record?.riskLikelihood, record?.riskImpact)
 
   const [composing, setComposing] = useState(false)
   const [mailBody, setMailBody] = useState('')
@@ -408,6 +421,73 @@ export default function OverviewTab({
             <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
             <dt>{labels.FIELD_STATUS}</dt>
             <dd>{issue.status}</dd>
+            {raidKind === 'risk' && record && (
+              <>
+                <dt>Exposure</dt>
+                <dd>
+                  {may.allowed ? (
+                    <>
+                      <select
+                        value={record.riskLikelihood ?? ''}
+                        aria-label="Likelihood, 1 to 5"
+                        onChange={(e) =>
+                          onSave(
+                            { riskLikelihood: e.target.value === '' ? null : Number(e.target.value) },
+                            null,
+                          )
+                        }
+                      >
+                        <option value="">not judged</option>
+                        {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
+                          <option key={n + 1} value={n + 1}>
+                            L{n + 1}
+                          </option>
+                        ))}
+                      </select>{' '}
+                      ×{' '}
+                      <select
+                        value={record.riskImpact ?? ''}
+                        aria-label="Impact, 1 to 5"
+                        onChange={(e) =>
+                          onSave(
+                            { riskImpact: e.target.value === '' ? null : Number(e.target.value) },
+                            null,
+                          )
+                        }
+                      >
+                        <option value="">not judged</option>
+                        {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
+                          <option key={n + 1} value={n + 1}>
+                            I{n + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <span>
+                      {record.riskLikelihood ?? '—'} × {record.riskImpact ?? '—'}
+                    </span>
+                  )}{' '}
+                  {judged ? (
+                    <b className={`raid-band raid-${judged.band.toLowerCase()}`}>
+                      = {judged.score} · {judged.band}
+                    </b>
+                  ) : (
+                    <span className="prov">not yet judged — exposure is computed, never stored</span>
+                  )}
+                </dd>
+              </>
+            )}
+            {raidKind === 'decision' && (
+              <>
+                <dt>Outcome</dt>
+                <dd className="ov-prose">
+                  {record?.decisionOutcome || (
+                    <span className="prov">no outcome recorded yet — Edit to record it</span>
+                  )}
+                </dd>
+              </>
+            )}
           </dl>
           <dl className="kv">
             <dt>{labels.ISSUE_OWNER}</dt>
@@ -512,6 +592,20 @@ export default function OverviewTab({
               aria-label="Description"
             />
           </dd>
+          {raidKind === 'decision' && (
+            <>
+              <dt>Outcome</dt>
+              <dd>
+                <textarea
+                  rows={3}
+                  value={draft.decisionOutcome}
+                  onChange={(e) => set('decisionOutcome', e.target.value)}
+                  aria-label="Decision outcome"
+                  placeholder="What was decided, and on what basis — the sentence people ask for months later."
+                />
+              </dd>
+            </>
+          )}
           <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
           <dd>
             {issue.client} · {issue.module}
