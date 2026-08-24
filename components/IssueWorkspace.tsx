@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
@@ -58,7 +59,6 @@ import {
 import { buildScale } from '@/lib/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import { planSlaDates, slaReason } from '@/lib/sla'
-import SlaPlanPanel from './SlaPlanPanel'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import BoardView from './BoardView'
@@ -71,13 +71,28 @@ import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
 import Inbox from './Inbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
-import Dialogs, { type DialogState } from './Dialogs'
-import IssueFocus from './IssueFocus'
-import EvidencePanel, { type AddEvidenceInput } from './EvidencePanel'
-import ChatPanel, { type ApplyOutcome } from './ChatPanel'
-import ConfigWorkspace from './ConfigWorkspace'
-import ArchivePanel from './ArchivePanel'
-import TimesheetPanel from './TimesheetPanel'
+import type { DialogState } from './Dialogs'
+import type { AddEvidenceInput } from './EvidencePanel'
+import type { ApplyOutcome } from './ChatPanel'
+
+/*
+ * Dynamically imported rather than bundled in with everything above.
+ *
+ * Every one of these is gated behind a boolean or a dialog-state check — never mounted on
+ * first paint — and ConfigWorkspace alone is ~4,900 lines. Statically importing them put the
+ * whole admin surface, every modal, and the timesheet/archive/chat panels into the one chunk
+ * every visitor downloads before the tree even renders. `ssr: false` is correct as well as an
+ * optimisation: nothing here can render before the interaction that opens it happens, so there
+ * is no server-rendered markup for these to produce.
+ */
+const Dialogs = dynamic(() => import('./Dialogs'), { ssr: false })
+const IssueFocus = dynamic(() => import('./IssueFocus'), { ssr: false })
+const EvidencePanel = dynamic(() => import('./EvidencePanel'), { ssr: false })
+const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
+const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })
+const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
+const TimesheetPanel = dynamic(() => import('./TimesheetPanel'), { ssr: false })
+const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {
   describeSave,

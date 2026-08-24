@@ -33,8 +33,26 @@ export interface SeedFile {
  * places — "179 issues" — and it was true of the raw export before deduplication and wrong from
  * the first load afterwards. A number in a label is a derived value stored as fact, which is the
  * rule this schema follows everywhere except, until now, inside a string.
+ *
+ * Memoised at module scope: the two files together are ~300KB, and `boot()` calls this on every
+ * request whether or not a database is configured — with one, the result is only read for its
+ * (small) `meta`, but the read-and-parse cost was paid in full regardless. The files change only
+ * on redeploy, which is exactly when this module gets a fresh process and a fresh cache.
  */
+let cached: Promise<SeedFile> | null = null
 export async function loadSeed(): Promise<SeedFile> {
+  // A failed read must not poison the cache — a transient disk error should be retried on the
+  // next request, not replayed forever as the same rejection.
+  if (!cached) {
+    cached = readSeed().catch((err) => {
+      cached = null
+      throw err
+    })
+  }
+  return cached
+}
+
+async function readSeed(): Promise<SeedFile> {
   const raw = await readFile(join(process.cwd(), 'data', 'issues.seed.json'), 'utf8')
   const seed = JSON.parse(raw) as SeedFile
   const internal = await loadInternal()

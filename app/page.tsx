@@ -47,8 +47,16 @@ export default async function Page({
 
   return (
     <IssueWorkspace
-      issues={seed.issues}
-      relationships={seed.relationships}
+      /*
+       * `issues`/`relationships` are only read as the lazy-init fallback the client falls back
+       * to when `initialState` is null — see `useState(() => initialState ?? initWorkspace(...))`
+       * in IssueWorkspace. With a database serving the workspace (the normal, live case) that
+       * branch never runs, so shipping the full seed log here was ~300KB of JSON serialised into
+       * every page load and never once read on the other end. Sent only when the client will
+       * actually need it.
+       */
+      issues={state ? [] : seed.issues}
+      relationships={state ? [] : seed.relationships}
       initialState={state}
       persistence={persistence}
       pass={pass}
