@@ -94,6 +94,9 @@ const KINDS = new Set([
   'config',
   'setAssignment',
   'updateEngagement',
+  'addProjectMember',
+  'updateProjectMember',
+  'removeProjectMember',
 ])
 
 export async function POST(req: Request) {

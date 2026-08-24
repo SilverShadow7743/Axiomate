@@ -145,6 +145,11 @@ export const PERMISSIONS = [
   },
   { key: 'sow.attribute', label: 'Attribute work to a SOW', what: 'Say which statement of work a project is delivered under.' },
   { key: 'engagement.edit', label: 'Edit engagement detail', what: 'Commercial and governance detail on an engagement.' },
+  {
+    key: 'project.staff',
+    label: 'Staff a project',
+    what: 'Add or remove who may see and act on a project, and correct their project role. Access, not capability — see the project-membership design.',
+  },
   { key: 'config.manage', label: 'Configure the platform', what: 'Terminology, roles, work types, service levels, transitions, agents, templates and routing.' },
 ] as const
 
@@ -243,14 +248,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit', 'project.staff'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
@@ -556,6 +561,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   archiveSow: 'sow.edit',
   attributeToSow: 'sow.attribute',
   updateEngagement: 'engagement.edit',
+  addProjectMember: 'project.staff',
+  updateProjectMember: 'project.staff',
+  removeProjectMember: 'project.staff',
   config: 'config.manage',
   /*
    * The two that genuinely take no grant, said out loud rather than left out.

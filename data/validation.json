@@ -718,7 +718,7 @@
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 43 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 44 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
@@ -989,6 +989,36 @@
       "expected": "projectOf returns null for a record parented directly to a bare client or engagement node — ALLOWED_PARENTS has always permitted that — and canOnProject treats null as ungated, matching today’s visibility for such records.",
       "verdict": "PASS",
       "actual": "resolved=null allowed=true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM5",
+      "title": "Staffing a project needs project.staff — an Engagement Lead may, a Consultant may not",
+      "expected": "addProjectMember goes through the same funnel as every other mutation: ACTION_PERMISSIONS names project.staff, and DEFAULT_GRANTS holds it for ROLE_ENGAGEMENT_LEAD and ROLE_PROJECT_MANAGER, not for ROLE_TECHNICAL.",
+      "verdict": "PASS",
+      "actual": "lead added a member; consultant refused: Staff a project is not something Technical Consultant can do here.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM6",
+      "title": "Adding a member with an unresolvable name is refused",
+      "expected": "addProjectMember refuses when the person does not resolve to exactly one directory entry, rather than storing a row nothing will ever match — the deliberate divergence from Allocation, which tolerates personId: null. (The directory refuses duplicate names on write — see directoryIdByName — so the \"many matches\" case cannot arise from anything the reducer itself can create; only the zero-match case is reachable here.)",
+      "verdict": "PASS",
+      "actual": "\"Nobody Here\" does not match exactly one person in the directory.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM7",
+      "title": "Removing a member is soft, and the removal takes effect immediately",
+      "expected": "removeProjectMember sets removedAt rather than deleting the row — the same reasoning Allocation and Commitment never hard-delete — and canOnProject stops counting it as staffed the moment removedAt is set.",
+      "verdict": "PASS",
+      "actual": "before=true rowSurvives=true after=false",
       "stops": "",
       "severity": "P1",
       "impact": "none"

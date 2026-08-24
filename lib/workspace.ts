@@ -109,7 +109,7 @@ import {
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
-import type { ProjectMember } from './staffing'
+import { memberProblem, type ProjectMember } from './staffing'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -1120,6 +1120,11 @@ export type Action =
       acceptUnavailable?: boolean
       now: string
     }
+  /* ---- PROJECT MEMBERSHIP ---- */
+  | { t: 'addProjectMember'; projectId: string; person: string; projectRoleId: string; now: string }
+  /** Role correction only — see `./staffing`. Nobody re-dates a tenure by editing it. */
+  | { t: 'updateProjectMember'; id: string; projectRoleId: string; now: string }
+  | { t: 'removeProjectMember'; id: string; now: string }
 
 /**
  * Operations on the operating model.
@@ -5860,6 +5865,106 @@ Question: ${review.question}`,
           }),
         },
         message: notes ? `${type.label} updated. ${notes}` : `${type.label} updated.`,
+      }
+    }
+
+    case 'addProjectMember': {
+      const project = state.nodes[a.projectId]
+      if (!project || project.kind !== 'project') {
+        return { state, error: 'Membership is staffed to a project.' }
+      }
+      const problem = memberProblem(a)
+      if (problem) return { state, error: problem.message }
+      if (!state.model.projectRoles[a.projectRoleId] || state.model.projectRoles[a.projectRoleId].deletedAt) {
+        return { state, error: 'That project role no longer exists.' }
+      }
+      /**
+       * Required, unlike `Allocation.personId` — see the module comment in `./staffing`. A row
+       * that cannot resolve to a directory id is an access fact nothing will ever match against
+       * a signed-in session, so this refuses rather than storing one silently useless.
+       */
+      const personId = directoryIdByName(state.model, a.person)
+      if (!personId) {
+        return { state, error: `"${a.person}" does not match exactly one person in the directory.` }
+      }
+      const already = Object.values(state.projectMembers).some(
+        (m) => m.projectId === a.projectId && m.personId === personId && !m.removedAt,
+      )
+      if (already) return { state, error: `${a.person} is already staffed on this project.` }
+
+      const seq = state.seq + 1
+      const id = `projmem-${seq}`
+      const member: ProjectMember = {
+        id,
+        projectId: a.projectId,
+        person: a.person.trim(),
+        personId,
+        projectRoleId: a.projectRoleId,
+        addedBy: by,
+        addedAt: a.now,
+        removedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          projectMembers: { ...state.projectMembers, [id]: member },
+          seq,
+          audit: log(actor, state, {
+            rowId: a.projectId,
+            field: 'project member',
+            from: '—',
+            to: `${a.person} (${state.model.projectRoles[a.projectRoleId].label})`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${a.person} added.`,
+      }
+    }
+
+    case 'updateProjectMember': {
+      const member = state.projectMembers[a.id]
+      if (!member || member.removedAt) return { state, error: 'That membership no longer exists.' }
+      if (!state.model.projectRoles[a.projectRoleId] || state.model.projectRoles[a.projectRoleId].deletedAt) {
+        return { state, error: 'That project role no longer exists.' }
+      }
+      const was = state.model.projectRoles[member.projectRoleId]?.label ?? member.projectRoleId
+      const next: ProjectMember = { ...member, projectRoleId: a.projectRoleId }
+      return {
+        state: {
+          ...state,
+          projectMembers: { ...state.projectMembers, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: member.projectId,
+            field: 'project member',
+            from: `${member.person} (${was})`,
+            to: `${member.person} (${state.model.projectRoles[a.projectRoleId].label})`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Project role updated.',
+      }
+    }
+
+    case 'removeProjectMember': {
+      const member = state.projectMembers[a.id]
+      if (!member) return { state, error: 'That membership no longer exists.' }
+      if (member.removedAt) return { state }
+      return {
+        state: {
+          ...state,
+          projectMembers: { ...state.projectMembers, [a.id]: { ...member, removedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: member.projectId,
+            field: 'project member',
+            from: `${member.person} (${state.model.projectRoles[member.projectRoleId]?.label ?? member.projectRoleId})`,
+            to: '(removed)',
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${member.person} removed.`,
       }
     }
 

@@ -5655,6 +5655,89 @@ scenario(
   },
 )
 
+scenario(
+  'PM5',
+  'Staffing a project needs project.staff — an Engagement Lead may, a Consultant may not',
+  'addProjectMember goes through the same funnel as every other mutation: ACTION_PERMISSIONS names project.staff, and DEFAULT_GRANTS holds it for ROLE_ENGAGEMENT_LEAD and ROLE_PROJECT_MANAGER, not for ROLE_TECHNICAL.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(st.model.people).find((pp) => pp.name === 'Sam')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+
+    const leadResult = apply(st, { t: 'addProjectMember', projectId, person: 'Sam', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action, { id: priyaId, name: 'Priya' })
+    const leadOk = !leadResult.error && Object.values(leadResult.state.projectMembers).some((m) => m.person === 'Sam' && m.projectId === projectId)
+
+    const consultantResult = apply(st, { t: 'addProjectMember', projectId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action, { id: samId, name: 'Sam' })
+    const consultantRefused = Boolean(consultantResult.error)
+
+    const good = leadOk && consultantRefused
+    return good
+      ? { verdict: 'PASS', actual: `lead added a member; consultant refused: ${consultantResult.error}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `leadOk=${leadOk} consultantRefused=${consultantRefused}`, stops: 'staffing a project is not gated the same way every other mutation is', severity: 'P1', impact: 'anybody can staff a project regardless of role' } as const
+  },
+)
+
+scenario(
+  'PM6',
+  'Adding a member with an unresolvable name is refused',
+  'addProjectMember refuses when the person does not resolve to exactly one directory entry, rather than storing a row nothing will ever match — the deliberate divergence from Allocation, which tolerates personId: null. (The directory refuses duplicate names on write — see directoryIdByName — so the "many matches" case cannot arise from anything the reducer itself can create; only the zero-match case is reachable here.)',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW } as Action)
+    const lead: Actor = { id: priyaId, name: 'Priya' }
+
+    const unknown = apply(st, { t: 'addProjectMember', projectId, person: 'Nobody Here', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action, lead)
+    const unknownRefused = Boolean(unknown.error) && Object.keys(unknown.state.projectMembers).length === 0
+
+    const good = unknownRefused
+    return good
+      ? { verdict: 'PASS', actual: unknown.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `unknownRefused=${unknownRefused}`, stops: 'a membership row is created for a name that does not resolve to exactly one person', severity: 'P1', impact: 'a project membership row exists that no signed-in session can ever match — silently useless access control' } as const
+  },
+)
+
+scenario(
+  'PM7',
+  'Removing a member is soft, and the removal takes effect immediately',
+  'removeProjectMember sets removedAt rather than deleting the row — the same reasoning Allocation and Commitment never hard-delete — and canOnProject stops counting it as staffed the moment removedAt is set.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Project task' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Project task')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(st.model.people).find((pp) => pp.name === 'Sam')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const lead: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+
+    st = ok(st, { t: 'addProjectMember', projectId, person: 'Sam', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const memberId = Object.values(st.projectMembers).find((m) => m.person === 'Sam')!.id
+    const resolved = projectOf(st, issueId)
+    const beforeRemove = canOnProject(st.model, sam, 'work.edit', resolved, Object.values(st.projectMembers))
+
+    st = ok(st, { t: 'removeProjectMember', id: memberId, now: NOW } as Action)
+    const rowSurvives = Boolean(st.projectMembers[memberId]) && st.projectMembers[memberId].removedAt === NOW
+    const afterRemove = canOnProject(st.model, sam, 'work.edit', resolved, Object.values(st.projectMembers))
+
+    const good = beforeRemove.allowed && rowSurvives && !afterRemove.allowed
+    return good
+      ? { verdict: 'PASS', actual: `before=${beforeRemove.allowed} rowSurvives=${rowSurvives} after=${afterRemove.allowed}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `before=${beforeRemove.allowed} rowSurvives=${rowSurvives} after=${afterRemove.allowed}`, stops: 'a removed member either still grants access, or the removal destroyed the row instead of soft-ending it', severity: 'P0', impact: 'someone removed from a project keeps access, or the history of who was staffed where is lost' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
