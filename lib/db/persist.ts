@@ -24,6 +24,7 @@ import {
   allocationToRow,
   projectMemberToRow,
   personalEventToRow,
+  inboundMailToRow,
   commitmentToRow,
   versionToRow,
   timesheetToRow,
@@ -489,6 +490,19 @@ export async function persistSteps(
         if (before.personalEvents[id] === e) continue
         const row = personalEventToRow(tenantId, e)
         await tx.personalEvent.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'recordInboundMail': {
+      for (const [id, m] of Object.entries(after.inboundMail)) {
+        if (before.inboundMail[id] === m) continue
+        const row = inboundMailToRow(tenantId, m)
+        await tx.inboundMail.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

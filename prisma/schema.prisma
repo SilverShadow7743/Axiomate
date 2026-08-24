@@ -132,6 +132,7 @@ model Tenant {
   allocations   Allocation[]
   projectMembers ProjectMember[]
   personalEvents PersonalEvent[]
+  inboundMail   InboundMail[]
   commitments   Commitment[]
   sows          Sow[]
   notifications Notification[]
@@ -685,6 +686,32 @@ model PersonalEvent {
 
   @@id([tenantId, id])
   @@index([tenantId, personId])
+}
+
+/// Every message intake has ever seen, accepted or refused — the reader classify()'s own
+/// discard never had. See lib/intake.ts's InboundMail. issueId and refusalReason are mutually
+/// exclusive; internal.view-gated only, not narrowed further.
+model InboundMail {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id      String @default(cuid())
+  mailbox String
+  from    String
+  subject String
+  body    String @db.Text
+
+  /// The sender's own message id — what the duplicate check queries directly.
+  messageId  String
+  receivedAt DateTime
+
+  issueId       String?
+  refusalReason String? @db.Text
+
+  createdAt DateTime
+
+  @@id([tenantId, id])
+  @@index([tenantId, messageId])
 }
 
 /// Leave, a public holiday, or internal work — what comes off capacity before anything is sold.

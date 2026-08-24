@@ -15,6 +15,7 @@ import type {
   Allocation as AllocationRow,
   ProjectMember as ProjectMemberRow,
   PersonalEvent as PersonalEventRow,
+  InboundMail as InboundMailRow,
   Commitment as CommitmentRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
@@ -46,6 +47,7 @@ import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { ProjectMember } from '../staffing'
 import type { PersonalEvent } from '../personalEvents'
+import type { InboundMail } from '../intake'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
@@ -946,6 +948,37 @@ export function personalEventFromRow(r: PersonalEventRow): PersonalEvent {
     attendees: r.attendees,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function inboundMailToRow(tenantId: TenantId, m: InboundMail): Prisma.InboundMailUncheckedCreateInput {
+  return {
+    tenantId,
+    id: m.id,
+    mailbox: m.mailbox,
+    from: m.from,
+    subject: m.subject,
+    body: m.body,
+    messageId: m.messageId,
+    receivedAt: new Date(m.receivedAt),
+    issueId: m.issueId,
+    refusalReason: m.refusalReason,
+    createdAt: new Date(m.createdAt),
+  }
+}
+
+export function inboundMailFromRow(r: InboundMailRow): InboundMail {
+  return {
+    id: r.id,
+    mailbox: r.mailbox,
+    from: r.from,
+    subject: r.subject,
+    body: r.body,
+    messageId: r.messageId,
+    receivedAt: r.receivedAt.toISOString(),
+    issueId: r.issueId,
+    refusalReason: r.refusalReason,
+    createdAt: r.createdAt.toISOString(),
   }
 }
 

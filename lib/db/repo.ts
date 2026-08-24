@@ -43,6 +43,7 @@ import {
   allocationToRow,
   projectMemberFromRow,
   personalEventFromRow,
+  inboundMailFromRow,
   commitmentFromRow,
   commitmentToRow,
   estimateFromRow,
@@ -130,6 +131,7 @@ type Reader = Pick<
   | 'allocation'
   | 'projectMember'
   | 'personalEvent'
+  | 'inboundMail'
   | 'commitment'
   | 'issueEstimate'
   | 'estimateRevision'
@@ -170,7 +172,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -186,6 +188,7 @@ export async function loadWorkspace(
       db.allocation.findMany({ where: { tenantId } }),
       db.projectMember.findMany({ where: { tenantId } }),
       db.personalEvent.findMany({ where: { tenantId } }),
+      db.inboundMail.findMany({ where: { tenantId } }),
       db.commitment.findMany({ where: { tenantId } }),
       db.issueEstimate.findMany({ where: { tenantId } }),
       db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
@@ -287,9 +290,7 @@ export async function loadWorkspace(
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
-    // Placeholder until the InboundMail table exists — see the mail-log plan's storage step,
-    // which replaces this with a real query in the same change that adds it.
-    inboundMail: {},
+    inboundMail: Object.fromEntries(inboundMail.map((m) => [m.id, inboundMailFromRow(m)])),
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
