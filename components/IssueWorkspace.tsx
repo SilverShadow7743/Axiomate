@@ -7,6 +7,7 @@ import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
 import MyWorkPanel from './MyWorkPanel'
+import MyCalendarPanel from './MyCalendarPanel'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
 import { can } from '@/lib/access'
@@ -2031,6 +2032,18 @@ export default function IssueWorkspace({
             if (tab) setRequestTab(tab as DetailTab)
           }}
           docked
+        />
+      ) : view === 'mycalendar' ? (
+        <MyCalendarPanel
+          state={state}
+          actor={actor}
+          today={today}
+          onAdd={(input) => dispatch({ t: 'addPersonalEvent', ...input, now: new Date().toISOString() })}
+          onUpdate={(id, patch) =>
+            dispatch({ t: 'updatePersonalEvent', id, patch, now: new Date().toISOString() })
+          }
+          onRemove={(id) => dispatch({ t: 'removePersonalEvent', id, now: new Date().toISOString() })}
+          onSelectWork={revealIssue}
         />
       ) : (
       <div className="split">

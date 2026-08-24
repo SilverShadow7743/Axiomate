@@ -1633,6 +1633,22 @@ select.cell-editor {
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
+/* My calendar, docked — `.cal`'s own `flex: 1` already fills the available width without
+   needing a min-width override the way the fixed-width modal/dropdown above did. */
+.view-dock .cal.docked {
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.cal-chip-event {
+  background: var(--accent-soft, var(--surface-3));
+}
+.cal-chip-commitment {
+  background: var(--warn-soft, var(--surface-3));
+}
+.cal-chip-allocation {
+  background: var(--surface-3);
+  opacity: 0.85;
+}
 
 /* The view switcher is navigation, not a filter — its active state carries more weight. */
 .segmented.view-switch button.active {
