@@ -157,11 +157,12 @@ interface Props {
   onRecordSkill: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
   onCorrectSkill: (id: string, patch: { level?: SkillLevel; source?: SkillSource; assessedBy?: string | null; lastUsedOn?: string | null; note?: string }) => boolean
   onRemoveSkill: (id: string) => boolean
+  onOpenProfile: (personId: string) => void
   onClose: () => void
 }
 
 export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig,
-  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onClose,
+  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onOpenProfile, onClose,
   initialTab, initialBlueprintSource }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
@@ -298,7 +299,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
               onConfig={onConfig}
             />
           )}
-          {tab === 'roles' && <RolesAndPeople state={state} onConfig={onConfig} />}
+          {tab === 'roles' && <RolesAndPeople state={state} onConfig={onConfig} onOpenProfile={onOpenProfile} />}
           {tab === 'responsibilities' && <Responsibilities state={state} onConfig={onConfig} />}
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} pass={pass} />}
@@ -519,9 +520,11 @@ function Terminology({
 function RolesAndPeople({
   state,
   onConfig,
+  onOpenProfile,
 }: {
   state: WorkspaceState
   onConfig: (op: ConfigOp) => boolean
+  onOpenProfile: (personId: string) => void
 }) {
   const model = state.model
   const roles = liveRoles(model)
@@ -821,7 +824,11 @@ function RolesAndPeople({
           <tbody>
             {people.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td>
+                  <button className="btn-link" onClick={() => onOpenProfile(p.id)}>
+                    {p.name}
+                  </button>
+                </td>
                 <td>
                   {/* The field a signed-in person is matched on. Recorded here rather than
                       derived from a name, because two people can share a display name and one

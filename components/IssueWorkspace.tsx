@@ -94,6 +94,7 @@ const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false 
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
 const TimesheetPanel = dynamic(() => import('./TimesheetPanel'), { ssr: false })
 const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
+const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {
   describeSave,
@@ -183,6 +184,8 @@ export default function IssueWorkspace({
   const [timesheetsOpen, setTimesheetsOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
   const [slaOpen, setSlaOpen] = useState(false)
+  /** The directory person whose profile panel is open, if any. */
+  const [openProfileId, setOpenProfileId] = useState<string | null>(null)
   const exportWrap = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!exportMenu) return
@@ -2528,6 +2531,21 @@ export default function IssueWorkspace({
           onRemoveSkill={(id) =>
             dispatch({ t: 'removePersonSkill', id, now: new Date().toISOString() })
           }
+          onOpenProfile={setOpenProfileId}
+        />
+      )}
+
+      {openProfileId && (
+        <ProfilePanel
+          key={openProfileId}
+          state={state}
+          actor={actor}
+          personId={openProfileId}
+          onNavigate={setOpenProfileId}
+          onUpdateCareer={(id, patch) =>
+            dispatch({ t: 'updateCareerProfile', id, patch, now: new Date().toISOString() })
+          }
+          onClose={() => setOpenProfileId(null)}
         />
       )}
 

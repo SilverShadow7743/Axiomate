@@ -3941,6 +3941,22 @@ select.cell-editor {
 .archive-modal {
   width: min(720px, 92vw);
 }
+
+/* A directory entry's own page. Wide enough for the skills table's four columns. */
+.profile-modal {
+  width: min(640px, 92vw);
+}
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 16px;
+}
+.profile-facts > div,
+.profile-facts > label.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .archive-group {
   border-top: 1px solid var(--grid-line);
   padding: 8px 0 2px;
