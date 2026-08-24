@@ -43,6 +43,7 @@ export default function TimesheetPanel({
   onDecideMany,
   onOpen,
   onClose,
+  docked = false,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -53,9 +54,15 @@ export default function TimesheetPanel({
   onDecideMany: (ids: string[]) => void
   onOpen: (issueId: string) => void
   onClose: () => void
+  /**
+   * Rendered as a first-class view rather than a modal: no scrim, no focus trap, no Close —
+   * the view switcher is how you leave. Same content either way, same reasoning MyWorkPanel's
+   * `docked` already established.
+   */
+  docked?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useOverlay(ref, true, onClose)
+  useOverlay(ref, !docked, onClose)
 
   const meId = directoryPersonFor(state.model, actor)?.id ?? null
   const [week, setWeek] = useState(() => weekStarting(today))
@@ -96,28 +103,28 @@ export default function TimesheetPanel({
   const lateFor = (t: Timesheet) =>
     entriesInWeek(entries, t.person, t.weekStarting, t.personId).filter((e) => e.justification)
 
-  const body = (
-    // Pointer-only dismissal; Escape via useOverlay is the keyboard path, and the target
-    // guard means clicks inside the dialog never bubble into a close.
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal is Escape (useOverlay)
-    <div
-        className="modal-scrim"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose()
-        }}
-      >
+  /*
+   * The scrim only wraps the dialog in the modal case — it is a flex container that centers
+   * `.modal` within it (`.modal-scrim { display: flex; justify-content: center; ... }`), so
+   * docked mode skips it entirely rather than rendering it hidden: MyWorkPanel's own drawer
+   * is positioned independently of its scrim and can afford a `{!docked && ...}` sibling, but
+   * a timesheet without its centering parent would render unstyled, not merely unwrapped.
+   */
+  const dialog = (
       <div
         className="modal timesheet-modal"
         ref={ref}
-        role="dialog"
-        aria-label="Timesheets"
+        role={docked ? undefined : 'dialog'}
+        aria-label={docked ? undefined : 'Timesheets'}
       >
         <div className="modal-head">
           <b>Timesheets</b>
           <span className="grow" />
+          {!docked && (
           <button className="btn ghost" onClick={onClose} aria-label="Close">
             ×
           </button>
+          )}
         </div>
         <div className="modal-body">
 
@@ -303,6 +310,21 @@ export default function TimesheetPanel({
         )}
         </div>
       </div>
+  )
+
+  if (docked) return <div className="view-dock">{dialog}</div>
+
+  const body = (
+    // Pointer-only dismissal; Escape via useOverlay is the keyboard path, and the target
+    // guard means clicks inside the dialog never bubble into a close.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal is Escape (useOverlay)
+    <div
+      className="modal-scrim"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      {dialog}
     </div>
   )
   return typeof document === 'undefined' ? body : createPortal(body, document.body)

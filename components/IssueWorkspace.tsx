@@ -1984,6 +1984,54 @@ export default function IssueWorkspace({
           onSelect={requestSelect}
           onCommitStatus={(rowId, status, reason) => commitCell(rowId, 'status', status, reason)}
         />
+      ) : view === 'timesheet' ? (
+        <TimesheetPanel
+          state={state}
+          actor={actor}
+          today={today}
+          onSubmitWeek={(person, week) =>
+            dispatch({ t: 'submitTimesheet', person, weekStarting: week, now: new Date().toISOString() })
+          }
+          onDecideWeek={(id, decision, reason) =>
+            dispatch({ t: 'decideTimesheet', id, decision, reason, now: new Date().toISOString() })
+          }
+          onDecideMany={(ids) => {
+            const now = new Date().toISOString()
+            dispatchMany(ids.map((tid) => ({ t: 'decideTimesheet', id: tid, decision: 'approved', now }) as Action))
+          }}
+          onOpen={(issueId) => {
+            revealIssue(issueId)
+            setRequestTab('Time' as DetailTab)
+          }}
+          onClose={() => {}}
+          docked
+        />
+      ) : view === 'inbox' ? (
+        <Inbox
+          state={state}
+          actor={actor}
+          onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
+          onSetPref={(personId, kind, mode) =>
+            dispatch({ t: 'setNotificationPref', personId, kind, mode, now: new Date().toISOString() })
+          }
+          onReadAll={(ids) => {
+            const now = new Date().toISOString()
+            dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
+          }}
+          onOpen={(issueId, n) => {
+            revealIssue(issueId)
+            const tab =
+              n.ruleId === 'assignment'
+                ? 'Overview'
+                : /timesheet|hours|\btime\b/i.test(`${n.subject} ${n.ruleId}`)
+                  ? 'Time'
+                  : /note|mail|reply/i.test(`${n.subject} ${n.ruleId}`)
+                    ? 'Notes'
+                    : null
+            if (tab) setRequestTab(tab as DetailTab)
+          }}
+          docked
+        />
       ) : (
       <div className="split">
         <div className="pane-tree" style={{ width: treeWidth }}>

@@ -1611,6 +1611,28 @@ select.cell-editor {
   border-right: 1px solid var(--border);
   z-index: auto;
 }
+/* Timesheets and Notifications, docked the same way — see TimesheetPanel's and Inbox's own
+   `docked` prop. Neither uses the `.evi` class (they predate My Work's promotion to a view),
+   so each needs the same override applied to its own dropdown/modal positioning. */
+.view-dock .timesheet-modal {
+  width: min(920px, 100%);
+  max-width: none;
+  box-shadow: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.view-dock .inbox-menu {
+  position: static;
+  top: auto;
+  right: auto;
+  left: auto;
+  width: min(920px, 100%);
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
 
 /* The view switcher is navigation, not a filter — its active state carries more weight. */
 .segmented.view-switch button.active {

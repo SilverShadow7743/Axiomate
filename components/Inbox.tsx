@@ -33,6 +33,7 @@ export default function Inbox({
   onReadAll,
   onOpen,
   onSetPref,
+  docked = false,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -43,6 +44,13 @@ export default function Inbox({
   onOpen: (issueId: string, notification: Notification) => void
   /** The viewer's own preference for one kind — the reducer refuses anybody else's. */
   onSetPref: (personId: string, kind: NotificationKind, mode: NotificationMode) => void
+  /**
+   * A second, independent mount alongside the toolbar bell (which stays, unchanged, on every
+   * view) rather than a replacement for it — see the design. There is no bell to provide here:
+   * navigating to this view already is the "open" action, so the content renders unconditionally
+   * and un-portaled.
+   */
+  docked?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -54,28 +62,9 @@ export default function Inbox({
   const unread = useMemo(() => unreadCount(state.notifications, actor.name, meId), [state.notifications, actor.name, meId])
   const stuck = useMemo(() => undelivered(state.notifications), [state.notifications])
 
-  return (
-    <div className="inbox-wrap">
-      <button
-        className={`inbox-btn${unread ? ' has-unread' : ''}`}
-        onClick={() => setOpen((v) => !v)}
-        title="Notifications"
-        aria-label={`Notifications — ${unread} unread`}
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M8 2a4 4 0 0 0-4 4v3l-1 2h10l-1-2V6a4 4 0 0 0-4-4Z" strokeLinejoin="round" />
-          <path d="M6.5 13a1.6 1.6 0 0 0 3 0" strokeLinecap="round" />
-        </svg>
-        {unread > 0 && <span className="inbox-count">{unread}</span>}
-      </button>
-
-      {open &&
-        createPortal(
-          <div className="menu inbox-menu" ref={ref} role="dialog" aria-label="Notifications">
-            <button className="menu-close" onClick={() => setOpen(false)} aria-label="Close">
-              ×
-            </button>
-            <div className="menu-head">
+  const content = (
+    <>
+      <div className="menu-head">
               <b>Notifications</b>
               <span className="prov">for {actor.name}</span>
               {unread > 1 && (
@@ -153,6 +142,39 @@ export default function Inbox({
                 </p>
               )}
             </div>
+    </>
+  )
+
+  if (docked) {
+    return (
+      <div className="view-dock">
+        <div className="menu inbox-menu docked">{content}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="inbox-wrap">
+      <button
+        className={`inbox-btn${unread ? ' has-unread' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        title="Notifications"
+        aria-label={`Notifications — ${unread} unread`}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M8 2a4 4 0 0 0-4 4v3l-1 2h10l-1-2V6a4 4 0 0 0-4-4Z" strokeLinejoin="round" />
+          <path d="M6.5 13a1.6 1.6 0 0 0 3 0" strokeLinecap="round" />
+        </svg>
+        {unread > 0 && <span className="inbox-count">{unread}</span>}
+      </button>
+
+      {open &&
+        createPortal(
+          <div className="menu inbox-menu" ref={ref} role="dialog" aria-label="Notifications">
+            <button className="menu-close" onClick={() => setOpen(false)} aria-label="Close">
+              ×
+            </button>
+            {content}
           </div>,
           document.body,
         )}

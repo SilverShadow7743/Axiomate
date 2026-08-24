@@ -19,13 +19,15 @@ const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
  * not verbs: this control is navigation, which is why it sits first in the bar rather than
  * among the filters.
  */
-const VIEW_ORDER: readonly WorkspaceView[] = ['mywork', 'tree', 'board', 'calendar', 'portfolio']
+const VIEW_ORDER: readonly WorkspaceView[] = ['mywork', 'tree', 'board', 'calendar', 'portfolio', 'timesheet', 'inbox']
 const VIEW_LABEL: Record<WorkspaceView, string> = {
   mywork: 'My work',
   tree: 'Tree',
   board: 'Board',
   calendar: 'Calendar',
   portfolio: 'Portfolio',
+  timesheet: 'Timesheets',
+  inbox: 'Notifications',
 }
 const VIEW_TITLE: Record<WorkspaceView, string> = {
   mywork: 'Everything waiting on you, across every engagement',
@@ -33,6 +35,8 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   board: 'Status lanes — drag a card to move it',
   calendar: 'Due dates on a month, with the undated on a rail',
   portfolio: 'Every engagement at once — overdue, blocked, unowned, quiet',
+  timesheet: 'Your week, gathered — and the approval queue, if you hold it',
+  inbox: 'What the rules have told you, and what never left the building',
 }
 
 /**

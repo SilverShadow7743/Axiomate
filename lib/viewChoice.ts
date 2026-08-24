@@ -8,7 +8,7 @@
  * may be overridden by that rule.
  */
 
-export const WORKSPACE_VIEWS = ['mywork', 'tree', 'board', 'calendar', 'portfolio'] as const
+export const WORKSPACE_VIEWS = ['mywork', 'tree', 'board', 'calendar', 'portfolio', 'timesheet', 'inbox'] as const
 export type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 const STORE_KEY = 'axiomate.tms.view'
