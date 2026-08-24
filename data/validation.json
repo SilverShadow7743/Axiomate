@@ -1272,6 +1272,46 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PS3",
+      "title": "updateCareerProfile lets somebody update their own grade without holding config.manage",
+      "expected": "Self-service is the gate, the same shape setNotificationPref already uses — not a grant.",
+      "verdict": "PASS",
+      "actual": "grade=Senior Consultant",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PS4",
+      "title": "updateCareerProfile refuses somebody editing a colleague's career profile without config.manage, naming them",
+      "expected": "The self check must be false for a mismatched id — this is the security-sensitive case named as the plan's highest risk.",
+      "verdict": "PASS",
+      "actual": "Grade, track and development are the person's own to state. Changing Sam's needs “Configure the platform”.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PS5",
+      "title": "updateCareerProfile lets an administrator edit somebody else's track — the admin exception",
+      "expected": "Mirrors setNotificationPref's own admin exception.",
+      "verdict": "PASS",
+      "actual": "track=Data",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PS6",
+      "title": "updateCareerProfile reuses career()'s absent-versus-cleared rule: an omitted field is untouched, an empty string clears it",
+      "expected": "The two callers of career() — upsertPerson and updateCareerProfile — must not silently diverge on what \"clear\" means.",
+      "verdict": "PASS",
+      "actual": "after step1: grade=Consultant developingToward=Practice Lead; after step2: grade=undefined",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

@@ -589,6 +589,9 @@ const SHAPES = {
     note: req(text),
     now,
   },
+  /* ---- PROFILE ---- */
+  /** The arm validates the patch's own fields, same as updatePersonalEvent's patch below. */
+  updateCareerProfile: { id: req(id), patch: req(plainObject), now },
   /* ---- COMMERCIAL ---- */
   /** `id: null` is how an upsert says "insert"; see the nullable-required note on `addEvidence`. */
   upsertSow: { id: req(idOrNull), engagementId: req(id), patch: req(plainObject), now },

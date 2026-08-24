@@ -1123,6 +1123,13 @@ export type Action =
   | { t: 'setNotificationPref'; personId: string; kind: NotificationKind; mode: NotificationMode; now: string }
   /** The drain stamping what actually happened to a queued message. Server-internal, like `notify`. */
   | { t: 'markNotificationDelivery'; id: string; delivery: Delivery; note: string; now: string }
+  /**
+   * Self-or-admin, like `setNotificationPref` above — the profile screen's own edit path.
+   * Typed to exactly these three fields, not `Partial<Person>` and not `upsertPerson`'s broader
+   * op shape: the type itself is part of what stops a self-dispatch from ever carrying `roleIds`
+   * or `managerId`, not just the reducer arm's runtime check.
+   */
+  | { t: 'updateCareerProfile'; id: string; patch: { grade?: string; track?: string; developingToward?: string }; now: string }
   /* ---- COMMERCIAL ---- */
   | { t: 'upsertSow'; id: string | null; engagementId: string; patch: Partial<Sow>; now: string }
   | { t: 'archiveSow'; id: string; now: string }
@@ -5337,6 +5344,57 @@ Question: ${review.question}`,
           }),
         },
         message: `Noted — ${a.kind} is now ${a.mode} for ${person.name}.`,
+      }
+    }
+
+    case 'updateCareerProfile': {
+      const person = state.model.people[a.id]
+      if (!person) {
+        return { state, error: 'A career profile belongs to a directory person, and that id resolves to nobody.' }
+      }
+      /*
+       * The same shape as `setNotificationPref` just above: self-service is the gate, not a
+       * grant, and the one exception is the operator who configures the platform. The arm knows
+       * whose record this is; the permission table cannot.
+       */
+      const self = directoryPersonFor(state.model, actor)?.id === a.id
+      if (!self && !can(state.model, actor, 'config.manage').allowed) {
+        return {
+          state,
+          error: `Grade, track and development are the person's own to state. Changing ${person.name}'s needs “Configure the platform”.`,
+        }
+      }
+      /*
+       * `career()` omits a field entirely from its returned patch when it resolves to "clear it"
+       * — that's how `upsertPerson` reads as a fresh `Person` object literal instead of a merge,
+       * so an absent key never falls back to a stale one. `{ ...person, ...career(...) }` would
+       * break that: object spread only overwrites keys present in the source, so a cleared field
+       * would silently keep its old value instead of clearing. Dropping the three career fields
+       * from the base before applying the patch keeps this arm's semantics identical to
+       * upsertPerson's, the one other caller of `career()`.
+       */
+      const { grade: _grade, track: _track, developingToward: _developingToward, source: _source, ...rest } = person
+      const nextPerson: Person = { ...rest, ...career(a.patch, person) }
+      // Career-only, not the wider `${name} — roles` shape upsertPerson's audit uses — name and
+      // roles never move through this arm, so showing them would pad every entry with two facts
+      // that never changed.
+      const fmt = (p: Person) =>
+        `grade: ${p.grade ?? '—'}, track: ${p.track ?? '—'}, developing toward: ${p.developingToward ?? '—'}`
+      if (fmt(person) === fmt(nextPerson)) return { state, message: 'Nothing changed.' }
+      return {
+        state: {
+          ...state,
+          model: { ...state.model, people: { ...state.model.people, [a.id]: nextPerson } },
+          audit: log(actor, state, {
+            rowId: a.id,
+            field: 'person.career',
+            from: fmt(person),
+            to: fmt(nextPerson),
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${person.name}'s career profile updated.`,
       }
     }
 

@@ -6302,6 +6302,88 @@ scenario(
   },
 )
 
+scenario(
+  'PS3',
+  'updateCareerProfile lets somebody update their own grade without holding config.manage',
+  'Self-service is the gate, the same shape setNotificationPref already uses — not a grant.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const st = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const result = apply(st, { t: 'updateCareerProfile', id: priyaId, patch: { grade: 'Senior Consultant' }, now: NOW }, priyaActor)
+    const good = !result.error && result.state.model.people[priyaId].grade === 'Senior Consultant'
+
+    return good
+      ? { verdict: 'PASS', actual: `grade=${result.state.model.people[priyaId]?.grade}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error} grade=${result.state.model.people[priyaId]?.grade}`, stops: 'a person cannot update their own career profile without config.manage', severity: 'P1', impact: 'the profile screen\'s self-edit would never work for anybody who is not also an administrator' } as const
+  },
+)
+
+scenario(
+  'PS4',
+  'updateCareerProfile refuses somebody editing a colleague\'s career profile without config.manage, naming them',
+  'The self check must be false for a mismatched id — this is the security-sensitive case named as the plan\'s highest risk.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const st = ok(
+      ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action),
+      { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action,
+    )
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const result = apply(st, { t: 'updateCareerProfile', id: samId, patch: { grade: 'Principal' }, now: NOW }, priyaActor)
+    const good = Boolean(result.error) && /Sam/.test(result.error ?? '') && /Configure the platform/i.test(result.error ?? '')
+
+    return good
+      ? { verdict: 'PASS', actual: result.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error}`, stops: 'a non-admin can edit a colleague\'s career profile, or the refusal does not name whose record it is', severity: 'P0', impact: 'anybody could edit anybody else\'s grade, track or development without ever holding config.manage' } as const
+  },
+)
+
+scenario(
+  'PS5',
+  'updateCareerProfile lets an administrator edit somebody else\'s track — the admin exception',
+  'Mirrors setNotificationPref\'s own admin exception.',
+  () => {
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const st = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    // `A` (Validator) resolves to no directory person and falls to defaultRoleIds, which this
+    // fixture ships as Administrator — the same admin actor RL4-RL7 already rely on.
+    const result = act(st, { t: 'updateCareerProfile', id: samId, patch: { track: 'Data' }, now: NOW } as Action)
+    const good = !result.error && result.state.model.people[samId].track === 'Data'
+
+    return good
+      ? { verdict: 'PASS', actual: `track=${result.state.model.people[samId]?.track}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error}`, stops: 'an administrator cannot edit somebody else\'s career profile', severity: 'P1', impact: 'nobody could ever correct a colleague\'s grade or track through this action, only the person themselves' } as const
+  },
+)
+
+scenario(
+  'PS6',
+  'updateCareerProfile reuses career()\'s absent-versus-cleared rule: an omitted field is untouched, an empty string clears it',
+  'The two callers of career() — upsertPerson and updateCareerProfile — must not silently diverge on what "clear" means.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const seeded = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'], grade: 'Consultant' }, now: NOW } as Action)
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+
+    // developingToward set, grade omitted — grade must survive untouched.
+    const step1 = apply(seeded, { t: 'updateCareerProfile', id: priyaId, patch: { developingToward: 'Practice Lead' }, now: NOW }, priyaActor)
+    const untouchedOk = !step1.error
+      && step1.state.model.people[priyaId].grade === 'Consultant'
+      && step1.state.model.people[priyaId].developingToward === 'Practice Lead'
+
+    // grade sent as an empty string — must actually clear, not silently keep the old value.
+    const step2 = apply(step1.state, { t: 'updateCareerProfile', id: priyaId, patch: { grade: '' }, now: NOW }, priyaActor)
+    const clearedOk = !step2.error && step2.state.model.people[priyaId].grade === undefined
+
+    const good = untouchedOk && clearedOk
+    return good
+      ? { verdict: 'PASS', actual: `after step1: grade=${step1.state.model.people[priyaId]?.grade} developingToward=${step1.state.model.people[priyaId]?.developingToward}; after step2: grade=${step2.state.model.people[priyaId]?.grade}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `untouchedOk=${untouchedOk} clearedOk=${clearedOk}`, stops: 'updateCareerProfile does not honour career()\'s absent-versus-cleared rule the same way upsertPerson does', severity: 'P1', impact: 'a cleared career field silently keeps its old value, or an untouched field is silently wiped' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

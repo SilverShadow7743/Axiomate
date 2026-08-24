@@ -57,6 +57,7 @@ const KINDS = new Set([
   'setDocumentVisibility',
   'markNotificationRead',
   'setNotificationPref',
+  'updateCareerProfile',
   'upsertSow',
   'archiveSow',
   'attributeToSow',
