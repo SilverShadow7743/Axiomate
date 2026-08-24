@@ -122,6 +122,8 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'setLabel',
   'upsertRole',
   'deleteRole',
+  'upsertProjectRole',
+  'deleteProjectRole',
   'upsertWorkType',
   'deleteWorkType',
   'upsertDiscipline',

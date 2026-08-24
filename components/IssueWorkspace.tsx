@@ -2160,6 +2160,13 @@ export default function IssueWorkspace({
             dispatch({ t: 'upsertAllocation', id: null, projectId, ...a, now: new Date().toISOString() })
           }
           onRelease={(id) => dispatch({ t: 'removeAllocation', id, now: new Date().toISOString() })}
+          onAddMember={(projectId, person, projectRoleId) =>
+            dispatch({ t: 'addProjectMember', projectId, person, projectRoleId, now: new Date().toISOString() })
+          }
+          onUpdateMemberRole={(id, projectRoleId) =>
+            dispatch({ t: 'updateProjectMember', id, projectRoleId, now: new Date().toISOString() })
+          }
+          onRemoveMember={(id) => dispatch({ t: 'removeProjectMember', id, now: new Date().toISOString() })}
           onUpsertSow={(id, engagementId, patch) =>
             dispatch({ t: 'upsertSow', id, engagementId, patch, now: new Date().toISOString() })
           }

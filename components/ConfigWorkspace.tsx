@@ -525,9 +525,11 @@ function RolesAndPeople({
 }) {
   const model = state.model
   const roles = liveRoles(model)
+  const projectRoles = Object.values(model.projectRoles).filter((r) => !r.deletedAt)
   const org = model.organization
   const filing = model.documentFiling
   const [newRole, setNewRole] = useState('')
+  const [newProjectRole, setNewProjectRole] = useState('')
   const [newParty, setNewParty] = useState('')
   const [personFilter, setPersonFilter] = useState('')
   const [newPerson, setNewPerson] = useState('')
@@ -689,6 +691,60 @@ function RolesAndPeople({
             }}
           >
             Add role
+          </button>
+        </div>
+      </section>
+
+      <section className="cfg-section">
+        <h3 className="cfg-h">Project roles</h3>
+        <p className="cfg-note">
+          The badge a project membership carries — Sponsor, Project Manager, Consultant, and so
+          on. Labels only: a project role does not grant anything by itself. What someone may do
+          on a project they're staffed on is still decided entirely by their organisation role
+          above — this is who they are on this project, not what they're allowed to do there.
+        </p>
+
+        {projectRoles.map((r) => (
+          <div className="cfg-card" key={r.id}>
+            <div className="cfg-card-head">
+              <input
+                defaultValue={r.label}
+                aria-label={`Name for ${r.id}`}
+                onBlur={(e) =>
+                  e.target.value.trim() !== r.label &&
+                  onConfig({ k: 'upsertProjectRole', id: r.id, label: e.target.value, description: r.description })
+                }
+              />
+              <span className="grow" />
+              {r.seeded && <Badge kind="seeded">built in</Badge>}
+              {!r.seeded && (
+                <button className="btn ghost" onClick={() => onConfig({ k: 'deleteProjectRole', id: r.id })}>
+                  Archive
+                </button>
+              )}
+            </div>
+            <code className="cfg-key">{r.id}</code>
+            <p className="cfg-card-desc">{r.description}</p>
+          </div>
+        ))}
+
+        <div className="cfg-inline">
+          <input
+            value={newProjectRole}
+            placeholder="Add a project role — e.g. Test Lead"
+            aria-label="New project role name"
+            onChange={(e) => setNewProjectRole(e.target.value)}
+          />
+          <button
+            className="btn primary"
+            disabled={!newProjectRole.trim()}
+            onClick={() => {
+              if (onConfig({ k: 'upsertProjectRole', id: null, label: newProjectRole, description: '' })) {
+                setNewProjectRole('')
+              }
+            }}
+          >
+            Add project role
           </button>
         </div>
       </section>

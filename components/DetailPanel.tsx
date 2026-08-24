@@ -25,6 +25,7 @@ import TimeTab from './TimeTab'
 import type { CommitmentKind } from '@/lib/capacity'
 import CommercialPanel from './CommercialPanel'
 import CapacityPanel from './CapacityPanel'
+import ProjectMembersPanel from './ProjectMembersPanel'
 import type { Sow } from '@/lib/sow'
 import type { TimeActivity } from '@/lib/time'
 import type { ApprovalDecision } from '@/lib/approval'
@@ -55,6 +56,7 @@ import {
 export type Tab =
   | 'Overview'
   | 'Capacity'
+  | 'Members'
   | 'Notes'
   | 'Estimation'
   | 'Time'
@@ -182,6 +184,9 @@ interface Props {
   onCorrectPattern: (versionId: string, validFrom: string, reason: string) => boolean
   onCommit: (c: { person: string; kind: CommitmentKind; startDate: string; endDate: string; hoursPerDay: number; note: string }) => boolean
   onReleaseCommitment: (id: string) => void
+  onAddMember: (projectId: string, person: string, projectRoleId: string) => boolean
+  onUpdateMemberRole: (id: string, projectRoleId: string) => void
+  onRemoveMember: (id: string) => void
   /** Correct an existing time entry. The reducer arm existed with no way to reach it. */
   onUpdateTime: (
     id: string,
@@ -232,6 +237,9 @@ export default function DetailPanel({
   onDecideScope,
   onAllocate,
   onRelease,
+  onAddMember,
+  onUpdateMemberRole,
+  onRemoveMember,
   onRecordPattern,
   onCorrectPattern,
   onCommit,
@@ -296,7 +304,7 @@ export default function DetailPanel({
   const TABS: Tab[] = issue
     ? ['Overview', 'Notes', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
-      ? ['Capacity', 'History']
+      ? ['Capacity', 'Members', 'History']
       : ['Overview', 'History']
 
   /**
@@ -513,6 +521,15 @@ export default function DetailPanel({
               />
             )}
           </>
+        ) : !issue && row.kind === 'project' && tab === 'Members' ? (
+          <ProjectMembersPanel
+            row={row}
+            state={state}
+            actor={actor}
+            onAdd={(person, projectRoleId) => onAddMember(row.id, person, projectRoleId)}
+            onUpdateRole={onUpdateMemberRole}
+            onRemove={onRemoveMember}
+          />
         ) : !issue && row.kind === 'project' && tab !== 'Overview' ? (
           <CapacityPanel
             row={row}

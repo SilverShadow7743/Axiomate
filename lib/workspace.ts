@@ -109,7 +109,7 @@ import {
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
-import { memberProblem, type ProjectMember } from './staffing'
+import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -1220,6 +1220,9 @@ export type ConfigOp =
   | { k: 'setLabel'; scopeId: string; key: LabelKey; label: string }
   | { k: 'upsertRole'; id: string | null; label: string; description: string }
   | { k: 'deleteRole'; id: string }
+  /* A separate registry from `roles` — see `OperatingModel.projectRoles`'s own comment. */
+  | { k: 'upsertProjectRole'; id: string | null; label: string; description: string }
+  | { k: 'deleteProjectRole'; id: string }
   | { k: 'upsertWorkType'; id: string | null; label: string; description: string }
   | { k: 'deleteWorkType'; id: string }
   | { k: 'upsertDiscipline'; id: string | null; label: string; description: string; ownerRoleId: string }
@@ -6219,6 +6222,54 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, roles: { ...m.roles, [op.id]: { ...role, deletedAt: now } } },
         { rowId: op.id, field: 'role', from: role.label, to: '(archived)', at: now, by },
         `Role “${role.label}” archived.`,
+      )
+    }
+
+    case 'upsertProjectRole': {
+      const label = op.label.trim()
+      if (!label) return { state, error: 'A project role needs a name.' }
+      const id = op.id ?? `PROJROLE_${m.seq}`
+      const existing = m.projectRoles[id]
+      const role: ProjectRole = {
+        id,
+        label,
+        description: op.description.trim(),
+        seeded: existing?.seeded ?? false,
+        deletedAt: null,
+      }
+      return done(
+        { ...m, projectRoles: { ...m.projectRoles, [id]: role }, seq: m.seq + (op.id ? 0 : 1) },
+        {
+          rowId: id,
+          field: 'project role',
+          from: existing?.label ?? null,
+          to: label,
+          at: now,
+          by,
+        },
+        existing ? `Project role “${label}” updated.` : `Project role “${label}” added.`,
+      )
+    }
+
+    case 'deleteProjectRole': {
+      const role = m.projectRoles[op.id]
+      if (!role) return { state, error: 'Project role not found.' }
+      if (role.seeded) {
+        return { state, error: `“${role.label}” is a built-in project role. Rename it rather than removing it.` }
+      }
+      const used = Object.values(state.projectMembers).filter(
+        (pm) => pm.projectRoleId === op.id && !pm.removedAt,
+      )
+      if (used.length) {
+        return {
+          state,
+          error: `${used.length} project ${used.length === 1 ? 'membership holds' : 'memberships hold'} “${role.label}”. Reassign them first.`,
+        }
+      }
+      return done(
+        { ...m, projectRoles: { ...m.projectRoles, [op.id]: { ...role, deletedAt: now } } },
+        { rowId: op.id, field: 'project role', from: role.label, to: '(archived)', at: now, by },
+        `Project role “${role.label}” archived.`,
       )
     }
 
