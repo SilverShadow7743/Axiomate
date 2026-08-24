@@ -150,25 +150,14 @@ type Reader = Pick<
 >
 
 /**
- * Rebuild one tenant's `WorkspaceState` from the database.
+ * `loadWorkspace`'s real body, run against whatever reader it is handed.
  *
- * The tenant is the first parameter and there is no overload without it — see `TenantId`.
- * Every query below names it, including the two that used to be `findUnique` on a row called
- * `singleton`: those were the schema asserting that one installation serves one firm.
- *
- * `WorkspaceState` itself carries no tenant, deliberately. The reducer is a pure function over
- * one workspace and has no business knowing there are others; tenancy is a property of the
- * boundary, enforced on the way in and on the way out. Threading a tenant id through every
- * record would put an access-control concern inside a domain model and give a thousand places
- * the chance to disagree about it.
- *
- * Soft-deleted rows are loaded, not filtered: `deletedAt` is part of the record, the tree
- * builder is what hides them, and Restore needs them present to bring one back.
+ * Split out so `loadWorkspace` itself can decide, once, whether that reader needs a transaction
+ * opened around it or already has one — see the row-level-security design/plan
+ * (`docs/plans/2026-08-24-row-level-security-*.md`). This function does not make that decision;
+ * it only runs the queries.
  */
-export async function loadWorkspace(
-  tenantId: TenantId,
-  db: Reader = prisma,
-): Promise<LoadedWorkspace> {
+async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<LoadedWorkspace> {
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
@@ -321,6 +310,52 @@ export async function loadWorkspace(
 }
 
 /**
+ * Rebuild one tenant's `WorkspaceState` from the database.
+ *
+ * The tenant is the first parameter and there is no overload without it — see `TenantId`.
+ * Every query below names it, including the two that used to be `findUnique` on a row called
+ * `singleton`: those were the schema asserting that one installation serves one firm.
+ *
+ * `WorkspaceState` itself carries no tenant, deliberately. The reducer is a pure function over
+ * one workspace and has no business knowing there are others; tenancy is a property of the
+ * boundary, enforced on the way in and on the way out. Threading a tenant id through every
+ * record would put an access-control concern inside a domain model and give a thousand places
+ * the chance to disagree about it.
+ *
+ * Soft-deleted rows are loaded, not filtered: `deletedAt` is part of the record, the tree
+ * builder is what hides them, and Restore needs them present to bring one back.
+ *
+ * ---------------------------------------------------------------------------
+ * Row-level security: which branch runs, and why it is safe to tell them apart by reference
+ *
+ * Called bare (`db` left at its default, the exported `prisma` singleton): nothing has opened a
+ * transaction on this caller's behalf, so this function opens one itself and sets
+ * `app.tenant_id` on it before running a single query — the tenant-scoped RLS policies read that
+ * setting on every table but `Tenant` (see `docs/plans/2026-08-24-row-level-security-design.md`).
+ * Called with an explicit `tx` (from `persist.ts`'s `runBatch`, `schedule.ts`, or a future
+ * caller inside its own transaction): that caller already set `app.tenant_id` on the same
+ * connection before handing `tx` here, so this function runs its queries against it directly and
+ * sets nothing — opening a second transaction, or setting the tenant a second time, would not be
+ * wrong so much as redundant, but skipping it here is what keeps this function from having any
+ * opinion about whether it is being called standalone or from inside a larger unit of work.
+ *
+ * The two are told apart by `db === prisma`: reference equality against the module-level `Proxy`
+ * `lib/db/client.ts` exports, which is stable for the life of the process, never the object a
+ * transaction callback is handed. See the plan's "details most likely to be gotten wrong" for
+ * what breaks if that stops holding.
+ */
+export async function loadWorkspace(
+  tenantId: TenantId,
+  db: Reader = prisma,
+): Promise<LoadedWorkspace> {
+  if (db !== prisma) return loadWorkspaceInner(tenantId, db)
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
+    return loadWorkspaceInner(tenantId, tx)
+  })
+}
+
+/**
  * The stored operating model is JSON, so it gets the same treatment as any other untyped
  * input: if it is unreadable, fall back to the shipped seed rather than handing a malformed
  * object to the resolvers. A configuration that has been corrupted should look like defaults,
@@ -409,6 +444,15 @@ export async function importWorkspace(
 
   try {
   await prisma.$transaction(async (tx) => {
+    /**
+     * Set before anything else in this transaction, including the `Tenant` insert immediately
+     * below — `Tenant` itself carries no RLS policy (it has no `tenantId` column to check
+     * against), but every table this transaction writes after it does, and this is the one
+     * place that has to set it for all of them. See
+     * `docs/plans/2026-08-24-row-level-security-design.md`.
+     */
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
+
     /**
      * The tenant row before anything that references it. Created rather than assumed: this is
      * also the path that provisions a tenant, and every other table restricts deletion of it.

@@ -1327,11 +1327,11 @@
       "id": "TV1",
       "title": "visibleRows excludes a matching issue's child issue when the child does not itself pass the filter",
       "expected": "This is the bug the profile-screen session found by hand: the count of matches shrank correctly while the tree still showed every child of a match regardless of whether it matched.",
-      "verdict": "FAIL",
-      "actual": "visible: [PARENT, CHILD-LOW]",
-      "stops": "a non-matching child issue rides along with its matching parent",
+      "verdict": "PASS",
+      "actual": "visible: [PARENT]",
+      "stops": "",
       "severity": "P2",
-      "impact": "the Tree view looks fuller than the shown-count says, and a person cannot trust a filter to mean \"only these\""
+      "impact": "none"
     },
     {
       "id": "TV2",

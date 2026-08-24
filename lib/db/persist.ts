@@ -154,6 +154,15 @@ async function runBatch(
    */
   return prisma.$transaction(
     async (tx) => {
+      /**
+       * Set before the very first read this transaction makes. Every table `loadWorkspace` and
+       * every write below it touches carries an RLS policy checking this against `tenantId` —
+       * see `docs/plans/2026-08-24-row-level-security-design.md`. Placed here rather than
+       * relying on `loadWorkspace(tenantId, tx)` to set it itself: `tx` is not the bare `prisma`
+       * client, so `loadWorkspace` deliberately does nothing with the tenant on this path and
+       * trusts the caller — this line is that trust being honored.
+       */
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
       const { state } = await loadWorkspace(tenantId, tx)
 
       /**

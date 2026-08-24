@@ -43,6 +43,12 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
 
   return prisma.$transaction(
     async (tx) => {
+      /**
+       * Set before the first read, same as `persist.ts`'s `runBatch` — every table this pass
+       * touches carries an RLS policy checking this against `tenantId`. See
+       * `docs/plans/2026-08-24-row-level-security-design.md`.
+       */
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
       const { state } = await loadWorkspace(tenantId, tx)
       const stored = await tx.scheduleWatch.findUnique({ where: { tenantId } })
       /**
