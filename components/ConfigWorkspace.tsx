@@ -811,9 +811,9 @@ function RolesAndPeople({
             <tr>
               <th>Name</th>
               <th>Work address</th>
-              <th>Roles</th>
-              <th>Reports to</th>
               <th>Client</th>
+              <th>Reports to</th>
+              <th>Roles</th>
               <th>Source</th>
               <th />
             </tr>
