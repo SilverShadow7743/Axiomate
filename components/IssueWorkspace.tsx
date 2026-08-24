@@ -8,6 +8,7 @@ import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
+import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
@@ -2050,6 +2051,8 @@ export default function IssueWorkspace({
           onRemove={(id) => dispatch({ t: 'removePersonalEvent', id, now: new Date().toISOString() })}
           onSelectWork={revealIssue}
         />
+      ) : view === 'mail' ? (
+        <MailLog state={state} />
       ) : (
       <div className="split">
         <div className="pane-tree" style={{ width: treeWidth }}>
