@@ -1599,7 +1599,14 @@ select.cell-editor {
   min-height: 0;
   overflow: auto;
   display: flex;
-  justify-content: center;
+  /* `safe center`, not `center`. Plain `center` on an overflowing flex item clips on the
+     START side and leaves it unreachable by scroll — a well-known flexbox quirk, not a width
+     bug in any one docked panel. `safe` falls back to start-alignment exactly when centering
+     would otherwise hide content this way, and is a no-op whenever the content already fits.
+     Found on My Calendar at ~1024-1037px (the privacy notice and Monday column clipped, no
+     scroll reaching them) but the container is shared by every docked panel, so the fix
+     belongs here rather than in one panel's own CSS. */
+  justify-content: safe center;
   background: var(--bg);
 }
 .view-dock .evi {

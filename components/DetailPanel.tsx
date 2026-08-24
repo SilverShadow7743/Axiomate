@@ -362,6 +362,32 @@ export default function DetailPanel({
     }
   }, [resizing, onResize])
 
+  /**
+   * Escape collapses the pane, the same place the header's own ▲ button leaves it.
+   *
+   * Deliberately NOT `useOverlay` — that hook makes the app shell `inert` and traps Tab, which
+   * is exactly right for a modal and exactly wrong here: a docked detail pane leaves the rest
+   * of the workspace reachable on purpose. This is only the one key, with no side effects
+   * beyond the same state change the button already makes. A no-op once already collapsed,
+   * so it is safe to leave listening rather than conditioning it on `panelState`.
+   *
+   * Skipped while focus sits in a text field. Several inline prompts in this panel (the
+   * status-change reason input, for one) already give Escape a narrower, local meaning —
+   * cancel just that prompt — via their own `onKeyDown`. Collapsing the whole pane underneath
+   * an input the person is mid-edit in would be a second, unrelated thing happening on the
+   * same keypress; deferring to focus lets each Escape mean one thing at a time.
+   */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || panelState === 'compact') return
+      const tag = (document.activeElement as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      onSetPanel('compact')
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [panelState, onSetPanel])
+
 
   /**
    * Responsibility types that are NOT one of the three bound to a column.
