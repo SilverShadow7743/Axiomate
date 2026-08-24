@@ -1,0 +1,139 @@
+-- Emergency rollback for 20260824000004_row_level_security.
+--
+-- Not applied automatically by `prisma migrate deploy` -- Prisma only ever runs
+-- migration.sql forward. Run this by hand (psql, or any client against DATABASE_URL) only
+-- if step 5's smoke test in docs/plans/2026-08-24-row-level-security-plan.md finds a real
+-- unwrapped path reading these tables as empty. Reverses every statement in migration.sql,
+-- in the same per-table order, dropping the policy before disabling RLS on each table.
+
+DROP POLICY IF EXISTS tenant_isolation ON "HierarchyNode";
+ALTER TABLE "HierarchyNode" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "HierarchyNode" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Issue";
+ALTER TABLE "Issue" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Issue" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "IssueActivity";
+ALTER TABLE "IssueActivity" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "IssueActivity" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "IssueDependency";
+ALTER TABLE "IssueDependency" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "IssueDependency" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "IssueRelationship";
+ALTER TABLE "IssueRelationship" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "IssueRelationship" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Evidence";
+ALTER TABLE "Evidence" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Evidence" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "IssueNote";
+ALTER TABLE "IssueNote" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "IssueNote" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Engagement";
+ALTER TABLE "Engagement" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Engagement" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "OperatingModel";
+ALTER TABLE "OperatingModel" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "OperatingModel" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "WorkspaceMeta";
+ALTER TABLE "WorkspaceMeta" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "WorkspaceMeta" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "ScheduleWatch";
+ALTER TABLE "ScheduleWatch" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "ScheduleWatch" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Allocation";
+ALTER TABLE "Allocation" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Allocation" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "ProjectMember";
+ALTER TABLE "ProjectMember" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "ProjectMember" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "PersonalEvent";
+ALTER TABLE "PersonalEvent" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "PersonalEvent" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "InboundMail";
+ALTER TABLE "InboundMail" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "InboundMail" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Commitment";
+ALTER TABLE "Commitment" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Commitment" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Sow";
+ALTER TABLE "Sow" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Sow" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Notification";
+ALTER TABLE "Notification" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Notification" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Approval";
+ALTER TABLE "Approval" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Approval" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "TimeEntry";
+ALTER TABLE "TimeEntry" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "TimeEntry" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "IssueEstimate";
+ALTER TABLE "IssueEstimate" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "IssueEstimate" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "EstimateRevision";
+ALTER TABLE "EstimateRevision" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "EstimateRevision" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "ScheduleAudit";
+ALTER TABLE "ScheduleAudit" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "ScheduleAudit" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "AppliedAction";
+ALTER TABLE "AppliedAction" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "AppliedAction" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Timesheet";
+ALTER TABLE "Timesheet" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Timesheet" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "ChangeRequest";
+ALTER TABLE "ChangeRequest" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "ChangeRequest" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "PersonRate";
+ALTER TABLE "PersonRate" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "PersonRate" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "PersonSkill";
+ALTER TABLE "PersonSkill" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "PersonSkill" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Document";
+ALTER TABLE "Document" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Document" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "DocumentReview";
+ALTER TABLE "DocumentReview" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "DocumentReview" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "ScopeItem";
+ALTER TABLE "ScopeItem" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "ScopeItem" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Milestone";
+ALTER TABLE "Milestone" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Milestone" DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "Version";
+ALTER TABLE "Version" NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE "Version" DISABLE ROW LEVEL SECURITY;
