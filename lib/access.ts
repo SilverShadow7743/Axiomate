@@ -397,12 +397,31 @@ export function isExempt(model: OperatingModel, actor: Actor): boolean {
 }
 
 /**
- * `can()`, narrowed to one project.
+ * Is this actor a live member of this project — or exempt from needing to be.
+ *
+ * The membership question alone, with no capability check bundled in. `apply()`'s funnel needs
+ * exactly this: the project gate is a precondition that applies whatever else decides capability
+ * — the central `can()` check for most actions, `canEditNote`'s authorship rule for notes, and
+ * so on — so it has to be askable on its own rather than only as half of `canOnProject` below.
+ */
+export function isStaffedOn(
+  model: OperatingModel,
+  actor: Actor,
+  projectId: string,
+  members: ProjectMember[],
+): boolean {
+  if (isExempt(model, actor)) return true
+  const personId = directoryPersonFor(model, actor)?.id
+  return members.some((m) => m.projectId === projectId && !m.removedAt && m.personId === personId)
+}
+
+/**
+ * `can()`, narrowed to one project — `isStaffedOn` and `can()` combined, for a caller that wants
+ * one Decision covering both questions.
  *
  * Deliberately NOT a change to `can()`'s signature — every existing caller asking the abstract
  * "does this actor's role permit this capability at all" question keeps calling `can()`
- * unchanged. This is a second, later check for the callers that also know which record they're
- * acting on: which project it resolves to is `workspace.ts`'s `projectOf` (it needs
+ * unchanged. Which project a record resolves to is `workspace.ts`'s `projectOf` (it needs
  * `scopeChainOf`, which lives there), so this function takes the resolution as a parameter
  * rather than importing `WorkspaceState` — keeping this module's dependencies exactly as
  * one-directional as they are today.
@@ -418,13 +437,10 @@ export function canOnProject(
   members: ProjectMember[],
 ): Decision {
   const base = can(model, actor, key)
-  if (!base.allowed || !projectId || isExempt(model, actor)) return base
-
-  const personId = directoryPersonFor(model, actor)?.id
-  const staffed = members.some(
-    (m) => m.projectId === projectId && !m.removedAt && m.personId === personId,
-  )
-  return staffed ? base : { allowed: false, reason: `${actor.name} is not staffed on this project.` }
+  if (!base.allowed || !projectId) return base
+  return isStaffedOn(model, actor, projectId, members)
+    ? base
+    : { allowed: false, reason: `${actor.name} is not staffed on this project.` }
 }
 
 /* ================================================================== *

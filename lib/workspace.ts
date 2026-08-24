@@ -43,7 +43,7 @@ import { ACTIVITY_PHASES, isNodeKind } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, isStaffedOn, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   LOG_FOR_OTHERS,
@@ -733,6 +733,89 @@ export function projectOf(state: WorkspaceState, id: string): string | null {
     if (state.nodes[scopeId]?.kind === 'project') return scopeId
   }
   return null
+}
+
+/**
+ * Which project(s) an action touches, for the membership gate in `apply()`.
+ *
+ * `null` means not project-scoped — the action is either coarser than a project (a SOW spans
+ * possibly many projects — see `Sow.projects`, a one-to-many — so milestones, scope items and
+ * document reviews, which hang off a SOW rather than a project directly, cannot be resolved to
+ * one project unambiguously; gating them would be guessing) or is not record-scoped at all
+ * (config, rates, notification preferences, membership management itself).
+ *
+ * Most kinds resolve through `projectOf` directly: `parentOf` already understands nodes, issues
+ * AND activities, so an id that names any of those needs no lookup here. The rest — notes,
+ * evidence, time entries, approvals, relationships, dependencies — are records `parentOf` does
+ * not know, so each is resolved to its owning issue first, by the same field every reducer arm
+ * for that kind already reads.
+ *
+ * Two-record actions (`link`, `addDependency`, and their removals) return both ends: the actor
+ * must be staffed on whichever project each side resolves to, which for a same-project link is
+ * one check twice and for a genuinely cross-project link is the real question being asked.
+ */
+export function projectScopeOf(state: WorkspaceState, a: Action): string[] | null {
+  const one = (id: string): string[] | null => {
+    const p = projectOf(state, id)
+    return p ? [p] : null
+  }
+  const two = (idA: string, idB: string): string[] | null => {
+    const pa = projectOf(state, idA)
+    const pb = projectOf(state, idB)
+    const ps = [...new Set([pa, pb].filter((x): x is string => Boolean(x)))]
+    return ps.length ? ps : null
+  }
+
+  switch (a.t) {
+    case 'create':
+      return one(a.parentId)
+    case 'duplicate':
+      return one(a.issueId)
+    case 'updateIssue':
+    case 'softDelete':
+    case 'restore':
+    case 'setDates':
+    case 'updateActivity':
+      return one(a.id)
+    case 'move':
+      return two(a.id, a.newParentId)
+    case 'link':
+      return two(a.sourceIssueId, a.targetIssueId)
+    case 'unlink': {
+      const rel = state.relationships.find((r) => r.id === a.id)
+      return rel ? two(rel.sourceIssueId, rel.targetIssueId) : null
+    }
+    case 'addDependency':
+      return two(a.predecessorId, a.successorId)
+    case 'removeDependency': {
+      const dep = state.dependencies.find((d) => d.id === a.id)
+      return dep ? two(dep.predecessorId, dep.successorId) : null
+    }
+    case 'addEvidence':
+    case 'addNote':
+    case 'setEstimate':
+    case 'baselineEstimate':
+    case 'addTime':
+    case 'buildLifecycle':
+    case 'clearLifecycle':
+    case 'setAssignment':
+      return one(a.issueId)
+    case 'requestApproval':
+      return one(a.subjectId)
+    case 'updateEvidence':
+    case 'removeEvidence':
+      return state.evidence[a.id] ? one(state.evidence[a.id].issueId) : null
+    case 'updateNote':
+    case 'removeNote':
+      return state.notes[a.id] ? one(state.notes[a.id].issueId) : null
+    case 'updateTime':
+    case 'removeTime':
+      return state.timeEntries[a.id] ? one(state.timeEntries[a.id].issueId) : null
+    case 'decideApproval':
+      return state.approvals[a.id] ? one(state.approvals[a.id].subjectId) : null
+    default:
+      return null
+  }
 }
 
 /* ================================================================== *
@@ -1536,6 +1619,30 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     if (need) {
       const verdict = can(state.model, actor, need)
       if (!verdict.allowed) return { state, error: verdict.reason ?? 'Not permitted.' }
+    }
+  }
+
+  /**
+   * Is this actor staffed on the project this action touches?
+   *
+   * A second, independent gate — not folded into the capability check above, because it applies
+   * regardless of how capability itself gets decided. `updateNote`/`removeNote` resolve `need`
+   * to null and defer to `canEditNote`'s authorship rule inside the arm; the project gate still
+   * has to hold for them, so it is asked here rather than only where `need` is non-null.
+   *
+   * `projectScopeOf` returns null for anything not resolvable to exactly one project — most
+   * actions, and every action coarser than a project (a SOW spans possibly many). Nothing there
+   * is newly gated; see its own comment for the boundary.
+   */
+  {
+    const scopeIds = projectScopeOf(state, a)
+    if (scopeIds) {
+      const members = Object.values(state.projectMembers)
+      for (const projectId of scopeIds) {
+        if (!isStaffedOn(state.model, actor, projectId, members)) {
+          return { state, error: `${actor.name} is not staffed on this project.` }
+        }
+      }
     }
   }
 
