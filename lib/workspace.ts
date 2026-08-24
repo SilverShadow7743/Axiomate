@@ -1315,6 +1315,8 @@ export type ConfigOp =
       email?: string
       /** The client node a client-role seat belongs to; null clears it. See Person. */
       clientScopeId?: string | null
+      /** Who this person reports to; null clears it. See `Person.managerId`. */
+      managerId?: string | null
       /** Seniority and specialism. See `Person` — deliberately not the same thing as a role. */
       grade?: string
       track?: string

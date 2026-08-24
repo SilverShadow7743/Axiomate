@@ -1182,6 +1182,36 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "RL1",
+      "title": "A three-hop cycle is refused",
+      "expected": "wouldCreateManagerCycle, driven directly against a hand-built people record — A manages B manages C; proposing C as A's manager would close the loop.",
+      "verdict": "PASS",
+      "actual": "refused",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RL2",
+      "title": "An immediate cycle is refused",
+      "expected": "A manages B; proposing A as B's manager directly would close the loop in one hop.",
+      "verdict": "PASS",
+      "actual": "refused",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RL3",
+      "title": "An unrelated manager is allowed — checked as its own case",
+      "expected": "A check that always refused would also pass RL1/RL2; this is what proves it discriminates.",
+      "verdict": "PASS",
+      "actual": "allowed",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

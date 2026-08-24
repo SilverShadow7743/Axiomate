@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-24T07:54:25.689Z",
+  "at": "2026-08-24T09:46:59.639Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 55,
   "failed": 0,
@@ -172,7 +172,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 36469 chars · 1 visible issues · 9 audit rows"
+      "detail": "payload 38192 chars · 1 visible issues · 8 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -182,7 +182,7 @@
     {
       "what": "a rename is one field edit and the renamed person still owns their records",
       "ok": true,
-      "detail": "1 items, first PROOF-1"
+      "detail": "1 items, first PROOF-2"
     },
     {
       "what": "a review round-trips with its pinned checksum, and a replaced verdict replaces",
@@ -197,7 +197,7 @@
     {
       "what": "a stored file comes back out of Postgres with its checksum and the locator that finds it",
       "ok": true,
-      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-1"
+      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-2"
     },
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
@@ -277,7 +277,7 @@
     {
       "what": "the proof tenant owns only its own rows",
       "ok": true,
-      "detail": "2 of 257 issue rows"
+      "detail": "2 of 259 issue rows"
     }
   ]
 }

@@ -38,6 +38,7 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
+  wouldCreateManagerCycle, type Person,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -6140,6 +6141,55 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `logged: ${entry.subject} · refused: ${entry.refusalReason}`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `error=${result.error} entry=${JSON.stringify(entry)}`, stops: 'recordInboundMail does not correctly land a row', severity: 'P1', impact: 'the mail log silently fails to record an arrival' } as const
+  },
+)
+
+scenario(
+  'RL1',
+  'A three-hop cycle is refused',
+  'wouldCreateManagerCycle, driven directly against a hand-built people record — A manages B manages C; proposing C as A\'s manager would close the loop.',
+  () => {
+    const p = (id: string, managerId?: string | null): Person => ({ id, name: id, roleIds: [], fromSource: false, managerId })
+    const people: Record<string, Person> = {
+      A: p('A', 'B'),
+      B: p('B', 'C'),
+      C: p('C', null),
+    }
+    const good = wouldCreateManagerCycle(people, 'C', 'A')
+
+    return good
+      ? { verdict: 'PASS', actual: 'refused', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'allowed', stops: 'a three-hop reporting cycle is not caught', severity: 'P1', impact: 'the directory can grow a loop nobody can escape by editing' } as const
+  },
+)
+
+scenario(
+  'RL2',
+  'An immediate cycle is refused',
+  'A manages B; proposing A as B\'s manager directly would close the loop in one hop.',
+  () => {
+    const p = (id: string, managerId?: string | null): Person => ({ id, name: id, roleIds: [], fromSource: false, managerId })
+    const people: Record<string, Person> = { A: p('A', 'B'), B: p('B', null) }
+    const good = wouldCreateManagerCycle(people, 'B', 'A')
+
+    return good
+      ? { verdict: 'PASS', actual: 'refused', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'allowed', stops: 'an immediate two-person cycle is not caught', severity: 'P1', impact: 'two people can be recorded as each other\'s manager' } as const
+  },
+)
+
+scenario(
+  'RL3',
+  'An unrelated manager is allowed — checked as its own case',
+  'A check that always refused would also pass RL1/RL2; this is what proves it discriminates.',
+  () => {
+    const p = (id: string, managerId?: string | null): Person => ({ id, name: id, roleIds: [], fromSource: false, managerId })
+    const people: Record<string, Person> = { A: p('A', 'B'), B: p('B', null), C: p('C', null) }
+    const good = !wouldCreateManagerCycle(people, 'A', 'C')
+
+    return good
+      ? { verdict: 'PASS', actual: 'allowed', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'refused', stops: 'an unrelated, cycle-free manager assignment is incorrectly refused', severity: 'P1', impact: 'a legitimate reporting-line edit is blocked' } as const
   },
 )
 

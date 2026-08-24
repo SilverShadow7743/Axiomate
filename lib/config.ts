@@ -236,6 +236,14 @@ export interface Person {
    * every-client. Internal seats ignore it.
    */
   clientScopeId?: string | null
+  /**
+   * Who this person reports to — one relationship, not the BOS reference document's three
+   * (Manager, Reporting Manager, Functional Manager). Same absent-versus-cleared shape as
+   * `clientScopeId`: `undefined` means nothing recorded, `null` means cleared, a value names
+   * another directory person. Validated at `upsertPerson` — must resolve to a real person, must
+   * not be the person themselves, and must not create a cycle (`wouldCreateManagerCycle`).
+   */
+  managerId?: string | null
   /** People discovered in the imported log rather than entered here. */
   fromSource: boolean
 
@@ -278,6 +286,29 @@ export interface Person {
    * who has learned it once should not have to learn it again per field.
    */
   source?: 'stated' | 'default'
+}
+
+/**
+ * Would naming `newManagerId` as `personId`'s manager close a loop?
+ *
+ * Walks upward from `newManagerId` through each person's own `managerId` — the same "walk until
+ * you either run out or come back to where you started" shape every cycle check is, guarded with
+ * a visited set the same way `depthOf` (`lib/db/repo.ts`) guards its own upward walk, in case the
+ * chain is already corrupt rather than trusting it isn't.
+ */
+export function wouldCreateManagerCycle(
+  people: Record<string, Person>,
+  personId: string,
+  newManagerId: string,
+): boolean {
+  const seen = new Set<string>()
+  let cursor: string | null | undefined = newManagerId
+  while (cursor && !seen.has(cursor)) {
+    if (cursor === personId) return true
+    seen.add(cursor)
+    cursor = people[cursor]?.managerId
+  }
+  return false
 }
 
 /**
