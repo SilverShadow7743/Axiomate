@@ -133,8 +133,9 @@ export default function ProfilePanel({
                         placeholder="none recorded"
                         onChange={(e) => setGrade(e.target.value)}
                         onBlur={() => {
-                          if (grade.trim() === (person.grade ?? '')) return
-                          if (!onUpdateCareer(person.id, { grade })) setGrade(person.grade ?? '')
+                          const next = grade.trim()
+                          if (next === (person.grade ?? '')) return
+                          if (!onUpdateCareer(person.id, { grade: next })) setGrade(person.grade ?? '')
                         }}
                       />
                     ) : (
@@ -149,8 +150,9 @@ export default function ProfilePanel({
                         placeholder="none recorded"
                         onChange={(e) => setTrack(e.target.value)}
                         onBlur={() => {
-                          if (track.trim() === (person.track ?? '')) return
-                          if (!onUpdateCareer(person.id, { track })) setTrack(person.track ?? '')
+                          const next = track.trim()
+                          if (next === (person.track ?? '')) return
+                          if (!onUpdateCareer(person.id, { track: next })) setTrack(person.track ?? '')
                         }}
                       />
                     ) : (
@@ -165,8 +167,9 @@ export default function ProfilePanel({
                         placeholder="none recorded"
                         onChange={(e) => setDevelopingToward(e.target.value)}
                         onBlur={() => {
-                          if (developingToward.trim() === (person.developingToward ?? '')) return
-                          if (!onUpdateCareer(person.id, { developingToward })) {
+                          const next = developingToward.trim()
+                          if (next === (person.developingToward ?? '')) return
+                          if (!onUpdateCareer(person.id, { developingToward: next })) {
                             setDevelopingToward(person.developingToward ?? '')
                           }
                         }}

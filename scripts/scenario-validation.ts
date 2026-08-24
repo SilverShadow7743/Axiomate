@@ -6384,6 +6384,28 @@ scenario(
   },
 )
 
+scenario(
+  'PS7',
+  'clearing the only recorded career field also clears source — "nothing recorded" is one state, not two',
+  'Person.source is documented as three states: stated, default, or absent meaning nothing was ever recorded. career() only ever writes \'stated\' or omits the key; it never writes \'default\'. Clearing the last career fact back out means nothing is recorded any more, so source must go back to absent too, not stay stuck at \'stated\'.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const set = apply(BASE, { t: 'updateCareerProfile', id: priyaId, patch: { grade: 'Consultant' }, now: NOW }, priyaActor)
+    const setOk = !set.error && set.state.model.people[priyaId].source === 'stated'
+
+    const cleared = apply(set.state, { t: 'updateCareerProfile', id: priyaId, patch: { grade: '' }, now: NOW }, priyaActor)
+    const clearedOk = !cleared.error
+      && cleared.state.model.people[priyaId].grade === undefined
+      && cleared.state.model.people[priyaId].source === undefined
+
+    const good = setOk && clearedOk
+    return good
+      ? { verdict: 'PASS', actual: `after set: source=${set.state.model.people[priyaId]?.source}; after clear: grade=${cleared.state.model.people[priyaId]?.grade} source=${cleared.state.model.people[priyaId]?.source}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `setOk=${setOk} clearedOk=${clearedOk}`, stops: 'source does not track whether any career fact is actually recorded', severity: 'P2', impact: 'a person who cleared their whole career profile would still read as "stated" when nothing is' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

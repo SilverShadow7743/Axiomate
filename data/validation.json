@@ -1312,6 +1312,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PS7",
+      "title": "clearing the only recorded career field also clears source — \"nothing recorded\" is one state, not two",
+      "expected": "Person.source is documented as three states: stated, default, or absent meaning nothing was ever recorded. career() only ever writes 'stated' or omits the key; it never writes 'default'. Clearing the last career fact back out means nothing is recorded any more, so source must go back to absent too, not stay stuck at 'stated'.",
+      "verdict": "PASS",
+      "actual": "after set: source=stated; after clear: grade=undefined source=undefined",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }
