@@ -1252,6 +1252,26 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PS1",
+      "title": "directReportsOf returns everybody naming a person as manager, and nobody else",
+      "expected": "A hand-built people record — A manages B and C, and D reports to nobody. Asking for A's reports must return exactly B and C.",
+      "verdict": "PASS",
+      "actual": "[B, C]",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PS2",
+      "title": "directReportsOf returns an empty array for somebody nobody reports to — checked as its own case",
+      "expected": "A function that returned undefined for \"nobody\" would still pass PS1 alone; this proves the empty case is a real array, not a missing one.",
+      "verdict": "PASS",
+      "actual": "[] (length 0)",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

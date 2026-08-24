@@ -312,6 +312,15 @@ export function wouldCreateManagerCycle(
 }
 
 /**
+ * Everybody whose `managerId` names this person — a flat filter, not a walk. Shared between
+ * `deletePerson`'s refusal (`lib/workspace.ts`) and the profile screen's own list, so the two
+ * cannot silently disagree about who reports to whom.
+ */
+export function directReportsOf(people: Record<string, Person>, id: string): Person[] {
+  return Object.values(people).filter((p) => p.managerId === id)
+}
+
+/**
  * What kind of work an item is.
  *
  * This is the discriminator that makes one table the right answer to "one work-item table, or

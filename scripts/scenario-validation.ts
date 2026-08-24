@@ -38,7 +38,7 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
-  wouldCreateManagerCycle, type Person,
+  wouldCreateManagerCycle, directReportsOf, type Person,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -6262,6 +6262,43 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `blocked: ${blocked.error}; then allowed after reassignment`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `blockedOk=${blockedOk} allowedOk=${allowedOk}`, stops: 'deletePerson does not correctly refuse or does not correctly allow once reassigned', severity: 'P1', impact: 'either a manager can be deleted leaving a dangling reference, or nobody can ever be removed from the directory once they manage somebody' } as const
+  },
+)
+
+scenario(
+  'PS1',
+  'directReportsOf returns everybody naming a person as manager, and nobody else',
+  'A hand-built people record — A manages B and C, and D reports to nobody. Asking for A\'s reports must return exactly B and C.',
+  () => {
+    const p = (id: string, managerId?: string | null): Person => ({ id, name: id, roleIds: [], fromSource: false, managerId })
+    const people: Record<string, Person> = {
+      A: p('A', null),
+      B: p('B', 'A'),
+      C: p('C', 'A'),
+      D: p('D', null),
+    }
+    const reports = directReportsOf(people, 'A').map((r) => r.id).sort()
+    const good = reports.length === 2 && reports[0] === 'B' && reports[1] === 'C'
+
+    return good
+      ? { verdict: 'PASS', actual: `[${reports.join(', ')}]`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `[${reports.join(', ')}]`, stops: 'directReportsOf does not return exactly the people naming this manager', severity: 'P1', impact: 'deletePerson\'s refusal and the profile screen\'s list could each compute a different answer' } as const
+  },
+)
+
+scenario(
+  'PS2',
+  'directReportsOf returns an empty array for somebody nobody reports to — checked as its own case',
+  'A function that returned undefined for "nobody" would still pass PS1 alone; this proves the empty case is a real array, not a missing one.',
+  () => {
+    const p = (id: string, managerId?: string | null): Person => ({ id, name: id, roleIds: [], fromSource: false, managerId })
+    const people: Record<string, Person> = { A: p('A', null), B: p('B', 'A') }
+    const reports = directReportsOf(people, 'B')
+    const good = Array.isArray(reports) && reports.length === 0
+
+    return good
+      ? { verdict: 'PASS', actual: `[${reports.join(', ')}] (length ${reports.length})`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(reports), stops: 'directReportsOf does not return an empty array for somebody with no reports', severity: 'P1', impact: 'the profile screen or deletePerson could crash or misbehave on somebody with no direct reports' } as const
   },
 )
 

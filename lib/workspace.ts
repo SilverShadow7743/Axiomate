@@ -175,6 +175,7 @@ import { type IntakeForm,
   emptyOverride,
   initModel,
   wouldCreateManagerCycle,
+  directReportsOf,
   liveWorkTypes,
   liveDisciplines,
   liveSkills,
@@ -6926,7 +6927,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
        * it would be exactly the "nothing failed, the wrong thing quietly worked" class of bug
        * this codebase's own history keeps finding and fixing.
        */
-      const reports = Object.values(m.people).filter((p) => p.managerId === op.id)
+      const reports = directReportsOf(m.people, op.id)
       if (reports.length) {
         return {
           state,
