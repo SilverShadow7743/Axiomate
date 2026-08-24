@@ -6193,6 +6193,78 @@ scenario(
   },
 )
 
+scenario(
+  'RL4',
+  'upsertPerson refuses a manager id that resolves to nobody',
+  'The check reads m.people directly, so a typo or a deleted person\'s stale id is caught the same way.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const result = act(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], managerId: 'PERSON_NEVER_EXISTED' }, now: NOW } as Action)
+    const good = Boolean(result.error)
+
+    return good
+      ? { verdict: 'PASS', actual: result.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'accepted', stops: 'a manager id that resolves to nobody is accepted', severity: 'P1', impact: 'the directory can point to a manager who does not exist' } as const
+  },
+)
+
+scenario(
+  'RL5',
+  'upsertPerson refuses a person naming themselves as their own manager',
+  'Checked against the resolved id, not op.id, so this also holds for a brand-new person whose op.id is null.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const result = act(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], managerId: priyaId }, now: NOW } as Action)
+    const good = Boolean(result.error)
+
+    return good
+      ? { verdict: 'PASS', actual: result.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'accepted', stops: 'a person can be recorded as their own manager', severity: 'P1', impact: 'the reporting line can point at itself' } as const
+  },
+)
+
+scenario(
+  'RL6',
+  'upsertPerson refuses a manager id that would create a cycle',
+  'Proves the reducer arm actually calls wouldCreateManagerCycle, not a second, possibly-different check.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    // Priya reports to Sam.
+    const st = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], managerId: samId }, now: NOW } as Action)
+    // Now propose Priya as Sam's manager — a two-hop cycle.
+    const result = act(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: [], managerId: priyaId }, now: NOW } as Action)
+    const good = Boolean(result.error)
+
+    return good
+      ? { verdict: 'PASS', actual: result.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'accepted', stops: 'the reducer accepts a manager assignment wouldCreateManagerCycle would refuse', severity: 'P0', impact: 'the reducer\'s own cycle check does not match the function proven correct in isolation' } as const
+  },
+)
+
+scenario(
+  'RL7',
+  'deletePerson refuses to delete someone with a direct report, and succeeds once nobody does',
+  'Proves deletePerson\'s new refusal is not permanent — reassigning the report unblocks the exact same delete.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const st = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], managerId: samId }, now: NOW } as Action)
+
+    const blocked = act(st, { t: 'config', op: { k: 'deletePerson', id: samId }, now: NOW } as Action)
+    const blockedOk = Boolean(blocked.error) && /reassign/i.test(blocked.error ?? '')
+
+    const reassigned = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], managerId: null }, now: NOW } as Action)
+    const nowAllowed = act(reassigned, { t: 'config', op: { k: 'deletePerson', id: samId }, now: NOW } as Action)
+    const allowedOk = !nowAllowed.error && !nowAllowed.state.model.people[samId]
+
+    const good = blockedOk && allowedOk
+    return good
+      ? { verdict: 'PASS', actual: `blocked: ${blocked.error}; then allowed after reassignment`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `blockedOk=${blockedOk} allowedOk=${allowedOk}`, stops: 'deletePerson does not correctly refuse or does not correctly allow once reassigned', severity: 'P1', impact: 'either a manager can be deleted leaving a dangling reference, or nobody can ever be removed from the directory once they manage somebody' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

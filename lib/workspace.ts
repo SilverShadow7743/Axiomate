@@ -174,6 +174,7 @@ import { type IntakeForm,
   checkAssignment,
   emptyOverride,
   initModel,
+  wouldCreateManagerCycle,
   liveWorkTypes,
   liveDisciplines,
   liveSkills,
@@ -6852,6 +6853,18 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         }
       }
 
+      /* Who this person reports to must be a real, live directory entry, must not be the
+       * person themselves, and must not close a loop — checked against the resolved `id`,
+       * not `op.id`, since a brand-new person's `op.id` is null. */
+      if (op.managerId) {
+        const manager = m.people[op.managerId]
+        if (!manager) return { state, error: 'That manager is not in the directory.' }
+        if (op.managerId === id) return { state, error: 'A person cannot be their own manager.' }
+        if (wouldCreateManagerCycle(m.people, id, op.managerId)) {
+          return { state, error: `${manager.name} already reports, directly or indirectly, to this person.` }
+        }
+      }
+
       const person: Person = {
         id,
         name,
@@ -6867,6 +6880,15 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
             : {}
           : existing?.clientScopeId
             ? { clientScopeId: existing.clientScopeId }
+            : {}),
+        // Same absent-versus-cleared shape, its own field — not clientScopeId's, which would
+        // silently make one optional reference track the other.
+        ...(op.managerId !== undefined
+          ? op.managerId
+            ? { managerId: op.managerId }
+            : {}
+          : existing?.managerId
+            ? { managerId: existing.managerId }
             : {}),
         /*
          * Grade, track and target follow the same absent-versus-empty rule as the address, and
@@ -6898,6 +6920,19 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
     case 'deletePerson': {
       const person = m.people[op.id]
       if (!person) return { state, error: 'Person not found.' }
+      /*
+       * The same "reassign them first" shape deleteRole and deleteProjectRole already use.
+       * deletePerson deletes outright, not a soft-remove — leaving a dangling managerId behind
+       * it would be exactly the "nothing failed, the wrong thing quietly worked" class of bug
+       * this codebase's own history keeps finding and fixing.
+       */
+      const reports = Object.values(m.people).filter((p) => p.managerId === op.id)
+      if (reports.length) {
+        return {
+          state,
+          error: `${reports.length} ${reports.length === 1 ? 'person reports' : 'people report'} to ${person.name}. Reassign them first.`,
+        }
+      }
       const people = { ...m.people }
       delete people[op.id]
       return done(

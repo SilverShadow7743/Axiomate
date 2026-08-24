@@ -1212,6 +1212,46 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "RL4",
+      "title": "upsertPerson refuses a manager id that resolves to nobody",
+      "expected": "The check reads m.people directly, so a typo or a deleted person's stale id is caught the same way.",
+      "verdict": "PASS",
+      "actual": "That manager is not in the directory.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RL5",
+      "title": "upsertPerson refuses a person naming themselves as their own manager",
+      "expected": "Checked against the resolved id, not op.id, so this also holds for a brand-new person whose op.id is null.",
+      "verdict": "PASS",
+      "actual": "A person cannot be their own manager.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RL6",
+      "title": "upsertPerson refuses a manager id that would create a cycle",
+      "expected": "Proves the reducer arm actually calls wouldCreateManagerCycle, not a second, possibly-different check.",
+      "verdict": "PASS",
+      "actual": "Priya already reports, directly or indirectly, to this person.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RL7",
+      "title": "deletePerson refuses to delete someone with a direct report, and succeeds once nobody does",
+      "expected": "Proves deletePerson's new refusal is not permanent — reassigning the report unblocks the exact same delete.",
+      "verdict": "PASS",
+      "actual": "blocked: 1 person reports to Sam. Reassign them first.; then allowed after reassignment",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
