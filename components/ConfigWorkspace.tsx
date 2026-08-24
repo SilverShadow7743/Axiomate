@@ -812,6 +812,7 @@ function RolesAndPeople({
               <th>Name</th>
               <th>Work address</th>
               <th>Roles</th>
+              <th>Reports to</th>
               <th>Client</th>
               <th>Source</th>
               <th />
@@ -868,6 +869,35 @@ function RolesAndPeople({
                   ) : (
                     <span className="prov">—</span>
                   )}
+                </td>
+                <td>
+                  {/* Directory people only, excluding p themselves — the reducer's own
+                      self-management and cycle checks would refuse those anyway, but a control
+                      that would only ever be refused should not be offered as though it might
+                      work. */}
+                  <select
+                    value={p.managerId ?? ''}
+                    aria-label={`Reports to for ${p.name}`}
+                    onChange={(e) =>
+                      onConfig({
+                        k: 'upsertPerson',
+                        id: p.id,
+                        name: p.name,
+                        roleIds: p.roleIds,
+                        managerId: e.target.value || null,
+                      })
+                    }
+                  >
+                    <option value="">none recorded</option>
+                    {Object.values(model.people)
+                      .filter((m) => m.id !== p.id)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
                 </td>
                 <td>
                   <select
