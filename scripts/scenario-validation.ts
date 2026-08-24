@@ -48,7 +48,7 @@ import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
-import { classify } from '../lib/intake'
+import { classify, alreadyReceived, type InboundMail } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
@@ -6080,6 +6080,36 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'empty map for an unrecognised sign-in', stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: JSON.stringify(asNobody), stops: 'an unrecognised sign-in receives events that belong to nobody it could be', severity: 'P1', impact: 'a null owner fails open rather than closed' } as const
+  },
+)
+
+scenario(
+  'ML1',
+  'A message id already in the mail log is recognised',
+  'alreadyReceived, extracted so this specific question is drivable on its own rather than only inferable from POST /api/intake\'s behaviour.',
+  () => {
+    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: 'No mailbox covers this address.', createdAt: NOW }
+    const st = { ...BASE, inboundMail: { [entry.id]: entry } }
+    const good = alreadyReceived(st, 'msg-abc')
+
+    return good
+      ? { verdict: 'PASS', actual: 'recognised', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'not recognised', stops: 'a message already logged is not recognised as a duplicate', severity: 'P0', impact: 'a redelivered message could create a second issue for the same client request' } as const
+  },
+)
+
+scenario(
+  'ML2',
+  'A message id not in the mail log is not recognised — checked as its own case',
+  'A check that always returned true would also pass ML1; this is what actually proves it discriminates.',
+  () => {
+    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: null, createdAt: NOW }
+    const st = { ...BASE, inboundMail: { [entry.id]: entry } }
+    const good = !alreadyReceived(st, 'msg-never-seen')
+
+    return good
+      ? { verdict: 'PASS', actual: 'correctly not recognised', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'incorrectly recognised as a duplicate', stops: 'a genuinely new message is refused as a duplicate', severity: 'P1', impact: 'a real client request is silently dropped because its id happened to look familiar' } as const
   },
 )
 

@@ -111,6 +111,7 @@ import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
+import type { InboundMail } from './intake'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -419,6 +420,11 @@ export interface WorkspaceState {
    * unconditionally; see `lib/db/boot.ts`'s `redactForReader` and `./personalEvents`.
    */
   personalEvents: Record<string, PersonalEvent>
+  /**
+   * A kept record of every message intake has ever seen — accepted or refused. See
+   * `./intake`'s `InboundMail`; `internal.view`-gated only, not narrowed further.
+   */
+  inboundMail: Record<string, InboundMail>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
   model: OperatingModel
   audit: AuditEntry[]
@@ -703,6 +709,8 @@ export function initWorkspace(
     // A fresh workspace starts with nobody's calendar typed in — there is no history to
     // backfill this from at all, for anyone.
     personalEvents: {},
+    // A fresh workspace has received no mail yet — the seed predates this record existing.
+    inboundMail: {},
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
     seq: 1,

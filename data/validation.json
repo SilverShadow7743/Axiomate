@@ -1152,6 +1152,26 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "ML1",
+      "title": "A message id already in the mail log is recognised",
+      "expected": "alreadyReceived, extracted so this specific question is drivable on its own rather than only inferable from POST /api/intake's behaviour.",
+      "verdict": "PASS",
+      "actual": "recognised",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "ML2",
+      "title": "A message id not in the mail log is not recognised — checked as its own case",
+      "expected": "A check that always returned true would also pass ML1; this is what actually proves it discriminates.",
+      "verdict": "PASS",
+      "actual": "correctly not recognised",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

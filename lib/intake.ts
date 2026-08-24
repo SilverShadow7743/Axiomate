@@ -1,6 +1,7 @@
 import type { IntakeMailbox, OperatingModel, RoutingRule } from './config'
 import { liveWorkTypes } from './config'
 import type { Severity } from './types'
+import type { WorkspaceState } from './workspace'
 
 /**
  * Turning an arriving message into a work item.
@@ -37,6 +38,40 @@ export interface InboundMessage {
   /** The sender's own message id, used to refuse the same message twice. */
   messageId: string
   receivedAt: string
+}
+
+/**
+ * A kept record of a message that arrived — the reader `classify()`'s discard never had.
+ *
+ * `lib/intake.ts`'s prior stance was that storing a second copy of every message was "a cost
+ * with no reader" — true when it was written, and answered rather than ignored now that a
+ * reference log has one. `body` is already `htmlToText`-converted, the same plain form every
+ * other consumer of a message sees, not a second HTML copy.
+ *
+ * Refused messages are kept too: `issueId` and `refusalReason` are mutually exclusive, and a
+ * reference log that silently dropped what got bounced would not be a complete reference.
+ */
+export interface InboundMail {
+  id: string
+  mailbox: string
+  from: string
+  subject: string
+  body: string
+  messageId: string
+  receivedAt: string
+  issueId: string | null
+  refusalReason: string | null
+  createdAt: string
+}
+
+/**
+ * Has this message already been received — extracted so `POST /api/intake` can be driven by
+ * the scenario harness on this specific question, rather than the check only being inferable
+ * from the route's own behaviour. Direct on `messageId`, replacing the substring search over
+ * note bodies the route used before `InboundMail` existed to check something more direct.
+ */
+export function alreadyReceived(state: WorkspaceState, messageId: string): boolean {
+  return Object.values(state.inboundMail).some((m) => m.messageId === messageId)
 }
 
 /* ================================================================== *

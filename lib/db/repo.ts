@@ -287,6 +287,9 @@ export async function loadWorkspace(
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
+    // Placeholder until the InboundMail table exists — see the mail-log plan's storage step,
+    // which replaces this with a real query in the same change that adds it.
+    inboundMail: {},
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
