@@ -1322,6 +1322,36 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "TV1",
+      "title": "visibleRows excludes a matching issue's child issue when the child does not itself pass the filter",
+      "expected": "This is the bug the profile-screen session found by hand: the count of matches shrank correctly while the tree still showed every child of a match regardless of whether it matched.",
+      "verdict": "FAIL",
+      "actual": "visible: [PARENT, CHILD-LOW]",
+      "stops": "a non-matching child issue rides along with its matching parent",
+      "severity": "P2",
+      "impact": "the Tree view looks fuller than the shown-count says, and a person cannot trust a filter to mean \"only these\""
+    },
+    {
+      "id": "TV2",
+      "title": "visibleRows keeps a matching issue's child issue when the child also passes the filter — checked as its own case",
+      "expected": "A fix that excluded every child regardless would also pass TV1; this proves it discriminates on the child's own match, not on child-hood itself.",
+      "verdict": "PASS",
+      "actual": "visible: [PARENT, CHILD-HIGH]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TV3",
+      "title": "visibleRows keeps a matching issue's non-issue children (activities, milestones) regardless of the filter",
+      "expected": "Activities and milestones have no owner/severity/status of their own to fail a filter on — TV1's fix must not have started excluding these too.",
+      "verdict": "PASS",
+      "actual": "visible: [PARENT, ACT]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

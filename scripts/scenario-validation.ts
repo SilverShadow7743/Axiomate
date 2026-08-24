@@ -92,7 +92,7 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree } from '../lib/tree'
+import { buildTree, visibleRows } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
@@ -103,7 +103,7 @@ import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
-import { ISSUE_STATUSES } from '../lib/types'
+import { ISSUE_STATUSES, EMPTY_FILTERS, type ScheduleRow, type IssueDetail } from '../lib/types'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -6403,6 +6403,102 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `after set: source=${set.state.model.people[priyaId]?.source}; after clear: grade=${cleared.state.model.people[priyaId]?.grade} source=${cleared.state.model.people[priyaId]?.source}`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `setOk=${setOk} clearedOk=${clearedOk}`, stops: 'source does not track whether any career fact is actually recorded', severity: 'P2', impact: 'a person who cleared their whole career profile would still read as "stated" when nothing is' } as const
+  },
+)
+
+/* ================================================================== *
+ * Tree visibility
+ * ================================================================== */
+
+/**
+ * visibleRows had zero scenario coverage before these three, despite being core to the Tree
+ * view since the first commit. Hand-built ScheduleRow/IssueDetail records — no reducer, no
+ * database — because the behaviour under test is the filter/keep logic itself, not anything a
+ * WorkspaceState pipeline would add.
+ */
+function tvDetail(over: Partial<IssueDetail>): IssueDetail {
+  return {
+    id: over.id ?? 'X', client: 'OAPIL', module: 'Finance', subject: 'x', description: '',
+    type: 'Defect', sourceType: '', discipline: '', severity: 'Medium', status: 'Open',
+    owner: 'Nobody', raisedBy: 'Client', accountable: 'OAPIL', raised: '2026-01-01',
+    lastActivity: '2026-01-01', age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',
+    evidenceDate: '', verification: '', source: '', reference: '', clientImpact: '',
+    ...over,
+  }
+}
+function tvRow(
+  over: Omit<Partial<ScheduleRow>, 'issue'> & {
+    id: string
+    parentId: string | null
+    kind: ScheduleRow['kind']
+    issue?: Partial<IssueDetail>
+  },
+): ScheduleRow {
+  const issue = over.kind === 'issue' ? tvDetail({ id: over.id, ...over.issue }) : undefined
+  return {
+    depth: 0, displayId: over.id, name: over.id, type: 'Defect', discipline: null,
+    status: issue?.status ?? null, severity: issue?.severity ?? null, owner: issue?.owner ?? null,
+    accountable: issue?.accountable ?? null, scheduleMode: 'AUTO', plannedStartDate: null,
+    plannedEndDate: null, actualStartDate: null, actualEndDate: null, plannedOrigin: null,
+    actualOrigin: null, duration: null, workingDuration: null, percentComplete: 0,
+    progressOrigin: 'status-derived', projectedCompletionDate: null, scheduleHealth: 'Unscheduled',
+    isMilestone: false, milestoneDate: null, nextAction: null, predecessorIds: [],
+    ...over,
+    issue,
+  }
+}
+
+scenario(
+  'TV1',
+  'visibleRows excludes a matching issue\'s child issue when the child does not itself pass the filter',
+  'This is the bug the profile-screen session found by hand: the count of matches shrank correctly while the tree still showed every child of a match regardless of whether it matched.',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
+      tvRow({ id: 'CHILD-LOW', parentId: 'PARENT', kind: 'issue', issue: { severity: 'Low' } }),
+    ]
+    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const good = shown.some((r) => r.id === 'PARENT') && !shown.some((r) => r.id === 'CHILD-LOW')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: 'a non-matching child issue rides along with its matching parent', severity: 'P2', impact: 'the Tree view looks fuller than the shown-count says, and a person cannot trust a filter to mean "only these"' } as const
+  },
+)
+
+scenario(
+  'TV2',
+  'visibleRows keeps a matching issue\'s child issue when the child also passes the filter — checked as its own case',
+  'A fix that excluded every child regardless would also pass TV1; this proves it discriminates on the child\'s own match, not on child-hood itself.',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
+      tvRow({ id: 'CHILD-HIGH', parentId: 'PARENT', kind: 'issue', issue: { severity: 'High' } }),
+    ]
+    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'CHILD-HIGH')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: 'a child issue that itself matches the filter is excluded', severity: 'P2', impact: 'the fix over-corrected: filtering could hide real matches nested under another match' } as const
+  },
+)
+
+scenario(
+  'TV3',
+  'visibleRows keeps a matching issue\'s non-issue children (activities, milestones) regardless of the filter',
+  'Activities and milestones have no owner/severity/status of their own to fail a filter on — TV1\'s fix must not have started excluding these too.',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
+      tvRow({ id: 'ACT', parentId: 'PARENT', kind: 'activity' }),
+    ]
+    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'ACT')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${shown.map((r) => r.id).join(', ')}]`, stops: 'a matching issue\'s own activity or milestone is hidden', severity: 'P1', impact: 'an issue\'s own lifecycle activities disappear from the tree the moment any filter is applied' } as const
   },
 )
 

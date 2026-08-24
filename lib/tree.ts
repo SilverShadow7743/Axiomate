@@ -403,7 +403,22 @@ export function visibleRows(
       keep.add(p)
       p = byId.get(p)?.parentId ?? null
     }
-    for (const child of all) if (child.parentId === row.id) keep.add(child.id)
+    /*
+     * A direct child rides along unconditionally only when it is not itself an issue — a
+     * lifecycle activity or milestone has no owner/severity/status of its own to fail a
+     * filter on, so it follows its issue automatically. A child ISSUE (the "issue under
+     * issue" nesting a Deliverable uses) has its own facets and must pass the same filter
+     * as any other issue row — otherwise a matched parent silently dragged every child issue
+     * along regardless of whether it matched, and the visible tree looked far fuller than
+     * the "N issues" count it was supposedly describing. A child issue that DOES match is
+     * added here for certainty, but would also have been added by its own pass through this
+     * same loop — this is not the only path that can keep it.
+     */
+    for (const child of all) {
+      if (child.parentId !== row.id) continue
+      if (child.kind === 'issue' && !matchesFilters(child, filters)) continue
+      keep.add(child.id)
+    }
   }
 
   // A structural row with no issues anywhere beneath it has nothing to be filtered out by —
