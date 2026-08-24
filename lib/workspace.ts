@@ -1238,6 +1238,24 @@ export type Action =
       now: string
     }
   | { t: 'removePersonalEvent'; id: string; now: string }
+  /**
+   * ---- MAIL LOG ----
+   * Machine-written only. Deliberately absent from `app/api/workspace/route.ts`'s `KINDS` —
+   * see the mail-log plan's step 2 — the same reasoning `notify` is absent: `POST
+   * /api/intake` calls `persistActions` directly and never reaches that endpoint at all.
+   */
+  | {
+      t: 'recordInboundMail'
+      mailbox: string
+      from: string
+      subject: string
+      body: string
+      messageId: string
+      receivedAt: string
+      issueId: string | null
+      refusalReason: string | null
+      now: string
+    }
 
 /**
  * Operations on the operating model.
@@ -6176,6 +6194,30 @@ Question: ${review.question}`,
           personalEvents: { ...state.personalEvents, [a.id]: { ...event, deletedAt: a.now } },
         },
         message: `${event.title} removed.`,
+      }
+    }
+
+    case 'recordInboundMail': {
+      const seq = state.seq + 1
+      const id = `inmail-${seq}`
+      const entry: InboundMail = {
+        id,
+        mailbox: a.mailbox,
+        from: a.from,
+        subject: a.subject,
+        body: a.body,
+        messageId: a.messageId,
+        receivedAt: a.receivedAt,
+        issueId: a.issueId,
+        refusalReason: a.refusalReason,
+        createdAt: a.now,
+      }
+      // No audit entry, the same reasoning the personal-event arms give for themselves —
+      // this is a system bookkeeping record, not a work-tracking mutation with an audience
+      // the audit trail exists for.
+      return {
+        state: { ...state, inboundMail: { ...state.inboundMail, [id]: entry }, seq },
+        message: 'Logged.',
       }
     }
 

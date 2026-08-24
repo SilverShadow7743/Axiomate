@@ -1172,6 +1172,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "ML3",
+      "title": "recordInboundMail lands in state.inboundMail",
+      "expected": "Driven through apply() directly — the reducer stays the single mutation funnel for this record too, the same as everything else in this app.",
+      "verdict": "PASS",
+      "actual": "logged: Help · refused: No mailbox covers this address.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

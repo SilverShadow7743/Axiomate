@@ -642,6 +642,18 @@ const SHAPES = {
   },
   updatePersonalEvent: { id: req(id), patch: req(plainObject), now },
   removePersonalEvent: { id: req(id), now },
+  /* ---- MAIL LOG ---- */
+  recordInboundMail: {
+    mailbox: req(text),
+    from: req(text),
+    subject: req(text),
+    body: req(text),
+    messageId: req(text),
+    receivedAt: req(text),
+    issueId: req(idOrNull),
+    refusalReason: req(textOrNull),
+    now,
+  },
   // `acceptUnavailable` for the same reason as `updateIssue`: this is the other arm that can
   // name somebody, and the reducer refuses both when that person is away for the whole window.
   recordVersion: {

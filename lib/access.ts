@@ -584,6 +584,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   addPersonalEvent: null,
   updatePersonalEvent: null,
   removePersonalEvent: null,
+  /* Machine-written only — see the mail-log design. Never reachable via app/api/workspace's
+   * KINDS set, the same reasoning `notify` is absent from it. */
+  recordInboundMail: null,
   config: 'config.manage',
   /*
    * The two that genuinely take no grant, said out loud rather than left out.

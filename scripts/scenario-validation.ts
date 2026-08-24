@@ -6113,6 +6113,36 @@ scenario(
   },
 )
 
+scenario(
+  'ML3',
+  'recordInboundMail lands in state.inboundMail',
+  'Driven through apply() directly — the reducer stays the single mutation funnel for this record too, the same as everything else in this app.',
+  () => {
+    const result = apply(
+      BASE,
+      {
+        t: 'recordInboundMail',
+        mailbox: 'support@oapil.example',
+        from: 'client@oapil.example',
+        subject: 'Help',
+        body: 'The invoice looks wrong.',
+        messageId: 'msg-xyz',
+        receivedAt: NOW,
+        issueId: null,
+        refusalReason: 'No mailbox covers this address.',
+        now: NOW,
+      } as Action,
+      SCHEDULE_ACTOR,
+    )
+    const entry = Object.values(result.state.inboundMail)[0]
+    const good = !result.error && entry?.messageId === 'msg-xyz' && entry.refusalReason === 'No mailbox covers this address.'
+
+    return good
+      ? { verdict: 'PASS', actual: `logged: ${entry.subject} · refused: ${entry.refusalReason}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error} entry=${JSON.stringify(entry)}`, stops: 'recordInboundMail does not correctly land a row', severity: 'P1', impact: 'the mail log silently fails to record an arrival' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
