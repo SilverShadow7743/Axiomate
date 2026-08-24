@@ -1122,6 +1122,36 @@
       "stops": "",
       "severity": "P0",
       "impact": "none"
+    },
+    {
+      "id": "PC7",
+      "title": "An administrator’s redacted view contains none of another person’s personal events",
+      "expected": "personalEventsFor filters unconditionally on personId === mine — no isExempt, no role check, the one redaction in this app with no exemption for anyone.",
+      "verdict": "PASS",
+      "actual": "admin's view contains 0 of another person's events",
+      "stops": "",
+      "severity": "P0",
+      "impact": "none"
+    },
+    {
+      "id": "PC8",
+      "title": "The owner’s own redacted view contains all of their own events, unfiltered",
+      "expected": "The filter narrows, it does not additionally hide the owner’s own rows from themselves — the same posture every other self-owned redaction in this app takes.",
+      "verdict": "PASS",
+      "actual": "owner sees both of their own events",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PC9",
+      "title": "A sign-in matching no directory entry gets an empty map, not an error and not every event",
+      "expected": "`mine: null` is a real, reachable case — an unrecognised sign-in — and it must fail closed.",
+      "verdict": "PASS",
+      "actual": "empty map for an unrecognised sign-in",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

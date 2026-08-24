@@ -37,3 +37,19 @@ export function eventProblem(
   if (a.endAt < a.startAt) return { field: 'dates', message: 'The end falls before the start.' }
   return null
 }
+
+/**
+ * The redaction, pulled out as its own pure function rather than left inline in
+ * `lib/db/boot.ts`'s `redactForReader` — the same reason `projectView`/`clientView` are their
+ * own exported functions rather than logic folded into `boot()` directly: this is the one
+ * redaction in the app with no exemption for anyone, including `ADMIN`, and a rule that
+ * important needs to be drivable by the scenario harness on its own, not only inferable from
+ * `boot()`'s behaviour. `mine: null` (no directory entry) correctly produces an empty map —
+ * there is no "whose" for an unrecognised sign-in to own.
+ */
+export function personalEventsFor(
+  all: Record<string, PersonalEvent>,
+  mine: string | null,
+): Record<string, PersonalEvent> {
+  return Object.fromEntries(Object.entries(all).filter(([, e]) => e.personId === mine))
+}

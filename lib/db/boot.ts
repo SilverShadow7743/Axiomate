@@ -1,6 +1,7 @@
 import { can, directoryPersonFor, isExempt } from '../access'
 import { clientView } from '../clientBoundary'
 import { memberProjectIdsFor, projectView } from '../projectBoundary'
+import { personalEventsFor } from '../personalEvents'
 import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
@@ -293,7 +294,19 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
     Object.entries(state.documents).map(([id, d]) => [id, { ...d, locator: null }]),
   )
 
-  const base = { ...state, rates, personSkills, documents }
+  /*
+   * Absolute, like the locator above — but stronger still: the locator rule has no exception
+   * ANYONE can reach through a permission; this one has no exception even ADMIN can reach.
+   * Applied here, before the `internal.view` branch below, on purpose — `isExempt` (used by
+   * the project boundary two lines down) is exactly the function that would make this
+   * conditional if it were reached for out of habit, and doing so here would be a worse
+   * failure than any payload leak this codebase has found before: every other redaction this
+   * app has ever gotten wrong had SOME audience who was supposed to see the data under
+   * different conditions. A personal-event leak has no such story.
+   */
+  const personalEvents = personalEventsFor(state.personalEvents, mine)
+
+  const base = { ...state, rates, personSkills, documents, personalEvents }
 
   /*
    * The client boundary — the same posture as the rate redaction above, applied to content.

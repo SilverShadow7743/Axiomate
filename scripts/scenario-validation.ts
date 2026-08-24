@@ -42,7 +42,7 @@ import {
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
-import type { PersonalEvent } from '../lib/personalEvents'
+import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
 import { directoryIdByName, rolesFor, canOnProject, isExempt } from '../lib/access'
 import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
@@ -6027,6 +6027,59 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `admin update: ${samUpdate.error}; admin remove: ${samRemove.error}; owner update: ok`, stops: '', severity: 'P0', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `samUpdate=${samUpdate.error} samRemove=${samRemove.error} priyaUpdate=${priyaUpdate.error}`, stops: 'an administrator, or anybody but the owner, can alter or remove somebody else’s private event', severity: 'P0', impact: 'the structural-privacy argument fails at the reducer, before any redaction even runs' } as const
+  },
+)
+
+scenario(
+  'PC7',
+  'An administrator’s redacted view contains none of another person’s personal events',
+  'personalEventsFor filters unconditionally on personId === mine — no isExempt, no role check, the one redaction in this app with no exemption for anyone.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const priyaEvent: PersonalEvent = { id: 'ev-p', personId: priyaId, title: 'Priya private', startAt: NOW, endAt: NOW, allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const all = { [priyaEvent.id]: priyaEvent }
+
+    // Sam holds ROLE_ADMIN and asks for his own redacted view — `mine` is his id, not Priya's.
+    const asSamAdmin = personalEventsFor(all, samId)
+    const good = Object.keys(asSamAdmin).length === 0
+
+    return good
+      ? { verdict: 'PASS', actual: `admin's view contains ${Object.keys(asSamAdmin).length} of another person's events`, stops: '', severity: 'P0', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(asSamAdmin), stops: 'a role holding ADMIN can see another person’s private calendar entries', severity: 'P0', impact: 'the strongest privacy rule in this app has an exemption after all' } as const
+  },
+)
+
+scenario(
+  'PC8',
+  'The owner’s own redacted view contains all of their own events, unfiltered',
+  'The filter narrows, it does not additionally hide the owner’s own rows from themselves — the same posture every other self-owned redaction in this app takes.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const e1: PersonalEvent = { id: 'ev-1', personId: priyaId, title: 'One', startAt: NOW, endAt: NOW, allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const e2: PersonalEvent = { id: 'ev-2', personId: priyaId, title: 'Two', startAt: NOW, endAt: NOW, allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const asOwner = personalEventsFor({ [e1.id]: e1, [e2.id]: e2 }, priyaId)
+    const good = Object.keys(asOwner).length === 2
+
+    return good
+      ? { verdict: 'PASS', actual: `owner sees both of their own events`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(asOwner), stops: 'the owner’s own events are filtered from their own view', severity: 'P1', impact: 'a person cannot see their own calendar' } as const
+  },
+)
+
+scenario(
+  'PC9',
+  'A sign-in matching no directory entry gets an empty map, not an error and not every event',
+  '`mine: null` is a real, reachable case — an unrecognised sign-in — and it must fail closed.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const e1: PersonalEvent = { id: 'ev-1', personId: priyaId, title: 'One', startAt: NOW, endAt: NOW, allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const asNobody = personalEventsFor({ [e1.id]: e1 }, null)
+    const good = Object.keys(asNobody).length === 0
+
+    return good
+      ? { verdict: 'PASS', actual: 'empty map for an unrecognised sign-in', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(asNobody), stops: 'an unrecognised sign-in receives events that belong to nobody it could be', severity: 'P1', impact: 'a null owner fails open rather than closed' } as const
   },
 )
 
