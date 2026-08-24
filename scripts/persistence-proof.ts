@@ -34,6 +34,7 @@ loadEnv()
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { importWorkspace, loadWorkspace } from '../lib/db/repo'
+import { withTenant } from '../lib/db/client'
 import { myWork } from '../lib/mywork'
 import { clientView } from '../lib/clientBoundary'
 import { persistActions } from '../lib/db/persist'
@@ -118,50 +119,59 @@ const seedIssue = (id: string, over: Partial<SeedIssueInput> = {}): SeedIssueInp
  * This asserts nothing about the schema. The previous comment claimed it did, which is how a
  * routine that could not work read as one that proved something.
  */
+/**
+ * Through `withTenant`, not bare — every table this touches carries a row-level-security
+ * policy now (`docs/plans/2026-08-24-row-level-security-design.md`), and a bare `deleteMany`
+ * against a connection with no `app.tenant_id` set deletes nothing, silently, whether the row
+ * is there or not. Caught the hard way: the first run after RLS actually started enforcing
+ * left this proof's own rows behind in production, because this function still looked like it
+ * was cleaning up.
+ */
 async function scrub() {
+  await withTenant(TENANT, async (tx) => {
   const where = { tenantId: TENANT }
 
   // The three references no deletion order can satisfy. See above.
-  await prisma.hierarchyNode.updateMany({ where, data: { sowId: null, parentId: null } })
-  await prisma.issue.updateMany({ where, data: { parentIssueId: null } })
+  await tx.hierarchyNode.updateMany({ where, data: { sowId: null, parentId: null } })
+  await tx.issue.updateMany({ where, data: { parentIssueId: null } })
 
-  await prisma.estimateRevision.deleteMany({ where })
-  await prisma.issueEstimate.deleteMany({ where })
-  await prisma.timeEntry.deleteMany({ where })
-  await prisma.approval.deleteMany({ where })
-  await prisma.notification.deleteMany({ where })
-  await prisma.issueNote.deleteMany({ where })
-  await prisma.evidence.deleteMany({ where })
-  await prisma.issueRelationship.deleteMany({ where })
-  await prisma.issueDependency.deleteMany({ where })
-  await prisma.issueActivity.deleteMany({ where })
-  await prisma.allocation.deleteMany({ where })
+  await tx.estimateRevision.deleteMany({ where })
+  await tx.issueEstimate.deleteMany({ where })
+  await tx.timeEntry.deleteMany({ where })
+  await tx.approval.deleteMany({ where })
+  await tx.notification.deleteMany({ where })
+  await tx.issueNote.deleteMany({ where })
+  await tx.evidence.deleteMany({ where })
+  await tx.issueRelationship.deleteMany({ where })
+  await tx.issueDependency.deleteMany({ where })
+  await tx.issueActivity.deleteMany({ where })
+  await tx.allocation.deleteMany({ where })
   // ProjectMember needs no line here: its foreign key to HierarchyNode is onDelete: Cascade,
   // so the hierarchyNode.deleteMany below already removes every row that references it.
   // PersonalEvent has no such relation — only Restrict on the tenant itself — so it does.
   // InboundMail is the same shape as PersonalEvent: no relation to cascade through, so it
   // needs its own line too, added here before it could repeat the same scrub() failure.
-  await prisma.personalEvent.deleteMany({ where })
-  await prisma.inboundMail.deleteMany({ where })
-  await prisma.commitment.deleteMany({ where })
-  await prisma.version.deleteMany({ where })
-  await prisma.timesheet.deleteMany({ where })
-  await prisma.personRate.deleteMany({ where })
-  await prisma.personSkill.deleteMany({ where })
-  await prisma.scopeItem.deleteMany({ where })
-  await prisma.milestone.deleteMany({ where })
-  await prisma.documentReview.deleteMany({ where })
-  await prisma.document.deleteMany({ where })
-  await prisma.changeRequest.deleteMany({ where })
-  await prisma.engagement.deleteMany({ where })
-  await prisma.appliedAction.deleteMany({ where })
-  await prisma.scheduleAudit.deleteMany({ where })
-  await prisma.workspaceMeta.deleteMany({ where })
-  await prisma.operatingModel.deleteMany({ where })
-  await prisma.scheduleWatch.deleteMany({ where })
-  await prisma.sow.deleteMany({ where })
-  await prisma.issue.deleteMany({ where })
-  await prisma.hierarchyNode.deleteMany({ where })
+  await tx.personalEvent.deleteMany({ where })
+  await tx.inboundMail.deleteMany({ where })
+  await tx.commitment.deleteMany({ where })
+  await tx.version.deleteMany({ where })
+  await tx.timesheet.deleteMany({ where })
+  await tx.personRate.deleteMany({ where })
+  await tx.personSkill.deleteMany({ where })
+  await tx.scopeItem.deleteMany({ where })
+  await tx.milestone.deleteMany({ where })
+  await tx.documentReview.deleteMany({ where })
+  await tx.document.deleteMany({ where })
+  await tx.changeRequest.deleteMany({ where })
+  await tx.engagement.deleteMany({ where })
+  await tx.appliedAction.deleteMany({ where })
+  await tx.scheduleAudit.deleteMany({ where })
+  await tx.workspaceMeta.deleteMany({ where })
+  await tx.operatingModel.deleteMany({ where })
+  await tx.scheduleWatch.deleteMany({ where })
+  await tx.sow.deleteMany({ where })
+  await tx.issue.deleteMany({ where })
+  await tx.hierarchyNode.deleteMany({ where })
 
   /**
    * The tenant last, and it is also the check that the list above is complete.
@@ -171,7 +181,7 @@ async function scrub() {
    * not the fix, which is a poor way to learn this months from now, so it is translated.
    */
   try {
-    await prisma.tenant.deleteMany({ where: { id: TENANT } })
+    await tx.tenant.deleteMany({ where: { id: TENANT } })
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     throw new Error(
@@ -180,6 +190,7 @@ async function scrub() {
         `before the tenant and after anything that references it. Postgres said: ${detail}`,
     )
   }
+  })
 }
 
 async function main() {
@@ -988,7 +999,7 @@ async function main() {
   }
 
   /* ---------------- ids do not collide after a restart ---------------- */
-  const meta = await prisma.workspaceMeta.findUnique({ where: { tenantId: TENANT } })
+  const meta = await withTenant(TENANT, (tx) => tx.workspaceMeta.findUnique({ where: { tenantId: TENANT } }))
   check(
     'the id counter is stored, so a restart cannot re-mint an id',
     (meta?.seq ?? 0) >= state.seq,
@@ -1004,7 +1015,7 @@ async function main() {
     `${first.summary} | then | ${second.summary}`,
   )
 
-  const watched = await prisma.scheduleWatch.findUnique({ where: { tenantId: TENANT } })
+  const watched = await withTenant(TENANT, (tx) => tx.scheduleWatch.findUnique({ where: { tenantId: TENANT } }))
   check(
     'and its memory is stored, not held in the process',
     Boolean(watched?.lastRunAt) && Array.isArray((watched?.observation as { watching?: unknown })?.watching),
@@ -1071,7 +1082,7 @@ async function main() {
       `${notesAtStart} → ${notesAfterFirst} → ${notesAfterSecond} notes; ${secondSend.skipped} skipped on the replay`,
     )
 
-    const recorded = await prisma.appliedAction.count({ where: { tenantId: TENANT } })
+    const recorded = await withTenant(TENANT, (tx) => tx.appliedAction.count({ where: { tenantId: TENANT } }))
     check(
       'and the keys are stored, so the skip survives a restart',
       recorded >= 2,
@@ -1093,12 +1104,20 @@ async function main() {
   }
 
   /* ---------------- tenancy holds at the database, not just in the code ---------------- */
-  const otherTenantRows = await prisma.issue.count({ where: { tenantId: TENANT } })
-  const allRows = await prisma.issue.count()
+  /**
+   * This used to also read a bare, unscoped `prisma.issue.count()` — every issue row in the
+   * database, across every tenant — and check the proof tenant's own count was a small part of
+   * it. That comparison is not just unavailable under row-level security, it is the wrong
+   * shape of proof for what RLS makes true: no ordinary connection should be able to see a
+   * cross-tenant total any more, which is what `scripts/rls-proof.ts`'s own bypass check
+   * exists to confirm. What is left here is the part that was always the real assertion — the
+   * proof tenant's own count is exactly what this run created, not more and not fewer.
+   */
+  const ownRows = await withTenant(TENANT, (tx) => tx.issue.count({ where: { tenantId: TENANT } }))
   check(
-    'the proof tenant owns only its own rows',
-    otherTenantRows === 2 && allRows >= otherTenantRows,
-    `${otherTenantRows} of ${allRows} issue rows`,
+    'the proof tenant owns exactly the rows it created',
+    ownRows === 2,
+    `${ownRows} issue row(s)`,
   )
 }
 
