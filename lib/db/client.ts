@@ -1,6 +1,7 @@
 import 'server-only'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Prisma } from '@prisma/client'
+import type { TenantId } from '../tenant'
 
 /**
  * The Prisma client, created on first use.
@@ -157,6 +158,34 @@ const PERMANENT_CODES = new Set([
   'P2011', // null constraint
   'P2025', // a record the write depended on is not there
 ])
+
+/**
+ * Run `fn` inside a fresh transaction with `app.tenant_id` set first — the one thing every
+ * tenant-scoped table's row-level-security policy checks (`Tenant` itself excepted; see
+ * `docs/plans/2026-08-24-row-level-security-design.md`).
+ *
+ * The single place this string is written, on purpose. Six call sites each hand-writing the
+ * same raw SQL is six chances for one of them to drift — a typo'd setting name would fail
+ * silently, since `current_setting(..., true)` on the wrong name just reads as unset rather
+ * than erroring. Every place in `lib/db` that needs its own transaction for this reason —
+ * `loadWorkspace` called bare, a one-off read or write that happens outside `runBatch`'s or
+ * `schedule.ts`'s larger transaction — calls this instead of opening one by hand.
+ *
+ * Not used by `runBatch`, `schedule.ts` or `importWorkspace`'s own transaction: those already
+ * open a transaction for their own reasons (serializable isolation, multiple sequential
+ * writes) and set the tenant as the first statement inside it directly, rather than through
+ * this wrapper, so the transaction's other options (isolation level, timeout) stay theirs to
+ * set.
+ */
+export async function withTenant<T>(
+  tenantId: TenantId,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
+    return fn(tx)
+  })
+}
 
 export function isPermanentDbError(err: unknown): boolean {
   const e = err as { code?: string; name?: string; message?: string }

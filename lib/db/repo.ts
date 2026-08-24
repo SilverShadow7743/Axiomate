@@ -3,7 +3,7 @@ import type { WorkspaceState } from '../workspace'
 import { initModel } from '../config'
 import type { OperatingModel } from '../config'
 import type { PrismaClient } from '@prisma/client'
-import { prisma } from './client'
+import { prisma, withTenant } from './client'
 import { provisioningName, type TenantId } from '../tenant'
 import {
   activityFromRow,
@@ -349,10 +349,7 @@ export async function loadWorkspace(
   db: Reader = prisma,
 ): Promise<LoadedWorkspace> {
   if (db !== prisma) return loadWorkspaceInner(tenantId, db)
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
-    return loadWorkspaceInner(tenantId, tx)
-  })
+  return withTenant(tenantId, (tx) => loadWorkspaceInner(tenantId, tx))
 }
 
 /**
@@ -430,7 +427,14 @@ export async function importWorkspace(
 ): Promise<ImportResult> {
   // Per tenant, not global. A single `seededAt` would refuse to seed the second firm because
   // the first had been seeded — and would report "already seeded" while their tree sat empty.
-  const existing = await prisma.workspaceMeta.findUnique({ where: { tenantId } })
+  //
+  // Through `withTenant`, not a bare read: a bare `prisma.workspaceMeta.findUnique` sees no
+  // rows once RLS is live (the row-level-security policy hides it from a connection that never
+  // set `app.tenant_id`), so an already-seeded tenant would read as unseeded on every single
+  // boot — and the `tx.workspaceMeta.create` below would then throw on the unique constraint
+  // it actually violates, every time. Caught before this ever ran against production; see
+  // `docs/plans/2026-08-24-row-level-security-plan.md`.
+  const existing = await withTenant(tenantId, (tx) => tx.workspaceMeta.findUnique({ where: { tenantId } }))
   if (existing?.seededAt) {
     return {
       imported: false,

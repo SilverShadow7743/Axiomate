@@ -2,7 +2,7 @@ import 'server-only'
 import type { Prisma } from '@prisma/client'
 import { apply,
   applyWithRules, type Action, type WorkspaceState } from '../workspace'
-import { prisma } from './client'
+import { prisma, withTenant } from './client'
 import { loadWorkspace } from './repo'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
@@ -969,14 +969,18 @@ function changedIds(before: WorkspaceState, after: WorkspaceState): string[] {
  * expired rows under serializable isolation — a conflict created entirely by housekeeping,
  * which is the false-conflict problem the field-level concurrency check exists to avoid.
  *
- * Outside a transaction for the same reason. Nothing depends on this having happened; a run
- * that is skipped leaves rows that are ignored anyway, since every lookup names the keys it
- * cares about.
+ * Outside `runBatch`'s own transaction for that reason, but still through `withTenant`'s own
+ * (ordinary, not serializable) transaction — the row-level-security policy `AppliedAction`
+ * carries hides every row from a bare, tenant-unset connection, so an unwrapped `deleteMany`
+ * would silently delete nothing, forever, rather than pruning what it names. `withTenant` does
+ * not raise the isolation level, so it does not reintroduce the contention this function is
+ * deliberately outside of. Nothing depends on this having happened; a run that is skipped
+ * leaves rows that are ignored anyway, since every lookup names the keys it cares about.
  */
 export async function pruneAppliedActions(tenantId: TenantId, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - KEY_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.appliedAction.deleteMany({
-    where: { tenantId, at: { lt: cutoff } },
-  })
+  const { count } = await withTenant(tenantId, (tx) =>
+    tx.appliedAction.deleteMany({ where: { tenantId, at: { lt: cutoff } } }),
+  )
   return count
 }

@@ -6,7 +6,7 @@ import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
 import { loadSeed, type SeedFile } from '../data'
-import { databaseConfigured, describeDbError, prisma } from './client'
+import { databaseConfigured, describeDbError, withTenant } from './client'
 import { importWorkspace, loadWorkspace } from './repo'
 import { currentTenantId } from '../tenant'
 import { getSessionFromCookies, identityEstablished } from '../principal'
@@ -151,7 +151,12 @@ export async function boot(): Promise<Boot> {
     const imported = await importWorkspace(tenantId, initWorkspace(seed.issues, seed.relationships))
     const { state, orphans } = await loadWorkspace(tenantId)
     // What the scheduled pass last did, so the screens report a run rather than promise one.
-    const watch = await prisma.scheduleWatch.findUnique({ where: { tenantId } })
+    //
+    // Through `withTenant`, not a bare read — a bare call sees nothing once RLS is live, and
+    // this exact banner (`pass.lastRunAt`/`lastSummary`) would silently read as "never run" on
+    // every page load of a tenant whose pass runs daily. See
+    // `docs/plans/2026-08-24-row-level-security-plan.md`.
+    const watch = await withTenant(tenantId, (tx) => tx.scheduleWatch.findUnique({ where: { tenantId } }))
     const pass = {
       lastRunAt: watch?.lastRunAt ? watch.lastRunAt.toISOString() : null,
       lastSummary: watch?.lastSummary ?? null,

@@ -35,8 +35,50 @@ from evidence found by tracing real call paths rather than trusting the design a
 - `lib/db/schedule.ts` — same, at the top of its `prisma.$transaction(async (tx) => {...})`,
   before its `loadWorkspace(tenantId, tx)` call at line 46.
 
-No other file changes. `app/api/health/route.ts`'s probe (`prisma.$queryRaw\`SELECT 1\``) touches
-no table and needs nothing — checked, not an oversight.
+`app/api/health/route.ts`'s probe (`prisma.$queryRaw\`SELECT 1\``) touches no table and needs
+nothing — checked, not an oversight.
+
+**Addendum, found while preparing step 3 and fixed before step 5 ever touched production.** A
+second sweep — `grep` for bare `prisma.<model>.<verb>(` across all of `app/` and `lib/`, this time
+covering reads as well as writes — found three more bare calls the first pass missed, one of them
+severe enough that applying the migration without fixing it first would have taken the live
+application's persistence offline on the very next page load:
+
+- `repo.ts`'s `importWorkspace`, its own pre-check (`const existing = await
+  prisma.workspaceMeta.findUnique(...)`), runs *before* that function's transaction opens. Once
+  RLS is live, a bare read like this always sees nothing, so `existing?.seededAt` reads as falsy
+  for a tenant that has been seeded for months — `importWorkspace` proceeds to re-import, its own
+  transaction's `tx.workspaceMeta.create` then throws the unique-constraint violation it actually
+  has, and `boot()`'s `catch` block returns `persistence: { enabled: false, note: 'Running from
+  the issue log. Changes are not being saved.' }` — on every request, forever. This is the one
+  that would have been found immediately in step 5.3, at the earliest, and would have looked like
+  the whole database had gone down rather than like a scoping gap.
+- `boot.ts`'s own `prisma.scheduleWatch.findUnique(...)`, called right after `loadWorkspace` in
+  the same function to populate the "when did the pass last run" banner (`pass.lastRunAt`/
+  `lastSummary`). Silently reads as never-run on every page load once RLS is live — a real,
+  user-visible regression, just not a fatal one.
+- `persist.ts`'s `pruneAppliedActions`, called daily by `app/api/schedule/run/route.ts`. Its own
+  comment explains it is deliberately *outside* `runBatch`'s transaction, to avoid serializable-
+  isolation contention with concurrent batches over the same expired rows. Once RLS is live, an
+  unwrapped `deleteMany` here does not contend with anything — it silently deletes zero rows,
+  every day, forever, which is low severity (the retained keys are already ignored once expired)
+  but is a real, if quiet, permanent regression.
+
+All three needed the same fix as `loadWorkspace`'s bare path — wrap in a transaction, set
+`app.tenant_id`, then run the query — so rather than a fourth and fifth hand-written
+`$executeRaw`, a single `withTenant(tenantId, (tx) => ...)` helper was added to `lib/db/client.ts`
+and all three (plus `loadWorkspace`'s own wrapper, refactored to call it too) now share it. The
+three transactional functions that already open their own transaction for other reasons
+(`runBatch`, `schedule.ts`, `importWorkspace`'s main body) keep their inline `$executeRaw` as the
+first statement rather than switching to `withTenant`, since they need control over their own
+transaction's options (isolation level, timeout) that `withTenant` does not expose. `pg_policies`
+was not yet queryable at this point (no migration applied), so this was verified the same way as
+the rest of step 1: `npx tsc --noEmit`, `rls-mechanism-proof.ts`, and the full regression suite,
+all re-run clean after the fix.
+
+This is exactly the class of gap step 3's own risk note describes, found one step earlier than
+the plan's own ordering would have caught it — by re-running the same grep with a wider net,
+not by trusting the first pass's "no other file changes" claim.
 
 **Verify:** `npx tsc --noEmit`. Then a standalone script,
 `scripts/rls-mechanism-proof.ts` (own throwaway tenant ids, same shape as
