@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-24T07:43:05.890Z",
+  "at": "2026-08-24T07:47:03.705Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 55,
   "failed": 0,
@@ -277,7 +277,7 @@
     {
       "what": "the proof tenant owns only its own rows",
       "ok": true,
-      "detail": "2 of 256 issue rows"
+      "detail": "2 of 257 issue rows"
     }
   ]
 }

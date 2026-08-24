@@ -3,7 +3,7 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
-import { classify, provenanceNote, type InboundMessage, htmlToText } from '@/lib/intake'
+import { classify, provenanceNote, type InboundMessage, htmlToText, alreadyReceived } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { secretProblem, secretValue } from '@/lib/secrets'
@@ -132,14 +132,45 @@ export async function POST(req: Request) {
      * retries, forwarding loops, a connector restarting mid-batch. Refused on the sender's own
      * id, and reported as a success, because the caller did nothing wrong and retrying is
      * exactly what it should have done.
+     *
+     * Checked directly against `InboundMail.messageId` rather than the substring search over
+     * note bodies this used before that table existed — still run before `classify()`, in the
+     * same place: a redelivered message that would now classify differently (routing rules
+     * changed since the first delivery) must still be recognised as the same arrival, not
+     * treated as a new one.
      */
-    const seen = Object.values(state.notes).some((n) => n.body.includes(full.messageId))
+    const seen = alreadyReceived(state, full.messageId)
     if (seen) {
       return NextResponse.json({ ok: true, duplicate: true, message: 'Already received.' })
     }
 
     const result = classify(full, state.model)
     if ('refused' in result) {
+      /*
+       * Logged before the response, not after — a thrown error from this write must not
+       * silently turn "refused and logged" into "refused and lost". Its own failure does not
+       * change what the caller is told: the message really was refused, and a logging failure
+       * is a different, secondary fact that gets recorded server-side rather than escalated,
+       * the same resilience the success path's `noteRecorded` already practises below.
+       */
+      try {
+        await persistActions(tenantId, INTAKE_ACTOR, [
+          {
+            t: 'recordInboundMail',
+            mailbox: full.to,
+            from: full.from,
+            subject: full.subject,
+            body: full.body,
+            messageId: full.messageId,
+            receivedAt: full.receivedAt,
+            issueId: null,
+            refusalReason: result.refused.reason,
+            now: new Date().toISOString(),
+          } as Action,
+        ])
+      } catch (err) {
+        console.error(`intake refused for ${full.messageId} but logging it failed: ${describeDbError(err)}`)
+      }
       return NextResponse.json({ ok: false, error: result.refused.reason }, { status: 422 })
     }
     const { draft } = result
@@ -176,9 +207,10 @@ export async function POST(req: Request) {
     /**
      * The provenance note is a second write on purpose.
      *
-     * It carries the sender's message id, which is what makes the duplicate check above work,
-     * and it says in words what was decided by a rule and what was guessed — so the consultant
-     * who picks this up knows which fields to distrust.
+     * It carries the sender's message id in words, for the consultant reading the issue — the
+     * duplicate check above no longer reads it back out of here; it queries `InboundMail`
+     * directly. The note still says in words what was decided by a rule and what was guessed,
+     * so the consultant who picks this up knows which fields to distrust.
      */
     const follow: Action[] = [
       {
@@ -189,6 +221,18 @@ export async function POST(req: Request) {
         pinned: true,
         now,
       },
+      {
+        t: 'recordInboundMail',
+        mailbox: full.to,
+        from: full.from,
+        subject: full.subject,
+        body: full.body,
+        messageId: full.messageId,
+        receivedAt: full.receivedAt,
+        issueId,
+        refusalReason: null,
+        now,
+      } as Action,
       ...draft.assignments.map(
         (a): Action => ({
           t: 'setAssignment',
