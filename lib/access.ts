@@ -1,5 +1,6 @@
 import { isMachineActor, type Actor } from './actor'
 import type { OperatingModel, Person } from './config'
+import type { ProjectMember } from './staffing'
 
 /**
  * What each role may do, and the check every mutation passes through.
@@ -375,6 +376,50 @@ export function can(model: OperatingModel, actor: Actor, key: PermissionKey): De
       ? `${what} is not something ${named.join(' or ')} can do here.`
       : `${what} needs a role, and none has been assigned to ${actor.name}.`,
   }
+}
+
+/**
+ * Bypasses project membership entirely — an administrator or a machine actor.
+ *
+ * Machine actors are checked first, mirroring the order `rolesFor` itself uses (`isMachineActor`
+ * ahead of the directory join) — a machine is not a person, and running one through
+ * `directoryPersonFor` to ask about its roles would be the wrong question before it is even a
+ * wrong answer.
+ */
+export function isExempt(model: OperatingModel, actor: Actor): boolean {
+  if (isMachineActor(actor)) return true
+  return rolesFor(model, actor).includes(ADMIN_ROLE_ID)
+}
+
+/**
+ * `can()`, narrowed to one project.
+ *
+ * Deliberately NOT a change to `can()`'s signature — every existing caller asking the abstract
+ * "does this actor's role permit this capability at all" question keeps calling `can()`
+ * unchanged. This is a second, later check for the callers that also know which record they're
+ * acting on: which project it resolves to is `workspace.ts`'s `projectOf` (it needs
+ * `scopeChainOf`, which lives there), so this function takes the resolution as a parameter
+ * rather than importing `WorkspaceState` — keeping this module's dependencies exactly as
+ * one-directional as they are today.
+ *
+ * `projectId: null` means the record has no `'project'` ancestor — ungated, same as today, per
+ * the design's "not every record" boundary.
+ */
+export function canOnProject(
+  model: OperatingModel,
+  actor: Actor,
+  key: PermissionKey,
+  projectId: string | null,
+  members: ProjectMember[],
+): Decision {
+  const base = can(model, actor, key)
+  if (!base.allowed || !projectId || isExempt(model, actor)) return base
+
+  const personId = directoryPersonFor(model, actor)?.id
+  const staffed = members.some(
+    (m) => m.projectId === projectId && !m.removedAt && m.personId === personId,
+  )
+  return staffed ? base : { allowed: false, reason: `${actor.name} is not staffed on this project.` }
 }
 
 /* ================================================================== *

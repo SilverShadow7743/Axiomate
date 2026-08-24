@@ -115,5 +115,8 @@ export function clientView(
     allocations: {},
     commitments: {},
     versions: {},
+    // Who is staffed on a project is internal machinery, the same class as rates and
+    // allocations above — withheld wholesale from every client view regardless of flags.
+    projectMembers: {},
   }
 }

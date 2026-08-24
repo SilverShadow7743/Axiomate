@@ -43,6 +43,7 @@ import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
 import type { ResourceProfile } from './capacity'
 import type { Skill } from './skills'
+import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './staffing'
 
 /* ================================================================== *
  * Scope
@@ -623,6 +624,16 @@ export interface OperatingModel {
    */
   goals: Record<string, Goal>
   roles: Record<string, OrgRole>
+  /**
+   * The vocabulary a project membership badge is drawn from. See `ProjectMember` in
+   * `./staffing`.
+   *
+   * A separate registry from `roles` on purpose: `roles` decides what someone may DO,
+   * everywhere; this only labels where they're staffed. A firm relabelling "Consultant" the
+   * org role must not silently relabel "Consultant" the project badge — they answer different
+   * questions and happen to share a common name by coincidence, not by design.
+   */
+  projectRoles: Record<string, ProjectRole>
   people: Record<string, Person>
   responsibilities: Record<string, ResponsibilityType>
   /** What kind of work an item is — the discriminator that keeps this one table. */
@@ -1056,6 +1067,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     // at, which is not something it knows.
     goals: {},
     roles,
+    projectRoles: Object.fromEntries(
+      Object.entries(DEFAULT_PROJECT_ROLES).map(([id, r]) => [id, { ...r }]),
+    ),
     people,
     responsibilities,
     workTypes,
@@ -1386,6 +1400,9 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     ...seed,
     ...stored,
     roles: { ...seed.roles, ...(stored.roles ?? {}) },
+    // Explicit, like `roles` beside it: a model stored before this key existed has no
+    // `projectRoles`, and the top-level spread would leave it undefined.
+    projectRoles: { ...seed.projectRoles, ...(stored.projectRoles ?? {}) },
     people: { ...seed.people, ...(stored.people ?? {}) },
     responsibilities: { ...seed.responsibilities, ...(stored.responsibilities ?? {}) },
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },

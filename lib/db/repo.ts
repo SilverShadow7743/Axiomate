@@ -279,6 +279,10 @@ export async function loadWorkspace(
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
+    // Placeholder until the ProjectMember table exists — see the project-membership plan's
+    // storage step, which replaces this with a real query in the same change that adds the
+    // table, so nothing here ever reads a collection that doesn't exist yet.
+    projectMembers: {},
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
@@ -325,6 +329,7 @@ function readModel(raw: unknown, owners: string[], types: string[]): OperatingMo
     // Same reason as the browser mirror: a stored model predating this key would spread
     // `undefined` over the seeded registry.
     workTypes: { ...seed.workTypes, ...(stored.workTypes ?? {}) },
+    projectRoles: { ...seed.projectRoles, ...(stored.projectRoles ?? {}) },
     sla: { ...seed.sla, ...(stored.sla ?? {}) },
     sizeBands: Array.isArray(stored.sizeBands) && stored.sizeBands.length ? stored.sizeBands : seed.sizeBands,
     approvalRules: Array.isArray(stored.approvalRules) ? stored.approvalRules : seed.approvalRules,

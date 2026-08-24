@@ -109,6 +109,7 @@ import {
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
+import type { ProjectMember } from './staffing'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -402,6 +403,16 @@ export interface WorkspaceState {
   versions: Record<string, Version<unknown>>
   /** Commercial and delivery envelope per engagement node. Keyed by node id. */
   engagements: Record<string, EngagementDetail>
+  /**
+   * Who may see and act on a project. See `./access`'s `canOnProject` and `projectOf`.
+   *
+   * Keyed to the same unit `Allocation.projectId` and a SOW's node attribution already are —
+   * a `'project'` hierarchy node. Unlike `Allocation`, `personId` is required: a row that
+   * cannot resolve to a directory id is an access fact nothing will ever match against a
+   * signed-in session, so `addProjectMember` refuses to create one rather than storing it
+   * silently useless.
+   */
+  projectMembers: Record<string, ProjectMember>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
   model: OperatingModel
   audit: AuditEntry[]
@@ -680,6 +691,9 @@ export function initWorkspace(
     allocations: {},
     commitments: {},
     engagements,
+    // A fresh workspace starts with nobody staffed on anything — the backfill migration is
+    // what populates this against real history; a seed has none to backfill from.
+    projectMembers: {},
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
     seq: 1,
@@ -703,6 +717,22 @@ export function scopeChainOf(state: WorkspaceState, id: string | null): string[]
     cursor = parentOf(state, cursor)
   }
   return chain
+}
+
+/**
+ * The `'project'` node a record sits under, or null.
+ *
+ * Reuses `scopeChainOf` as-is — the same walk config-scope resolution and the SOW-engagement
+ * check already use. Null covers two real cases, not an error: the id doesn't exist, or the
+ * record genuinely sits directly under a bare `'client'`/`'engagement'` node with no project
+ * ancestor, which `ALLOWED_PARENTS` has always permitted. Either way `canOnProject`
+ * (`./access`) treats it as ungated, matching how such records are visible today.
+ */
+export function projectOf(state: WorkspaceState, id: string): string | null {
+  for (const scopeId of scopeChainOf(state, id)) {
+    if (state.nodes[scopeId]?.kind === 'project') return scopeId
+  }
+  return null
 }
 
 /* ================================================================== *

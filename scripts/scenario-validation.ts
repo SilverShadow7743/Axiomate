@@ -27,6 +27,7 @@ import { runRecurrences,
   initWorkspace,
   runWatch,
   scopeChainOf,
+  projectOf,
   type Action,
   type SeedIssueInput,
   type WorkspaceState,
@@ -40,7 +41,8 @@ import {
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
-import { directoryIdByName, rolesFor } from '../lib/access'
+import { directoryIdByName, rolesFor, canOnProject, isExempt } from '../lib/access'
+import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { classify } from '../lib/intake'
@@ -5546,6 +5548,110 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The OAPIL guest\u2019s view holds OAPIL\u2019s marked record with its ancestor chain and nothing of Rival \u2014 not the marked record, not even the nodes; Rival\u2019s guest sees the mirror image. A null scope \u2014 a sign-in matching no directory entry, or a client seat nobody attached \u2014 empties every table rather than widening to every client, which is the deny-by-default the design demands. The directory refuses an engagement node as a scope in words naming what it must be, and both the scope and the email survive an unrelated rename.', stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `oapilRight=${oapilRight} rivalRight=${rivalRight} denyRight=${denyRight} scopeValidated=${scopeValidated} scopeSurvives=${scopeSurvives}`, stops: 'the scope disagrees with the design', severity: 'P1', impact: 'one client\u2019s guest reading another client\u2019s marked content' } as const
+  },
+)
+
+/* ================================================================== *
+ * Project membership
+ * ================================================================== */
+
+scenario(
+  'PM1',
+  'A member of a project may act on it',
+  'canOnProject resolves the record’s project via projectOf, and a person named on a live ProjectMember row for that project keeps whatever their role already grants them.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Project task' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Project task')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    const member: ProjectMember = {
+      id: 'pm-1', projectId, person: 'Priya', personId: priyaId,
+      projectRoleId: 'PROJROLE_CONSULTANT', addedBy: 'val', addedAt: NOW, removedAt: null,
+    }
+
+    const resolved = projectOf(st, issueId)
+    const decision = canOnProject(st.model, priya, 'work.edit', resolved, [member])
+    const good = resolved === projectId && decision.allowed
+
+    return good
+      ? { verdict: 'PASS', actual: `projectOf resolved ${resolved}; member ${priya.name} allowed=${decision.allowed}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `resolved=${resolved} allowed=${decision.allowed}`, stops: 'a staffed member is refused on their own project', severity: 'P1', impact: 'a project cannot be worked by the people staffed on it' } as const
+  },
+)
+
+scenario(
+  'PM2',
+  'A non-member is refused, with a reason naming them',
+  'canOnProject refuses somebody who holds the capability by role but carries no live ProjectMember row for the project the record resolves to.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Project task' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Project task')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    const resolved = projectOf(st, issueId)
+    const decision = canOnProject(st.model, priya, 'work.edit', resolved, [])
+    const good = !decision.allowed && /not staffed/.test(decision.reason ?? '') && decision.reason?.includes('Priya')
+
+    return good
+      ? { verdict: 'PASS', actual: decision.reason ?? '', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `allowed=${decision.allowed} reason=${decision.reason}`, stops: 'a non-member is not refused, or refused without saying why', severity: 'P0', impact: 'anybody holding a delivery role can act on any project, membership notwithstanding' } as const
+  },
+)
+
+scenario(
+  'PM3',
+  'An administrator bypasses the membership gate with no row at all',
+  'isExempt recognises ADMIN_ROLE_ID and the machine actor before checking any ProjectMember row — an operator is never locked out of their own deployment by a staffing gap.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Project task' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Project task')!.id
+    const resolved = projectOf(st, issueId)
+
+    /* `A` (Validator) holds no directory role, so it falls to `defaultRoleIds` — shipped
+       ADMIN — the same fallback every unrecognised actor gets on a deployment with no login. */
+    const adminExempt = isExempt(st.model, A) && canOnProject(st.model, A, 'work.edit', resolved, []).allowed
+    const machineExempt = isExempt(st.model, SCHEDULE_ACTOR)
+
+    const good = adminExempt && machineExempt
+    return good
+      ? { verdict: 'PASS', actual: `admin exempt=${adminExempt}; machine exempt=${machineExempt}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `adminExempt=${adminExempt} machineExempt=${machineExempt}`, stops: 'an administrator or the scheduled pass is refused by a gate meant to exempt them', severity: 'P0', impact: 'the operator of a fresh deployment, or the scheduled pass, is locked out by an empty membership table' } as const
+  },
+)
+
+scenario(
+  'PM4',
+  'A record with no project ancestor is ungated',
+  'projectOf returns null for a record parented directly to a bare client or engagement node — ALLOWED_PARENTS has always permitted that — and canOnProject treats null as ungated, matching today’s visibility for such records.',
+  () => {
+    /* BASE’s seeded issues sit under a module, not a project — no project ancestor at all. */
+    const issueId = 'OAPIL-1'
+    const resolved = projectOf(BASE, issueId)
+
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const decision = canOnProject(staffed.model, priya, 'work.edit', resolved, [])
+
+    const good = resolved === null && decision.allowed
+    return good
+      ? { verdict: 'PASS', actual: `resolved=${resolved} allowed=${decision.allowed}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `resolved=${resolved} allowed=${decision.allowed}`, stops: 'work outside any project node is gated when it should not be, or a real project is being missed', severity: 'P1', impact: 'work not organised into a project becomes newly inaccessible to people who could see it today' } as const
   },
 )
 

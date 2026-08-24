@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "51 of 51 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-23. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "51 of 51 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-24. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -528,7 +528,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-23: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-24: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
@@ -949,6 +949,46 @@
       "expected": "The withheld view is scoped to the reader’s own client node; null — no directory entry, or a client seat nobody attached — empties everything rather than widening to every client; the directory refuses a scope that is not a client node.",
       "verdict": "PASS",
       "actual": "The OAPIL guest’s view holds OAPIL’s marked record with its ancestor chain and nothing of Rival — not the marked record, not even the nodes; Rival’s guest sees the mirror image. A null scope — a sign-in matching no directory entry, or a client seat nobody attached — empties every table rather than widening to every client, which is the deny-by-default the design demands. The directory refuses an engagement node as a scope in words naming what it must be, and both the scope and the email survive an unrelated rename.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM1",
+      "title": "A member of a project may act on it",
+      "expected": "canOnProject resolves the record’s project via projectOf, and a person named on a live ProjectMember row for that project keeps whatever their role already grants them.",
+      "verdict": "PASS",
+      "actual": "projectOf resolved project:2; member Priya allowed=true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM2",
+      "title": "A non-member is refused, with a reason naming them",
+      "expected": "canOnProject refuses somebody who holds the capability by role but carries no live ProjectMember row for the project the record resolves to.",
+      "verdict": "PASS",
+      "actual": "Priya is not staffed on this project.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM3",
+      "title": "An administrator bypasses the membership gate with no row at all",
+      "expected": "isExempt recognises ADMIN_ROLE_ID and the machine actor before checking any ProjectMember row — an operator is never locked out of their own deployment by a staffing gap.",
+      "verdict": "PASS",
+      "actual": "admin exempt=true; machine exempt=true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM4",
+      "title": "A record with no project ancestor is ungated",
+      "expected": "projectOf returns null for a record parented directly to a bare client or engagement node — ALLOWED_PARENTS has always permitted that — and canOnProject treats null as ungated, matching today’s visibility for such records.",
+      "verdict": "PASS",
+      "actual": "resolved=null allowed=true",
       "stops": "",
       "severity": "P1",
       "impact": "none"
