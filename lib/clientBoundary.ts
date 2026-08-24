@@ -118,5 +118,9 @@ export function clientView(
     // Who is staffed on a project is internal machinery, the same class as rates and
     // allocations above — withheld wholesale from every client view regardless of flags.
     projectMembers: {},
+    // Nobody's private calendar belongs in a client view — the same absolute rule as
+    // `redactForReader`'s own filter, applied here too since clientView can be called
+    // independently of boot()'s internal.view branch.
+    personalEvents: {},
   }
 }

@@ -248,6 +248,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       // Mirror-wins like every other collection above it — this only runs in no-database mode,
       // where nothing is ever redacted before it reaches the mirror.
       projectMembers: parsed.projectMembers ?? {},
+      // `?? {}` because a mirror written before personal events existed has no such key.
+      personalEvents: parsed.personalEvents ?? {},
       // Merged, not taken whole. The mirror's model predates every operating-model key added
       // since it was written, and adopting it verbatim made those keys `undefined` — which is
       // how a newly configurable work-type registry arrived empty on every existing browser.

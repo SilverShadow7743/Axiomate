@@ -283,6 +283,9 @@ export async function loadWorkspace(
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
+    // Placeholder until the PersonalEvent table exists — see the personal-calendar plan's
+    // storage step, which replaces this with a real query in the same change that adds it.
+    personalEvents: {},
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),

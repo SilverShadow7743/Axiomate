@@ -1062,6 +1062,46 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PC1",
+      "title": "An event, a commitment, an allocation and a work item all land on their owner’s month",
+      "expected": "myCalendarMonth gathers all four kinds for one person, each on the day(s) it covers.",
+      "verdict": "PASS",
+      "actual": "all four kinds found on their expected day",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PC2",
+      "title": "Another person’s events, commitments, allocations and work do not appear in this month",
+      "expected": "The aggregation’s own join is exercised before any reducer or redaction exists to also get it right.",
+      "verdict": "PASS",
+      "actual": "Priya's month contains none of Sam's entries",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PC3",
+      "title": "A multi-day commitment and allocation appear on every day they span, clipped to the month",
+      "expected": "The same clipping rule calendarMonth already proves for work items, applied here to the other three kinds too.",
+      "verdict": "PASS",
+      "actual": "Aug 1-2 carry the span; nothing from July does",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PC4",
+      "title": "An owned work item with no planned end is listed as unscheduled, not silently dropped",
+      "expected": "The same honesty calendarMonth already established for undated work items.",
+      "verdict": "PASS",
+      "actual": "listed unscheduled: Subject OAPIL-1, Subject OAPIL-3, No date yet",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

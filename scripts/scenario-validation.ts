@@ -40,7 +40,9 @@ import {
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
-import { capacityFor, planCheck } from '../lib/capacity'
+import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
+import { myCalendarMonth } from '../lib/myCalendar'
+import type { PersonalEvent } from '../lib/personalEvents'
 import { directoryIdByName, rolesFor, canOnProject, isExempt } from '../lib/access'
 import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
@@ -5856,6 +5858,130 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `admin sees Alpha=${adminSeesAlpha}, member sees Alpha=${memberSeesAlpha}, unstaffed sees Alpha=${unstaffedSeesAlpha} but sees ungated work=${unstaffedSeesUngated}`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `admin=${adminSeesAlpha} member=${memberSeesAlpha} unstaffedAlpha=${unstaffedSeesAlpha} unstaffedUngated=${unstaffedSeesUngated}`, stops: 'the three-way routing in boot() disagrees with the design for at least one of exempt/member/unstaffed', severity: 'P0', impact: 'either a lockout for someone who should see their own project, or a leak for someone who should not' } as const
+  },
+)
+
+/* ================================================================== *
+ * Personal calendar
+ * ================================================================== */
+
+scenario(
+  'PC1',
+  'An event, a commitment, an allocation and a work item all land on their owner’s month',
+  'myCalendarMonth gathers all four kinds for one person, each on the day(s) it covers.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Ship the thing' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Ship the thing')!.id
+    st = ok(st, { t: 'updateIssue', id: issueId, patch: { owner: 'Priya', plannedStart: '2026-08-12', plannedEnd: '2026-08-12' }, now: NOW } as Action)
+
+    const event: PersonalEvent = { id: 'ev-1', personId: priyaId, title: 'Dentist', startAt: '2026-08-05T09:00:00.000Z', endAt: '2026-08-05T10:00:00.000Z', allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const commitment: Commitment = { id: 'commit-x', person: 'Priya', personId: priyaId, kind: 'Leave', startDate: '2026-08-10', endDate: '2026-08-10', hoursPerDay: 7.5, note: '', createdBy: 'val', createdAt: NOW, deletedAt: null }
+    const allocation: Allocation = { id: 'alloc-x', person: 'Priya', personId: priyaId, projectId, startDate: '2026-08-01', endDate: '2026-08-20', percentage: 60, note: '', createdBy: 'val', createdAt: NOW, deletedAt: null }
+    st = {
+      ...st,
+      personalEvents: { [event.id]: event },
+      commitments: { ...st.commitments, [commitment.id]: commitment },
+      allocations: { ...st.allocations, [allocation.id]: allocation },
+    }
+
+    const month = myCalendarMonth(st, priyaId, '2026-08-15')
+    const day = (iso: string) => month.weeks.flat().find((d) => d.date === iso)!
+    const good =
+      day('2026-08-05').entries.some((e) => e.kind === 'event' && e.id === 'ev-1') &&
+      day('2026-08-10').entries.some((e) => e.kind === 'commitment' && e.id === 'commit-x') &&
+      day('2026-08-12').entries.some((e) => e.kind === 'allocation' && e.id === 'alloc-x') &&
+      day('2026-08-12').entries.some((e) => e.kind === 'work' && e.issueId === issueId)
+
+    return good
+      ? { verdict: 'PASS', actual: `all four kinds found on their expected day`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(month.weeks.flat().filter((d) => d.entries.length)), stops: 'one or more kinds did not land on the expected day', severity: 'P1', impact: 'a person’s own calendar is missing entries that belong to them' } as const
+  },
+)
+
+scenario(
+  'PC2',
+  'Another person’s events, commitments, allocations and work do not appear in this month',
+  'The aggregation’s own join is exercised before any reducer or redaction exists to also get it right.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Sam’s task' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'Sam’s task')!.id
+    st = ok(st, { t: 'updateIssue', id: issueId, patch: { owner: 'Sam', plannedStart: '2026-08-12', plannedEnd: '2026-08-12' }, now: NOW } as Action)
+
+    const event: PersonalEvent = { id: 'ev-2', personId: samId, title: 'Sam’s dentist', startAt: '2026-08-05T09:00:00.000Z', endAt: '2026-08-05T10:00:00.000Z', allDay: false, note: '', attendees: '', createdAt: NOW, deletedAt: null }
+    const commitment: Commitment = { id: 'commit-y', person: 'Sam', personId: samId, kind: 'Leave', startDate: '2026-08-10', endDate: '2026-08-10', hoursPerDay: 7.5, note: '', createdBy: 'val', createdAt: NOW, deletedAt: null }
+    const allocation: Allocation = { id: 'alloc-y', person: 'Sam', personId: samId, projectId, startDate: '2026-08-01', endDate: '2026-08-20', percentage: 60, note: '', createdBy: 'val', createdAt: NOW, deletedAt: null }
+    st = {
+      ...st,
+      personalEvents: { [event.id]: event },
+      commitments: { ...st.commitments, [commitment.id]: commitment },
+      allocations: { ...st.allocations, [allocation.id]: allocation },
+    }
+
+    const month = myCalendarMonth(st, priyaId, '2026-08-15')
+    const all = month.weeks.flat().flatMap((d) => d.entries)
+    const nothingLeaked = !all.some((e) => ['ev-2', 'commit-y', 'alloc-y'].includes(e.id)) && !all.some((e) => e.kind === 'work' && e.issueId === issueId)
+
+    return nothingLeaked
+      ? { verdict: 'PASS', actual: `Priya's month contains none of Sam's entries`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(all), stops: 'the aggregation joins to the wrong person', severity: 'P0', impact: 'one person’s calendar shows another person’s events, leave, allocation or work' } as const
+  },
+)
+
+scenario(
+  'PC3',
+  'A multi-day commitment and allocation appear on every day they span, clipped to the month',
+  'The same clipping rule calendarMonth already proves for work items, applied here to the other three kinds too.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+
+    // Spans July into August — only the August days should appear in the August grid.
+    const commitment: Commitment = { id: 'commit-z', person: 'Priya', personId: priyaId, kind: 'Leave', startDate: '2026-07-30', endDate: '2026-08-02', hoursPerDay: 7.5, note: '', createdBy: 'val', createdAt: NOW, deletedAt: null }
+    st = { ...st, commitments: { ...st.commitments, [commitment.id]: commitment } }
+
+    const month = myCalendarMonth(st, priyaId, '2026-08-15')
+    const augDays = ['2026-08-01', '2026-08-02'].every((iso) =>
+      month.weeks.flat().find((d) => d.date === iso)?.entries.some((e) => e.id === 'commit-z'),
+    )
+    const julyLeaked = month.weeks.flat().some((d) => d.date < '2026-08-01' && d.entries.some((e) => e.id === 'commit-z'))
+
+    const good = augDays && !julyLeaked
+    return good
+      ? { verdict: 'PASS', actual: 'Aug 1-2 carry the span; nothing from July does', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `augDays=${augDays} julyLeaked=${julyLeaked}`, stops: 'a multi-day span is not clipped correctly to the requested month', severity: 'P1', impact: 'a leave period spanning a month boundary is missing days or bleeds into an adjacent month’s grid' } as const
+  },
+)
+
+scenario(
+  'PC4',
+  'An owned work item with no planned end is listed as unscheduled, not silently dropped',
+  'The same honesty calendarMonth already established for undated work items.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Rollout' }, now: NOW } as Action)
+    const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Rollout')!.id
+    st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'No date yet' }, now: NOW } as Action)
+    const issueId = Object.values(st.issues).find((i) => i.subject === 'No date yet')!.id
+    st = ok(st, { t: 'updateIssue', id: issueId, patch: { owner: 'Priya' }, now: NOW } as Action)
+
+    const month = myCalendarMonth(st, priyaId, '2026-08-15')
+    const good = month.unscheduled.some((u) => u.issueId === issueId) && !month.weeks.flat().some((d) => d.entries.some((e) => e.kind === 'work' && e.issueId === issueId))
+
+    return good
+      ? { verdict: 'PASS', actual: `listed unscheduled: ${month.unscheduled.map((u) => u.title).join(', ')}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(month.unscheduled), stops: 'undated owned work is silently absent instead of listed', severity: 'P1', impact: 'work with no planned date disappears from a person’s calendar entirely' } as const
   },
 )
 

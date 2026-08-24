@@ -110,6 +110,7 @@ import {
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
+import { eventProblem, type PersonalEvent } from './personalEvents'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -413,6 +414,11 @@ export interface WorkspaceState {
    * silently useless.
    */
   projectMembers: Record<string, ProjectMember>
+  /**
+   * A person's own calendar entries — typed in, not synced. Private to their owner
+   * unconditionally; see `lib/db/boot.ts`'s `redactForReader` and `./personalEvents`.
+   */
+  personalEvents: Record<string, PersonalEvent>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
   model: OperatingModel
   audit: AuditEntry[]
@@ -694,6 +700,9 @@ export function initWorkspace(
     // A fresh workspace starts with nobody staffed on anything — the backfill migration is
     // what populates this against real history; a seed has none to backfill from.
     projectMembers: {},
+    // A fresh workspace starts with nobody's calendar typed in — there is no history to
+    // backfill this from at all, for anyone.
+    personalEvents: {},
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
     seq: 1,
