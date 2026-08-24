@@ -1,5 +1,6 @@
-import { can, directoryPersonFor } from '../access'
+import { can, directoryPersonFor, isExempt } from '../access'
 import { clientView } from '../clientBoundary'
+import { memberProjectIdsFor, projectView } from '../projectBoundary'
 import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
@@ -166,6 +167,21 @@ export async function boot(): Promise<Boot> {
      */
     const reader = state ? directoryPersonFor(state.model, actor) : null
     const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+    /*
+     * A fourth reason the view can be narrower than "everything", alongside the three above.
+     * Deliberately worded as "work inside a project", not "nothing" — someone staffed on zero
+     * projects still sees whatever is organised OUTSIDE one, per `projectView`'s ungated
+     * default, and a banner claiming they see nothing would be wrong the moment they open the
+     * tree.
+     */
+    const unstaffed =
+      state &&
+      can(state.model, actor, 'internal.view').allowed &&
+      !isExempt(state.model, actor) &&
+      reader &&
+      memberProjectIdsFor(state, reader.id).size === 0
+        ? ' You aren’t staffed on any project yet, so project work is not shown — ask your project manager to add you.'
+        : ''
     const scopeNote =
       state && !can(state.model, actor, 'internal.view').allowed
         ? reader
@@ -173,7 +189,7 @@ export async function boot(): Promise<Boot> {
             ? ' Your seat holds a client role but is not attached to a client yet — ask the firm to set it on your directory entry.'
             : ''
           : ' This sign-in matches no directory entry, so there is nothing to show — ask the firm to add you.'
-        : ''
+        : unstaffed
     const note = noteBase + scopeNote
 
     return {
@@ -297,7 +313,21 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
    * which is the sign-in gate's lesson — withholding the records and shipping the summary
    * of them is the same disclosure.
    */
-  if (can(state.model, actor, 'internal.view').allowed) return base
+  if (can(state.model, actor, 'internal.view').allowed) {
+    /*
+     * The project boundary — a second narrowing INSIDE `internal.view`, on a different axis
+     * from the client boundary below. `isExempt` covers ADMIN and the machine actor, who see
+     * everything, the same reasoning `defaultRoleIds` ships as Administrator: an operator is
+     * never locked out of their own deployment by a staffing gap.
+     *
+     * What survives for a non-exempt internal reader: every record with no `'project'`
+     * ancestor at all (unchanged — see `projectView`'s own comment on why this is the
+     * deliberate default), plus every record under a project they are a live member of.
+     * Someone staffed on zero projects still sees everything organised OUTSIDE a project —
+     * that is `projectView`'s ungated default holding, not a special case for this reader.
+     */
+    return isExempt(state.model, actor) ? base : projectView(base, memberProjectIdsFor(state, mine))
+  }
   /*
    * The reader's own client, from their directory entry — null (no entry, or a client
    * seat nobody has attached yet) EMPTIES the view rather than widening it to every

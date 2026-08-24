@@ -42,6 +42,7 @@ import {
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck } from '../lib/capacity'
 import { directoryIdByName, rolesFor, canOnProject, isExempt } from '../lib/access'
+import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
@@ -5735,6 +5736,126 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `before=${beforeRemove.allowed} rowSurvives=${rowSurvives} after=${afterRemove.allowed}`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `before=${beforeRemove.allowed} rowSurvives=${rowSurvives} after=${afterRemove.allowed}`, stops: 'a removed member either still grants access, or the removal destroyed the row instead of soft-ending it', severity: 'P0', impact: 'someone removed from a project keeps access, or the history of who was staffed where is lost' } as const
+  },
+)
+
+scenario(
+  'PM10',
+  'An internal project member sees their project in full, and none of another',
+  'projectView keeps every issue, note, evidence item and time entry under a project the reader is staffed on, and drops all of another project’s the same way — checked by asserting on the ABSENCE of the other project’s specific ids, the discipline clientView’s own payload-leak proof already follows.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const alphaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Alpha')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const betaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Beta')!.id
+
+    st = ok(st, { t: 'create', parentId: alphaId, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    const alphaIssue = Object.values(st.issues).find((i) => i.subject === 'Alpha task')!
+    st = ok(st, { t: 'create', parentId: betaId, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+    const betaIssue = Object.values(st.issues).find((i) => i.subject === 'Beta task')!
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addNote', issueId: alphaIssue.id, body: 'alpha note', noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
+    st = ok(st, { t: 'addNote', issueId: betaIssue.id, body: 'beta note', noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: alphaId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const view = projectView(st, memberProjectIdsFor(st, priyaId))
+    const good =
+      Boolean(view.issues[alphaIssue.id]) &&
+      !view.issues[betaIssue.id] &&
+      Boolean(view.nodes[alphaId]) &&
+      !view.nodes[betaId] &&
+      Object.values(view.notes).some((n) => n.issueId === alphaIssue.id) &&
+      !Object.values(view.notes).some((n) => n.issueId === betaIssue.id)
+
+    return good
+      ? { verdict: 'PASS', actual: `alpha issue kept=${Boolean(view.issues[alphaIssue.id])}, beta issue kept=${Boolean(view.issues[betaIssue.id])}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `alpha=${Boolean(view.issues[alphaIssue.id])} beta=${Boolean(view.issues[betaIssue.id])}`, stops: 'the project boundary leaks another project’s content, or hides the reader’s own', severity: 'P0', impact: 'a project member sees a project they are not staffed on, or cannot see the one they are' } as const
+  },
+)
+
+scenario(
+  'PM11',
+  'Audit entries about another project’s issue are dropped whole, not just the issue itself',
+  'The same leak class clientView’s launch found once already — a child-content audit entry surviving under a parent that itself was filtered — checked again here because a new redaction function can reproduce an old bug for a new reason.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const alphaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Alpha')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const betaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Beta')!.id
+    st = ok(st, { t: 'create', parentId: betaId, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+    const betaIssue = Object.values(st.issues).find((i) => i.subject === 'Beta task')!
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'setDates', id: betaIssue.id, start: '2026-09-01', end: '2026-09-05', now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: alphaId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const view = projectView(st, memberProjectIdsFor(st, priyaId))
+    const auditLeaked = view.audit.some((a) => a.rowId === betaIssue.id)
+
+    return !auditLeaked
+      ? { verdict: 'PASS', actual: `audit rows about Beta in the reader’s view: ${view.audit.filter((a) => a.rowId === betaIssue.id).length}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: 'an audit entry about a non-member project’s issue survived', stops: 'the audit trail leaks activity on a project the reader is not staffed on', severity: 'P0', impact: 'a project member can read what happened on a project they cannot otherwise see' } as const
+  },
+)
+
+scenario(
+  'PM12',
+  'Work with no project ancestor is never gated, whatever the reader is staffed on',
+  'projectView’s default is ALLOW for ungated work — the deliberate boundary the design names, checked here directly rather than only inferred from projectOf.',
+  () => {
+    /* BASE’s seeded issues sit under a module, directly under the engagement — no project at all. */
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+
+    /* Zero memberships — staffed nowhere — and the ungated seed issues still survive. */
+    const view = projectView(staffed, memberProjectIdsFor(staffed, priyaId))
+    const good = Boolean(view.issues['OAPIL-1']) && Boolean(view.issues['OAPIL-2']) && Boolean(view.issues['OAPIL-3'])
+
+    return good
+      ? { verdict: 'PASS', actual: `OAPIL-1..3 all kept with zero project memberships`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `OAPIL-1=${Boolean(view.issues['OAPIL-1'])} OAPIL-2=${Boolean(view.issues['OAPIL-2'])} OAPIL-3=${Boolean(view.issues['OAPIL-3'])}`, stops: 'work never organised into a project became invisible to someone staffed on no project', severity: 'P0', impact: 'the majority of a firm’s pre-existing work vanishes for anyone not yet enrolled anywhere' } as const
+  },
+)
+
+scenario(
+  'PM13',
+  'boot()’s redaction routes correctly: exempt sees everything, a staffed member sees their project, an unstaffed reader sees only ungated work',
+  'The three-way branch inside internal.view — isExempt bypasses projectView entirely, a member gets projectView narrowed to their projects, everyone else gets projectView with an empty member set — exercised end to end through the same function boot() calls.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const alphaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Alpha')!.id
+    st = ok(st, { t: 'create', parentId: alphaId, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    const alphaIssue = Object.values(st.issues).find((i) => i.subject === 'Alpha task')!
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(st.model.people).find((pp) => pp.name === 'Sam')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: alphaId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    /* boot()'s actual branch: `isExempt(...) ? base : projectView(...)`. `A` (Validator) falls
+       to the shipped ADMIN fallback role — the same reasoning PM3 already proves — so an
+       exempt reader's view is `st` itself, never routed through projectView at all. */
+    const adminView = isExempt(st.model, A) ? st : projectView(st, memberProjectIdsFor(st, null))
+    const adminSeesAlpha = Boolean(adminView.issues[alphaIssue.id])
+
+    const memberView = projectView(st, memberProjectIdsFor(st, priyaId))
+    const memberSeesAlpha = Boolean(memberView.issues[alphaIssue.id])
+
+    const unstaffedView = projectView(st, memberProjectIdsFor(st, samId))
+    const unstaffedSeesAlpha = Boolean(unstaffedView.issues[alphaIssue.id])
+    const unstaffedSeesUngated = Boolean(unstaffedView.issues['OAPIL-1'])
+
+    const good = adminSeesAlpha && memberSeesAlpha && !unstaffedSeesAlpha && unstaffedSeesUngated
+    return good
+      ? { verdict: 'PASS', actual: `admin sees Alpha=${adminSeesAlpha}, member sees Alpha=${memberSeesAlpha}, unstaffed sees Alpha=${unstaffedSeesAlpha} but sees ungated work=${unstaffedSeesUngated}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `admin=${adminSeesAlpha} member=${memberSeesAlpha} unstaffedAlpha=${unstaffedSeesAlpha} unstaffedUngated=${unstaffedSeesUngated}`, stops: 'the three-way routing in boot() disagrees with the design for at least one of exempt/member/unstaffed', severity: 'P0', impact: 'either a lockout for someone who should see their own project, or a leak for someone who should not' } as const
   },
 )
 

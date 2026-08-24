@@ -1022,6 +1022,46 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PM10",
+      "title": "An internal project member sees their project in full, and none of another",
+      "expected": "projectView keeps every issue, note, evidence item and time entry under a project the reader is staffed on, and drops all of another project’s the same way — checked by asserting on the ABSENCE of the other project’s specific ids, the discipline clientView’s own payload-leak proof already follows.",
+      "verdict": "PASS",
+      "actual": "alpha issue kept=true, beta issue kept=false",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM11",
+      "title": "Audit entries about another project’s issue are dropped whole, not just the issue itself",
+      "expected": "The same leak class clientView’s launch found once already — a child-content audit entry surviving under a parent that itself was filtered — checked again here because a new redaction function can reproduce an old bug for a new reason.",
+      "verdict": "PASS",
+      "actual": "audit rows about Beta in the reader’s view: 0",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM12",
+      "title": "Work with no project ancestor is never gated, whatever the reader is staffed on",
+      "expected": "projectView’s default is ALLOW for ungated work — the deliberate boundary the design names, checked here directly rather than only inferred from projectOf.",
+      "verdict": "PASS",
+      "actual": "OAPIL-1..3 all kept with zero project memberships",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PM13",
+      "title": "boot()’s redaction routes correctly: exempt sees everything, a staffed member sees their project, an unstaffed reader sees only ungated work",
+      "expected": "The three-way branch inside internal.view — isExempt bypasses projectView entirely, a member gets projectView narrowed to their projects, everyone else gets projectView with an empty member set — exercised end to end through the same function boot() calls.",
+      "verdict": "PASS",
+      "actual": "admin sees Alpha=true, member sees Alpha=true, unstaffed sees Alpha=false but sees ungated work=true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
