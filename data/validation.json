@@ -1352,6 +1352,36 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "TV4",
+      "title": "visibleRows hides a genuinely empty structural branch that belongs to a DIFFERENT client than the one selected",
+      "expected": "Found by inspection, not a user report: Client: OAPIL selected, and Axiocloud's own empty internal projects still rode along above the actual OAPIL results — the \"keep an empty branch visible\" rule was blind to every filter including client, and a client filter is \"show me this client's tree\", not \"this client's tree plus everyone else's empty leftovers\".",
+      "verdict": "PASS",
+      "actual": "visible: [COMPANY, CLIENT-A]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TV5",
+      "title": "visibleRows keeps a genuinely empty structural branch that belongs to the SELECTED client — checked as its own case",
+      "expected": "A fix that excluded every empty branch regardless of client would also pass TV4; this proves the original \"a freshly created empty Project stays visible and selectable\" behaviour still holds for the client actually being viewed.",
+      "verdict": "PASS",
+      "actual": "visible: [CLIENT-A, PROJECT-A]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TV6",
+      "title": "visibleRows keeps every empty structural branch, across every client, when no client filter is active",
+      "expected": "TV4's fix is scoped to filters.client !== 'All' on purpose — this proves the ordinary unfiltered case (Client: All) is untouched.",
+      "verdict": "PASS",
+      "actual": "visible: [CLIENT-B, PROJECT-B]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

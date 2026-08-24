@@ -6502,6 +6502,66 @@ scenario(
   },
 )
 
+scenario(
+  'TV4',
+  'visibleRows hides a genuinely empty structural branch that belongs to a DIFFERENT client than the one selected',
+  'Found by inspection, not a user report: Client: OAPIL selected, and Axiocloud\'s own empty internal projects still rode along above the actual OAPIL results — the "keep an empty branch visible" rule was blind to every filter including client, and a client filter is "show me this client\'s tree", not "this client\'s tree plus everyone else\'s empty leftovers".',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'COMPANY', parentId: null, kind: 'company' }),
+      tvRow({ id: 'CLIENT-A', parentId: 'COMPANY', kind: 'client', name: 'OAPIL' }),
+      tvRow({ id: 'CLIENT-B', parentId: 'COMPANY', kind: 'client', name: 'Axiocloud' }),
+      tvRow({ id: 'PROJECT-B', parentId: 'CLIENT-B', kind: 'project', name: 'Axio-Finance' }),
+    ]
+    const shown = visibleRows(all, { ...EMPTY_FILTERS, client: 'OAPIL' }, new Set())
+    const ids = shown.map((r) => r.id)
+    const good = ids.includes('COMPANY') && ids.includes('CLIENT-A')
+      && !ids.includes('CLIENT-B') && !ids.includes('PROJECT-B')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${ids.join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${ids.join(', ')}]`, stops: 'an empty branch under a different client than the one selected still rides along', impact: 'filtering to one client leaves every other client\'s empty structure cluttering the tree above the actual results', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'TV5',
+  'visibleRows keeps a genuinely empty structural branch that belongs to the SELECTED client — checked as its own case',
+  'A fix that excluded every empty branch regardless of client would also pass TV4; this proves the original "a freshly created empty Project stays visible and selectable" behaviour still holds for the client actually being viewed.',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'CLIENT-A', parentId: null, kind: 'client', name: 'OAPIL' }),
+      tvRow({ id: 'PROJECT-A', parentId: 'CLIENT-A', kind: 'project', name: 'New Project' }),
+    ]
+    const shown = visibleRows(all, { ...EMPTY_FILTERS, client: 'OAPIL' }, new Set())
+    const ids = shown.map((r) => r.id)
+    const good = ids.includes('CLIENT-A') && ids.includes('PROJECT-A')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${ids.join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${ids.join(', ')}]`, stops: 'the fix over-corrected: an empty branch under the selected client itself is now hidden', impact: 'a freshly created, empty Project under the client actually being viewed would disappear and become unselectable', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'TV6',
+  'visibleRows keeps every empty structural branch, across every client, when no client filter is active',
+  'TV4\'s fix is scoped to filters.client !== \'All\' on purpose — this proves the ordinary unfiltered case (Client: All) is untouched.',
+  () => {
+    const all: ScheduleRow[] = [
+      tvRow({ id: 'CLIENT-B', parentId: null, kind: 'client', name: 'Axiocloud' }),
+      tvRow({ id: 'PROJECT-B', parentId: 'CLIENT-B', kind: 'project', name: 'Axio-Finance' }),
+    ]
+    const shown = visibleRows(all, EMPTY_FILTERS, new Set())
+    const ids = shown.map((r) => r.id)
+    const good = ids.includes('CLIENT-B') && ids.includes('PROJECT-B')
+
+    return good
+      ? { verdict: 'PASS', actual: `visible: [${ids.join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `visible: [${ids.join(', ')}]`, stops: 'an empty branch is hidden even with no client filter active', impact: 'TV4\'s fix leaked into the unfiltered case — every empty Project across every client would disappear by default', severity: 'P1' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

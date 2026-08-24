@@ -424,6 +424,14 @@ export function visibleRows(
   // A structural row with no issues anywhere beneath it has nothing to be filtered out by —
   // it is empty, not excluded. Without this a freshly created Engagement / Project / Process
   // Area would never render, so the user could not select it to add anything underneath.
+  //
+  // Blind to every filter dimension except one on purpose. A client filter is not "narrow the
+  // work within a client" the way severity or owner are — it is "show me this client's branch
+  // of the tree" — so an empty branch belonging to a DIFFERENT client riding along regardless
+  // is not the same kind of harmless as an empty branch riding along past a severity filter.
+  // Checked by walking up to the nearest `kind === 'client'` ancestor's name, the same value
+  // `matchesFilters` compares `i.client` against — a row with no client ancestor at all (above
+  // the client tier, or the client filter is 'All') is unaffected, matching prior behaviour.
   const hasIssueDescendant = new Set<string>()
   for (const row of all) {
     if (row.kind !== 'issue') continue
@@ -433,9 +441,21 @@ export function visibleRows(
       p = byId.get(p)?.parentId ?? null
     }
   }
+  const clientOf = (row: ScheduleRow): string | null => {
+    let cur: ScheduleRow | undefined = row
+    while (cur) {
+      if (cur.kind === 'client') return cur.name
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    }
+    return null
+  }
   for (const row of all) {
     if (row.kind === 'issue' || row.kind === 'activity' || row.kind === 'milestone') continue
     if (hasIssueDescendant.has(row.id)) continue
+    if (filters.client !== 'All') {
+      const client = clientOf(row)
+      if (client !== null && client !== filters.client) continue
+    }
     keep.add(row.id)
     let p = row.parentId
     while (p) {
