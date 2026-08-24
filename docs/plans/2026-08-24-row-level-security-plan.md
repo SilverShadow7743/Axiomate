@@ -214,6 +214,60 @@ be written under pressure: `ALTER TABLE "<Model>" NO FORCE ROW LEVEL SECURITY; A
 Worth drafting that reversal SQL alongside step 3's forward migration, not after something has
 already gone wrong.
 
+**What actually happened, step by step, since it diverged from the above in two ways worth
+recording.**
+
+*There was no dev/disposable database to test against first — asked and confirmed with the user
+before touching anything, rather than assumed.* `.env`'s `DATABASE_URL` pointed directly at
+production; `scripts/db-setup.mjs` assumes a local Postgres that did not exist in this
+environment. Steps 3 and 4's own migration and `rls-proof.ts` were written and committed first,
+so `audit:rls` was ready to run the instant the migration landed, collapsing what the plan wrote
+as separate steps 3/4 (test) and 5 (apply) into one tight sequence against the only database
+there was.
+
+*`npm run audit:rls`, run immediately after `npm run db:migrate`, failed on exactly the check that
+matters most* — the deliberate bypass saw the row it should not have. Root cause, found by
+querying `pg_roles` rather than guessed at: `tmsadmin`, the connecting role, carries Postgres's
+`BYPASSRLS` attribute (inherited via Azure's `azure_pg_admin` membership) — an attribute
+`ENABLE`/`FORCE ROW LEVEL SECURITY` has no power over, since Postgres checks it before evaluating
+any policy at all. The design's own reasoning for `FORCE` ("the connecting role owns these
+tables") only accounted for the ownership bypass; there is a second, independent one `FORCE` does
+nothing about, and Azure's managed Postgres grants it to the admin role by default. This is not
+this deployment's own send-back condition (that one asks about the reference-equality check, and
+it held); it is a new one, found live: **RLS existed but enforced nothing, on any connection,
+including the application's own, from the moment the migration landed until this was fixed.**
+Confirmed with the user before acting — this is a role-security-attribute change on the exact role
+every production request uses, a bigger blast radius than adding policies and not something the
+plan anticipated — then fixed with `ALTER ROLE tmsadmin NOBYPASSRLS`, instantly reversible
+(`ALTER ROLE tmsadmin BYPASSRLS` undoes only this, no migration involved either way). `audit:rls`
+re-run clean afterward, all six checks including the bypass.
+
+*Fixing `BYPASSRLS` surfaced a second gap immediately*: `scripts/persistence-proof.ts`'s own
+`scrub()` and four of its read checks used bare, unwrapped Prisma calls — exactly the pattern step
+1 fixed in `lib/db`, just not in this file. The very next `audit:persistence` run failed on its
+own cleanup, leaving that proof's rows behind in production before the RESTRICT foreign key on
+`Tenant` caught it. Fixed the same way (routed through `withTenant`), the leftover rows were
+removed by that same fix's own corrected `scrub()` on its next run, and the whole regression suite
+re-run clean.
+
+*The currently-deployed App Service instance was still running the code from before this session's
+RLS work* — none of `withTenant`, `loadWorkspace`'s self-wrap, or the `boot.ts`/`persist.ts` fixes
+existed in what was actually serving requests, and RLS was now genuinely enforcing (`BYPASSRLS`
+gone). That old code never sets `app.tenant_id` anywhere, so every real request was at risk of
+`boot()` falling back to "changes are not being saved" the moment RLS started actually applying to
+`tmsadmin` — this is not hypothetical, it is the exact failure this plan's step 3 risk note
+describes, just aimed at the deployed instance rather than a code path this plan missed. Not a
+step the plan named at all, because the plan implicitly assumed "apply the migration" and "deploy
+the code that expects it" were the same moment — they were not, since the migration went straight
+to the database while the running instance was still on an old build. Fixed by running the
+project's established clean-room release (`git archive` → `npm ci` → `prisma generate` → `tsc`
+→ `build` → package → `az webapp deploy` → health poll) immediately, before any further
+verification, closing the window between "RLS enforces" and "the deployed code knows to set it."
+
+All of the above is now true in production: `axiocloud`'s data (257 issues, 59 nodes, operating
+model present, 0 orphans) reads identically before and after, through the real deployed app, with
+RLS genuinely enforcing and `tmsadmin` no longer able to bypass it.
+
 ## Details most likely to be gotten wrong
 
 - **The reference-equality check.** `db === prisma` only works because `prisma` (`lib/db/client.ts`)
