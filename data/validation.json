@@ -1102,6 +1102,26 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "PC5",
+      "title": "Adding a personal event resolves to the actor’s own directory id, with no field naming it",
+      "expected": "addPersonalEvent carries no personId at all — the reducer resolves the owner from the actor, the same join myWork/setNotificationPref already use.",
+      "verdict": "PASS",
+      "actual": "event owned by PERSON_1",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PC6",
+      "title": "A different actor cannot update or remove somebody else’s event — not even an administrator",
+      "expected": "Full stop, no admin fallback — the one place this codebase deliberately withholds the operator exemption every other self-scoped arm grants.",
+      "verdict": "PASS",
+      "actual": "admin update: This is not your event.; admin remove: This is not your event.; owner update: ok",
+      "stops": "",
+      "severity": "P0",
+      "impact": "none"
     }
   ]
 }

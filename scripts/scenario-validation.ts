@@ -5985,6 +5985,51 @@ scenario(
   },
 )
 
+scenario(
+  'PC5',
+  'Adding a personal event resolves to the actor’s own directory id, with no field naming it',
+  'addPersonalEvent carries no personId at all — the reducer resolves the owner from the actor, the same join myWork/setNotificationPref already use.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const result = apply(BASE, { t: 'addPersonalEvent', title: 'Dentist', startAt: '2026-08-05T09:00:00.000Z', endAt: '2026-08-05T10:00:00.000Z', allDay: false, note: '', attendees: '', now: NOW } as Action, priya)
+    const event = Object.values(result.state.personalEvents)[0]
+    const good = !result.error && event?.personId === priyaId
+
+    return good
+      ? { verdict: 'PASS', actual: `event owned by ${event.personId}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error} personId=${event?.personId}`, stops: 'a personal event does not resolve to the actor who created it', severity: 'P1', impact: 'nobody could reliably own a calendar entry' } as const
+  },
+)
+
+scenario(
+  'PC6',
+  'A different actor cannot update or remove somebody else’s event — not even an administrator',
+  'Full stop, no admin fallback — the one place this codebase deliberately withholds the operator exemption every other self-scoped arm grants.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_ADMIN'] }, now: NOW } as Action)
+    const addResult = apply(staffed, { t: 'addPersonalEvent', title: 'Private', startAt: '2026-08-05T09:00:00.000Z', endAt: '2026-08-05T10:00:00.000Z', allDay: false, note: '', attendees: '', now: NOW } as Action, priya)
+    if (addResult.error) throw new Error(`addPersonalEvent refused: ${addResult.error}`)
+    const withEvent = addResult.state
+    const eventId = Object.values(withEvent.personalEvents).find((e) => e.title === 'Private')!.id
+
+    const samUpdate = apply(withEvent, { t: 'updatePersonalEvent', id: eventId, patch: { title: 'Hijacked' }, now: NOW } as Action, sam)
+    const samRemove = apply(withEvent, { t: 'removePersonalEvent', id: eventId, now: NOW } as Action, sam)
+    const priyaUpdate = apply(withEvent, { t: 'updatePersonalEvent', id: eventId, patch: { title: 'Renamed by me' }, now: NOW } as Action, priya)
+
+    const good = Boolean(samUpdate.error) && Boolean(samRemove.error) && !priyaUpdate.error
+
+    return good
+      ? { verdict: 'PASS', actual: `admin update: ${samUpdate.error}; admin remove: ${samRemove.error}; owner update: ok`, stops: '', severity: 'P0', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `samUpdate=${samUpdate.error} samRemove=${samRemove.error} priyaUpdate=${priyaUpdate.error}`, stops: 'an administrator, or anybody but the owner, can alter or remove somebody else’s private event', severity: 'P0', impact: 'the structural-privacy argument fails at the reducer, before any redaction even runs' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

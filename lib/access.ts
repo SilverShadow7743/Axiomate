@@ -580,6 +580,10 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   addProjectMember: 'project.staff',
   updateProjectMember: 'project.staff',
   removeProjectMember: 'project.staff',
+  /* No admin fallback, unlike setNotificationPref below — see the personal-calendar design. */
+  addPersonalEvent: null,
+  updatePersonalEvent: null,
+  removePersonalEvent: null,
   config: 'config.manage',
   /*
    * The two that genuinely take no grant, said out loud rather than left out.

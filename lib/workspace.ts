@@ -1217,6 +1217,19 @@ export type Action =
   /** Role correction only — see `./staffing`. Nobody re-dates a tenure by editing it. */
   | { t: 'updateProjectMember'; id: string; projectRoleId: string; now: string }
   | { t: 'removeProjectMember'; id: string; now: string }
+  /**
+   * ---- PERSONAL CALENDAR ----
+   * Deliberately no `personId` field on any of these three — see `./personalEvents`. The
+   * reducer resolves the owner from the actor; the wire has nothing to carry a wrong value.
+   */
+  | { t: 'addPersonalEvent'; title: string; startAt: string; endAt: string; allDay: boolean; note: string; attendees: string; now: string }
+  | {
+      t: 'updatePersonalEvent'
+      id: string
+      patch: Partial<Pick<PersonalEvent, 'title' | 'startAt' | 'endAt' | 'allDay' | 'note' | 'attendees'>>
+      now: string
+    }
+  | { t: 'removePersonalEvent'; id: string; now: string }
 
 /**
  * Operations on the operating model.
@@ -6084,6 +6097,77 @@ Question: ${review.question}`,
           }),
         },
         message: `${member.person} removed.`,
+      }
+    }
+
+    /*
+     * No audit entry in any of the three arms below, unlike every other mutation in this
+     * reducer. `state.audit` is not filtered per-owner anywhere today — `redactForReader`
+     * passes it through unchanged for any `internal.view` holder — so an entry naming a
+     * personal event's title would leak its existence, and half its content, to exactly the
+     * readers the design says must never see it. The accountability an audit trail exists for
+     * has no audience here; there is nobody this record is answerable to but its owner.
+     */
+    case 'addPersonalEvent': {
+      const problem = eventProblem(a)
+      if (problem) return { state, error: problem.message }
+      const personId = directoryPersonFor(state.model, actor)?.id
+      if (!personId) {
+        return { state, error: 'This sign-in matches no directory entry, so there is nowhere to add it.' }
+      }
+      const seq = state.seq + 1
+      const id = `pevent-${seq}`
+      const event: PersonalEvent = {
+        id,
+        personId,
+        title: a.title.trim(),
+        startAt: a.startAt,
+        endAt: a.endAt,
+        allDay: a.allDay,
+        note: a.note.trim(),
+        attendees: a.attendees.trim(),
+        createdAt: a.now,
+        deletedAt: null,
+      }
+      return {
+        state: { ...state, personalEvents: { ...state.personalEvents, [id]: event }, seq },
+        message: `${event.title} added.`,
+      }
+    }
+
+    case 'updatePersonalEvent': {
+      const event = state.personalEvents[a.id]
+      if (!event || event.deletedAt) return { state, error: 'That event no longer exists.' }
+      /**
+       * Full stop, no admin fallback — see the design. Every other self-scoped arm in this
+       * file (`setNotificationPref`) grants `config.manage` a way in; this one deliberately
+       * does not, because there is no legitimate reason for anyone but the owner to touch it.
+       */
+      if (directoryPersonFor(state.model, actor)?.id !== event.personId) {
+        return { state, error: 'This is not your event.' }
+      }
+      const next: PersonalEvent = { ...event, ...a.patch }
+      const problem = eventProblem(next)
+      if (problem) return { state, error: problem.message }
+      return {
+        state: { ...state, personalEvents: { ...state.personalEvents, [a.id]: next } },
+        message: 'Updated.',
+      }
+    }
+
+    case 'removePersonalEvent': {
+      const event = state.personalEvents[a.id]
+      if (!event) return { state, error: 'That event no longer exists.' }
+      if (event.deletedAt) return { state }
+      if (directoryPersonFor(state.model, actor)?.id !== event.personId) {
+        return { state, error: 'This is not your event.' }
+      }
+      return {
+        state: {
+          ...state,
+          personalEvents: { ...state.personalEvents, [a.id]: { ...event, deletedAt: a.now } },
+        },
+        message: `${event.title} removed.`,
       }
     }
 

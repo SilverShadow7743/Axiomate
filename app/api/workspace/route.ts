@@ -97,6 +97,9 @@ const KINDS = new Set([
   'addProjectMember',
   'updateProjectMember',
   'removeProjectMember',
+  'addPersonalEvent',
+  'updatePersonalEvent',
+  'removePersonalEvent',
 ])
 
 export async function POST(req: Request) {

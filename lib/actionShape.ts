@@ -630,6 +630,18 @@ const SHAPES = {
   addProjectMember: { projectId: req(id), person: req(text), projectRoleId: req(id), now },
   updateProjectMember: { id: req(id), projectRoleId: req(id), now },
   removeProjectMember: { id: req(id), now },
+  /* ---- PERSONAL CALENDAR ---- */
+  addPersonalEvent: {
+    title: req(text),
+    startAt: req(text),
+    endAt: req(text),
+    allDay: req(bool),
+    note: req(text),
+    attendees: req(text),
+    now,
+  },
+  updatePersonalEvent: { id: req(id), patch: req(plainObject), now },
+  removePersonalEvent: { id: req(id), now },
   // `acceptUnavailable` for the same reason as `updateIssue`: this is the other arm that can
   // name somebody, and the reducer refuses both when that person is away for the whole window.
   recordVersion: {
