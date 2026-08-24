@@ -14,6 +14,7 @@ import type {
   Sow as SowRow,
   Allocation as AllocationRow,
   ProjectMember as ProjectMemberRow,
+  PersonalEvent as PersonalEventRow,
   Commitment as CommitmentRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
@@ -44,6 +45,7 @@ import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { ProjectMember } from '../staffing'
+import type { PersonalEvent } from '../personalEvents'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
@@ -913,6 +915,37 @@ export function projectMemberFromRow(r: ProjectMemberRow): ProjectMember {
     addedBy: r.addedBy,
     addedAt: r.addedAt.toISOString(),
     removedAt: r.removedAt ? r.removedAt.toISOString() : null,
+  }
+}
+
+export function personalEventToRow(tenantId: TenantId, e: PersonalEvent): Prisma.PersonalEventUncheckedCreateInput {
+  return {
+    tenantId,
+    id: e.id,
+    personId: e.personId,
+    title: e.title,
+    startAt: new Date(e.startAt),
+    endAt: new Date(e.endAt),
+    allDay: e.allDay,
+    note: e.note,
+    attendees: e.attendees,
+    createdAt: new Date(e.createdAt),
+    deletedAt: e.deletedAt ? new Date(e.deletedAt) : null,
+  }
+}
+
+export function personalEventFromRow(r: PersonalEventRow): PersonalEvent {
+  return {
+    id: r.id,
+    personId: r.personId,
+    title: r.title,
+    startAt: r.startAt.toISOString(),
+    endAt: r.endAt.toISOString(),
+    allDay: r.allDay,
+    note: r.note,
+    attendees: r.attendees,
+    createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 

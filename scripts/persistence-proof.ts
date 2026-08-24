@@ -136,6 +136,10 @@ async function scrub() {
   await prisma.issueDependency.deleteMany({ where })
   await prisma.issueActivity.deleteMany({ where })
   await prisma.allocation.deleteMany({ where })
+  // ProjectMember needs no line here: its foreign key to HierarchyNode is onDelete: Cascade,
+  // so the hierarchyNode.deleteMany below already removes every row that references it.
+  // PersonalEvent has no such relation — only Restrict on the tenant itself — so it does.
+  await prisma.personalEvent.deleteMany({ where })
   await prisma.commitment.deleteMany({ where })
   await prisma.version.deleteMany({ where })
   await prisma.timesheet.deleteMany({ where })
@@ -347,6 +351,38 @@ async function main() {
     'a project member comes back out of Postgres with the project, the person and the role intact',
     member?.projectId === projectId && member.personId === Object.values(state.model.people).find((p) => p.name === 'Priya')?.id && member.projectRoleId === 'PROJROLE_CONSULTANT',
     member ? `${member.person} on ${member.projectId} as ${member.projectRoleId}` : 'missing',
+  )
+
+  /*
+   * A separate small batch, not folded into the big one above: addPersonalEvent resolves its
+   * owner from the actor via directoryPersonFor, and the big batch's actor (`A`, "Persistence
+   * Proof") matches nobody in the directory — the arm would correctly refuse it. Priya does
+   * resolve, so the event is persisted as her and the workspace is reloaded to prove the
+   * round trip, the same discipline every other collection's check in this file follows.
+   */
+  const priyaActor: Actor = { id: Object.values(state.model.people).find((p) => p.name === 'Priya')!.id, name: 'Priya' }
+  const eventWrite = await persistActions(TENANT, priyaActor, [
+    {
+      t: 'addPersonalEvent',
+      title: 'Proof event',
+      startAt: '2026-09-01T09:00:00.000Z',
+      endAt: '2026-09-01T10:00:00.000Z',
+      allDay: false,
+      note: 'Round-trip check',
+      attendees: 'Nobody',
+      now: NOW,
+    } as Action,
+  ])
+  check('a personal event is accepted, owned by whoever the actor resolves to', eventWrite.ok, eventWrite.error ?? '')
+  const { state: withEvent } = await loadWorkspace(TENANT)
+  const event = Object.values(withEvent.personalEvents)[0]
+  check(
+    'a personal event comes back out of Postgres with its title, dates and attendees text intact',
+    event?.title === 'Proof event' &&
+      event.startAt.slice(0, 10) === '2026-09-01' &&
+      event.attendees === 'Nobody' &&
+      event.personId === priyaActor.id,
+    event ? `${event.title} · ${event.startAt} → ${event.endAt} · attendees "${event.attendees}"` : 'missing',
   )
 
   const dated = state.issues['PROOF-1']

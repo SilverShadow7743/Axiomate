@@ -23,6 +23,7 @@ import {
   sowToRow,
   allocationToRow,
   projectMemberToRow,
+  personalEventToRow,
   commitmentToRow,
   versionToRow,
   timesheetToRow,
@@ -473,6 +474,21 @@ export async function persistSteps(
         if (before.projectMembers[id] === m) continue
         const row = projectMemberToRow(tenantId, m)
         await tx.projectMember.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'addPersonalEvent':
+    case 'updatePersonalEvent':
+    case 'removePersonalEvent': {
+      for (const [id, e] of Object.entries(after.personalEvents)) {
+        if (before.personalEvents[id] === e) continue
+        const row = personalEventToRow(tenantId, e)
+        await tx.personalEvent.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

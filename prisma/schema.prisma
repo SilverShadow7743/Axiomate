@@ -131,6 +131,7 @@ model Tenant {
   watch         ScheduleWatch?
   allocations   Allocation[]
   projectMembers ProjectMember[]
+  personalEvents PersonalEvent[]
   commitments   Commitment[]
   sows          Sow[]
   notifications Notification[]
@@ -659,6 +660,30 @@ model ProjectMember {
 
   @@id([tenantId, id])
   @@index([tenantId, projectId, personId])
+  @@index([tenantId, personId])
+}
+
+/// A person's own calendar entry — typed in, not synced from anywhere. Private to its owner
+/// unconditionally; see redactForReader in lib/db/boot.ts, which filters this table with no
+/// exemption for any role, including ADMIN.
+model PersonalEvent {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id       String @default(cuid())
+  personId String
+
+  title     String
+  startAt   DateTime
+  endAt     DateTime
+  allDay    Boolean @default(false)
+  note      String  @db.Text
+  attendees String  @db.Text
+
+  createdAt DateTime
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
   @@index([tenantId, personId])
 }
 
