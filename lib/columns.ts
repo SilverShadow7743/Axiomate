@@ -14,6 +14,8 @@ export interface ColumnDef {
    * configuration one.
    */
   labelKey?: LabelKey
+  /** Prepended before the resolved term, for headings that name something else plus a term. */
+  labelPrefix?: string
   /** Appended after the resolved term, for headings that name a term plus something else. */
   labelSuffix?: string
   width: number
@@ -32,8 +34,14 @@ export const COLUMNS: ColumnDef[] = [
   {
     key: 'name',
     labelKey: 'RECORD_ISSUE',
-    labelSuffix: ' / Activity Name',
-    label: 'Issue / Activity Name',
+    // The column shows every row kind the tree carries, not just issues and activities — the
+    // structural tiers (Company/Client/Engagement/Project/Process Area) render here too, and
+    // "Outcome" is what names that group; "Activity" names the lifecycle/milestone rows under
+    // an issue. Only the middle term is configurable — a firm can rename what it calls an
+    // "Issue"; the other two describe this app's own row kinds and are not a business term.
+    labelPrefix: 'Outcome / ',
+    labelSuffix: ' / Activity',
+    label: 'Outcome / Issue / Activity',
     // Widened when the tree gained the Company and Engagement tiers: five levels of indent
     // plus rollup badges left the name itself with almost nothing at the old 320.
     width: 392,
@@ -167,5 +175,5 @@ export const DEFAULT_FROZEN = 2
  */
 export function labelColumn(c: ColumnDef, labels: Record<LabelKey, string>): string {
   if (!c.labelKey) return c.label
-  return `${labels[c.labelKey] ?? c.label}${c.labelSuffix ?? ''}`
+  return `${c.labelPrefix ?? ''}${labels[c.labelKey] ?? c.label}${c.labelSuffix ?? ''}`
 }
