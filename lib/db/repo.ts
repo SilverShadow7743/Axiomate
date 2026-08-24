@@ -41,6 +41,7 @@ import {
   sowToRow,
   allocationFromRow,
   allocationToRow,
+  projectMemberFromRow,
   commitmentFromRow,
   commitmentToRow,
   estimateFromRow,
@@ -126,6 +127,7 @@ type Reader = Pick<
   | 'documentReview'
   | 'sow'
   | 'allocation'
+  | 'projectMember'
   | 'commitment'
   | 'issueEstimate'
   | 'estimateRevision'
@@ -166,7 +168,7 @@ export async function loadWorkspace(
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -180,6 +182,7 @@ export async function loadWorkspace(
       db.notification.findMany({ where: { tenantId } }),
       db.sow.findMany({ where: { tenantId } }),
       db.allocation.findMany({ where: { tenantId } }),
+      db.projectMember.findMany({ where: { tenantId } }),
       db.commitment.findMany({ where: { tenantId } }),
       db.issueEstimate.findMany({ where: { tenantId } }),
       db.estimateRevision.findMany({ where: { tenantId }, orderBy: { at: 'asc' } }),
@@ -279,10 +282,7 @@ export async function loadWorkspace(
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
-    // Placeholder until the ProjectMember table exists — see the project-membership plan's
-    // storage step, which replaces this with a real query in the same change that adds the
-    // table, so nothing here ever reads a collection that doesn't exist yet.
-    projectMembers: {},
+    projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),

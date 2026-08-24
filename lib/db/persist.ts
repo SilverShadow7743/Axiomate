@@ -22,6 +22,7 @@ import {
   notificationToRow,
   sowToRow,
   allocationToRow,
+  projectMemberToRow,
   commitmentToRow,
   versionToRow,
   timesheetToRow,
@@ -457,6 +458,21 @@ export async function persistSteps(
         if (before.allocations[id] === alloc) continue
         const row = allocationToRow(tenantId, alloc)
         await tx.allocation.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'addProjectMember':
+    case 'updateProjectMember':
+    case 'removeProjectMember': {
+      for (const [id, m] of Object.entries(after.projectMembers)) {
+        if (before.projectMembers[id] === m) continue
+        const row = projectMemberToRow(tenantId, m)
+        await tx.projectMember.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

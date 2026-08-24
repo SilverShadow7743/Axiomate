@@ -13,6 +13,7 @@ import type {
   Notification as NotificationRow,
   Sow as SowRow,
   Allocation as AllocationRow,
+  ProjectMember as ProjectMemberRow,
   Commitment as CommitmentRow,
   EstimateRevision as RevisionRow,
   IssueRelationship as RelationshipRow,
@@ -42,6 +43,7 @@ import type { Approval, ApprovalDecision } from '../approval'
 import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
+import type { ProjectMember } from '../staffing'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
@@ -884,6 +886,33 @@ export function allocationFromRow(r: AllocationRow): Allocation {
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function projectMemberToRow(tenantId: TenantId, m: ProjectMember): Prisma.ProjectMemberUncheckedCreateInput {
+  return {
+    tenantId,
+    id: m.id,
+    person: m.person,
+    personId: m.personId,
+    projectId: m.projectId,
+    projectRoleId: m.projectRoleId,
+    addedBy: m.addedBy,
+    addedAt: new Date(m.addedAt),
+    removedAt: m.removedAt ? new Date(m.removedAt) : null,
+  }
+}
+
+export function projectMemberFromRow(r: ProjectMemberRow): ProjectMember {
+  return {
+    id: r.id,
+    person: r.person,
+    personId: r.personId,
+    projectId: r.projectId,
+    projectRoleId: r.projectRoleId,
+    addedBy: r.addedBy,
+    addedAt: r.addedAt.toISOString(),
+    removedAt: r.removedAt ? r.removedAt.toISOString() : null,
   }
 }
 

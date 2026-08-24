@@ -275,6 +275,7 @@ async function main() {
     { t: 'upsertSow', id: null, engagementId, patch: { reference: 'SOW-PROOF-1', title: 'Proof', effortHours: 40, value: 12345.67, status: 'Signed' }, now: NOW },
     { t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave', startDate: '2026-09-07', endDate: '2026-09-11', hoursPerDay: 7.5, note: '', now: NOW },
     { t: 'upsertAllocation', id: null, person: 'Priya', projectId, startDate: '2026-09-01', endDate: '2026-09-05', percentage: 50, note: '', now: NOW },
+    { t: 'addProjectMember', projectId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW },
     { t: 'link', sourceIssueId: 'PROOF-2', targetIssueId: 'PROOF-1', relationshipType: 'Duplicate of', note: '', now: NOW },
     { t: 'buildLifecycle', issueId: 'PROOF-2', slaDays: 5, now: NOW },
     { t: 'config', op: { k: 'setSla', patch: { High: 3 } }, now: NOW },
@@ -339,6 +340,13 @@ async function main() {
     'an allocation and a commitment keep their dates',
     allocation?.startDate === '2026-09-01' && commitment?.startDate === '2026-09-07' && commitment.hoursPerDay === 7.5,
     allocation ? `${allocation.startDate}→${allocation.endDate}, leave ${commitment?.hoursPerDay}h/day` : 'missing',
+  )
+
+  const member = Object.values(state.projectMembers)[0]
+  check(
+    'a project member comes back out of Postgres with the project, the person and the role intact',
+    member?.projectId === projectId && member.personId === Object.values(state.model.people).find((p) => p.name === 'Priya')?.id && member.projectRoleId === 'PROJROLE_CONSULTANT',
+    member ? `${member.person} on ${member.projectId} as ${member.projectRoleId}` : 'missing',
   )
 
   const dated = state.issues['PROOF-1']

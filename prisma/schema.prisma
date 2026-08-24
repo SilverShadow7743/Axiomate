@@ -130,6 +130,7 @@ model Tenant {
   meta          WorkspaceMeta?
   watch         ScheduleWatch?
   allocations   Allocation[]
+  projectMembers ProjectMember[]
   commitments   Commitment[]
   sows          Sow[]
   notifications Notification[]
@@ -190,6 +191,7 @@ model HierarchyNode {
   /// SOWs filed against this node, when it is an engagement.
   sowsHere Sow[] @relation("SowEngagement")
   allocations Allocation[] @relation("ProjectAllocation")
+  projectMembers ProjectMember[] @relation("ProjectMembership")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -631,6 +633,33 @@ model Allocation {
   @@id([tenantId, id])
   @@index([tenantId, person, startDate])
   @@index([tenantId, projectId])
+}
+
+/// Who may see and act on a project — an access fact, not a capacity one. See Allocation above
+/// for the sibling question this answers about the same node.
+///
+/// personId is required, unlike Allocation.personId — a row that cannot resolve to a directory
+/// id is an access-control fact nothing will ever match against a signed-in session, so the
+/// reducer refuses to create one rather than storing it silently useless.
+model ProjectMember {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String        @default(cuid())
+  person    String
+  personId  String
+  projectId String
+  project   HierarchyNode @relation("ProjectMembership", fields: [tenantId, projectId], references: [tenantId, id], onDelete: Cascade)
+
+  projectRoleId String
+
+  addedBy   String
+  addedAt   DateTime
+  removedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, projectId, personId])
+  @@index([tenantId, personId])
 }
 
 /// Leave, a public holiday, or internal work — what comes off capacity before anything is sold.
