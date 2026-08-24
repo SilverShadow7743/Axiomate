@@ -37,10 +37,15 @@ export default function UserMenu({
   actor,
   verified,
   signInRequired,
+  myProfileId,
+  onOpenProfile,
 }: {
   actor: Actor
   verified: boolean
   signInRequired: boolean
+  /** This session's own directory id, when the signed-in actor resolves to one. */
+  myProfileId: string | null
+  onOpenProfile: (personId: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement | null>(null)
@@ -133,6 +138,26 @@ export default function UserMenu({
               ? 'Verified by Microsoft Entra. Changes are recorded under this name.'
               : 'No identity provider is configured, so this session is unverified. Changes are still recorded under this name.'}
           </div>
+
+          {/*
+           * Absent, not disabled, when this session doesn't resolve to a directory person —
+           * an actor with no match (the fallback-role case this project has already found and
+           * fixed once, for a real person) has no profile to open, and a control that would
+           * only ever fail shouldn't be offered as though it might work.
+           */}
+          {myProfileId && (
+            <button
+              className="menu-item"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onOpenProfile(myProfileId)
+                setOpen(false)
+              }}
+            >
+              My profile
+            </button>
+          )}
 
           {verified ? (
             <form method="POST" action="/api/auth/signout">

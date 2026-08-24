@@ -10,7 +10,7 @@ import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
-import { can } from '@/lib/access'
+import { can, directoryPersonFor } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
@@ -1927,6 +1927,8 @@ export default function IssueWorkspace({
           actor={actor}
           verified={Boolean(verified)}
           signInRequired={Boolean(signInRequired)}
+          myProfileId={directoryPersonFor(state.model, actor)?.id ?? null}
+          onOpenProfile={setOpenProfileId}
         />
       </div>
 
