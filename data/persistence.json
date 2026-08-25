@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-25T05:41:13.082Z",
+  "at": "2026-08-25T05:59:12.217Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 55,
+  "passed": 62,
   "failed": 0,
   "checks": [
     {
@@ -172,7 +172,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 38192 chars · 1 visible issues · 8 audit rows"
+      "detail": "payload 36469 chars · 1 visible issues · 9 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -182,7 +182,7 @@
     {
       "what": "a rename is one field edit and the renamed person still owns their records",
       "ok": true,
-      "detail": "1 items, first PROOF-2"
+      "detail": "1 items, first PROOF-1"
     },
     {
       "what": "a review round-trips with its pinned checksum, and a replaced verdict replaces",
@@ -197,7 +197,7 @@
     {
       "what": "a stored file comes back out of Postgres with its checksum and the locator that finds it",
       "ok": true,
-      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-2"
+      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-1"
     },
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
@@ -275,9 +275,44 @@
       "detail": "1 key(s): proof-key-cccccccc-3333"
     },
     {
+      "what": "a proof intake mailbox is configured",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "what": "the first message on a new thread matches nothing and is classified to file",
+      "ok": true,
+      "detail": "matched=null"
+    },
+    {
+      "what": "the new thread creates exactly one issue",
+      "ok": true,
+      "detail": "PROOF-003"
+    },
+    {
+      "what": "a reply on the same conversationId matches the issue the first message created — no classify() call needed to know this, the design's own point",
+      "ok": true,
+      "detail": "matched=PROOF-003, expected=PROOF-003"
+    },
+    {
+      "what": "the reply did not create a second issue — the thread still resolves to one issue across two messages",
+      "ok": true,
+      "detail": "2 mail row(s) on this thread, issue ids: PROOF-003, PROOF-003"
+    },
+    {
+      "what": "a message with no conversationId matches nothing, today's behaviour unchanged",
+      "ok": true,
+      "detail": "matched=null"
+    },
+    {
+      "what": "the unrelated message creates its own, separate issue",
+      "ok": true,
+      "detail": "PROOF-004, thread issue was PROOF-003"
+    },
+    {
       "what": "the proof tenant owns exactly the rows it created",
       "ok": true,
-      "detail": "2 issue row(s)"
+      "detail": "4 issue row(s)"
     }
   ]
 }

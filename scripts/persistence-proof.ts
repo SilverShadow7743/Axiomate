@@ -38,6 +38,7 @@ import { withTenant } from '../lib/db/client'
 import { myWork } from '../lib/mywork'
 import { clientView } from '../lib/clientBoundary'
 import { persistActions } from '../lib/db/persist'
+import { classify, matchingIssue } from '../lib/intake'
 import { runScheduledPass } from '../lib/db/schedule'
 import { apply, initWorkspace, type Action, type SeedIssueInput, type WorkspaceState } from '../lib/workspace'
 import { SCHEDULE_ACTOR, type Actor } from '../lib/actor'
@@ -1106,6 +1107,89 @@ async function main() {
     )
   }
 
+  /* ---------------- intake reply threading, end to end against real Postgres --------------- */
+  /**
+   * `matchingIssue` is already proven pure (the scenario suite's IT1–IT5). What is not proven
+   * anywhere else is that the endpoint's own wiring — `classify()`, then `matchingIssue()`, then
+   * the branch between attaching a note and creating a new issue — actually holds together
+   * against a real database, the same integration risk `docs/plans/2026-08-25-intake-reply-
+   * threading-plan.md` names for step 4. This drives the identical sequence
+   * `app/api/intake/route.ts` does, rather than calling the route handler directly, matching
+   * this file's own convention of proving through the library functions a route calls.
+   */
+  const mailboxConfig = await persistActions(TENANT, A, [
+    {
+      t: 'config',
+      op: { k: 'upsertIntake', id: null, patch: { address: 'intake-proof@example.com', scopeId: engagementId, enabled: true } },
+      now: NOW,
+    } as Action,
+  ])
+  check('a proof intake mailbox is configured', mailboxConfig.ok, mailboxConfig.error ?? '')
+
+  const stateForIntake = (await loadWorkspace(TENANT)).state
+  const firstMsg = { to: 'intake-proof@example.com', from: 'client@proof.example', subject: 'Thread test', body: 'first message', messageId: 'proof-thread-1', receivedAt: NOW, conversationId: 'proof-thread-conv' }
+  const firstResult = classify(firstMsg, stateForIntake.model)
+  const firstMatch = 'draft' in firstResult ? matchingIssue(stateForIntake.inboundMail, stateForIntake.issues, firstMsg.conversationId) : null
+  check(
+    'the first message on a new thread matches nothing and is classified to file',
+    'draft' in firstResult && firstMatch === null,
+    'draft' in firstResult ? `matched=${firstMatch}` : `refused: ${firstResult.refused.reason}`,
+  )
+  let threadIssueId: string | null = null
+  if ('draft' in firstResult) {
+    const created = await persistActions(TENANT, A, [
+      { t: 'create', parentId: firstResult.draft.parentId, kind: 'issue', draft: { name: firstResult.draft.subject, description: firstResult.draft.description, type: firstResult.draft.type, severity: firstResult.draft.severity, raisedBy: firstResult.draft.raisedBy, status: 'Open' }, now: NOW },
+    ])
+    threadIssueId = created.createdId ?? null
+    if (threadIssueId) {
+      await persistActions(TENANT, A, [
+        { t: 'addNote', issueId: threadIssueId, body: 'first message', noteType: 'Client Communication', pinned: true, now: NOW },
+        { t: 'recordInboundMail', mailbox: firstMsg.to, from: firstMsg.from, subject: firstMsg.subject, body: firstMsg.body, messageId: firstMsg.messageId, receivedAt: firstMsg.receivedAt, issueId: threadIssueId, refusalReason: null, conversationId: firstMsg.conversationId, now: NOW } as Action,
+      ])
+    }
+  }
+  check('the new thread creates exactly one issue', Boolean(threadIssueId), threadIssueId ?? 'none created')
+
+  const stateAfterFirst = (await loadWorkspace(TENANT)).state
+  const secondMsg = { to: 'intake-proof@example.com', from: 'client@proof.example', subject: 'RE: Thread test', body: 'a reply', messageId: 'proof-thread-2', receivedAt: NOW, conversationId: 'proof-thread-conv' }
+  const secondMatch = matchingIssue(stateAfterFirst.inboundMail, stateAfterFirst.issues, secondMsg.conversationId)
+  check(
+    'a reply on the same conversationId matches the issue the first message created — no classify() call needed to know this, the design\'s own point',
+    secondMatch === threadIssueId,
+    `matched=${secondMatch}, expected=${threadIssueId}`,
+  )
+  if (secondMatch) {
+    await persistActions(TENANT, A, [
+      { t: 'addNote', issueId: secondMatch, body: 'a reply', noteType: 'Client Communication', pinned: true, now: NOW },
+      { t: 'recordInboundMail', mailbox: secondMsg.to, from: secondMsg.from, subject: secondMsg.subject, body: secondMsg.body, messageId: secondMsg.messageId, receivedAt: secondMsg.receivedAt, issueId: secondMatch, refusalReason: null, conversationId: secondMsg.conversationId, now: NOW } as Action,
+    ])
+  }
+
+  const stateAfterReply = (await loadWorkspace(TENANT)).state
+  const threadMailRows = Object.values(stateAfterReply.inboundMail).filter((m) => m.conversationId === 'proof-thread-conv')
+  check(
+    'the reply did not create a second issue — the thread still resolves to one issue across two messages',
+    threadMailRows.length === 2 && threadMailRows.every((m) => m.issueId === threadIssueId),
+    `${threadMailRows.length} mail row(s) on this thread, issue ids: ${threadMailRows.map((m) => m.issueId).join(', ')}`,
+  )
+
+  const thirdMsg = { to: 'intake-proof@example.com', from: 'other@proof.example', subject: 'Unrelated', body: 'a different topic', messageId: 'proof-thread-3', receivedAt: NOW, conversationId: null }
+  const thirdMatch = matchingIssue(stateAfterReply.inboundMail, stateAfterReply.issues, thirdMsg.conversationId)
+  check('a message with no conversationId matches nothing, today\'s behaviour unchanged', thirdMatch === null, `matched=${thirdMatch}`)
+  const thirdResult = classify(thirdMsg, stateAfterReply.model)
+  let unrelatedIssueId: string | null = null
+  if ('draft' in thirdResult) {
+    const created = await persistActions(TENANT, A, [
+      { t: 'create', parentId: thirdResult.draft.parentId, kind: 'issue', draft: { name: thirdResult.draft.subject, description: thirdResult.draft.description, type: thirdResult.draft.type, severity: thirdResult.draft.severity, raisedBy: thirdResult.draft.raisedBy, status: 'Open' }, now: NOW },
+    ])
+    unrelatedIssueId = created.createdId ?? null
+  }
+  check(
+    'the unrelated message creates its own, separate issue',
+    Boolean(unrelatedIssueId) && unrelatedIssueId !== threadIssueId,
+    `${unrelatedIssueId ?? 'none created'}, thread issue was ${threadIssueId}`,
+  )
+
   /* ---------------- tenancy holds at the database, not just in the code ---------------- */
   /**
    * This used to also read a bare, unscoped `prisma.issue.count()` — every issue row in the
@@ -1115,11 +1199,14 @@ async function main() {
    * cross-tenant total any more, which is what `scripts/rls-proof.ts`'s own bypass check
    * exists to confirm. What is left here is the part that was always the real assertion — the
    * proof tenant's own count is exactly what this run created, not more and not fewer.
+   *
+   * 4, not 2, since the intake-threading checks above add two of their own: the new thread's
+   * issue and the unrelated message's issue. The reply in between deliberately adds none.
    */
   const ownRows = await withTenant(TENANT, (tx) => tx.issue.count({ where: { tenantId: TENANT } }))
   check(
     'the proof tenant owns exactly the rows it created',
-    ownRows === 2,
+    ownRows === 4,
     `${ownRows} issue row(s)`,
   )
 }

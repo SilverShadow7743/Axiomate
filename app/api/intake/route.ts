@@ -3,7 +3,7 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
-import { classify, provenanceNote, type InboundMessage, htmlToText, alreadyReceived } from '@/lib/intake'
+import { classify, provenanceNote, type InboundMessage, htmlToText, alreadyReceived, matchingIssue } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { secretProblem, secretValue } from '@/lib/secrets'
@@ -182,8 +182,56 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: result.refused.reason }, { status: 422 })
     }
     const { draft } = result
-
     const now = new Date().toISOString()
+
+    /**
+     * A reply on a thread this workspace has already seen attaches to the issue it belongs to,
+     * rather than creating a second one. See
+     * `docs/plans/2026-08-25-intake-reply-threading-design.md`. Checked here, after `classify()`
+     * has already resolved a mailbox and a draft — a message with nowhere to file was refused
+     * above regardless of whether it is a reply, and a match still records exactly what
+     * `classify()` decided the message was, even though that decision is not what gets built.
+     */
+    const matched = matchingIssue(state.inboundMail, state.issues, full.conversationId)
+
+    if (matched) {
+      const follow: Action[] = [
+        {
+          t: 'addNote',
+          issueId: matched,
+          body: `${provenanceNote(full, draft)}\n\nMessage id: ${full.messageId}`,
+          noteType: 'Client Communication',
+          pinned: true,
+          now,
+        },
+        {
+          t: 'recordInboundMail',
+          mailbox: full.to,
+          from: full.from,
+          subject: full.subject,
+          body: full.body,
+          messageId: full.messageId,
+          receivedAt: full.receivedAt,
+          issueId: matched,
+          refusalReason: null,
+          conversationId: full.conversationId,
+          now,
+        } as Action,
+      ]
+      const result2 = await persistActions(tenantId, INTAKE_ACTOR, follow)
+      if (!result2.ok) {
+        return NextResponse.json({ ok: false, error: result2.error }, { status: 409 })
+      }
+      return NextResponse.json({
+        ok: true,
+        issueId: matched,
+        matched: true,
+        matchedOn: draft.matchedOn,
+        confidence: draft.confidence,
+        noteRecorded: true,
+      })
+    }
+
     const actions: Action[] = [
       {
         t: 'create',
