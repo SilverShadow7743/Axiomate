@@ -160,6 +160,21 @@ non-empty `conversationId` this time — read it back from the `InboundMail` row
 added, not just from the Logic App's own run history, since a field can appear to map correctly in
 the designer and still arrive empty at the endpoint.
 
+**What actually happened.** `main.bicep`'s own header documents `intakeToken` as supplied "from
+Key Vault via `getSecret()`... never as a literal" — but no `Microsoft.KeyVault/vaults` resource
+exists anywhere in `Axiomate-TMS-RG`. The documented design and the deployed reality have
+diverged: `AXIOMATE_INTAKE_TOKEN` is set directly as an App Service application setting. Deployed
+`infra/intake.bicep` standalone (`az deployment group create`, not the full `main.bicep` estate —
+`intake.bicep`'s own header confirms every module can be deployed on its own), fetching the token
+from the app setting and passing it within the same command it was used in, so it was never
+persisted between shell calls. Verified after, not assumed: the deployed workflow definition
+actually carries `conversationId: "@triggerBody()?['conversationId']"`; the Office 365 connection
+is still `Connected` (redeploying the workflow did not reset its OAuth consent — a real risk the
+file's own comments name, checked rather than trusted); the workflow is still `Enabled`. A live
+test message through a real client mailbox was not sent — the checks above were judged sufficient
+without also touching a real client's inbox; a genuine end-to-end confirmation (a real reply
+attaching instead of duplicating) still wants a live email once the next real thread arrives.
+
 ## Step 6 — The cleanup script
 
 **New file:** `scripts/merge-duplicate-threads.ts`, following the `--apply`/dry-run-by-default
