@@ -108,6 +108,7 @@ import { ISSUE_STATUSES, EMPTY_FILTERS, type ScheduleRow, type IssueDetail } fro
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
+import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
 import { summarise } from '../lib/estimation'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
@@ -4737,6 +4738,78 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'no match before the note exists; matches once it does; edited text is not a match; a same-text note on another issue is not a match; a deleted note is not a match', stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `beforeSend=${beforeSend} afterSend=${afterSend} editedText=${editedText} wrongIssueUntouched=${wrongIssueUntouched} deletedNotBlocking=${deletedNotBlocking}`, stops: 'the replay check does not recognise a genuine retry, or wrongly blocks a legitimate new send', severity: 'P1', impact: 'either a retried request can still mail a client twice, or an edited or genuinely new message silently never sends' } as const
+  },
+)
+
+scenario(
+  'PK1',
+  'clientScopeIdFor resolves a client by name, and buildWeeklyClientPack windows its lines to 7 days while its position and disclosure cover the whole client-visible subset',
+  'OAPIL-1 is marked visible with recent activity, OAPIL-2 visible but stale, OAPIL-3 left internal — the shape a real client-visible backlog will actually have.',
+  () => {
+    const oapilId = clientScopeIdFor(BASE, 'OAPIL')
+    const unknownId = clientScopeIdFor(BASE, 'Nonexistent Client')
+    const resolves = oapilId !== null && unknownId === null
+
+    const s1 = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { clientVisible: true }, now: '2026-08-14T09:00:00.000Z' } as Action)
+    const s2 = ok(s1, { t: 'updateIssue', id: 'OAPIL-2', patch: { clientVisible: true }, now: '2026-08-01T09:00:00.000Z' } as Action)
+
+    const pack = buildWeeklyClientPack(s2, oapilId!, TODAY)
+    const disclosure = pack.disclosure.shown === 2 && pack.disclosure.total === 3
+    const position = pack.position.total === 2 && pack.position.open === 2 && pack.position.high === 1 && pack.position.medium === 1
+    const onlyRecent = pack.lines.length === 1 && pack.lines[0].id === 'OAPIL-1'
+
+    const okAll = resolves && disclosure && position && onlyRecent
+    return okAll
+      ? { verdict: 'PASS', actual: `resolves=${resolves} disclosure=${JSON.stringify(pack.disclosure)} position total/open/high/medium=${pack.position.total}/${pack.position.open}/${pack.position.high}/${pack.position.medium} lines=${JSON.stringify(pack.lines.map((l) => l.id))}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `resolves=${resolves} disclosure=${JSON.stringify(pack.disclosure)} position=${JSON.stringify(pack.position)} lines=${JSON.stringify(pack.lines.map((l) => l.id))}`, stops: 'the weekly pack disagrees with clientView() about what is visible, or windows incorrectly', severity: 'P2', impact: 'a client-facing report could show the wrong records, the wrong counts, or the wrong window' } as const
+  },
+)
+
+scenario(
+  'PK2',
+  'buildMonthlyGovernancePack reports raised and resolved movement from the same audit trail dailyIms reads, for the client-visible subset only',
+  '',
+  () => {
+    const oapilId = clientScopeIdFor(BASE, 'OAPIL')!
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    /* A new client-visible issue this month — the "raised" count. */
+    const created = ok(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'A new client ask' }, now: NOW } as Action)
+    const newIssue = Object.values(created.issues).find((i) => i.subject === 'A new client ask')!
+    const s1 = ok(created, { t: 'updateIssue', id: newIssue.id, patch: { clientVisible: true }, now: NOW } as Action)
+
+    /* An existing client-visible issue closed this month — the "resolved" count. */
+    const s2 = ok(s1, { t: 'updateIssue', id: 'OAPIL-1', patch: { clientVisible: true }, now: NOW } as Action)
+    const s3 = ok(s2, { t: 'updateIssue', id: 'OAPIL-1', patch: { status: 'Closed - no defect' }, reason: 'Not reproducible.', now: NOW } as Action)
+
+    /* An internal issue's own movement must not leak into a client-facing count. */
+    const s4 = ok(s3, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - no defect' }, reason: 'Not reproducible.', now: NOW } as Action)
+
+    const pack = buildMonthlyGovernancePack(s4, oapilId, TODAY)
+    const counted = pack.movement.raised === 1 && pack.movement.resolved === 1 && pack.movement.trailAvailable
+    const disclosure = pack.disclosure.shown === 2
+
+    const okAll = counted && disclosure
+    return okAll
+      ? { verdict: 'PASS', actual: `movement=${JSON.stringify(pack.movement)} disclosure=${JSON.stringify(pack.disclosure)}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `movement=${JSON.stringify(pack.movement)} disclosure=${JSON.stringify(pack.disclosure)}`, stops: 'the governance rollup miscounts movement, or an internal-only record’s movement leaks into a client-facing count', severity: 'P2', impact: 'a steering committee could see the wrong raised/resolved figures, or figures for work never marked visible to them' } as const
+  },
+)
+
+scenario(
+  'PK3',
+  'A client pack for a client with nothing marked visible still reports zero of the real total, not an error and not an empty object',
+  'Confirmed against real production data before this was designed: only 4 of 255 live issues are clientVisible today, so this is the common case, not the edge case.',
+  () => {
+    const oapilId = clientScopeIdFor(BASE, 'OAPIL')!
+    const weekly = buildWeeklyClientPack(BASE, oapilId, TODAY)
+    const monthly = buildMonthlyGovernancePack(BASE, oapilId, TODAY)
+    const okAll =
+      weekly.disclosure.shown === 0 && weekly.disclosure.total === 3 && weekly.lines.length === 0 &&
+      monthly.disclosure.shown === 0 && monthly.disclosure.total === 3
+    return okAll
+      ? { verdict: 'PASS', actual: `weekly=${JSON.stringify(weekly.disclosure)} monthly=${JSON.stringify(monthly.disclosure)}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `weekly=${JSON.stringify(weekly.disclosure)} monthly=${JSON.stringify(monthly.disclosure)}`, stops: 'a client pack with nothing marked visible throws, or misreports the count of what exists internally', severity: 'P1', impact: 'the single most common real state today — almost nothing marked visible yet — is unhandled or silently wrong' } as const
   },
 )
 

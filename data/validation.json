@@ -397,7 +397,7 @@
       "title": "Weekly client and monthly governance reporting",
       "expected": "A client-safe weekly pack and a monthly governance pack can be produced.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "Only the daily IMS is built (1 report module(s) in source). The weekly pack needs a client-visible boundary that does not exist — no field marks a record or a note as client-safe.",
+      "actual": "Only the daily IMS is built (2 report module(s) in source). The weekly pack needs a client-visible boundary that does not exist — no field marks a record or a note as client-safe.",
       "stops": "at the visibility boundary",
       "severity": "P1",
       "impact": "Anything sent to a client is assembled by hand, and internal notes are one copy-paste from the client."
@@ -849,6 +849,36 @@
       "expected": "The gap this closes: a send succeeds, its response never reaches the browser, and the person retries with the same text still in the box — /api/mail/send must find the note this check proves exists and skip calling the send a second time, never reached from this harness, so the route itself is read to confirm the check sits before it.",
       "verdict": "PASS",
       "actual": "no match before the note exists; matches once it does; edited text is not a match; a same-text note on another issue is not a match; a deleted note is not a match",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PK1",
+      "title": "clientScopeIdFor resolves a client by name, and buildWeeklyClientPack windows its lines to 7 days while its position and disclosure cover the whole client-visible subset",
+      "expected": "OAPIL-1 is marked visible with recent activity, OAPIL-2 visible but stale, OAPIL-3 left internal — the shape a real client-visible backlog will actually have.",
+      "verdict": "PASS",
+      "actual": "resolves=true disclosure={\"shown\":2,\"total\":3} position total/open/high/medium=2/2/1/1 lines=[\"OAPIL-1\"]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "PK2",
+      "title": "buildMonthlyGovernancePack reports raised and resolved movement from the same audit trail dailyIms reads, for the client-visible subset only",
+      "expected": "",
+      "verdict": "PASS",
+      "actual": "movement={\"trailAvailable\":true,\"raised\":1,\"resolved\":1} disclosure={\"shown\":2,\"total\":4}",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "PK3",
+      "title": "A client pack for a client with nothing marked visible still reports zero of the real total, not an error and not an empty object",
+      "expected": "Confirmed against real production data before this was designed: only 4 of 255 live issues are clientVisible today, so this is the common case, not the edge case.",
+      "verdict": "PASS",
+      "actual": "weekly={\"shown\":0,\"total\":3} monthly={\"shown\":0,\"total\":3}",
       "stops": "",
       "severity": "P1",
       "impact": "none"
