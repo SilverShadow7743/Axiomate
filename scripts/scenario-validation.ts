@@ -99,7 +99,7 @@ import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
 import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
-import { isOutboundRefusal, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
+import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
@@ -4699,6 +4699,44 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: 'client-wide resolves alone; the engagement mailbox wins once it exists and is skipped once disabled; subject is RE: subject [id]; the recipient is the claimed address; no mailbox and no address both refuse with their own codes', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `clientWide=${clientWide} nearest=${nearest} threaded=${threaded} toClaim=${toClaim} disabledSkipped=${disabledSkipped} noBox=${noBox} noRecipient=${noRecipient} bareEmail=${bareEmail} subjectShape=${subjectShape}`, stops: 'outbound resolution disagrees with the design', severity: 'P1', impact: 'a reply could go out as the wrong mailbox or to nobody stated' } as const
+  },
+)
+
+scenario(
+  'OM2',
+  'alreadySent recognises a retried send by its exact recorded text, and nothing else',
+  'The gap this closes: a send succeeds, its response never reaches the browser, and the person retries with the same text still in the box — /api/mail/send must find the note this check proves exists and skip calling the send a second time, never reached from this harness, so the route itself is read to confirm the check sits before it.',
+  () => {
+    const s1 = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { raisedBy: 'Ravi Mada <ravi@client.example>' }, now: NOW } as Action)
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const s2 = ok(s1, { t: 'config', op: { k: 'upsertIntake', id: null, patch: { address: 'engagement@axiocloud.example', scopeId: engagementId, enabled: true } }, now: NOW } as Action)
+    const resolved = sendingMailboxFor(s2, 'OAPIL-1')
+    if (isOutboundRefusal(resolved)) throw new Error('fixture setup failed to resolve an outbound mailbox')
+    const body = outboundNoteBody(resolved, 'The fix ships Thursday.')
+
+    const beforeSend = alreadySent(s2, 'OAPIL-1', body) === null
+
+    const s3 = ok(s2, { t: 'addNote', issueId: 'OAPIL-1', body, noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
+    const afterSend = alreadySent(s3, 'OAPIL-1', body) !== null
+
+    /* Different text is a different message, not a replay. */
+    const editedText = alreadySent(s3, 'OAPIL-1', outboundNoteBody(resolved, 'The fix ships Friday instead.')) === null
+
+    /* A note of the same words but a different type (someone pasted the sent text into a
+       manual note) must not be mistaken for the record the send itself made. */
+    const s4 = ok(s3, { t: 'addNote', issueId: 'OAPIL-2', body, noteType: 'General Update', pinned: false, now: NOW } as Action)
+    const wrongIssueUntouched = alreadySent(s4, 'OAPIL-2', body) === null
+
+    /* A withdrawn note is not "already sent" — deleting the record must not silently and
+       permanently block a legitimate resend of the same words. */
+    const note3 = Object.values(s3.notes).find((n) => n.issueId === 'OAPIL-1' && n.body === body)!
+    const s5 = ok(s3, { t: 'removeNote', id: note3.id, now: NOW } as Action)
+    const deletedNotBlocking = alreadySent(s5, 'OAPIL-1', body) === null
+
+    const okAll = beforeSend && afterSend && editedText && wrongIssueUntouched && deletedNotBlocking
+    return okAll
+      ? { verdict: 'PASS', actual: 'no match before the note exists; matches once it does; edited text is not a match; a same-text note on another issue is not a match; a deleted note is not a match', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `beforeSend=${beforeSend} afterSend=${afterSend} editedText=${editedText} wrongIssueUntouched=${wrongIssueUntouched} deletedNotBlocking=${deletedNotBlocking}`, stops: 'the replay check does not recognise a genuine retry, or wrongly blocks a legitimate new send', severity: 'P1', impact: 'either a retried request can still mail a client twice, or an edited or genuinely new message silently never sends' } as const
   },
 )
 

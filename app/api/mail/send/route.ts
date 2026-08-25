@@ -5,7 +5,7 @@ import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
-import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
+import { alreadySent, isOutboundRefusal, outboundNoteBody, sendingMailboxFor } from '@/lib/outbound'
 import { sendAsMailbox } from '@/lib/mail'
 import type { Action } from '@/lib/workspace'
 import type { IssueNote } from '@/lib/notes'
@@ -24,6 +24,11 @@ import type { IssueNote } from '@/lib/notes'
  *  - **Resolution before composition.** The recipient is the record's claimed sender, the
  *    From is the nearest intake mailbox on the record's own chain — both resolved by
  *    `lib/outbound.ts` and refused at the door when either is missing.
+ *  - **A retry cannot double-send.** If the exact message this request would send was already
+ *    recorded on this issue, `lib/outbound.ts`'s `alreadySent` finds it before `sendAsMailbox`
+ *    is ever called, and the response says so as `replayed: true`. This is what protects the
+ *    realistic failure mode: the send succeeds, its response never reaches the browser, and
+ *    the person — reasonably, seeing their text still in the box — tries again.
  *
  * On success — and only on success — the sent message becomes a pinned note on the record,
  * dispatched as the person. A failed send records nothing: the record holds what happened.
@@ -105,6 +110,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: resolved.reason }, { status: 422 })
     }
 
+    const noteBody = outboundNoteBody(resolved, text)
+
+    /*
+     * Checked before the send, not after: the realistic trigger is a first attempt that
+     * actually succeeded, whose response never reached the browser, followed by the person
+     * naturally retrying with the same text still in the box. See `alreadySent`'s own comment.
+     */
+    const existing = alreadySent(state, issueId, noteBody)
+    if (existing) {
+      return NextResponse.json({
+        ok: true,
+        from: resolved.mailbox.address,
+        to: resolved.recipient,
+        subject: resolved.subject,
+        noteRecorded: true,
+        note: existing,
+        // This exact message already went out — nothing was sent just now. The caller must
+        // not present this as a fresh send.
+        replayed: true,
+      })
+    }
+
     /* ---- the send itself, through the shared Graph client ---- */
     const res = await sendAsMailbox(resolved.mailbox.address, resolved.recipient, resolved.subject, text)
     if (!res.ok) {
@@ -124,7 +151,6 @@ export async function POST(req: Request) {
 
     /* ---- recorded only because it happened, and as the person ---- */
     const now = new Date().toISOString()
-    const noteBody = `Sent to ${resolved.recipient} as ${resolved.mailbox.address}\nSubject: ${resolved.subject}\n\n${text}`
     const note: Action = {
       t: 'addNote',
       issueId,

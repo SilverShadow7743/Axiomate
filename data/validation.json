@@ -844,6 +844,16 @@
       "impact": "none"
     },
     {
+      "id": "OM2",
+      "title": "alreadySent recognises a retried send by its exact recorded text, and nothing else",
+      "expected": "The gap this closes: a send succeeds, its response never reaches the browser, and the person retries with the same text still in the box — /api/mail/send must find the note this check proves exists and skip calling the send a second time, never reached from this harness, so the route itself is read to confirm the check sits before it.",
+      "verdict": "PASS",
+      "actual": "no match before the note exists; matches once it does; edited text is not a match; a same-text note on another issue is not a match; a deleted note is not a match",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
       "id": "PR1",
       "title": "A deliverable is sent for review, judged, re-judged, and re-uploaded",
       "expected": "The review pins the bytes it was asked about; the asker cannot answer; a change request names its change; a second answer replaces the first; a new version visibly does not carry the old approval.",

@@ -1,5 +1,6 @@
 import type { IntakeMailbox } from './config'
 import { scopeChainOf, type WorkspaceState } from './workspace'
+import type { IssueNote } from './notes'
 
 /**
  * Outbound mail: the other half of intake's loop, resolved before anything is sent.
@@ -98,4 +99,47 @@ export function isOutboundRefusal(
   r: OutboundResolution | OutboundRefusal,
 ): r is OutboundRefusal {
   return 'code' in r
+}
+
+/**
+ * The exact text recorded as a sent note's body. One function, called both to check whether a
+ * message already went out and to build the record after it does, so the two can never drift
+ * into comparing against a string the record was never actually written with.
+ */
+export function outboundNoteBody(resolved: OutboundResolution, text: string): string {
+  return `Sent to ${resolved.recipient} as ${resolved.mailbox.address}\nSubject: ${resolved.subject}\n\n${text}`
+}
+
+/**
+ * Has this exact message already been sent and recorded on this issue — checked BEFORE the send,
+ * not after. The gap this closes: the send succeeds, but the response never reaches the browser
+ * (a dropped connection, a closed tab), so the person sees a failure with their text still in
+ * the box and, reasonably, tries again. Without this check, that retry mails the client the
+ * message a second time.
+ *
+ * Matched on exact body text rather than a separately-minted idempotency key: once the mailbox,
+ * recipient and subject are resolved, the note body is already fully determined by
+ * `(issueId, text)`, so two genuinely identical requests always produce the identical string —
+ * nothing new needs generating, storing, or threading through the client just to compare against
+ * something the record already contains.
+ *
+ * Deliberately unconditional, not windowed by time: a person who genuinely wants to send the
+ * exact same words again gets a silent no-op instead of a second email. The caller must report
+ * this as a replay, not as an ordinary send, so nobody is told a message went out when it did
+ * not — see `replayed` in `app/api/mail/send/route.ts`.
+ */
+export function alreadySent(
+  state: WorkspaceState,
+  issueId: string,
+  noteBody: string,
+): IssueNote | null {
+  return (
+    Object.values(state.notes).find(
+      (n) =>
+        n.issueId === issueId &&
+        n.noteType === 'Client Communication' &&
+        n.body === noteBody &&
+        !n.deletedAt,
+    ) ?? null
+  )
 }

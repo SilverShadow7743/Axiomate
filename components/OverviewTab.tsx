@@ -237,6 +237,7 @@ export default function OverviewTab({
         to?: string
         noteRecorded?: boolean
         note?: IssueNote | null
+        replayed?: boolean
       } | null
       if (composeGen.current !== gen) {
         // The person moved to another record while this was in flight. The note merge below
@@ -258,7 +259,11 @@ export default function OverviewTab({
         setSentUnrecorded(true)
         return
       }
-      setSentLine(`Sent to ${data.to} and recorded in Notes.`)
+      setSentLine(
+        data.replayed
+          ? `This exact message was already sent to ${data.to} — nothing new was sent.`
+          : `Sent to ${data.to} and recorded in Notes.`,
+      )
       setMailBody('')
       setComposing(false)
     } catch {
