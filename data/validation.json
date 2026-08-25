@@ -1435,8 +1435,8 @@
     },
     {
       "id": "IT6",
-      "title": "duplicateGroups groups issues sharing mailbox, client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active",
-      "expected": "The \"item master\" shape this was built to find: three issues, same thread, filed three times.",
+      "title": "duplicateGroups groups issues sharing client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active — even one with no InboundMail row at all",
+      "expected": "The \"item master\" shape this was built to find: three issues, same thread, filed three times. OAPIL-149 carries no mail row on purpose — the real gap this was rewritten to close.",
       "verdict": "PASS",
       "actual": "[{\"canonical\":\"OAPIL-151\",\"duplicates\":[\"OAPIL-149\",\"OAPIL-150\"]}]",
       "stops": "",
@@ -1446,7 +1446,17 @@
     {
       "id": "IT7",
       "title": "duplicateGroups does not group issues that only share a subject — client and parent must match too",
-      "expected": "Two unrelated clients both emailing \"Weekly status\" must not become a group.",
+      "expected": "Two unrelated clients both emailing \"Weekly status\" must not become a group. This is now the only guard against a false positive, since the key no longer requires a shared mailbox.",
+      "verdict": "PASS",
+      "actual": "[]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT9",
+      "title": "duplicateGroups does not group issues whose subjects merely start alike — the match is on the full normalized subject, not a prefix",
+      "expected": "\"item master\" and \"item master pricing\" are different topics under the same client and parent; nothing about dropping the mailbox from the key should make the subject match looser.",
       "verdict": "PASS",
       "actual": "[]",
       "stops": "",

@@ -6680,20 +6680,15 @@ scenario(
 
 scenario(
   'IT6',
-  'duplicateGroups groups issues sharing mailbox, client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active',
-  'The "item master" shape this was built to find: three issues, same thread, filed three times.',
+  'duplicateGroups groups issues sharing client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active — even one with no InboundMail row at all',
+  'The "item master" shape this was built to find: three issues, same thread, filed three times. OAPIL-149 carries no mail row on purpose — the real gap this was rewritten to close.',
   () => {
-    const mail = [
-      itMail({ id: 'm1', mailbox: 'a@x.example', issueId: 'OAPIL-149', subject: 'Fw: item master' }),
-      itMail({ id: 'm2', mailbox: 'a@x.example', issueId: 'OAPIL-150', subject: 'RE: item master' }),
-      itMail({ id: 'm3', mailbox: 'a@x.example', issueId: 'OAPIL-151', subject: 're: RE: item master' }),
-    ]
     const issues = {
-      'OAPIL-149': itIssue({ id: 'OAPIL-149', lastActivity: '2026-08-10' }),
-      'OAPIL-150': itIssue({ id: 'OAPIL-150', lastActivity: '2026-08-12' }),
-      'OAPIL-151': itIssue({ id: 'OAPIL-151', lastActivity: '2026-08-14' }),
+      'OAPIL-149': itIssue({ id: 'OAPIL-149', lastActivity: '2026-08-10', subject: 'Fw: item master' }),
+      'OAPIL-150': itIssue({ id: 'OAPIL-150', lastActivity: '2026-08-12', subject: 'RE: item master' }),
+      'OAPIL-151': itIssue({ id: 'OAPIL-151', lastActivity: '2026-08-14', subject: 're: RE: item master' }),
     }
-    const groups = duplicateGroups(mail, issues)
+    const groups = duplicateGroups(issues)
     const good = groups.length === 1 && groups[0].canonical === 'OAPIL-151' &&
       new Set(groups[0].duplicates).size === 2 &&
       groups[0].duplicates.includes('OAPIL-149') && groups[0].duplicates.includes('OAPIL-150')
@@ -6706,20 +6701,32 @@ scenario(
 scenario(
   'IT7',
   'duplicateGroups does not group issues that only share a subject — client and parent must match too',
-  'Two unrelated clients both emailing "Weekly status" must not become a group.',
+  'Two unrelated clients both emailing "Weekly status" must not become a group. This is now the only guard against a false positive, since the key no longer requires a shared mailbox.',
   () => {
-    const mail = [
-      itMail({ id: 'm1', mailbox: 'a@x.example', issueId: 'OAPIL-1', subject: 'Weekly status' }),
-      itMail({ id: 'm2', mailbox: 'a@x.example', issueId: 'SLG-1', subject: 'Weekly status' }),
-    ]
     const issues = {
-      'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY, client: 'OAPIL' }),
-      'SLG-1': itIssue({ id: 'SLG-1', lastActivity: TODAY, client: 'SLG' }),
+      'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY, client: 'OAPIL', subject: 'Weekly status' }),
+      'SLG-1': itIssue({ id: 'SLG-1', lastActivity: TODAY, client: 'SLG', subject: 'Weekly status' }),
     }
-    const groups = duplicateGroups(mail, issues)
+    const groups = duplicateGroups(issues)
     return groups.length === 0
       ? { verdict: 'PASS', actual: JSON.stringify(groups), stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: JSON.stringify(groups), stops: 'issues from different clients are grouped on subject alone', impact: 'the cleanup script could cross-link two different clients\' issues as duplicates of each other', severity: 'P1' } as const
+  },
+)
+
+scenario(
+  'IT9',
+  'duplicateGroups does not group issues whose subjects merely start alike — the match is on the full normalized subject, not a prefix',
+  '"item master" and "item master pricing" are different topics under the same client and parent; nothing about dropping the mailbox from the key should make the subject match looser.',
+  () => {
+    const issues = {
+      'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY, subject: 'item master' }),
+      'OAPIL-2': itIssue({ id: 'OAPIL-2', lastActivity: TODAY, subject: 'item master pricing' }),
+    }
+    const groups = duplicateGroups(issues)
+    return groups.length === 0
+      ? { verdict: 'PASS', actual: JSON.stringify(groups), stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(groups), stops: 'subjects that only share a prefix are treated as the same thread', impact: 'two genuinely different topics under the same client and parent could be wrongly linked as duplicates', severity: 'P1' } as const
   },
 )
 

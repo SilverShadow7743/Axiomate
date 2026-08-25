@@ -44,11 +44,17 @@ up `InboundMail` rows sharing the incoming `conversationId`, joined to their `is
 
 **3. Cleanup, one time, for what the bug already created.** A script — not a live rule, since
 messages received before this ships never captured a real `conversationId` to match on. It groups
-*existing* issues by mailbox + client + subject with a leading `Re:`/`Fw:`/`Fwd:` (any case,
-any repetition — `Re: Re: Fwd:` included) stripped, within the same parent node, and links every
-issue in a group other than the most-recently-active one to it using the relationship type this
-codebase already has for exactly this — `IssueRelationship`'s `DUPLICATE_OF`, the same relationship
-the `duplicate` action itself already mints (`lib/workspace.ts`, the `duplicate` reducer arm).
+*existing* issues by client + subject with a leading `Re:`/`Fw:`/`Fwd:` (any case, any repetition
+— `Re: Re: Fwd:` included) stripped, within the same parent node, and links every issue in a group
+other than the most-recently-active one to it using the relationship type this codebase already
+has for exactly this — `IssueRelationship`'s `DUPLICATE_OF`, the same relationship the `duplicate`
+action itself already mints (`lib/workspace.ts`, the `duplicate` reducer arm).
+
+Grouped on the issue's own fields, not joined through `InboundMail` — the first real dry run
+against production (step 6) found the motivating case, `OAPIL-149`, has no `InboundMail` row at
+all, so an original mailbox-gated key could never reach it no matter how well its subject matched.
+Dropping the mailbox from the key was the fix; see the script's own header comment and
+`lib/intake.ts`'s `duplicateGroups` doc comment for why.
 Nothing is deleted, merged, or moved: no note history, no time entries, no status change on any
 issue in a group — only a cross-reference a person can act on, and can undo by removing the link
 if it's wrong. The script reports every group it links before/while acting, in the same shape
@@ -92,6 +98,9 @@ data before trusting it, not just against its own logic.
   that is a finding about the connector, surfaced before §2's matching logic is built on top of
   a value that was never really there.
 - If the cleanup pass's subject-stripping regex produces a false-positive group on the real data
-  — two genuinely unrelated issues that happen to share a mailbox, client, and a common subject
-  line like "Weekly status" — that is the dry-run's job to catch before anything is linked, not
-  a case to guard against with a cleverer regex.
+  — two genuinely unrelated issues that happen to share a client and a common subject line like
+  "Weekly status" — that is the dry-run's job to catch before anything is linked, not a case to
+  guard against with a cleverer regex. The real dry run found exactly this shape once: two OAPIL
+  issues both titled the generic placeholder "(raised in Teams chat)" grouped as if duplicates.
+  Reported to the user alongside the rest of the report rather than silently excluded — a person
+  decides whether to link or skip it, per this document's own stance on what the script is for.
