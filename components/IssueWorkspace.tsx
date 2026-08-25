@@ -60,6 +60,8 @@ import {
 } from '@/lib/panel'
 import { buildScale } from '@/lib/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
+import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
+import ClientPackView from './ClientPackView'
 import { planSlaDates, slaReason } from '@/lib/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
@@ -185,6 +187,8 @@ export default function IssueWorkspace({
   const [timesheetsOpen, setTimesheetsOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
   const [slaOpen, setSlaOpen] = useState(false)
+  /** Which client pack is open for print, if any. */
+  const [clientPack, setClientPack] = useState<{ kind: 'weekly' | 'monthly'; pack: WeeklyClientPack | MonthlyGovernancePack } | null>(null)
   /** The directory person whose profile panel is open, if any. */
   const [openProfileId, setOpenProfileId] = useState<string | null>(null)
   const exportWrap = useRef<HTMLDivElement>(null)
@@ -1687,6 +1691,31 @@ export default function IssueWorkspace({
   }, [state, sortedRows, filters, today, scopeLabel, download, notify])
 
   /**
+   * A client pack is for exactly one client — the same precondition `clientView` itself has —
+   * so this refuses before building anything when the screen isn't scoped to one, rather than
+   * silently picking a client or building against an ambiguous filter.
+   */
+  const openClientPack = useCallback(
+    (kind: 'weekly' | 'monthly') => {
+      if (filters.client === 'All') {
+        notify('Pick one client first — a client pack is for a single client, not the whole workspace.', true)
+        return
+      }
+      const scopeId = clientScopeIdFor(state, filters.client)
+      if (!scopeId) {
+        notify(`No client scope found for "${filters.client}".`, true)
+        return
+      }
+      const pack =
+        kind === 'weekly'
+          ? buildWeeklyClientPack(state, scopeId, today)
+          : buildMonthlyGovernancePack(state, scopeId, today)
+      setClientPack({ kind, pack })
+    },
+    [state, filters.client, today, notify],
+  )
+
+  /**
    * What applying the SLA policy would do. Computed on demand; nothing is written here.
    *
    * Scoped to the rows in view, like the IMS, so a bulk write can never reach further than
@@ -1867,6 +1896,26 @@ export default function IssueWorkspace({
               >
                 Daily IMS — status report
                 <span className="menu-sub">Text to paste, plus a CSV of the open rows</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
+                  openClientPack('weekly')
+                }}
+              >
+                Weekly client pack
+                <span className="menu-sub">Print-ready — client-safe records only</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
+                  openClientPack('monthly')
+                }}
+              >
+                Monthly governance pack
+                <span className="menu-sub">Print-ready — a rollup, not a row list</span>
               </button>
               <button
                 className="menu-item"
@@ -2448,6 +2497,8 @@ export default function IssueWorkspace({
           onClose={() => setArchiveOpen(false)}
         />
       )}
+
+      {clientPack && <ClientPackView pack={clientPack.pack} onClose={() => setClientPack(null)} />}
 
       {timesheetsOpen && (
         <TimesheetPanel
