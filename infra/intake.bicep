@@ -227,6 +227,18 @@ resource workflow 'Microsoft.Logic/workflows@2019-05-01' = {
               */
               messageId: '@triggerBody()?[\'internetMessageId\']'
               /*
+                Exchange's own thread id — stable across every message in the same conversation,
+                unlike `messageId` above, which is unique per message. This is what lets a reply
+                attach to the issue its first message created instead of filing a second one; see
+                docs/plans/2026-08-25-intake-reply-threading-design.md.
+
+                No refusal on this one being absent, unlike `messageId` — a message that arrives
+                without it still has somewhere to go: `matchingIssue` reads a missing
+                `conversationId` exactly like an unrecognised one, and the message files as a new
+                issue the same way it always has.
+              */
+              conversationId: '@triggerBody()?[\'conversationId\']'
+              /*
                 When the client sent it, not when we noticed. If this is ever absent the endpoint
                 stamps its own arrival time, which is out by at most one polling interval — worth
                 knowing before anybody reasons about response times from it.
