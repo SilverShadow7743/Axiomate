@@ -23,8 +23,13 @@
  * linking is reversible. The live pipeline (`app/api/intake/route.ts`) matches on `conversationId`
  * alone, never subject, and this script does not change that.
  *
- *   npx tsx --conditions=react-server scripts/merge-duplicate-threads.ts           # dry run
+ *   npx tsx --conditions=react-server scripts/merge-duplicate-threads.ts                       # dry run
  *   npx tsx --conditions=react-server scripts/merge-duplicate-threads.ts --apply
+ *
+ * `--skip=ID,ID,...` names issues (canonical or duplicate, either works) whose whole group is
+ * left out — for a group the dry-run report flagged as a real risk (a generic placeholder
+ * subject, a gap too wide to be one thread) rather than a genuine duplicate. The skipped groups
+ * still print, marked SKIPPED, so the report accounts for every group either way.
  */
 import { config as loadEnv } from 'dotenv'
 loadEnv()
@@ -37,6 +42,9 @@ import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'
 
 const APPLY = process.argv.includes('--apply')
+const SKIP = new Set(
+  (process.argv.find((a) => a.startsWith('--skip=')) ?? '').replace('--skip=', '').split(',').filter(Boolean),
+)
 const TENANT = (process.env.AXIOMATE_TENANT ?? 'axiocloud') as TenantId
 const ACTOR: Actor = { id: 'merge-duplicate-threads', name: process.env.AXIOMATE_OPERATOR ?? 'Operator' }
 const NOW = new Date().toISOString()
@@ -55,11 +63,13 @@ async function main() {
   console.log(`  ${groups.length} group(s) found:\n`)
   const actions: Action[] = []
   for (const g of groups) {
+    const skipped = SKIP.has(g.canonical) || g.duplicates.some((id) => SKIP.has(id))
     const canonical = state.issues[g.canonical]
-    console.log(`  ${g.canonical}  "${canonical.subject}"  (canonical, ${canonical.lastActivity})`)
+    console.log(`  ${g.canonical}  "${canonical.subject}"  (canonical, ${canonical.lastActivity})${skipped ? '  [SKIPPED]' : ''}`)
     for (const dupId of g.duplicates) {
       const dup = state.issues[dupId]
       console.log(`    -> ${dupId}  "${dup.subject}"  (${dup.lastActivity})`)
+      if (skipped) continue
       actions.push({
         t: 'link',
         sourceIssueId: dupId,
