@@ -708,10 +708,17 @@ model InboundMail {
   issueId       String?
   refusalReason String? @db.Text
 
+  /// Exchange's thread id, stable across every message in the same conversation, unlike
+  /// messageId — what a reply is matched against. Null for the intake form (not email) and for
+  /// anything received before the connector sent this. See
+  /// docs/plans/2026-08-25-intake-reply-threading-design.md.
+  conversationId String?
+
   createdAt DateTime
 
   @@id([tenantId, id])
   @@index([tenantId, messageId])
+  @@index([tenantId, conversationId])
 }
 
 /// Leave, a public holiday, or internal work — what comes off capacity before anything is sold.

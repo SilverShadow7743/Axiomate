@@ -963,6 +963,7 @@ export function inboundMailToRow(tenantId: TenantId, m: InboundMail): Prisma.Inb
     receivedAt: new Date(m.receivedAt),
     issueId: m.issueId,
     refusalReason: m.refusalReason,
+    conversationId: m.conversationId,
     createdAt: new Date(m.createdAt),
   }
 }
@@ -978,6 +979,7 @@ export function inboundMailFromRow(r: InboundMailRow): InboundMail {
     receivedAt: r.receivedAt.toISOString(),
     issueId: r.issueId,
     refusalReason: r.refusalReason,
+    conversationId: r.conversationId,
     createdAt: r.createdAt.toISOString(),
   }
 }

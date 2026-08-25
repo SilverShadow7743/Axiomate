@@ -655,6 +655,7 @@ const SHAPES = {
     receivedAt: req(text),
     issueId: req(idOrNull),
     refusalReason: req(textOrNull),
+    conversationId: req(textOrNull),
     now,
   },
   // `acceptUnavailable` for the same reason as `updateIssue`: this is the other arm that can

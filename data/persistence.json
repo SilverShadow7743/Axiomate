@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-24T14:40:35.820Z",
+  "at": "2026-08-25T05:41:13.082Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 55,
   "failed": 0,
@@ -80,9 +80,9 @@
       "detail": "Priya on project:2 as PROJROLE_CONSULTANT"
     },
     {
-      "what": "a mail log entry comes back out of Postgres with its subject, body and refusal state intact",
+      "what": "a mail log entry comes back out of Postgres with its subject, body, refusal state and conversation id intact",
       "ok": true,
-      "detail": "Proof message · issueId=PROOF-1 · refusalReason=null"
+      "detail": "Proof message · issueId=PROOF-1 · refusalReason=null · conversationId=proof-conv-1"
     },
     {
       "what": "a personal event is accepted, owned by whoever the actor resolves to",
@@ -207,7 +207,7 @@
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-08-24T09:00:00.000Z"
+      "detail": "deletedAt 2026-08-25T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",

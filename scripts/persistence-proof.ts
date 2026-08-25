@@ -294,7 +294,7 @@ async function main() {
     { t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave', startDate: '2026-09-07', endDate: '2026-09-11', hoursPerDay: 7.5, note: '', now: NOW },
     { t: 'upsertAllocation', id: null, person: 'Priya', projectId, startDate: '2026-09-01', endDate: '2026-09-05', percentage: 50, note: '', now: NOW },
     { t: 'addProjectMember', projectId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW },
-    { t: 'recordInboundMail', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Proof message', body: 'Body with “smart quotes” and a\nnewline.', messageId: 'proof-msg-1', receivedAt: NOW, issueId: 'PROOF-1', refusalReason: null, now: NOW },
+    { t: 'recordInboundMail', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Proof message', body: 'Body with “smart quotes” and a\nnewline.', messageId: 'proof-msg-1', receivedAt: NOW, issueId: 'PROOF-1', refusalReason: null, conversationId: 'proof-conv-1', now: NOW },
     { t: 'link', sourceIssueId: 'PROOF-2', targetIssueId: 'PROOF-1', relationshipType: 'Duplicate of', note: '', now: NOW },
     { t: 'buildLifecycle', issueId: 'PROOF-2', slaDays: 5, now: NOW },
     { t: 'config', op: { k: 'setSla', patch: { High: 3 } }, now: NOW },
@@ -370,12 +370,15 @@ async function main() {
 
   const mail = Object.values(state.inboundMail)[0]
   check(
-    'a mail log entry comes back out of Postgres with its subject, body and refusal state intact',
+    'a mail log entry comes back out of Postgres with its subject, body, refusal state and conversation id intact',
     mail?.subject === 'Proof message' &&
       mail.body === 'Body with “smart quotes” and a\nnewline.' &&
       mail.issueId === 'PROOF-1' &&
-      mail.refusalReason === null,
-    mail ? `${mail.subject} · issueId=${mail.issueId} · refusalReason=${mail.refusalReason}` : 'missing',
+      mail.refusalReason === null &&
+      mail.conversationId === 'proof-conv-1',
+    mail
+      ? `${mail.subject} · issueId=${mail.issueId} · refusalReason=${mail.refusalReason} · conversationId=${mail.conversationId}`
+      : 'missing',
   )
 
   /*

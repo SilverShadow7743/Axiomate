@@ -1263,6 +1263,7 @@ export type Action =
       receivedAt: string
       issueId: string | null
       refusalReason: string | null
+      conversationId: string | null
       now: string
     }
 
@@ -6272,6 +6273,7 @@ Question: ${review.question}`,
         receivedAt: a.receivedAt,
         issueId: a.issueId,
         refusalReason: a.refusalReason,
+        conversationId: a.conversationId,
         createdAt: a.now,
       }
       // No audit entry, the same reasoning the personal-event arms give for themselves —

@@ -93,6 +93,8 @@ export async function POST(req: Request) {
       // identical submissions create two records — stated in the checklist as expected.
       messageId: `form-${randomUUID()}`,
       receivedAt: new Date().toISOString(),
+      // A form submission is never email — it has no Exchange thread to carry.
+      conversationId: null,
     }
 
     const result = classifyForm(form, message, state.model, urgency)

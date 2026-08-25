@@ -112,6 +112,13 @@ export async function POST(req: Request) {
     messageId: message.messageId,
     receivedAt:
       typeof message.receivedAt === 'string' ? message.receivedAt : new Date().toISOString(),
+    /*
+     * Exchange's thread id, mapped through by `infra/intake.bicep`'s trigger action. Absent for
+     * the intake-form path (a different endpoint) and for anything sent by a connector that
+     * has not been redeployed since this was added — both read as "no thread to match", the
+     * same as any other unrecognised message.
+     */
+    conversationId: typeof message.conversationId === 'string' ? message.conversationId : null,
   }
 
   if (!databaseConfigured()) {
@@ -165,6 +172,7 @@ export async function POST(req: Request) {
             receivedAt: full.receivedAt,
             issueId: null,
             refusalReason: result.refused.reason,
+            conversationId: full.conversationId,
             now: new Date().toISOString(),
           } as Action,
         ])
@@ -231,6 +239,7 @@ export async function POST(req: Request) {
         receivedAt: full.receivedAt,
         issueId,
         refusalReason: null,
+        conversationId: full.conversationId,
         now,
       } as Action,
       ...draft.assignments.map(

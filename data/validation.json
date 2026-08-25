@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "55 of 55 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-24. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "55 of 55 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-25. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -528,7 +528,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-24: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-25: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
@@ -1379,6 +1379,86 @@
       "expected": "TV4's fix is scoped to filters.client !== 'All' on purpose — this proves the ordinary unfiltered case (Client: All) is untouched.",
       "verdict": "PASS",
       "actual": "visible: [CLIENT-B, PROJECT-B]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT1",
+      "title": "matchingIssue attaches a reply to the one open issue sharing its conversationId",
+      "expected": "",
+      "verdict": "PASS",
+      "actual": "matched OAPIL-1",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "IT2",
+      "title": "matchingIssue attaches to a matching issue even when it is closed, without the caller reopening it",
+      "expected": "The design is explicit: a reply on a closed issue adds a note, it does not reopen the issue — a person decides.",
+      "verdict": "PASS",
+      "actual": "matched OAPIL-2",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT3",
+      "title": "matchingIssue picks the most recently active issue when a thread matches more than one",
+      "expected": "Legacy data from before this shipped, or a thread a person split by hand — the design's own tie-break, never a refusal to pick.",
+      "verdict": "PASS",
+      "actual": "matched OAPIL-NEW",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT4",
+      "title": "matchingIssue ignores a refused message with no issue when matching a later reply on the same thread",
+      "expected": "A refused message's InboundMail row has no issueId — it named no issue, and cannot become one a later reply matches against.",
+      "verdict": "PASS",
+      "actual": "no match, creates a new issue",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT5",
+      "title": "matchingIssue creates a new issue when there is no conversationId, or nothing matches it",
+      "expected": "Today's behaviour, unchanged — the intake-form path and any message from a connector that has not been redeployed both hit this.",
+      "verdict": "PASS",
+      "actual": "noId=null, noMatch=null",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "IT6",
+      "title": "duplicateGroups groups issues sharing mailbox, client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active",
+      "expected": "The \"item master\" shape this was built to find: three issues, same thread, filed three times.",
+      "verdict": "PASS",
+      "actual": "[{\"canonical\":\"OAPIL-151\",\"duplicates\":[\"OAPIL-149\",\"OAPIL-150\"]}]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT7",
+      "title": "duplicateGroups does not group issues that only share a subject — client and parent must match too",
+      "expected": "Two unrelated clients both emailing \"Weekly status\" must not become a group.",
+      "verdict": "PASS",
+      "actual": "[]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "IT8",
+      "title": "normalizeSubject strips only a leading Re:/Fw:/Fwd: run, not one appearing mid-subject",
+      "expected": "",
+      "verdict": "PASS",
+      "actual": "a=true b=true",
       "stops": "",
       "severity": "P2",
       "impact": "none"

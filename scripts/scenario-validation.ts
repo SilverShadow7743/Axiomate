@@ -29,6 +29,7 @@ import { runRecurrences,
   scopeChainOf,
   projectOf,
   type Action,
+  type IssueRecord,
   type SeedIssueInput,
   type WorkspaceState,
 } from '../lib/workspace'
@@ -49,7 +50,7 @@ import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
-import { classify, alreadyReceived, type InboundMail } from '../lib/intake'
+import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, type InboundMail } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
@@ -298,6 +299,7 @@ scenario(
       body: 'This is blocking our month end — we cannot post any goods receipts. Production is down.',
       messageId: '<CAF=123@mail.oapil.example>',
       receivedAt: '2026-08-15T08:41:00.000Z',
+      conversationId: null,
     }
 
     const classified = classify(message, cfg.model)
@@ -4414,6 +4416,8 @@ scenario(
       body: 'The inventory journal will not post. This is urgent for month end.',
       messageId: 'form-test-1',
       receivedAt: NOW,
+      // A form submission is never email — it has no Exchange thread to carry.
+      conversationId: null,
       ...over,
     })
 
@@ -6089,7 +6093,7 @@ scenario(
   'A message id already in the mail log is recognised',
   'alreadyReceived, extracted so this specific question is drivable on its own rather than only inferable from POST /api/intake\'s behaviour.',
   () => {
-    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: 'No mailbox covers this address.', createdAt: NOW }
+    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: 'No mailbox covers this address.', conversationId: null, createdAt: NOW }
     const st = { ...BASE, inboundMail: { [entry.id]: entry } }
     const good = alreadyReceived(st, 'msg-abc')
 
@@ -6104,7 +6108,7 @@ scenario(
   'A message id not in the mail log is not recognised — checked as its own case',
   'A check that always returned true would also pass ML1; this is what actually proves it discriminates.',
   () => {
-    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: null, createdAt: NOW }
+    const entry: InboundMail = { id: 'im-1', mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help', body: 'text', messageId: 'msg-abc', receivedAt: NOW, issueId: null, refusalReason: null, conversationId: null, createdAt: NOW }
     const st = { ...BASE, inboundMail: { [entry.id]: entry } }
     const good = !alreadyReceived(st, 'msg-never-seen')
 
@@ -6559,6 +6563,177 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `visible: [${ids.join(', ')}]`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `visible: [${ids.join(', ')}]`, stops: 'an empty branch is hidden even with no client filter active', impact: 'TV4\'s fix leaked into the unfiltered case — every empty Project across every client would disappear by default', severity: 'P1' } as const
+  },
+)
+
+/* ================================================================== *
+ * Intake reply threading
+ * ================================================================== */
+
+/**
+ * `matchingIssue` had zero scenario coverage before these, despite deciding whether a reply
+ * creates a duplicate issue or attaches to the one it's actually about — see
+ * docs/plans/2026-08-25-intake-reply-threading-design.md. Hand-built `InboundMail`/`IssueRecord`
+ * records, no reducer, no database, matching TV1–TV6's own pattern for the same reason: the
+ * behaviour under test is the matching logic itself.
+ */
+function itMail(over: Partial<InboundMail> & { id: string }): InboundMail {
+  return {
+    mailbox: 'support@oapil.example', from: 'client@oapil.example', subject: 'Help',
+    body: 'text', messageId: `msg-${over.id}`, receivedAt: NOW, issueId: null,
+    refusalReason: null, conversationId: null, createdAt: NOW,
+    ...over,
+  }
+}
+function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string }): IssueRecord {
+  return {
+    parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
+    subject: 'x', description: '', type: 'Defect', sourceType: '', discipline: '',
+    severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
+    accountable: 'OAPIL', raised: TODAY, actualEnd: null, statusSince: null,
+    pausedDays: 0, age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',
+    evidenceDate: '', verification: '', source: '', reference: '', clientImpact: '',
+    plannedStart: null, plannedEnd: null, percentOverride: null, scheduleMode: 'AUTO',
+    assignments: {}, deletedAt: null,
+    ...over,
+  }
+}
+
+scenario(
+  'IT1',
+  'matchingIssue attaches a reply to the one open issue sharing its conversationId',
+  '',
+  () => {
+    const mail = { m1: itMail({ id: 'm1', conversationId: 'conv-1', issueId: 'OAPIL-1' }) }
+    const issues = { 'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY }) }
+    const result = matchingIssue(mail, issues, 'conv-1')
+    return result === 'OAPIL-1'
+      ? { verdict: 'PASS', actual: `matched ${result}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `matched ${result}`, stops: 'a reply on a known thread does not attach to the issue it belongs to', impact: 'every reply on a client thread still files as a new issue', severity: 'P1' } as const
+  },
+)
+
+scenario(
+  'IT2',
+  'matchingIssue attaches to a matching issue even when it is closed, without the caller reopening it',
+  'The design is explicit: a reply on a closed issue adds a note, it does not reopen the issue — a person decides.',
+  () => {
+    const mail = { m1: itMail({ id: 'm1', conversationId: 'conv-2', issueId: 'OAPIL-2' }) }
+    const issues = { 'OAPIL-2': itIssue({ id: 'OAPIL-2', lastActivity: TODAY, status: 'Closed - confirmed' }) }
+    const result = matchingIssue(mail, issues, 'conv-2')
+    return result === 'OAPIL-2'
+      ? { verdict: 'PASS', actual: `matched ${result}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `matched ${result}`, stops: 'a closed issue is excluded from matching entirely', impact: 'a client replying on a resolved issue gets a duplicate instead of a note landing where a person will see it', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'IT3',
+  'matchingIssue picks the most recently active issue when a thread matches more than one',
+  'Legacy data from before this shipped, or a thread a person split by hand — the design\'s own tie-break, never a refusal to pick.',
+  () => {
+    const mail = {
+      m1: itMail({ id: 'm1', conversationId: 'conv-3', issueId: 'OAPIL-OLD' }),
+      m2: itMail({ id: 'm2', conversationId: 'conv-3', issueId: 'OAPIL-NEW' }),
+    }
+    const issues = {
+      'OAPIL-OLD': itIssue({ id: 'OAPIL-OLD', lastActivity: '2026-08-01' }),
+      'OAPIL-NEW': itIssue({ id: 'OAPIL-NEW', lastActivity: '2026-08-20' }),
+    }
+    const result = matchingIssue(mail, issues, 'conv-3')
+    return result === 'OAPIL-NEW'
+      ? { verdict: 'PASS', actual: `matched ${result}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `matched ${result}`, stops: 'the tie-break does not pick the most recently active issue', impact: 'an ambiguous match could attach a reply to a stale, no-longer-relevant issue instead of the one actually being worked', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'IT4',
+  'matchingIssue ignores a refused message with no issue when matching a later reply on the same thread',
+  'A refused message\'s InboundMail row has no issueId — it named no issue, and cannot become one a later reply matches against.',
+  () => {
+    const mail = { m1: itMail({ id: 'm1', conversationId: 'conv-4', issueId: null, refusalReason: 'Refused.' }) }
+    const result = matchingIssue(mail, {}, 'conv-4')
+    return result === null
+      ? { verdict: 'PASS', actual: 'no match, creates a new issue', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `matched ${result}`, stops: 'a refused message with no issue is treated as a match', impact: 'a reply on a thread whose first message was refused would attach to nothing, or throw, instead of creating a new issue', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'IT5',
+  'matchingIssue creates a new issue when there is no conversationId, or nothing matches it',
+  'Today\'s behaviour, unchanged — the intake-form path and any message from a connector that has not been redeployed both hit this.',
+  () => {
+    const noId = matchingIssue({}, {}, null)
+    const noMatch = matchingIssue(
+      { m1: itMail({ id: 'm1', conversationId: 'conv-other', issueId: 'OAPIL-1' }) },
+      { 'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY }) },
+      'conv-5',
+    )
+    const good = noId === null && noMatch === null
+    return good
+      ? { verdict: 'PASS', actual: `noId=${noId}, noMatch=${noMatch}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `noId=${noId}, noMatch=${noMatch}`, stops: 'a message with no conversationId, or no matching thread, is treated as a match anyway', impact: 'a genuinely new topic could silently attach as a note on an unrelated issue instead of becoming its own tracked item', severity: 'P1' } as const
+  },
+)
+
+scenario(
+  'IT6',
+  'duplicateGroups groups issues sharing mailbox, client, parent and a Re:/Fwd:-stripped subject, canonical as the most recently active',
+  'The "item master" shape this was built to find: three issues, same thread, filed three times.',
+  () => {
+    const mail = [
+      itMail({ id: 'm1', mailbox: 'a@x.example', issueId: 'OAPIL-149', subject: 'Fw: item master' }),
+      itMail({ id: 'm2', mailbox: 'a@x.example', issueId: 'OAPIL-150', subject: 'RE: item master' }),
+      itMail({ id: 'm3', mailbox: 'a@x.example', issueId: 'OAPIL-151', subject: 're: RE: item master' }),
+    ]
+    const issues = {
+      'OAPIL-149': itIssue({ id: 'OAPIL-149', lastActivity: '2026-08-10' }),
+      'OAPIL-150': itIssue({ id: 'OAPIL-150', lastActivity: '2026-08-12' }),
+      'OAPIL-151': itIssue({ id: 'OAPIL-151', lastActivity: '2026-08-14' }),
+    }
+    const groups = duplicateGroups(mail, issues)
+    const good = groups.length === 1 && groups[0].canonical === 'OAPIL-151' &&
+      new Set(groups[0].duplicates).size === 2 &&
+      groups[0].duplicates.includes('OAPIL-149') && groups[0].duplicates.includes('OAPIL-150')
+    return good
+      ? { verdict: 'PASS', actual: JSON.stringify(groups), stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(groups), stops: 'a real duplicate thread is not grouped, or the wrong issue is picked as canonical', impact: 'the cleanup script would not find (or would mis-link) the exact case it exists for', severity: 'P2' } as const
+  },
+)
+
+scenario(
+  'IT7',
+  'duplicateGroups does not group issues that only share a subject — client and parent must match too',
+  'Two unrelated clients both emailing "Weekly status" must not become a group.',
+  () => {
+    const mail = [
+      itMail({ id: 'm1', mailbox: 'a@x.example', issueId: 'OAPIL-1', subject: 'Weekly status' }),
+      itMail({ id: 'm2', mailbox: 'a@x.example', issueId: 'SLG-1', subject: 'Weekly status' }),
+    ]
+    const issues = {
+      'OAPIL-1': itIssue({ id: 'OAPIL-1', lastActivity: TODAY, client: 'OAPIL' }),
+      'SLG-1': itIssue({ id: 'SLG-1', lastActivity: TODAY, client: 'SLG' }),
+    }
+    const groups = duplicateGroups(mail, issues)
+    return groups.length === 0
+      ? { verdict: 'PASS', actual: JSON.stringify(groups), stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: JSON.stringify(groups), stops: 'issues from different clients are grouped on subject alone', impact: 'the cleanup script could cross-link two different clients\' issues as duplicates of each other', severity: 'P1' } as const
+  },
+)
+
+scenario(
+  'IT8',
+  'normalizeSubject strips only a leading Re:/Fw:/Fwd: run, not one appearing mid-subject',
+  '',
+  () => {
+    const a = normalizeSubject('Re: Re: Fwd: item master') === 'item master'
+    const b = normalizeSubject('Re: item master (Fwd: from Priya)') === 'item master (Fwd: from Priya)'
+    const good = a && b
+    return good
+      ? { verdict: 'PASS', actual: `a=${a} b=${b}`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `a=${a} b=${b}`, stops: 'the prefix strip is not anchored to the start, or does not repeat', impact: 'a subject with a parenthetical Fwd: gets over-stripped, or a doubled Re: Fwd: prefix is not fully removed', severity: 'P2' } as const
   },
 )
 
