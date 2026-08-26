@@ -47,7 +47,7 @@ import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActio
 import { EVENT_TYPES, type EventType } from '@/lib/events'
 import { CHANNELS, type Channel } from '@/lib/notifications'
 import { WATCH_CONDITIONS, observe, type ConditionKey } from '@/lib/watch'
-import { bandForScore, bandProblems, totalComplexity, type SizeBand } from '@/lib/estimation'
+import { bandForScore, bandProblems, isScored, normaliseScore, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
 
 /**
@@ -1491,11 +1491,20 @@ function Sizing({
   const bands = state.model.sizeBands
   const problems = bandProblems(bands)
 
-  /** How many estimates currently land in each band — calibration is easier with usage. */
+  /**
+   * How many estimates currently land in each band — calibration is easier with usage.
+   *
+   * Skips anything not fully scored. XS now starts at 0 (see the design's own worked-example
+   * range), so an estimate nobody has touched — every dimension still `null`, summing to a raw
+   * total of 0 — would otherwise land in XS and count as if somebody had actually sized it that
+   * small. `isScored` is what tells "genuinely scored at the smallest size" apart from "hasn't
+   * been scored at all," the same distinction the sentinel exists for everywhere else.
+   */
   const inUse = useMemo(() => {
     const n: Record<string, number> = {}
     for (const e of Object.values(state.estimates)) {
-      const b = bandForScore(bands, totalComplexity(e.scores))
+      if (!isScored(e.scores)) continue
+      const b = bandForScore(bands, normaliseScore(totalComplexity(e.scores)))
       if (b) n[b.size] = (n[b.size] ?? 0) + 1
     }
     return n
@@ -1511,9 +1520,11 @@ function Sizing({
     <section className="cfg-section">
       <h3 className="cfg-h">T-shirt sizing</h3>
       <p className="cfg-note">
-        What a size is worth here. A complexity score between 5 and 25 lands in one of these
-        bands, and the band carries the story points and the hours the estimate uses — so this
-        is where the firm&rsquo;s calibration lives, rather than on the estimation screen.
+        What a size is worth here. The five parameters sum to a raw total (0–25), which is then
+        normalised to a 0–15 band — the numbers below are that normalised score, not the raw
+        total — and lands in one of these bands, which carries the story points and the hours
+        the estimate uses. This is where the firm&rsquo;s calibration lives, rather than on the
+        estimation screen.
       </p>
       <p className="cfg-note">
         Two firms running the same five-parameter model will disagree about what an L costs.
@@ -1532,7 +1543,7 @@ function Sizing({
         <thead>
           <tr>
             <th>Size</th>
-            <th>Score from</th>
+            <th>Normalised score from</th>
             <th>to</th>
             <th>Story points</th>
             <th>Effort hours</th>

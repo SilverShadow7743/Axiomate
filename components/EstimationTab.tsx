@@ -11,6 +11,7 @@ import {
   COMPLEXITY_PARAMETERS,
   CONFIDENCE_LEVELS,
   MAX_COMPLEXITY,
+  NORMALISED_MAX,
   TSHIRT_SIZES,
   deriveEffort,
   deriveTimeline,
@@ -121,7 +122,14 @@ export default function EstimationTab({
           <dl>
             <dt>Complexity</dt>
             <dd className="mono">
-              {effort.scored ? `${effort.score} / ${MAX_COMPLEXITY}` : 'Not scored'}
+              {effort.scored ? (
+                <>
+                  {effort.score} / {NORMALISED_MAX}
+                  <span className="prov"> · {effort.rawScore} raw / {MAX_COMPLEXITY}</span>
+                </>
+              ) : (
+                'Not scored'
+              )}
             </dd>
             <dt>T-shirt size</dt>
             <dd className="mono">
@@ -236,9 +244,9 @@ export default function EstimationTab({
       <section className="est-section">
         <h4>A · Complexity and effort</h4>
         <p className="cfg-note">
-          Five parameters, one to five each. The total maps to a T-shirt size, and the size
-          carries the story points and hours this firm has calibrated — all of which is
-          maintained centrally under Master data, not here.
+          Five parameters, zero to five each. The total is normalised, and the normalised score
+          maps to a T-shirt size, which carries the story points and hours this firm has
+          calibrated — all of which is maintained centrally under Master data, not here.
         </p>
 
         <table className="est-table">
@@ -269,7 +277,11 @@ export default function EstimationTab({
 
         <div className="est-derive">
           <span className="mono">
-            {effort.scored ? effort.score : '—'} / {MAX_COMPLEXITY}
+            {effort.scored ? effort.rawScore : '—'} / {MAX_COMPLEXITY}
+          </span>
+          <span className="est-arrow">→</span>
+          <span className="mono">
+            {effort.scored ? effort.score : '—'} / {NORMALISED_MAX}
           </span>
           <span className="est-arrow">→</span>
           <span className="mono">{effort.size ?? '—'}</span>
