@@ -1552,6 +1552,56 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "EZ1",
+      "title": "A freshly-emptied score is unscored, not scored at zero",
+      "expected": "`emptyScores` returns null per dimension, not 0 — `isScored` tells the two apart, and `totalComplexity` still sums a fully-zeroed estimate correctly once every dimension is deliberately set to 0.",
+      "verdict": "PASS",
+      "actual": "emptyScores() is unscored with a total of 0; a record with every dimension explicitly set to 0 is scored, also totalling 0 — the two states are distinguishable even though they sum identically.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "EZ2",
+      "title": "normaliseScore matches the Axiomate model’s own rounding, not just its endpoints",
+      "expected": "ROUND((raw/25)×15) at both ends of the raw range and at the design doc’s own worked figure (12→7) — proving the rounding direction, not just that 0 maps to 0 and 25 maps to 15.",
+      "verdict": "PASS",
+      "actual": "normaliseScore(0)=0, normaliseScore(25)=15, normaliseScore(12)=7 — matching the deck's own worked example exactly.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "EZ3",
+      "title": "Size bands are matched on the normalised score, including the nominal XXL/3XL range",
+      "expected": "A normalised 3 lands in XS and a normalised 4 lands in S — the boundary the model actually draws — and a normalised 16, unreachable by the real formula, still resolves to XXL because the band is configured, not just documented.",
+      "verdict": "PASS",
+      "actual": "Normalised 3 -> XS, 4 -> S, 15 -> XL (the real ceiling), 16 -> XXL (unreachable by normaliseScore alone, but still a configured band for sizeOverride to land on).",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "EZ4",
+      "title": "deriveEffort reproduces the design doc’s own worked example exactly",
+      "expected": "Business 4, Technical 5, Integration 0, Testing 2, Data 1 — raw 12, normalised 7, size M — the same arithmetic the design doc quotes from the deck’s slide 13, so a future reader can check this scenario against the deck directly.",
+      "verdict": "PASS",
+      "actual": "rawScore=12 score=7 size=M — matches the deck's slide-13 worked example (raw 12, normalised 7, size M) exactly.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "EZ5",
+      "title": "The auto-estimator no longer floors an untouched dimension to 1",
+      "expected": "Text that fires only the \"security\" rule (business/technical/testing) leaves Data untouched by any content rule — it proposes 0, \"no meaningful effort in this dimension,\" not the old floor of 1 — and the proposal is still scored, since a rule did fire.",
+      "verdict": "PASS",
+      "actual": "scores={\"business\":3,\"technical\":2,\"integration\":1,\"testing\":3,\"data\":0}, outcome=scored — Data proposes 0 rather than an assumed 1, Integration still gets its NO_SIGNAL_FLOOR of 1, and the proposal still counts as scored because the security rule actually fired.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

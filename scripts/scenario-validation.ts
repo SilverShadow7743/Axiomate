@@ -111,7 +111,20 @@ import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
-import { summarise } from '../lib/estimation'
+import {
+  summarise,
+  totalComplexity,
+  emptyScores,
+  isScored,
+  normaliseScore,
+  bandForScore,
+  deriveEffort,
+  emptyEstimate,
+  DEFAULT_SIZE_BANDS,
+  MAX_COMPLEXITY,
+  NORMALISED_MAX,
+} from '../lib/estimation'
+import { proposeEstimate } from '../lib/estimator'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
@@ -6967,6 +6980,94 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `a=${a} b=${b}`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `a=${a} b=${b}`, stops: 'the prefix strip is not anchored to the start, or does not repeat', impact: 'a subject with a parenthetical Fwd: gets over-stripped, or a doubled Re: Fwd: prefix is not fully removed', severity: 'P2' } as const
+  },
+)
+
+/* ================================================================== *
+ * Estimation: 0–5 scoring, normalised (design 2026-08-26)
+ * ================================================================== */
+
+scenario(
+  'EZ1',
+  'A freshly-emptied score is unscored, not scored at zero',
+  '`emptyScores` returns null per dimension, not 0 — `isScored` tells the two apart, and `totalComplexity` still sums a fully-zeroed estimate correctly once every dimension is deliberately set to 0.',
+  () => {
+    const empty = emptyScores()
+    const emptyIsUnscored = !isScored(empty) && totalComplexity(empty) === 0
+    const allZero: typeof empty = { business: 0, technical: 0, integration: 0, testing: 0, data: 0 }
+    const zeroIsScored = isScored(allZero) && totalComplexity(allZero) === 0
+    const good = emptyIsUnscored && zeroIsScored
+    return good
+      ? { verdict: 'PASS', actual: 'emptyScores() is unscored with a total of 0; a record with every dimension explicitly set to 0 is scored, also totalling 0 — the two states are distinguishable even though they sum identically.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `emptyIsUnscored=${emptyIsUnscored} zeroIsScored=${zeroIsScored}`, stops: 'the unscored sentinel and a real score of 0 collapse into the same state', severity: 'P1', impact: 'an unscored issue reads as scored at the smallest size, or a deliberately-zero dimension reads as still needing a score' } as const
+  },
+)
+
+scenario(
+  'EZ2',
+  'normaliseScore matches the Axiomate model’s own rounding, not just its endpoints',
+  'ROUND((raw/25)×15) at both ends of the raw range and at the design doc’s own worked figure (12→7) — proving the rounding direction, not just that 0 maps to 0 and 25 maps to 15.',
+  () => {
+    const low = normaliseScore(0) === 0
+    const high = normaliseScore(MAX_COMPLEXITY) === NORMALISED_MAX
+    const worked = normaliseScore(12) === 7 // 12/25*15 = 7.2 -> 7, the deck's own slide-13 example
+    const good = low && high && worked
+    return good
+      ? { verdict: 'PASS', actual: `normaliseScore(0)=0, normaliseScore(25)=15, normaliseScore(12)=7 — matching the deck's own worked example exactly.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `low=${low} high=${high} worked=${worked}`, stops: 'the normalisation formula or its rounding disagrees with the Axiomate model', severity: 'P1', impact: 'every size band is matched against the wrong number, silently' } as const
+  },
+)
+
+scenario(
+  'EZ3',
+  'Size bands are matched on the normalised score, including the nominal XXL/3XL range',
+  'A normalised 3 lands in XS and a normalised 4 lands in S — the boundary the model actually draws — and a normalised 16, unreachable by the real formula, still resolves to XXL because the band is configured, not just documented.',
+  () => {
+    const xs = bandForScore(DEFAULT_SIZE_BANDS, 3)?.size === 'XS'
+    const s = bandForScore(DEFAULT_SIZE_BANDS, 4)?.size === 'S'
+    const xl = bandForScore(DEFAULT_SIZE_BANDS, 15)?.size === 'XL'
+    const xxl = bandForScore(DEFAULT_SIZE_BANDS, 16)?.size === 'XXL'
+    const good = xs && s && xl && xxl
+    return good
+      ? { verdict: 'PASS', actual: 'Normalised 3 -> XS, 4 -> S, 15 -> XL (the real ceiling), 16 -> XXL (unreachable by normaliseScore alone, but still a configured band for sizeOverride to land on).', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `xs=${xs} s=${s} xl=${xl} xxl=${xxl}`, stops: 'the shipped size bands do not match the Axiomate model’s own threshold table', severity: 'P1', impact: 'an issue is sized wrong the moment it is scored' } as const
+  },
+)
+
+scenario(
+  'EZ4',
+  'deriveEffort reproduces the design doc’s own worked example exactly',
+  'Business 4, Technical 5, Integration 0, Testing 2, Data 1 — raw 12, normalised 7, size M — the same arithmetic the design doc quotes from the deck’s slide 13, so a future reader can check this scenario against the deck directly.',
+  () => {
+    const estimate = { ...emptyEstimate('2026-01-01'), scores: { business: 4, technical: 5, integration: 0, testing: 2, data: 1 } }
+    const eff = deriveEffort(estimate, DEFAULT_SIZE_BANDS)
+    const good = eff.rawScore === 12 && eff.score === 7 && eff.scored && eff.size === 'M'
+    return good
+      ? { verdict: 'PASS', actual: `rawScore=${eff.rawScore} score=${eff.score} size=${eff.size} — matches the deck's slide-13 worked example (raw 12, normalised 7, size M) exactly.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `rawScore=${eff.rawScore} score=${eff.score} scored=${eff.scored} size=${eff.size}`, stops: 'deriveEffort disagrees with the design doc’s own worked example', severity: 'P1', impact: 'every complexity-scored estimate in the product is wrong, not just an edge case' } as const
+  },
+)
+
+scenario(
+  'EZ5',
+  'The auto-estimator no longer floors an untouched dimension to 1',
+  'Text that fires only the "security" rule (business/technical/testing) leaves Data untouched by any content rule — it proposes 0, "no meaningful effort in this dimension," not the old floor of 1 — and the proposal is still scored, since a rule did fire.',
+  () => {
+    const issue = {
+      subject: 'Restrict access by role',
+      description: 'New security group with limited privilege',
+      module: 'Security',
+      type: 'Issue',
+      severity: 'Medium',
+    }
+    const proposal = proposeEstimate(issue, 'd365-fo')
+    const dataUntouched = proposal.scores.data === 0
+    const integrationFloored = proposal.scores.integration === 1 // NO_SIGNAL_FLOOR, unchanged
+    const businessScored = (proposal.scores.business ?? 0) > 0
+    const good = proposal.scored && proposal.outcome === 'scored' && dataUntouched && integrationFloored && businessScored
+    return good
+      ? { verdict: 'PASS', actual: `scores=${JSON.stringify(proposal.scores)}, outcome=${proposal.outcome} — Data proposes 0 rather than an assumed 1, Integration still gets its NO_SIGNAL_FLOOR of 1, and the proposal still counts as scored because the security rule actually fired.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `scores=${JSON.stringify(proposal.scores)} scored=${proposal.scored} outcome=${proposal.outcome}`, stops: 'the estimator still floors an untouched dimension, or dropping the floor broke whether a proposal counts as scored', severity: 'P1', impact: 'every future auto-proposed estimate either still inflates untouched dimensions, or stops being usable once a rule fires' } as const
   },
 )
 

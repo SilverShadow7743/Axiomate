@@ -73,31 +73,56 @@ export const COMPLEXITY_PARAMETERS = [
 
 export type ComplexityKey = (typeof COMPLEXITY_PARAMETERS)[number]['key']
 
-export type ComplexityScores = Record<ComplexityKey, number>
+/**
+ * `null` is a dimension nobody has scored yet. `0` is a real score — "None: no meaningful
+ * effort in this dimension" — and the two must not collapse into each other, which is why
+ * unscored is not represented as a number at all.
+ */
+export type ComplexityScores = Record<ComplexityKey, number | null>
 
-/** 1–5, and what each means when somebody is choosing. */
+/** 0–5, and what each means when somebody is choosing. Source: the Axiomate Estimation Model. */
 export const COMPLEXITY_LEVELS = [
+  { score: 0, label: 'None' },
   { score: 1, label: 'Very low' },
   { score: 2, label: 'Low' },
-  { score: 3, label: 'Medium' },
+  { score: 3, label: 'Moderate' },
   { score: 4, label: 'High' },
   { score: 5, label: 'Very high' },
 ] as const
 
-export const MIN_COMPLEXITY = COMPLEXITY_PARAMETERS.length // all 1s
+export const MIN_COMPLEXITY = 0 // all 0s
 export const MAX_COMPLEXITY = COMPLEXITY_PARAMETERS.length * 5 // all 5s — 25
 
 export function totalComplexity(s: ComplexityScores): number {
-  return COMPLEXITY_PARAMETERS.reduce((sum, p) => sum + (s[p.key] || 0), 0)
+  return COMPLEXITY_PARAMETERS.reduce((sum, p) => sum + (s[p.key] ?? 0), 0)
 }
 
 export function emptyScores(): ComplexityScores {
-  return { business: 0, technical: 0, integration: 0, testing: 0, data: 0 }
+  return { business: null, technical: null, integration: null, testing: null, data: null }
 }
 
 /** Whether every parameter has been given a value. A partial score is not a score. */
 export function isScored(s: ComplexityScores): boolean {
-  return COMPLEXITY_PARAMETERS.every((p) => s[p.key] >= 1 && s[p.key] <= 5)
+  return COMPLEXITY_PARAMETERS.every((p) => s[p.key] !== null)
+}
+
+/**
+ * The raw total (0–25) normalised to the 0–15 band the Axiomate model's size thresholds are
+ * actually written against. `NORMALISED_MAX` is a fixed target of that model, not derived from
+ * the parameter count — five dimensions today does not mean the band width should follow if a
+ * sixth were ever added.
+ *
+ *     Normalised Score = ROUND( (Raw Total / 25) × 15 )
+ *
+ * Never compare a raw total against these thresholds directly, and never compare a normalised
+ * score against `MAX_COMPLEXITY` — the two scales look similar enough in size to swap by
+ * accident, and the Axiomate model's own training material calls this out explicitly: "never
+ * mix a 25-point raw score with 15-point thresholds."
+ */
+export const NORMALISED_MAX = 15
+
+export function normaliseScore(raw: number): number {
+  return Math.round((raw / MAX_COMPLEXITY) * NORMALISED_MAX)
 }
 
 /* ================================================================== *
@@ -125,20 +150,25 @@ export interface SizeBand {
 }
 
 /**
- * The shipped calibration.
+ * The shipped calibration, matching the Axiomate Estimation Model's own threshold table.
  *
- * Bands cover 5–25 continuously, because a score with no size is a dead end for the user and
- * an unrepresentable state for the model. The values are a starting point a firm is expected
- * to change, not a recommendation — which is exactly why they are editable.
+ * `minScore`/`maxScore` are on the *normalised* 0–15 scale (`normaliseScore`'s output), not the
+ * raw 0–25 total — see `deriveEffort`, which normalises before calling `bandForScore`. XS starts
+ * at 0: the model has no separate tier below it. XXL and 3XL are not reachable through scoring
+ * at all — a normalised score is capped at exactly 15 (25/25×15) by construction — so their
+ * ranges here are nominal, present only so they stay selectable via `Estimate.sizeOverride` and
+ * so `bandProblems` has a defined, gap-free upper region to report on. The model's own guidance
+ * for anything that would otherwise land above XL is to decompose the work, not to score it into
+ * XXL/3XL directly.
  */
 export const DEFAULT_SIZE_BANDS: SizeBand[] = [
-  { size: 'XS', minScore: 5, maxScore: 7, storyPoints: 1, effortHours: 4 },
-  { size: 'S', minScore: 8, maxScore: 10, storyPoints: 2, effortHours: 8 },
-  { size: 'M', minScore: 11, maxScore: 13, storyPoints: 3, effortHours: 16 },
-  { size: 'L', minScore: 14, maxScore: 17, storyPoints: 5, effortHours: 40 },
-  { size: 'XL', minScore: 18, maxScore: 20, storyPoints: 8, effortHours: 80 },
-  { size: 'XXL', minScore: 21, maxScore: 23, storyPoints: 13, effortHours: 160 },
-  { size: '3XL', minScore: 24, maxScore: 25, storyPoints: 21, effortHours: 320 },
+  { size: 'XS', minScore: 0, maxScore: 3, storyPoints: 1, effortHours: 4 },
+  { size: 'S', minScore: 4, maxScore: 6, storyPoints: 2, effortHours: 8 },
+  { size: 'M', minScore: 7, maxScore: 9, storyPoints: 3, effortHours: 16 },
+  { size: 'L', minScore: 10, maxScore: 12, storyPoints: 5, effortHours: 40 },
+  { size: 'XL', minScore: 13, maxScore: 15, storyPoints: 8, effortHours: 80 },
+  { size: 'XXL', minScore: 16, maxScore: 20, storyPoints: 13, effortHours: 160 },
+  { size: '3XL', minScore: 21, maxScore: 25, storyPoints: 21, effortHours: 320 },
 ]
 
 /** The band a score falls in, or null when the bands do not cover it. */
@@ -152,6 +182,11 @@ export function bandForScore(bands: SizeBand[], score: number): SizeBand | null 
  * A gap means some scores produce no size; an overlap means a score produces two, and which
  * one wins becomes an accident of array order. Both are configuration mistakes that would
  * otherwise only show up as a confusing estimate weeks later.
+ *
+ * Checked against `0`–`NORMALISED_MAX`, not `MIN_COMPLEXITY`–`MAX_COMPLEXITY` — `bandForScore`
+ * is always called with a normalised score (see `deriveEffort`), so that is the range a
+ * calibration actually needs to cover. Checking against the raw 0–25 range instead would demand
+ * bands reach past 15, which nothing can ever score into.
  */
 export function bandProblems(bands: SizeBand[]): string[] {
   const problems: string[] = []
@@ -170,8 +205,8 @@ export function bandProblems(bands: SizeBand[]): string[] {
   }
   const first = sorted[0]
   const last = sorted[sorted.length - 1]
-  if (first && first.minScore > MIN_COMPLEXITY) problems.push(`No size covers ${MIN_COMPLEXITY}–${first.minScore - 1}.`)
-  if (last && last.maxScore < MAX_COMPLEXITY) problems.push(`No size covers ${last.maxScore + 1}–${MAX_COMPLEXITY}.`)
+  if (first && first.minScore > 0) problems.push(`No size covers 0–${first.minScore - 1}.`)
+  if (last && last.maxScore < NORMALISED_MAX) problems.push(`No size covers ${last.maxScore + 1}–${NORMALISED_MAX}.`)
   return problems
 }
 
@@ -245,6 +280,9 @@ export function emptyEstimate(today: string): Estimate {
  * ================================================================== */
 
 export interface EffortResult {
+  /** Business + Technical + Integration + Testing + Data, unweighted — 0 to `MAX_COMPLEXITY`. */
+  rawScore: number
+  /** `normaliseScore(rawScore)` — what `band` is actually matched against, 0 to `NORMALISED_MAX`. */
   score: number
   scored: boolean
   band: SizeBand | null
@@ -262,7 +300,8 @@ export interface EffortResult {
 }
 
 export function deriveEffort(e: Estimate, bands: SizeBand[]): EffortResult {
-  const score = totalComplexity(e.scores)
+  const rawScore = totalComplexity(e.scores)
+  const score = normaliseScore(rawScore)
   const scored = isScored(e.scores)
   const scoreBand = scored ? bandForScore(bands, score) : null
   const band = e.sizeOverride ? (bands.find((b) => b.size === e.sizeOverride) ?? scoreBand) : scoreBand
@@ -277,6 +316,7 @@ export function deriveEffort(e: Estimate, bands: SizeBand[]): EffortResult {
   const effortHours = e.approvedEffortHours ?? breakdownHours ?? suggested
 
   return {
+    rawScore,
     score,
     scored,
     band,

@@ -263,13 +263,13 @@ export function proposeEstimate(issue: Readable, domain: EstimateDomain): Estima
    */
   for (const rule of fired) {
     for (const [key, value] of Object.entries(rule.weights) as [ComplexityKey, number][]) {
-      if (value > scores[key]) scores[key] = value
+      if (scores[key] === null || value > scores[key]) scores[key] = value
     }
     basis.push(`${rule.id}: ${rule.because}`)
   }
 
   for (const [key, value] of Object.entries(NO_SIGNAL_FLOOR) as [ComplexityKey, number][]) {
-    if (scores[key] === 0) scores[key] = value
+    if (scores[key] === null) scores[key] = value
   }
 
   /*
@@ -295,9 +295,14 @@ export function proposeEstimate(issue: Readable, domain: EstimateDomain): Estima
     basis.push('severity: High. The cost of the fix being wrong is what raises the testing effort, not the fix itself.')
   }
 
-  /* Every parameter that a rule touched needs a floor of 1 — a scored 0 is not a score. */
+  /*
+   * A parameter no rule ever touched is not "unsafe to leave alone" any more — 0 is a real
+   * score, "no meaningful effort in this dimension," and the model's own training material
+   * treats that as common and honest, not a gap papered over with an assumed floor of 1.
+   */
   for (const p of COMPLEXITY_PARAMETERS) {
-    scores[p.key] = Math.max(1, Math.min(5, scores[p.key]))
+    const current = scores[p.key]
+    scores[p.key] = current === null ? 0 : Math.min(5, current)
   }
 
   const scored = isScored(scores)
@@ -315,7 +320,7 @@ export function proposeEstimate(issue: Readable, domain: EstimateDomain): Estima
 
 function bump(scores: ComplexityScores, weights: Weights): void {
   for (const [key, value] of Object.entries(weights) as [ComplexityKey, number][]) {
-    if (scores[key] > 0) scores[key] = Math.min(5, scores[key] + value)
+    if (scores[key] !== null) scores[key] = Math.min(5, scores[key] + value)
   }
 }
 
