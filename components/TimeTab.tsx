@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -14,16 +14,30 @@ import {
   type TimeActivity,
   type TimeEntry,
 } from '@/lib/time'
-import { formatIso, formatShort } from '@/lib/dates'
+import { addDays, formatIso, formatShort } from '@/lib/dates'
 import {
   weekStarting,
   weekLabel,
   weekTotal,
+  daysOfWeek,
+  issueWeekCells,
   sheetFor,
   submitProblem,
   decideProblem,
 } from '@/lib/timesheet'
-import { backdated } from '@/lib/timeWindow'
+import { backdated, gridSaveProblem } from '@/lib/timeWindow'
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+interface WeekDraft {
+  hours: string
+  activity: TimeActivity
+  billable: boolean
+  note: string
+  justification: string
+}
+
+const EMPTY_DRAFT: WeekDraft = { hours: '', activity: 'Resolution', billable: true, note: '', justification: '' }
 
 /**
  * Hours recorded against this issue.
@@ -146,6 +160,83 @@ export default function TimeTab({
   const [returnReason, setReturnReason] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const cannotReturn = decideProblem(sheet, 'rejected', returnReason, attester)
+
+  /* ---------------- the weekly grid: a second way to fill in the same form ---------------- */
+
+  /**
+   * Its own week, independent of the Quick Record `date` above.
+   *
+   * `sheetPanel` above reads `week`, derived from the Quick Record date — that binding is
+   * unchanged. The grid gets a second, separate week so that paging through it with
+   * Previous/Next cannot move what `sheetPanel` reports; `TimesheetPanel` already establishes
+   * this exact shape (its own `useState` week, moved by `addDays(week, ±7)`) for the same
+   * reason: two week pickers on one screen that quietly shared state would be the confusing
+   * kind of bug, the kind that looks like it works.
+   */
+  const [mode, setMode] = useState<'quick' | 'week'>('quick')
+  const [gridWeek, setGridWeek] = useState(() => weekStarting(date))
+  const [drafts, setDrafts] = useState<Record<string, WeekDraft>>({})
+  /* A draft typed for one week, or for somebody else's hours, is not an entry meant for the
+   * week or the person now on screen. */
+  useEffect(() => {
+    setDrafts({})
+  }, [gridWeek, person, issueId])
+
+  const gridCells = useMemo(
+    () => issueWeekCells(Object.values(state.timeEntries), issueId, person, gridWeek),
+    [state.timeEntries, issueId, person, gridWeek],
+  )
+  const openDates = useMemo(() => gridCells.filter((c) => c.hours === null).map((c) => c.date), [gridCells])
+  const filledCells = useMemo(
+    () =>
+      openDates
+        .map((d) => {
+          const draft = drafts[d]
+          if (!draft || !draft.hours.trim()) return null
+          return { date: d, hours: Number(draft.hours), justification: draft.justification.trim() || undefined }
+        })
+        .filter((x): x is { date: string; hours: number; justification: string | undefined } => x !== null),
+    [openDates, drafts],
+  )
+  const gridProblem = gridSaveProblem(
+    filledCells,
+    sheets,
+    person,
+    gridWeek,
+    today,
+    state.model.timePolicy.backdatingAllowanceDays,
+  )
+
+  /**
+   * Every filled cell, or none. `onAdd` has no batch form — this is `N` independent calls —
+   * so `gridSaveProblem` above is what makes "all or nothing" true in practice: every filled
+   * cell already passed the same checks the reducer applies before any of them is attempted.
+   * A call failing anyway (the week frozen out from under it mid-save, `today` rolling over)
+   * stops the loop immediately; cells already recorded stay recorded, the rest are left typed
+   * exactly as they were, and nothing already entered is lost.
+   */
+  const saveWeek = () => {
+    if (filledCells.length === 0 || gridProblem) return
+    for (const cell of filledCells) {
+      const draft = drafts[cell.date]
+      if (!draft) continue
+      const ok = onAdd({
+        person,
+        date: cell.date,
+        hours: cell.hours,
+        activity: draft.activity,
+        billable: draft.billable,
+        note: draft.note,
+        justification: cell.justification,
+      })
+      if (!ok) break
+      setDrafts((prev) => {
+        const next = { ...prev }
+        delete next[cell.date]
+        return next
+      })
+    }
+  }
 
   /**
    * The week's own strip: what it totals, what state it is in, and the one action available.
@@ -316,6 +407,93 @@ export default function TimeTab({
       {!may.allowed ? (
         <div className="panel-note">{may.reason ?? 'Read only.'}</div>
       ) : (
+        <>
+          <div className="time-mode-toggle" role="tablist" aria-label="How to record time">
+            <button
+              type="button"
+              className={mode === 'quick' ? 'btn' : 'btn ghost'}
+              role="tab"
+              aria-selected={mode === 'quick'}
+              onClick={() => setMode('quick')}
+            >
+              Quick record
+            </button>
+            <button
+              type="button"
+              className={mode === 'week' ? 'btn' : 'btn ghost'}
+              role="tab"
+              aria-selected={mode === 'week'}
+              onClick={() => setMode('week')}
+            >
+              Weekly timesheet
+            </button>
+          </div>
+
+          {mode === 'week' ? (
+            <section className="time-week">
+              <div className="ts-week-bar">
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setGridWeek(addDays(gridWeek, -7))}
+                  aria-label="Previous week"
+                >
+                  ‹
+                </button>
+                <b>{weekLabel(gridWeek)}</b>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setGridWeek(addDays(gridWeek, 7))}
+                  aria-label="Next week"
+                >
+                  ›
+                </button>
+                <button type="button" className="btn ghost" onClick={() => setGridWeek(weekStarting(today))}>
+                  This week
+                </button>
+              </div>
+              <div className="time-week-grid">
+                {gridCells.map((cell, i) => (
+                  <div key={cell.date} className="time-week-day">
+                    <div className="time-week-day-head">
+                      <span>{DAY_NAMES[i]}</span>
+                      <span className="mono prov">{formatShort(cell.date)}</span>
+                    </div>
+                    {cell.hours !== null ? (
+                      <div className="time-week-day-total mono" title="Already recorded — correct it below, in Entries">
+                        {cell.hours}h
+                      </div>
+                    ) : (
+                      <WeekDayCell
+                        date={cell.date}
+                        person={person}
+                        today={today}
+                        allowanceDays={state.model.timePolicy.backdatingAllowanceDays}
+                        draft={drafts[cell.date] ?? EMPTY_DRAFT}
+                        onChange={(patch) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [cell.date]: { ...(prev[cell.date] ?? EMPTY_DRAFT), ...patch },
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              {gridProblem && <p className="ov-gate">{gridProblem}</p>}
+              <button
+                type="button"
+                className="btn primary"
+                disabled={filledCells.length === 0 || Boolean(gridProblem)}
+                title={gridProblem ?? 'Record every filled day at once'}
+                onClick={saveWeek}
+              >
+                Save week
+              </button>
+            </section>
+          ) : (
         <section className="time-form">
           <h4 className="est-h">Record time</h4>
           <div className="time-row">
@@ -395,6 +573,8 @@ export default function TimeTab({
           )}
           {problem && <p className="ov-gate">{problem.message}</p>}
         </section>
+          )}
+        </>
       )}
 
       {entries.length === 0 ? (
@@ -570,6 +750,81 @@ function CorrectEntry({
       >
         Save
       </button>
+      {problem && <span className="ov-gate">{problem.message}</span>}
+    </div>
+  )
+}
+
+/**
+ * One open day in the weekly grid.
+ *
+ * Deliberately not `CorrectEntry` reused: that component edits a stored entry's hours, note
+ * and billable flag; this one drafts a *new* entry that does not exist until Save Week writes
+ * it, so it also needs an activity picker and, when the date warrants it, its own reason
+ * field — which `CorrectEntry` gates on `staleHours` instead, a different question (was the
+ * change itself late) from this one (was the work itself late).
+ */
+function WeekDayCell({
+  date,
+  person,
+  today,
+  allowanceDays,
+  draft,
+  onChange,
+}: {
+  date: string
+  person: string
+  today: string
+  allowanceDays: number
+  draft: WeekDraft
+  onChange: (patch: Partial<WeekDraft>) => void
+}) {
+  const parsed = Number(draft.hours)
+  const problem = draft.hours.trim() ? checkEntry({ hours: parsed, date, person }, today) : null
+  const lateness = backdated(date, today, allowanceDays)
+  const needsReason = draft.hours.trim() && lateness.justificationRequired
+
+  return (
+    <div className="time-week-day-form">
+      <input
+        type="number"
+        step={0.25}
+        min={0.25}
+        max={MAX_HOURS_PER_ENTRY}
+        value={draft.hours}
+        placeholder="0.00"
+        onChange={(e) => onChange({ hours: e.target.value })}
+        aria-label={`Hours on ${date}`}
+      />
+      <select
+        value={draft.activity}
+        onChange={(e) => onChange({ activity: e.target.value as TimeActivity })}
+        aria-label={`Activity on ${date}`}
+      >
+        {TIME_ACTIVITIES.map((a) => (
+          <option key={a}>{a}</option>
+        ))}
+      </select>
+      <label className="time-week-billable">
+        <input type="checkbox" checked={draft.billable} onChange={(e) => onChange({ billable: e.target.checked })} />
+        Billable
+      </label>
+      <input
+        className="fld-input"
+        value={draft.note}
+        placeholder="Note — optional"
+        onChange={(e) => onChange({ note: e.target.value })}
+        aria-label={`Note on ${date}`}
+      />
+      {needsReason && (
+        <input
+          className="fld-input"
+          value={draft.justification}
+          placeholder={`${lateness.days}d late — reason needed`}
+          onChange={(e) => onChange({ justification: e.target.value })}
+          aria-label={`Reason for the late entry on ${date}`}
+        />
+      )}
       {problem && <span className="ov-gate">{problem.message}</span>}
     </div>
   )

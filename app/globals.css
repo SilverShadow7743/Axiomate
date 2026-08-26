@@ -4621,6 +4621,59 @@ select.cell-editor {
   color: var(--h-ontrack);
 }
 
+/* ---------- weekly timesheet grid (ticket-scoped) ---------- */
+.time-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.time-week {
+  margin-top: 8px;
+}
+.time-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+}
+.time-week-day {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+}
+.time-week-day-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.time-week-day-total {
+  font-size: 16px;
+  text-align: center;
+  padding: 10px 0;
+  color: var(--text-muted);
+}
+.time-week-day-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.time-week-day-form input,
+.time-week-day-form select {
+  width: 100%;
+}
+.time-week-billable {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
 /* ---------- approvals ----------
    The block sits under the record in the Overview, so it borrows the panel's spacing rather
    than introducing a card of its own. A decided entry is tinted by outcome: a reader scanning
