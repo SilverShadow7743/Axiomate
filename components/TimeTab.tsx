@@ -211,32 +211,63 @@ export default function TimeTab({
    * Every filled cell, or none. `onAdd` has no batch form — this is `N` independent calls —
    * so `gridSaveProblem` above is what makes "all or nothing" true in practice: every filled
    * cell already passed the same checks the reducer applies before any of them is attempted.
-   * A call failing anyway (the week frozen out from under it mid-save, `today` rolling over)
-   * stops the loop immediately; cells already recorded stay recorded, the rest are left typed
-   * exactly as they were, and nothing already entered is lost.
+   *
+   * They are NOT fired in a synchronous loop, and that is not a style choice. `onAdd` reaches
+   * this app's shared `dispatch` (`IssueWorkspace.tsx`), which closes over `state` as of the
+   * render that created it and calls `setState` with a plain value rather than an updater
+   * function. Two calls to it inside one synchronous handler both read the SAME stale `state`
+   * snapshot, and the second's `setState` call overwrites the first's — both actions still
+   * reach the server and persist correctly (every filled cell really is recorded), but the
+   * browser's own copy of `state` would silently keep only the last cell until the next
+   * reload, showing every earlier cell as if it had reverted to blank. Queuing one cell into
+   * `pendingSave` and letting the effect below pop it lets a real render land between calls,
+   * so `onAdd` is a fresh closure over the state the previous call actually produced.
    */
+  const [pendingSave, setPendingSave] = useState<
+    | {
+        date: string
+        hours: number
+        activity: TimeActivity
+        billable: boolean
+        note: string
+        justification?: string
+      }[]
+    | null
+  >(null)
+
   const saveWeek = () => {
-    if (filledCells.length === 0 || gridProblem) return
-    for (const cell of filledCells) {
-      const draft = drafts[cell.date]
-      if (!draft) continue
-      const ok = onAdd({
-        person,
-        date: cell.date,
-        hours: cell.hours,
-        activity: draft.activity,
-        billable: draft.billable,
-        note: draft.note,
-        justification: cell.justification,
-      })
-      if (!ok) break
+    if (filledCells.length === 0 || gridProblem || pendingSave) return
+    setPendingSave(
+      filledCells.map((cell) => {
+        const draft = drafts[cell.date] ?? EMPTY_DRAFT
+        return {
+          date: cell.date,
+          hours: cell.hours,
+          activity: draft.activity,
+          billable: draft.billable,
+          note: draft.note,
+          justification: cell.justification,
+        }
+      }),
+    )
+  }
+
+  useEffect(() => {
+    if (!pendingSave || pendingSave.length === 0) return
+    const [next, ...rest] = pendingSave
+    const ok = onAdd({ person, ...next })
+    if (ok) {
       setDrafts((prev) => {
-        const next = { ...prev }
-        delete next[cell.date]
-        return next
+        const nextDrafts = { ...prev }
+        delete nextDrafts[next.date]
+        return nextDrafts
       })
     }
-  }
+    setPendingSave(ok && rest.length ? rest : null)
+    // Deliberately just `pendingSave`: onAdd/person must be read fresh on every firing (that
+    // is the whole point above), not frozen at whatever render first queued this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSave])
 
   /**
    * The week's own strip: what it totals, what state it is in, and the one action available.
@@ -486,11 +517,15 @@ export default function TimeTab({
               <button
                 type="button"
                 className="btn primary"
-                disabled={filledCells.length === 0 || Boolean(gridProblem)}
-                title={gridProblem ?? 'Record every filled day at once'}
+                disabled={filledCells.length === 0 || Boolean(gridProblem) || Boolean(pendingSave)}
+                title={
+                  pendingSave
+                    ? 'Recording — one moment'
+                    : (gridProblem ?? 'Record every filled day at once')
+                }
                 onClick={saveWeek}
               >
-                Save week
+                {pendingSave ? 'Saving…' : 'Save week'}
               </button>
             </section>
           ) : (

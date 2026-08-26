@@ -189,3 +189,46 @@ responding, close the tab and open a fresh one rather than retrying against a fr
   second, independent `gridWeek` would then desynchronize something outside this file
   that the design didn't account for. Cheap to check before writing any code; expensive
   to discover after.
+
+## What Step 3 actually found
+
+The "onAdd has a per-call side effect unsafe under a tight sequential loop" item above is
+exactly what happened, though not in the form guessed. Root cause, found by browser
+verification and confirmed with instrumented logging: `dispatch` in
+`components/IssueWorkspace.tsx` closes over `state` at the render that created it and
+calls `setState(res.state)` with a plain value, not a functional updater. Two calls to it
+inside one synchronous handler — the original `for (const cell of filledCells) { onAdd(...) }`
+— both compute against the SAME stale `state` snapshot, and the second's `setState` call
+overwrites the first's. Every filled cell still reached the server and persisted correctly
+(confirmed by querying the database directly, not just trusting the UI) — the bug was
+client-side only: the browser's own copy of `state` kept just the last cell in the batch,
+rendering every earlier one as if it had silently reverted to blank.
+
+This did not send the design back. It stayed inside Step 2's scope: `saveWeek` now queues
+every cell into a `pendingSave` state array instead of looping, and a `useEffect` pops one
+cell per firing. Popping via `setPendingSave` forces a real render between calls, so by
+the time the effect fires for the next cell, `onAdd` is a fresh closure over the state the
+previous call actually produced — confirmed with temporary instrumentation showing
+`timeEntries` count stepping 16 → 17 → 18 across the two calls, not both computing from 16.
+The instrumentation was removed before committing; the `git diff` for this step is the fix
+alone.
+
+Two things worth recording for whoever next does interactive verification in this
+project, neither specific to this feature:
+
+- **This dev server's `DATABASE_URL` points at the real production Postgres instance**,
+  not a separate local database. Interactive verification here writes real rows into
+  the real delivery register. This session's test entries (13 `TimeEntry` rows across
+  OAPIL-129 through OAPIL-132) were withdrawn afterward via `removeTime` — the same
+  soft-delete the UI's own "Remove" button uses — through the authenticated browser
+  session's own `fetch('/api/workspace', ...)`, confirmed by querying the database
+  directly to see every one carrying a `deletedAt`. Nothing was hard-deleted.
+- **The app registers a Service Worker (`sw.js`, PWA offline support) that caches JS
+  bundles and does not release them on an ordinary reload.** During this verification it
+  silently served a pre-fix build for over an hour of testing, reproducing the exact bug
+  being fixed on every attempt regardless of new code being compiled and served correctly
+  by the dev server — confirmed by fetching the same chunk URL with `curl` (fresh) against
+  the browser's own `fetch` (stale) and finding different byte lengths. Unregistering the
+  service worker and clearing `caches` before testing (`navigator.serviceWorker.getRegistrations()`
+  → `unregister()`, `caches.keys()` → `delete()`) is required before any dev-server
+  browser verification in this codebase, not just this feature's.
