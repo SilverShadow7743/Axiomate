@@ -64,22 +64,22 @@ whose `justification` is blank as its own blocking reason — the same rule
 `TimeTab.tsx`'s single form already enforces, made checkable over a set of cells instead
 of one.
 
-**Verify:** `npx tsc --noEmit`, then new scenarios `TG1`–`TG4` in
+**Verify:** `npx tsc --noEmit`, then new scenarios `TK1`–`TK4` in
 `scripts/scenario-validation.ts` (id prefix confirmed unused —
 `grep -n "'TG" scripts/scenario-validation.ts` currently returns nothing), run with
 `npm run validate:scenarios`:
 
-- `TG1` — `issueWeekCells` on a week with entries on 2 of 7 days, one of those days
+- `TK1` — `issueWeekCells` on a week with entries on 2 of 7 days, one of those days
   holding two entries (reuse `WG1`'s two-entries-same-day fixture): the two remaining
   days report `null`, the two populated days report `hours` as their sum, not their
   count.
-- `TG2` — `issueWeekCells` excludes another person's entries and a deleted entry, and
+- `TK2` — `issueWeekCells` excludes another person's entries and a deleted entry, and
   resolves by `personId` across a stale display name — same three guards `WG1` already
   proves for `weekGrid`, restated for the issue-scoped function so a regression in either
   can't hide behind the other's passing test.
-- `TG3` — `gridSaveProblem` returns the frozen-week message when `sheetFor` reports
+- `TK3` — `gridSaveProblem` returns the frozen-week message when `sheetFor` reports
   `Submitted`, before it looks at any cell.
-- `TG4` — `gridSaveProblem` returns null for a set of valid filled cells, returns a
+- `TK4` — `gridSaveProblem` returns null for a set of valid filled cells, returns a
   reason when one cell exceeds `MAX_HOURS_PER_ENTRY`, and returns a reason when one cell
   is backdated past the allowance with no justification — three sub-cases in one
   scenario, matching this file's existing style of one scenario asserting several related
@@ -172,7 +172,7 @@ responding, close the tab and open a fresh one rather than retrying against a fr
 - **If entries commonly split across several activities on the same day for the same
   issue** (not the occasional correction-plus-original case `WG1` models, but a routine
   pattern), the read-only "summed total" cell hides which activities compose it and gives
-  nobody a way to add a fourth without leaving the grid. Surfaces while writing `TG1`'s
+  nobody a way to add a fourth without leaving the grid. Surfaces while writing `TK1`'s
   fixture in Step 1 if realistic sample data turns out to look like this — if so, the
   single-cell-per-day model itself is wrong, not just incomplete, and the design needs
   a per-activity row, not a patch.

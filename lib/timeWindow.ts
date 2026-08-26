@@ -1,8 +1,9 @@
 import { daysBetween, formatShort, startOfWeek } from './dates'
 import { isTerminal } from './schedule'
 import { valueAt, type Version } from './versioning'
-import { frozenMessage } from './timesheet'
+import { frozenMessage, isFrozen, type Timesheet } from './timesheet'
 import { WORKING_PATTERN } from './capacity'
+import { checkEntry } from './time'
 import type { PermissionKey } from './access'
 import type { IssueStatus } from './types'
 
@@ -400,6 +401,51 @@ export function backdated(
       ? `Recorded ${days} days after the work happened, and the allowance is ${allowanceDays}. An entry this late needs a reason on it and an approval behind it — a week reconstructed from memory is exactly what an auditor asks about.`
       : null,
   }
+}
+
+/**
+ * A day cell the weekly timesheet grid is about to write, before it is a real `TimeEntry`.
+ */
+export interface GridCell {
+  date: string
+  hours: number
+  justification?: string
+}
+
+/**
+ * The first reason the grid's Save Week cannot fire, or null.
+ *
+ * Checked over every filled cell before any of them becomes an `onAdd` call — there is no
+ * batch form of that call, so this is the strongest guarantee available that either every
+ * filled cell is good or none of them is attempted. The frozen-week check runs first and
+ * covers the whole grid at once: a week already submitted or approved has nothing left to
+ * validate cell by cell, and reusing `isFrozen`/`frozenMessage` keeps its wording identical
+ * to the single-entry form's own refusal for the same week. `personId` is deliberately not a
+ * parameter — `isFrozen` does not take one today, and the caller (the ticket's Time tab)
+ * does not thread it through its own `sheetFor` lookup either; adding it only here would be a
+ * second, disagreeing join rule for the same week.
+ */
+export function gridSaveProblem(
+  cells: GridCell[],
+  sheets: Timesheet[],
+  person: string,
+  week: string,
+  today: string,
+  allowanceDays: number,
+): string | null {
+  const status = isFrozen(sheets, person, week)
+  if (status) return frozenMessage(status, week)
+
+  for (const cell of cells) {
+    const problem = checkEntry({ hours: cell.hours, date: cell.date, person }, today)
+    if (problem) return `${cell.date}: ${problem.message}`
+
+    const lateness = backdated(cell.date, today, allowanceDays)
+    if (lateness.justificationRequired && !cell.justification?.trim()) {
+      return `${cell.date}: ${lateness.message ?? 'This entry needs a reason.'}`
+    }
+  }
+  return null
 }
 
 /* ================================================================== *

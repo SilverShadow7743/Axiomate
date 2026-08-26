@@ -397,7 +397,7 @@
       "title": "Weekly client and monthly governance reporting",
       "expected": "A client-safe weekly pack and a monthly governance pack can be produced.",
       "verdict": "NOT IMPLEMENTED",
-      "actual": "Only the daily IMS is built (2 report module(s) in source). The weekly pack needs a client-visible boundary that does not exist — no field marks a record or a note as client-safe.",
+      "actual": "Only the daily IMS is built (3 report module(s) in source). The weekly pack needs a client-visible boundary that does not exist — no field marks a record or a note as client-safe.",
       "stops": "at the visibility boundary",
       "severity": "P1",
       "impact": "Anything sent to a client is assembled by hand, and internal notes are one copy-paste from the client."
@@ -951,6 +951,46 @@
       "actual": "The grid gathers a week across issues without re-filtering: quarter hours sum per day and per issue, a withdrawn entry is excluded, another person’s hours never land, and the id-join matches an entry whose display name went stale. Three submitted weeks make a queue; the panel’s pre-filter — decideProblem per row — excludes the approver’s own week, the remaining two approve as an atomic fold, and the own week asked individually is refused in the rule’s words and stays Submitted.",
       "stops": "",
       "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TK1",
+      "title": "A ticket’s week, as seven cells — summed where hours exist, open where they don’t",
+      "expected": "`issueWeekCells` filters `entriesInWeek` to one issue and sums same-day entries into one cell, the same way `weekGrid` sums a row — a populated day is never mistaken for one entry each.",
+      "verdict": "PASS",
+      "actual": "Seven cells, Monday through Sunday. Monday carries two entries summed to 3.75, not reported as two; Thursday carries its one entry at 4; Tuesday and Friday are null — open to entry — and Tuesday’s null holds even though the other issue has 8h on that day, because the filter is to this issue.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TK2",
+      "title": "The grid’s cells hold the same three guards the cross-issue grid already proves",
+      "expected": "An id-joined entry survives a stale display name; a withdrawn entry and another person’s entry are both excluded — restated over `issueWeekCells` so a regression in either function can’t hide behind the other’s passing scenario.",
+      "verdict": "PASS",
+      "actual": "Friday reports 3h — the id-joined stale-name entry, with the withdrawn 5h excluded from the sum. Tuesday stays open: Sam’s 8h on that date never lands in Priya’s cell.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TK3",
+      "title": "Save Week is refused for a frozen week before any cell is looked at",
+      "expected": "A submitted or approved week short-circuits `gridSaveProblem` on the frozen check alone — the same `isFrozen`/`frozenMessage` the single-entry form already refuses with, so the wording agrees whichever screen somebody sees it on.",
+      "verdict": "PASS",
+      "actual": "With the week Submitted, gridSaveProblem returns the exact frozenMessage text for that status — the same valid cells, with no sheet in play, return null. The frozen check runs and wins before any cell is evaluated.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "TK4",
+      "title": "Save Week is refused per cell: over the hour cap, or late without a reason",
+      "expected": "checkEntry and backdated — the same two checks the single-entry form already runs — are applied to every filled cell; one bad cell blocks the whole save, and a clean set of cells does not.",
+      "verdict": "PASS",
+      "actual": "A clean cell passes with no message. A 15h cell is blocked naming the 12-hour cap — checkEntry’s own words. A cell 10 days late with no reason is blocked; the same cell with a reason attached passes.",
+      "stops": "",
+      "severity": "P1",
       "impact": "none"
     },
     {

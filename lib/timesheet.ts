@@ -128,6 +128,37 @@ export function weekGrid(
   return { rows, byDay, total: round(rows.reduce((t, r) => t + r.total, 0)) }
 }
 
+/**
+ * One issue's week, as 7 cells — an existing total (summed, read-only) or nothing (open to
+ * entry).
+ *
+ * For the ticket-scoped weekly grid (design 2026-08-26), not `weekGrid`'s cross-issue rows.
+ * Reuses `entriesInWeek` for the id-first join and week bounds, filtered to one issue, and
+ * sums a day the same way `weekGrid` does — a day already holding two entries is not two
+ * cells, it is one cell reporting their total. The grid never edits a day that already has
+ * hours on it; it only ever fills one that has none.
+ */
+export interface WeekCell {
+  date: string
+  /** Null when nothing is recorded for this day yet — the grid may write here. */
+  hours: number | null
+}
+
+export function issueWeekCells(
+  entries: TimeEntry[],
+  issueId: string,
+  person: string,
+  week: string,
+  personId?: string | null,
+): WeekCell[] {
+  const mine = entriesInWeek(entries, person, week, personId).filter((e) => e.issueId === issueId)
+  const round = (n: number) => Math.round(n * 100) / 100
+  return daysOfWeek(week).map((date) => {
+    const onDate = mine.filter((e) => e.date === date)
+    return { date, hours: onDate.length ? round(onDate.reduce((t, e) => t + e.hours, 0)) : null }
+  })
+}
+
 /** Hours in the week, and how many of them are chargeable. */
 export function weekTotal(
   entries: TimeEntry[],

@@ -65,6 +65,7 @@ import {
   timeEntryAllowed,
   timeEntryNote,
   windowOpening,
+  gridSaveProblem,
   BACKDATING_ALLOWANCE_DAYS,
   type WindowIssue,
   type WindowPerson,
@@ -158,7 +159,8 @@ import {
 } from '../lib/changeRequest'
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
-  weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, submitProblem, decideProblem, statusAfter,
+  weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
+  issueWeekCells,
   type Timesheet, type Attester,
 } from '../lib/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
@@ -5380,6 +5382,119 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The grid gathers a week across issues without re-filtering: quarter hours sum per day and per issue, a withdrawn entry is excluded, another person\u2019s hours never land, and the id-join matches an entry whose display name went stale. Three submitted weeks make a queue; the panel\u2019s pre-filter \u2014 decideProblem per row \u2014 excludes the approver\u2019s own week, the remaining two approve as an atomic fold, and the own week asked individually is refused in the rule\u2019s words and stays Submitted.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `gridRight=${gridRight} submittedAll=${submittedAll} preFilterRight=${preFilterRight} batchRight=${batchRight} selfRefused=${selfRefused}`, stops: 'the gathering disagrees with the design', severity: 'P1', impact: 'a week attested from a partial picture, or an approver deciding their own hours' } as const
+  },
+)
+
+/* ================================================================== *
+ * Ticket-scoped weekly timesheet grid (design 2026-08-26)
+ * ================================================================== */
+
+scenario(
+  'TK1',
+  'A ticket’s week, as seven cells — summed where hours exist, open where they don’t',
+  '`issueWeekCells` filters `entriesInWeek` to one issue and sums same-day entries into one cell, the same way `weekGrid` sums a row — a populated day is never mistaken for one entry each.',
+  () => {
+    const te = (over: Partial<TimeEntry> & Pick<TimeEntry, 'id' | 'issueId' | 'date' | 'hours'>): TimeEntry => ({
+      person: 'Priya', personId: 'P-1', activity: 'Investigation', billable: true, note: '',
+      createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null, deletedAt: null,
+      ...over,
+    })
+    const week = '2026-08-10'
+    const entries: TimeEntry[] = [
+      /* Two entries the same day, same issue — one cell, summed. */
+      te({ id: 't1', issueId: 'OAPIL-1', date: '2026-08-10', hours: 2.25 }),
+      te({ id: 't2', issueId: 'OAPIL-1', date: '2026-08-10', hours: 1.5 }),
+      te({ id: 't3', issueId: 'OAPIL-1', date: '2026-08-13', hours: 4 }),
+      /* Another issue, same person, same week — never lands in OAPIL-1's cells. */
+      te({ id: 't4', issueId: 'OAPIL-2', date: '2026-08-11', hours: 8 }),
+    ]
+    const cells = issueWeekCells(entries, 'OAPIL-1', 'Priya', week, 'P-1')
+    const monday = cells.find((c) => c.date === '2026-08-10')
+    const tuesday = cells.find((c) => c.date === '2026-08-11')
+    const thursday = cells.find((c) => c.date === '2026-08-13')
+    const friday = cells.find((c) => c.date === '2026-08-14')
+    const good =
+      cells.length === 7 &&
+      monday?.hours === 3.75 &&
+      tuesday?.hours === null &&
+      thursday?.hours === 4 &&
+      friday?.hours === null
+    return good
+      ? { verdict: 'PASS', actual: 'Seven cells, Monday through Sunday. Monday carries two entries summed to 3.75, not reported as two; Thursday carries its one entry at 4; Tuesday and Friday are null — open to entry — and Tuesday’s null holds even though the other issue has 8h on that day, because the filter is to this issue.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `cells.length=${cells.length} monday=${monday?.hours} tuesday=${tuesday?.hours} thursday=${thursday?.hours} friday=${friday?.hours}`, stops: 'issueWeekCells disagrees with weekGrid’s own summing rule, or leaks across issues', severity: 'P1', impact: 'the grid shows the wrong total for a day, or shows another ticket’s hours as this one’s' } as const
+  },
+)
+
+scenario(
+  'TK2',
+  'The grid’s cells hold the same three guards the cross-issue grid already proves',
+  'An id-joined entry survives a stale display name; a withdrawn entry and another person’s entry are both excluded — restated over `issueWeekCells` so a regression in either function can’t hide behind the other’s passing scenario.',
+  () => {
+    const te = (over: Partial<TimeEntry> & Pick<TimeEntry, 'id' | 'issueId' | 'date' | 'hours'>): TimeEntry => ({
+      person: 'Priya', personId: 'P-1', activity: 'Investigation', billable: true, note: '',
+      createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null, deletedAt: null,
+      ...over,
+    })
+    const entries: TimeEntry[] = [
+      /* The rename case: the id matches, the display name is stale. */
+      te({ id: 't1', issueId: 'OAPIL-1', date: '2026-08-14', hours: 3, person: 'Priya (old name)' }),
+      /* Withdrawn on the same day, same issue — not part of what she attests to. */
+      te({ id: 't2', issueId: 'OAPIL-1', date: '2026-08-14', hours: 5, deletedAt: NOW }),
+      /* Another person entirely, same issue, same week. */
+      te({ id: 't3', issueId: 'OAPIL-1', date: '2026-08-11', hours: 8, person: 'Sam', personId: 'P-2' }),
+    ]
+    const cells = issueWeekCells(entries, 'OAPIL-1', 'Priya', '2026-08-10', 'P-1')
+    const friday = cells.find((c) => c.date === '2026-08-14')
+    const tuesday = cells.find((c) => c.date === '2026-08-11')
+    const good = friday?.hours === 3 && tuesday?.hours === null
+    return good
+      ? { verdict: 'PASS', actual: 'Friday reports 3h — the id-joined stale-name entry, with the withdrawn 5h excluded from the sum. Tuesday stays open: Sam’s 8h on that date never lands in Priya’s cell.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `friday=${friday?.hours} tuesday=${tuesday?.hours}`, stops: 'issueWeekCells’s join or exclusion rules disagree with entriesInWeek’s', severity: 'P1', impact: 'a corrected/renamed person’s hours vanish from the grid, a withdrawn entry still counts, or another person’s hours leak in' } as const
+  },
+)
+
+scenario(
+  'TK3',
+  'Save Week is refused for a frozen week before any cell is looked at',
+  'A submitted or approved week short-circuits `gridSaveProblem` on the frozen check alone — the same `isFrozen`/`frozenMessage` the single-entry form already refuses with, so the wording agrees whichever screen somebody sees it on.',
+  () => {
+    const week = '2026-08-10'
+    const submittedSheet: Timesheet = {
+      id: 'ts-tg3', person: 'Priya', personId: 'P-1', weekStarting: week, status: 'Submitted',
+      submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+    }
+    const validCells = [{ date: '2026-08-11', hours: 4 }]
+    const frozenResult = gridSaveProblem(validCells, [submittedSheet], 'Priya', week, '2026-08-12', 7)
+    const notFrozenResult = gridSaveProblem(validCells, [], 'Priya', week, '2026-08-12', 7)
+    const good =
+      frozenResult === frozenMessage('Submitted', week) &&
+      notFrozenResult === null
+    return good
+      ? { verdict: 'PASS', actual: 'With the week Submitted, gridSaveProblem returns the exact frozenMessage text for that status — the same valid cells, with no sheet in play, return null. The frozen check runs and wins before any cell is evaluated.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `frozenResult=${frozenResult} notFrozenResult=${notFrozenResult}`, stops: 'gridSaveProblem’s frozen-week check disagrees with isFrozen/frozenMessage, or does not run first', severity: 'P1', impact: 'Save Week could write into an already-attested week, or refuse a week that is actually open' } as const
+  },
+)
+
+scenario(
+  'TK4',
+  'Save Week is refused per cell: over the hour cap, or late without a reason',
+  'checkEntry and backdated — the same two checks the single-entry form already runs — are applied to every filled cell; one bad cell blocks the whole save, and a clean set of cells does not.',
+  () => {
+    const today = '2026-08-20'
+    const good1 = [{ date: '2026-08-19', hours: 4 }]
+    const overCap = [{ date: '2026-08-19', hours: 15 }]
+    const lateNoReason = [{ date: '2026-08-10', hours: 4 }]
+    const lateWithReason = [{ date: '2026-08-10', hours: 4, justification: 'Catching up after leave.' }]
+
+    const cleanPasses = gridSaveProblem(good1, [], 'Priya', '2026-08-17', today, 7) === null
+    const capBlocks = /12 hours/.test(gridSaveProblem(overCap, [], 'Priya', '2026-08-17', today, 7) ?? '')
+    const lateBlocks = /reason|allowance/.test(gridSaveProblem(lateNoReason, [], 'Priya', '2026-08-10', today, 7) ?? '')
+    const justifiedPasses = gridSaveProblem(lateWithReason, [], 'Priya', '2026-08-10', today, 7) === null
+
+    const good = cleanPasses && capBlocks && lateBlocks && justifiedPasses
+    return good
+      ? { verdict: 'PASS', actual: 'A clean cell passes with no message. A 15h cell is blocked naming the 12-hour cap — checkEntry’s own words. A cell 10 days late with no reason is blocked; the same cell with a reason attached passes.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `cleanPasses=${cleanPasses} capBlocks=${capBlocks} lateBlocks=${lateBlocks} justifiedPasses=${justifiedPasses}`, stops: 'gridSaveProblem’s per-cell validation disagrees with checkEntry/backdated', severity: 'P1', impact: 'an over-cap or unexplained-late entry could be saved from the grid when the single-entry form would have refused it' } as const
   },
 )
 
