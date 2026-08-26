@@ -21,6 +21,8 @@
  * removed is not a record of anything.
  */
 
+import type { RichDoc } from './richText'
+
 /**
  * What a note is for.
  *
@@ -45,8 +47,7 @@ export interface IssueNote {
   /** `note-12`, minted from the workspace counter — unique within a tenant, not globally. */
   id: string
   issueId: string
-  /** Plain text. Structured prose beats a rich-text editor nobody asked for yet. */
-  body: string
+  body: RichDoc
   noteType: NoteType
   /** Pinned notes sort above the rest, whatever their age. */
   pinned: boolean

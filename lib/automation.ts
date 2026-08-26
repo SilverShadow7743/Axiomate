@@ -1,6 +1,7 @@
 import type { DomainEvent, EventType } from './events'
 import type { Channel } from './notifications'
 import type { Action, IssueRecord, WorkspaceState } from './workspace'
+import { wrapPlainText } from './richText'
 
 /**
  * Event → condition → action, and the one design decision that makes it safe.
@@ -307,7 +308,7 @@ export function planActions(
             actions.push({
               t: 'addNote',
               issueId: event.subjectId,
-              body: fill(step.text ?? '', event, issue),
+              body: wrapPlainText(fill(step.text ?? '', event, issue)),
               noteType: 'General Update',
               pinned: false,
               now,

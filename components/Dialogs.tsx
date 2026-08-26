@@ -17,6 +17,7 @@ import {
 import { formatIso } from '@/lib/dates'
 import { kindLabel, liveDisciplines, liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
+import { richTextToPlainText } from '@/lib/richText'
 
 export type DialogState =
   | { t: 'add'; parentId: string; kind: CreatableKind }
@@ -350,7 +351,10 @@ function EditForm({
     if (issue)
       return {
         subject: issue.subject,
-        description: issue.description,
+        // Flattened for this plain <textarea> — the form's own `description` field is a
+        // string throughout; wrapped back to a RichDoc at the dispatch boundary
+        // (submitDialog's updateIssue branch).
+        description: richTextToPlainText(issue.description),
         status: issue.status,
         severity: issue.severity,
         owner: issue.owner,

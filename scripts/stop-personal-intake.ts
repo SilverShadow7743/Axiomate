@@ -60,6 +60,7 @@ import { persistActions } from '../lib/db/persist'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'
+import { richTextToPlainText, wrapPlainText } from '../lib/richText'
 
 const APPLY = process.argv.includes('--apply')
 const TENANT = (process.env.AXIOMATE_TENANT ?? 'axiocloud') as TenantId
@@ -121,9 +122,10 @@ async function main() {
       console.log(`    ${id}  not found — skipped.`)
       continue
     }
-    const already = issue.description?.startsWith('[Redacted')
+    const descriptionText = richTextToPlainText(issue.description)
+    const already = descriptionText.startsWith('[Redacted')
     console.log(
-      `    ${id}  ${issue.deletedAt ? 'archived' : 'LIVE'}  ${issue.description?.length ?? 0} chars  ${already ? '(already redacted)' : ''}`,
+      `    ${id}  ${issue.deletedAt ? 'archived' : 'LIVE'}  ${descriptionText.length} chars  ${already ? '(already redacted)' : ''}`,
     )
     console.log(`      ${issue.subject.slice(0, 78)}`)
     if (already) continue
@@ -131,7 +133,7 @@ async function main() {
     actions.push({
       t: 'updateIssue',
       id,
-      patch: { description: REDACTED },
+      patch: { description: wrapPlainText(REDACTED) },
       reason: 'Bank one-time passcode removed. The record that the message arrived is kept; the code is not.',
       now: NOW,
     } as Action)
@@ -163,7 +165,7 @@ async function main() {
   console.log(`  Enabled intake mailboxes now: ${live.length ? live.map((b) => b.address).join(', ') : 'none'}`)
   for (const id of PASSCODE_ISSUES) {
     const i = after.issues[id]
-    if (i) console.log(`  ${id}: ${i.deletedAt ? 'archived' : 'live'}, ${i.description?.length ?? 0} chars`)
+    if (i) console.log(`  ${id}: ${i.deletedAt ? 'archived' : 'live'}, ${richTextToPlainText(i.description).length} chars`)
   }
   console.log('\n  Client mail will stop arriving until a mailbox is configured that is not an')
   console.log('  individual’s. That is the trade, and it is deliberate.')

@@ -5,6 +5,7 @@ import type { Actor } from '@/lib/actor'
 import { canAddNote, canEditNote } from '@/lib/permissions'
 import { NOTE_TYPES, DEFAULT_NOTE_TYPE, notesFor, wasEdited, type IssueNote, type NoteType } from '@/lib/notes'
 import { mentionSegments } from '@/lib/mentions'
+import { richTextToPlainText, wrapPlainText, type RichDoc } from '@/lib/richText'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -27,7 +28,7 @@ export default function NotesTab({
   issueId: string
   state: WorkspaceState
   actor: Actor
-  onAdd: (body: string, noteType: NoteType, pinned: boolean, clientVisible: boolean) => void
+  onAdd: (body: RichDoc, noteType: NoteType, pinned: boolean, clientVisible: boolean) => void
   onUpdate: (
     id: string,
     patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned' | 'clientVisible'>>,
@@ -54,7 +55,7 @@ export default function NotesTab({
 
   const submit = () => {
     if (!draft.trim()) return
-    onAdd(draft, draftType, draftPinned, draftVisible)
+    onAdd(wrapPlainText(draft), draftType, draftPinned, draftVisible)
     setDraft('')
     setDraftType(DEFAULT_NOTE_TYPE)
     setDraftPinned(false)
@@ -165,7 +166,10 @@ export default function NotesTab({
                           className="btn ghost"
                           onClick={() => {
                             setEditingId(n.id)
-                            setEditBody(n.body)
+                            // Flattened to plain text for this plain <textarea> — lossy for a
+                            // note with real structure (none exist yet; Step 5's real editor
+                            // replaces this whole edit path before that changes).
+                            setEditBody(richTextToPlainText(n.body))
                           }}
                         >
                           Edit
@@ -241,9 +245,9 @@ export default function NotesTab({
                       </button>
                       <button
                         className="btn primary"
-                        disabled={!editBody.trim() || editBody === n.body}
+                        disabled={!editBody.trim() || editBody.trim() === richTextToPlainText(n.body)}
                         onClick={() => {
-                          onUpdate(n.id, { body: editBody })
+                          onUpdate(n.id, { body: wrapPlainText(editBody) })
                           setEditingId(null)
                         }}
                       >
@@ -257,7 +261,7 @@ export default function NotesTab({
                   // render through the same parser the mint reads, so the highlight and the
                   // ping cannot disagree.
                   <p className="note-body">
-                    {mentionSegments(n.body, Object.values(state.model.people)).map((seg, i) =>
+                    {mentionSegments(richTextToPlainText(n.body), Object.values(state.model.people)).map((seg, i) =>
                       seg.kind === 'mention' ? (
                         <span key={i} className="note-mention" title="They were told">
                           {seg.text}

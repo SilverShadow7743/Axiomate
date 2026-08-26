@@ -392,7 +392,7 @@ scenario(
   'The reply is recorded against the issue, the issue stops looking stale, and the trail shows who said what and when.',
   () => {
     const s = ok(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: 'Client confirms the batch is still failing.',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('Client confirms the batch is still failing.'),
       noteType: 'Client Communication', pinned: false, now: NOW,
     } as Action)
     const note = Object.values(s.notes)[0]
@@ -1596,7 +1596,7 @@ scenario(
         reason: 'Not a defect.',
       } as Action),
       schedule: attempt(who, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action),
-      note: attempt(who, { t: 'addNote', issueId: 'OAPIL-1', body: 'Spoke to the client.', noteType: 'General Update', pinned: false, now: NOW } as Action),
+      note: attempt(who, { t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('Spoke to the client.'), noteType: 'General Update', pinned: false, now: NOW } as Action),
       estimate: attempt(who, { t: 'setEstimate', issueId: 'OAPIL-1', patch: { waitDays: 2 }, now: NOW } as Action),
       // Reopening a closed record, which is a closure decision in the other direction.
       reopen: (() => {
@@ -1736,7 +1736,7 @@ scenario(
   "The edit is refused, because a note is that person's account — unless they hold the supervisor grant.",
   () => {
     const withNote = ok(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: 'Client says the batch still fails.',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('Client says the batch still fails.'),
       noteType: 'Client Communication', pinned: false, now: NOW,
     } as Action)
     const noteId = Object.values(withNote.notes)[0].id
@@ -1753,7 +1753,7 @@ scenario(
     } as Action)
 
     const refused = apply(staffed, {
-      t: 'updateNote', id: noteId, patch: { body: 'Client says it is fine now.' }, now: NOW,
+      t: 'updateNote', id: noteId, patch: { body: wrapPlainText('Client says it is fine now.') }, now: NOW,
     } as Action, other)
 
     const withOverride = ok(staffed, {
@@ -1762,7 +1762,7 @@ scenario(
       now: NOW,
     } as Action)
     const allowed = apply(withOverride, {
-      t: 'updateNote', id: noteId, patch: { body: 'Corrected: the client meant the nightly job.' }, now: NOW,
+      t: 'updateNote', id: noteId, patch: { body: wrapPlainText('Corrected: the client meant the nightly job.') }, now: NOW,
     } as Action, other)
     const keptAuthor = allowed.state.notes[noteId]?.createdBy
     const recordedEditor = allowed.state.notes[noteId]?.updatedBy
@@ -2611,7 +2611,7 @@ scenario(
      * unload, and that beacon can carry a slice a live request is already carrying.
      */
     const note = (body: string, key: string) => ({
-      t: 'addNote', issueId: 'OAPIL-1', body, noteType: 'General Update',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText(body), noteType: 'General Update',
       pinned: false, now: NOW, key,
     } as SubmittedAction)
 
@@ -2621,7 +2621,7 @@ scenario(
     const d = note('Note D', 'dddddddd-4444-4444-8444-dddddddddddd')
 
     const countNotes = (st: WorkspaceState) =>
-      Object.values(st.notes).filter((n) => n.body.startsWith('Note ')).length
+      Object.values(st.notes).filter((n) => richTextToPlainText(n.body).startsWith('Note ')).length
 
     const applyAll = (st: WorkspaceState, items: { action: Action }[]) =>
       items.reduce((acc, i) => ok(acc, i.action), st)
@@ -4741,7 +4741,7 @@ scenario(
 
     const beforeSend = alreadySent(s2, 'OAPIL-1', body) === null
 
-    const s3 = ok(s2, { t: 'addNote', issueId: 'OAPIL-1', body, noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
+    const s3 = ok(s2, { t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText(body), noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
     const afterSend = alreadySent(s3, 'OAPIL-1', body) !== null
 
     /* Different text is a different message, not a replay. */
@@ -4749,12 +4749,12 @@ scenario(
 
     /* A note of the same words but a different type (someone pasted the sent text into a
        manual note) must not be mistaken for the record the send itself made. */
-    const s4 = ok(s3, { t: 'addNote', issueId: 'OAPIL-2', body, noteType: 'General Update', pinned: false, now: NOW } as Action)
+    const s4 = ok(s3, { t: 'addNote', issueId: 'OAPIL-2', body: wrapPlainText(body), noteType: 'General Update', pinned: false, now: NOW } as Action)
     const wrongIssueUntouched = alreadySent(s4, 'OAPIL-2', body) === null
 
     /* A withdrawn note is not "already sent" — deleting the record must not silently and
        permanently block a legitimate resend of the same words. */
-    const note3 = Object.values(s3.notes).find((n) => n.issueId === 'OAPIL-1' && n.body === body)!
+    const note3 = Object.values(s3.notes).find((n) => n.issueId === 'OAPIL-1' && richTextToPlainText(n.body) === body)!
     const s5 = ok(s3, { t: 'removeNote', id: note3.id, now: NOW } as Action)
     const deletedNotBlocking = alreadySent(s5, 'OAPIL-1', body) === null
 
@@ -4884,7 +4884,7 @@ scenario(
     /* Tarun completes it: approved, and the pinned Decision note lands on the record. */
     s1x = apply(s1x, { t: 'decideDocumentReview', reviewId: review().id, verdict: 'approved', note: '', now: NOW } as Action, tarun).state
     const approved = describeReview(review(), s1x.documents[docId]) === 'approved'
-    const noted = Object.values(s1x.notes).some((n) => n.issueId === 'OAPIL-1' && n.pinned && /APPROVED/.test(n.body) && n.noteType === 'Decision')
+    const noted = Object.values(s1x.notes).some((n) => n.issueId === 'OAPIL-1' && n.pinned && /APPROVED/.test(richTextToPlainText(n.body)) && n.noteType === 'Decision')
 
     /* A new version: the chain grows, and the approval visibly stays with the old bytes. */
     const s2 = apply(s1x, {
@@ -5016,10 +5016,10 @@ scenario(
     const flipped = marked.issues[internalIssue.id].clientVisible === true
 
     /* Notes: default internal; the explicit flag rides addNote; updateNote flips it. */
-    let s1 = ok(marked, { t: 'addNote', issueId: internalIssue.id, body: 'internal working note', noteType: 'Investigation', pinned: false, now: NOW } as Action)
-    s1 = ok(s1, { t: 'addNote', issueId: internalIssue.id, body: 'what we told the client', noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
-    const visNote = Object.values(s1.notes).find((n) => n.body === 'what we told the client')!
-    const intNote = Object.values(s1.notes).find((n) => n.body === 'internal working note')!
+    let s1 = ok(marked, { t: 'addNote', issueId: internalIssue.id, body: wrapPlainText('internal working note'), noteType: 'Investigation', pinned: false, now: NOW } as Action)
+    s1 = ok(s1, { t: 'addNote', issueId: internalIssue.id, body: wrapPlainText('what we told the client'), noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action)
+    const visNote = Object.values(s1.notes).find((n) => richTextToPlainText(n.body) === 'what we told the client')!
+    const intNote = Object.values(s1.notes).find((n) => richTextToPlainText(n.body) === 'internal working note')!
     const noteDefaults = intNote.clientVisible !== true && visNote.clientVisible === true
 
     /* A document flagged after upload, through the one new arm. */
@@ -5034,8 +5034,8 @@ scenario(
     const keptIssue = Boolean(view.issues[internalIssue.id])
     const droppedInternalIssues = Object.values(view.issues).every((i) => i.clientVisible)
     const ancestors = view.issues[internalIssue.id] ? Boolean(view.nodes[view.issues[internalIssue.id].parentId]) : false
-    const notesRight = Boolean(Object.values(view.notes).find((n) => n.body === 'what we told the client')) &&
-      !Object.values(view.notes).some((n) => n.body === 'internal working note')
+    const notesRight = Boolean(Object.values(view.notes).find((n) => richTextToPlainText(n.body) === 'what we told the client')) &&
+      !Object.values(view.notes).some((n) => richTextToPlainText(n.body) === 'internal working note')
     const docsRight = Boolean(view.documents[doc.id])
     const machineryEmpty =
       Object.keys(view.rates).length === 0 && Object.keys(view.timeEntries).length === 0 &&
@@ -5617,7 +5617,7 @@ scenario(
       Object.values(st.notifications).filter((n) => n.ruleId === 'mention')
 
     const once = ok(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya please look at this \u2014 and again @Priya.',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('@Priya please look at this \u2014 and again @Priya.'),
       noteType: 'Investigation', pinned: false, now: NOW,
     } as Action)
     const mintedOnce = mentionsOf(once)
@@ -5626,19 +5626,19 @@ scenario(
 
     const priya: Actor = { id: 'mn-priya', name: 'Priya' }
     const selfNote = apply(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya \u2014 note to self.',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('@Priya \u2014 note to self.'),
       noteType: 'Investigation', pinned: false, now: NOW,
     } as Action, priya).state
     const authorExcluded = mentionsOf(selfNote).length === 0
 
     /* The edit pings only the newly named. */
     let ed = ok(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: 'plain start', noteType: 'Investigation', pinned: false, now: NOW,
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('plain start'), noteType: 'Investigation', pinned: false, now: NOW,
     } as Action)
-    const noteId = Object.values(ed.notes).find((n) => n.body === 'plain start')!.id
-    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: '@Priya now involved' }, now: NOW } as Action)
+    const noteId = Object.values(ed.notes).find((n) => richTextToPlainText(n.body) === 'plain start')!.id
+    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: wrapPlainText('@Priya now involved') }, now: NOW } as Action)
     const afterFirst = mentionsOf(ed).length
-    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: '@Priya now involved, and @Sam too' }, now: NOW } as Action)
+    ed = ok(ed, { t: 'updateNote', id: noteId, patch: { body: wrapPlainText('@Priya now involved, and @Sam too') }, now: NOW } as Action)
     const afterSecond = mentionsOf(ed)
     const editRight = afterFirst === 1 && afterSecond.length === 2 &&
       afterSecond.filter((n) => n.toId === priyaId).length === 1
@@ -5648,7 +5648,7 @@ scenario(
       t: 'setNotificationPref', personId: priyaId, kind: 'mention', mode: 'mute', now: NOW,
     } as Action)
     const quiet = ok(muted, {
-      t: 'addNote', issueId: 'OAPIL-1', body: '@Priya \u2014 you will not be pinged.',
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('@Priya \u2014 you will not be pinged.'),
       noteType: 'Investigation', pinned: false, now: NOW,
     } as Action)
     const muteRight = mentionsOf(quiet).length === 0 &&
@@ -5656,7 +5656,7 @@ scenario(
 
     /* The default path: no @, nothing minted. */
     const plain = ok(BASE, {
-      t: 'addNote', issueId: 'OAPIL-1', body: 'no names here', noteType: 'Investigation', pinned: false, now: NOW,
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('no names here'), noteType: 'Investigation', pinned: false, now: NOW,
     } as Action)
     const defaultRight = mentionsOf(plain).length === 0
 
@@ -6012,8 +6012,8 @@ scenario(
 
     const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
     st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
-    st = ok(st, { t: 'addNote', issueId: alphaIssue.id, body: 'alpha note', noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
-    st = ok(st, { t: 'addNote', issueId: betaIssue.id, body: 'beta note', noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
+    st = ok(st, { t: 'addNote', issueId: alphaIssue.id, body: wrapPlainText('alpha note'), noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
+    st = ok(st, { t: 'addNote', issueId: betaIssue.id, body: wrapPlainText('beta note'), noteType: 'Internal Discussion', pinned: false, now: NOW } as Action)
     st = ok(st, { t: 'addProjectMember', projectId: alphaId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
 
     const view = projectView(st, memberProjectIdsFor(st, priyaId))
@@ -6670,7 +6670,7 @@ scenario(
  */
 function tvDetail(over: Partial<IssueDetail>): IssueDetail {
   return {
-    id: over.id ?? 'X', client: 'OAPIL', module: 'Finance', subject: 'x', description: '',
+    id: over.id ?? 'X', client: 'OAPIL', module: 'Finance', subject: 'x', description: emptyRichDoc(),
     type: 'Defect', sourceType: '', discipline: '', severity: 'Medium', status: 'Open',
     owner: 'Nobody', raisedBy: 'Client', accountable: 'OAPIL', raised: '2026-01-01',
     lastActivity: '2026-01-01', age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',
@@ -6836,7 +6836,7 @@ function itMail(over: Partial<InboundMail> & { id: string }): InboundMail {
 function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string }): IssueRecord {
   return {
     parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
-    subject: 'x', description: '', type: 'Defect', sourceType: '', discipline: '',
+    subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
     accountable: 'OAPIL', raised: TODAY, actualEnd: null, statusSince: null,
     pausedDays: 0, age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',

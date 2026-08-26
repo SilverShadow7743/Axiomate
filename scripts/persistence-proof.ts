@@ -46,6 +46,7 @@ import { timelineOf, valueAt, stamp } from '../lib/versioning'
 import { redactPersonSkill } from '../lib/skills'
 import { personSkillToRow, documentToRow } from '../lib/db/map'
 import type { TenantId } from '../lib/tenant'
+import { richTextToPlainText, wrapPlainText } from '../lib/richText'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const URL = process.env.DATABASE_URL
@@ -286,7 +287,7 @@ async function main() {
   const batch: Action[] = [
     { t: 'setDates', id: 'PROOF-1', start: '2026-08-01', end: '2026-08-10', now: NOW, reason: 'Client moved UAT — “quotes” and a\nnewline' },
     { t: 'updateIssue', id: 'PROOF-1', patch: { riskLikelihood: 4, riskImpact: 5, decisionOutcome: 'Interim mapping shipped.' }, now: NOW },
-    { t: 'addNote', issueId: 'PROOF-1', body: 'Note with “smart quotes”, an em—dash and a\nnewline.', noteType: 'Client Communication', pinned: true, now: NOW },
+    { t: 'addNote', issueId: 'PROOF-1', body: wrapPlainText('Note with “smart quotes”, an em—dash and a\nnewline.'), noteType: 'Client Communication', pinned: true, now: NOW },
     { t: 'addEvidence', issueId: 'PROOF-1', kind: 'document', name: 'signoff.pdf', purpose: 'Client confirmation', url: null, mimeType: 'application/pdf', sizeBytes: 0, note: '', now: NOW },
     { t: 'addTime', issueId: 'PROOF-1', person: 'Priya', date: '2026-08-04', hours: 6.25, activity: 'Investigation', billable: false, note: 'Quarter hours', justification: 'Proof entry — dated fixture, recorded late by design.', now: NOW },
     { t: 'setEstimate', issueId: 'PROOF-1', patch: { scores: { business: 3, technical: 4, integration: 2, testing: 3, data: 1 }, waitDays: 2, assumptions: 'Assumes the client answers' }, now: NOW },
@@ -309,7 +310,7 @@ async function main() {
   const note = Object.values(state.notes)[0]
   check(
     'a note keeps its text exactly, quotes and newline included',
-    note?.body === 'Note with “smart quotes”, an em—dash and a\nnewline.' && note.pinned === true,
+    (note ? richTextToPlainText(note.body) : null) === 'Note with “smart quotes”, an em—dash and a\nnewline.' && note.pinned === true,
     note ? `pinned=${note.pinned}` : 'no note',
   )
 
@@ -691,8 +692,8 @@ async function main() {
     const issueId = Object.values(st0.issues)[0]!.id
     await persistActions(TENANT, A, [
       { t: 'updateIssue', id: issueId, patch: { clientVisible: true }, now: NOW } as Action,
-      { t: 'addNote', issueId, body: 'INTERNAL-ONLY-MARKER working note', noteType: 'Investigation', pinned: false, now: NOW } as Action,
-      { t: 'addNote', issueId, body: 'CLIENT-SAFE-MARKER reply', noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action,
+      { t: 'addNote', issueId, body: wrapPlainText('INTERNAL-ONLY-MARKER working note'), noteType: 'Investigation', pinned: false, now: NOW } as Action,
+      { t: 'addNote', issueId, body: wrapPlainText('CLIENT-SAFE-MARKER reply'), noteType: 'Client Communication', pinned: true, clientVisible: true, now: NOW } as Action,
     ])
     const st = (await loadWorkspace(TENANT)).state
     const proofClient = Object.values(st.nodes).find((n) => n.kind === 'client' && !n.deletedAt)!.id
@@ -792,7 +793,7 @@ async function main() {
     )
     check(
       'and completing the review left its pinned Decision note on the record',
-      Object.values(backState.notes).some((n) => n.pinned && n.noteType === 'Decision' && /Cutover plan/.test(n.body)),
+      Object.values(backState.notes).some((n) => n.pinned && n.noteType === 'Decision' && /Cutover plan/.test(richTextToPlainText(n.body))),
       'looked for a pinned Decision note naming the document',
     )
   }
@@ -1029,8 +1030,8 @@ async function main() {
   /* ---------------- a refused batch leaves nothing behind ---------------- */
   const before = await loadWorkspace(TENANT)
   const half = await persistActions(TENANT, A, [
-    { t: 'addNote', issueId: 'PROOF-2', body: 'This one is fine.', noteType: 'General Update', pinned: false, now: NOW },
-    { t: 'addNote', issueId: 'NOPE-9', body: 'This one is not.', noteType: 'General Update', pinned: false, now: NOW },
+    { t: 'addNote', issueId: 'PROOF-2', body: wrapPlainText('This one is fine.'), noteType: 'General Update', pinned: false, now: NOW },
+    { t: 'addNote', issueId: 'NOPE-9', body: wrapPlainText('This one is not.'), noteType: 'General Update', pinned: false, now: NOW },
   ])
   const after = await loadWorkspace(TENANT)
   /**
@@ -1064,7 +1065,7 @@ async function main() {
    */
   {
     const keyed = (body: string, key: string) =>
-      ({ t: 'addNote', issueId: 'PROOF-2', body, noteType: 'General Update', pinned: false, now: NOW, key }) as Action & { key: string }
+      ({ t: 'addNote', issueId: 'PROOF-2', body: wrapPlainText(body), noteType: 'General Update', pinned: false, now: NOW, key }) as Action & { key: string }
 
     const batch = [
       keyed('Delivered once.', 'proof-key-aaaaaaaa-1111'),
@@ -1097,7 +1098,7 @@ async function main() {
     // this check used to accept proved nothing, because the actions carried no keys at all.
     const partial = await persistActions(TENANT, A, [
       keyed('Valid, and keyed.', 'proof-key-cccccccc-3333'),
-      { t: 'addNote', issueId: 'NOPE-9', body: 'Not valid.', noteType: 'General Update', pinned: false, now: NOW, key: 'proof-key-dddddddd-4444' } as Action & { key: string },
+      { t: 'addNote', issueId: 'NOPE-9', body: wrapPlainText('Not valid.'), noteType: 'General Update', pinned: false, now: NOW, key: 'proof-key-dddddddd-4444' } as Action & { key: string },
     ])
     check(
       'a refused keyed batch names the keys that did commit',
@@ -1143,7 +1144,7 @@ async function main() {
     threadIssueId = created.createdId ?? null
     if (threadIssueId) {
       await persistActions(TENANT, A, [
-        { t: 'addNote', issueId: threadIssueId, body: 'first message', noteType: 'Client Communication', pinned: true, now: NOW },
+        { t: 'addNote', issueId: threadIssueId, body: wrapPlainText('first message'), noteType: 'Client Communication', pinned: true, now: NOW },
         { t: 'recordInboundMail', mailbox: firstMsg.to, from: firstMsg.from, subject: firstMsg.subject, body: firstMsg.body, messageId: firstMsg.messageId, receivedAt: firstMsg.receivedAt, issueId: threadIssueId, refusalReason: null, conversationId: firstMsg.conversationId, now: NOW } as Action,
       ])
     }
@@ -1160,7 +1161,7 @@ async function main() {
   )
   if (secondMatch) {
     await persistActions(TENANT, A, [
-      { t: 'addNote', issueId: secondMatch, body: 'a reply', noteType: 'Client Communication', pinned: true, now: NOW },
+      { t: 'addNote', issueId: secondMatch, body: wrapPlainText('a reply'), noteType: 'Client Communication', pinned: true, now: NOW },
       { t: 'recordInboundMail', mailbox: secondMsg.to, from: secondMsg.from, subject: secondMsg.subject, body: secondMsg.body, messageId: secondMsg.messageId, receivedAt: secondMsg.receivedAt, issueId: secondMatch, refusalReason: null, conversationId: secondMsg.conversationId, now: NOW } as Action,
     ])
   }

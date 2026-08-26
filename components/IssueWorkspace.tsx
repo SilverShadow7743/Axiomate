@@ -6,6 +6,7 @@ import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel 
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
+import { wrapPlainText } from '@/lib/richText'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import MailLog from './MailLog'
@@ -951,7 +952,17 @@ export default function IssueWorkspace({
       if (p.kind === 'update') {
         const actions: Action[] = []
         if (Object.keys(p.patch).length) {
-          actions.push({ t: 'updateIssue', id: p.id, patch: p.patch as Partial<IssueRecord>, now })
+          // p.patch is Record<string, string> (the assistant only ever proposes plain text) —
+          // wrap description explicitly rather than casting the whole object, so a plain string
+          // can never reach the RichDoc column silently. The `as` on the rest is unavoidable
+          // (the assistant's patch is a loose string bag validated against IssueRecord's other
+          // fields upstream in lib/chat.ts, not re-derivable here), but description gets no cast.
+          const { description, ...rest } = p.patch
+          const patch: Partial<IssueRecord> = {
+            ...(rest as Partial<IssueRecord>),
+            ...(description !== undefined ? { description: wrapPlainText(description) } : {}),
+          }
+          actions.push({ t: 'updateIssue', id: p.id, patch, now })
         }
         if (p.dates) {
           actions.push({ t: 'setDates', id: p.id, start: p.dates.start, end: p.dates.end, now, reason: why })
@@ -1391,7 +1402,7 @@ export default function IssueWorkspace({
             id,
             patch: {
               subject: p.subject,
-              description: p.description,
+              description: wrapPlainText(p.description),
               status: p.status as never,
               severity: p.severity as never,
               owner: p.owner,

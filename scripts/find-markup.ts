@@ -24,6 +24,7 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { htmlToText } from '../lib/intake'
+import { richTextToPlainText } from '../lib/richText'
 import type { TenantId } from '../lib/tenant'
 
 const TENANT = (process.env.AXIOMATE_TENANT ?? 'axiocloud') as TenantId
@@ -69,7 +70,7 @@ async function main() {
 
   for (const i of Object.values(state.issues)) {
     for (const [field, value] of [
-      ['issue.description', i.description],
+      ['issue.description', richTextToPlainText(i.description)],
       ['issue.subject', i.subject],
       ['issue.nextAction', i.nextAction],
       ['issue.evidence', i.evidence],
@@ -79,7 +80,7 @@ async function main() {
     }
   }
   for (const n of Object.values(state.notes)) {
-    const hit = inspect('note.body', `${n.issueId}/${n.id}`, n.body)
+    const hit = inspect('note.body', `${n.issueId}/${n.id}`, richTextToPlainText(n.body))
     if (hit) hits.push(hit)
   }
   for (const s of Object.values(state.sows)) {

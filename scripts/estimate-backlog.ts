@@ -47,6 +47,7 @@ import { deriveEffort, emptyEstimate } from '../lib/estimation'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import { ESTIMATION_ACTOR, type Actor } from '../lib/actor'
+import { richTextToPlainText } from '../lib/richText'
 
 const argv = process.argv.slice(2)
 const APPLY = argv.includes('--apply')
@@ -105,10 +106,11 @@ async function main() {
   for (const issue of candidates) {
     if (actions.length >= LIMIT) break
 
+    const descriptionText = richTextToPlainText(issue.description)
     const proposal = proposeEstimate(
       {
         subject: issue.subject,
-        description: issue.description,
+        description: descriptionText,
         module: issue.module,
         type: issue.type,
         severity: issue.severity,
@@ -117,11 +119,11 @@ async function main() {
     )
 
     if (proposal.outcome === 'out-of-domain') {
-      outOfDomain.push(`${issue.id}  ${issue.module} — ${issue.description.slice(0, 56)}`)
+      outOfDomain.push(`${issue.id}  ${issue.module} — ${descriptionText.slice(0, 56)}`)
       continue
     }
     if (!proposal.scored) {
-      unreadable.push(`${issue.id}  ${issue.module} — ${issue.description.slice(0, 60)}`)
+      unreadable.push(`${issue.id}  ${issue.module} — ${descriptionText.slice(0, 60)}`)
       continue
     }
 
@@ -140,7 +142,7 @@ async function main() {
       size,
       hours: effort.effortHours != null ? `${effort.effortHours}h` : '—',
       rules: proposal.summary,
-      subject: issue.description.slice(0, 46),
+      subject: descriptionText.slice(0, 46),
     })
 
     actions.push({
@@ -155,7 +157,7 @@ async function main() {
     } as Action)
 
     if (EXPLAIN) {
-      console.log(`\n${issue.id}  ${issue.module} — ${issue.description.slice(0, 70)}`)
+      console.log(`\n${issue.id}  ${issue.module} — ${descriptionText.slice(0, 70)}`)
       const s = proposal.scores
       console.log(`  business ${s.business}  technical ${s.technical}  integration ${s.integration}  testing ${s.testing}  data ${s.data}   -> ${size} ${effort.effortHours ?? '—'}h`)
       for (const b of proposal.basis) console.log(`    ${b}`)

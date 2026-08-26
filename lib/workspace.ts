@@ -20,6 +20,8 @@
 
 import type { Blueprint } from './blueprint'
 import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
+import type { RichDoc } from './richText'
+import { isEmptyRichDoc, richDocsEqual, richTextToPlainText, wrapPlainText } from './richText'
 import type {
   AccountableParty,
   ActivityPhase,
@@ -226,7 +228,7 @@ export interface IssueRecord {
   client: string
   module: string
   subject: string
-  description: string
+  description: RichDoc
   type: string
   /**
    * The classification the source log recorded, when `type` has been mapped onto a different
@@ -640,6 +642,7 @@ export function initWorkspace(
     issues[i.id] = {
       ...i,
       parentId: mId,
+      description: wrapPlainText(i.description),
       sourceType: i.sourceType ?? '',
       // Empty, not guessed. The imported log has no discipline column and never had one.
       discipline: i.discipline ?? '',
@@ -909,7 +912,7 @@ export type Action =
     }
   | { t: 'updateEvidence'; id: string; patch: Partial<EvidenceItem>; now: string }
   /* ---- NOTES ---- */
-  | { t: 'addNote'; issueId: string; body: string; noteType: NoteType; pinned: boolean; clientVisible?: boolean; now: string }
+  | { t: 'addNote'; issueId: string; body: RichDoc; noteType: NoteType; pinned: boolean; clientVisible?: boolean; now: string }
   | {
       t: 'updateNote'
       id: string
@@ -1832,7 +1835,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           client: client || 'Unassigned',
           module: mod || 'Unclassified',
           subject: name,
-          description: a.draft.description || '',
+          description: wrapPlainText(a.draft.description || ''),
           // Falls back to the first configured type rather than a literal. `'Defect'` was
           // hardcoded here, so a workspace that had archived Defect — or never had one —
           // would still mint records classified as it, and no filter would show them.
@@ -3217,8 +3220,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'addNote': {
       const issue = state.issues[a.issueId]
       if (!issue) return { state, error: 'Issue not found.' }
-      const body = a.body.trim()
-      if (!body) return { state, error: 'A note needs something in it.' }
+      const body = a.body
+      if (isEmptyRichDoc(body)) return { state, error: 'A note needs something in it.' }
+      const bodyText = richTextToPlainText(body)
 
       const seq = state.seq + 1
       const id = `note-${seq}`
@@ -3250,11 +3254,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         to: note.noteType,
         at: a.now,
         by,
-        reason: body.length > 120 ? `${body.slice(0, 117)}…` : body,
+        reason: bodyText.length > 120 ? `${bodyText.slice(0, 117)}…` : bodyText,
       })
       {
+        // mentionsIn on the flattened text, not the structural mentionedPeopleIn: nothing
+        // produces a real `mention` node yet (the interim <textarea> only ever wraps plain
+        // text), so mentionedPeopleIn would silently find nobody. richTextToPlainText(body) on
+        // a wrapPlainText'd doc is exactly the trimmed original string, so this is byte-
+        // identical to what shipped before body became a RichDoc. Revisit once Step 5's editor
+        // produces real mention nodes — mentionedPeopleIn stays defined (RC4) for that.
         const selfId = directoryPersonFor(state.model, actor)?.id ?? null
-        const named = mentionsIn(body, Object.values(state.model.people))
+        const named = mentionsIn(bodyText, Object.values(state.model.people))
           .filter((mn) => mn.id !== selfId)
           .sort((x, y) => x.id.localeCompare(y.id))
         for (const mn of named) {
@@ -3285,7 +3295,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
               toId: mn.id,
               channel: 'in-app',
               subject: `You were mentioned on ${a.issueId}`,
-              body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+              body: `${by}: “${bodyText.length > 140 ? `${bodyText.slice(0, 137)}…` : bodyText}”`,
               aboutId: a.issueId,
               ruleId: 'mention',
               createdAt: a.now,
@@ -3306,7 +3316,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
                 toId: mn.id,
                 channel: 'email',
                 subject: `You were mentioned on ${a.issueId}`,
-                body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                body: `${by}: “${bodyText.length > 140 ? `${bodyText.slice(0, 137)}…` : bodyText}”`,
                 aboutId: a.issueId,
                 ruleId: 'mention',
                 createdAt: a.now,
@@ -3353,8 +3363,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         const mayEdit = canEditNote(state.model, actor, note)
         if (!mayEdit.allowed) return { state, error: mayEdit.reason ?? 'Not permitted.' }
       }
-      const body = a.patch.body !== undefined ? a.patch.body.trim() : note.body
-      if (!body) return { state, error: 'A note needs something in it.' }
+      const body = a.patch.body !== undefined ? a.patch.body : note.body
+      if (isEmptyRichDoc(body)) return { state, error: 'A note needs something in it.' }
+      const bodyText = richTextToPlainText(body)
 
       const next: IssueNote = {
         ...note,
@@ -3363,8 +3374,8 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         updatedBy: by,
         updatedAt: a.now,
       }
-      const changed = (Object.keys(a.patch) as (keyof IssueNote)[]).filter(
-        (k) => note[k] !== next[k],
+      const changed = (Object.keys(a.patch) as (keyof IssueNote)[]).filter((k) =>
+        k === 'body' ? !richDocsEqual(note.body, next.body) : note[k] !== next[k],
       )
       if (!changed.length) return { state, message: 'Nothing changed.' }
 
@@ -3381,17 +3392,19 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           let audit = log(actor, state, {
             rowId: note.issueId,
             field: 'note',
-            from: String(note[changed[0]] ?? ''),
-            to: String(next[changed[0]] ?? ''),
+            from: changed[0] === 'body' ? richTextToPlainText(note.body) : String(note[changed[0]] ?? ''),
+            to: changed[0] === 'body' ? bodyText : String(next[changed[0]] ?? ''),
             at: a.now,
             by,
             reason: `Note edited (${changed.join(', ')}).`,
           })
           if (changed.includes('body')) {
+            // Same reasoning as addNote: string-based mentionsIn on the flattened text until
+            // Step 5's editor produces real mention nodes for mentionedPeopleIn to find.
             const selfId = directoryPersonFor(state.model, actor)?.id ?? null
             const people = Object.values(state.model.people)
-            const before = new Set(mentionsIn(note.body, people).map((mn) => mn.id))
-            const added = mentionsIn(body, people)
+            const before = new Set(mentionsIn(richTextToPlainText(note.body), people).map((mn) => mn.id))
+            const added = mentionsIn(bodyText, people)
               .filter((mn) => !before.has(mn.id) && mn.id !== selfId)
               .sort((x, y) => x.id.localeCompare(y.id))
             for (const mn of added) {
@@ -3422,7 +3435,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
                   toId: mn.id,
                   channel: 'in-app',
                   subject: `You were mentioned on ${note.issueId}`,
-                  body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                  body: `${by}: “${bodyText.length > 140 ? `${bodyText.slice(0, 137)}…` : bodyText}”`,
                   aboutId: note.issueId,
                   ruleId: 'mention',
                   createdAt: a.now,
@@ -3443,7 +3456,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
                     toId: mn.id,
                     channel: 'email',
                     subject: `You were mentioned on ${note.issueId}`,
-                    body: `${by}: “${body.length > 140 ? `${body.slice(0, 137)}…` : body}”`,
+                    body: `${by}: “${bodyText.length > 140 ? `${bodyText.slice(0, 137)}…` : bodyText}”`,
                     aboutId: note.issueId,
                     ruleId: 'mention',
                     createdAt: a.now,
@@ -5055,10 +5068,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           [nid]: {
             id: nid,
             issueId: review.issueId,
-            body: `Review of “${doc?.name ?? review.documentId}” — ${done.outcome === 'approved' ? 'APPROVED' : 'changes requested'}: ${verdicts
+            body: wrapPlainText(`Review of “${doc?.name ?? review.documentId}” — ${done.outcome === 'approved' ? 'APPROVED' : 'changes requested'}: ${verdicts
               .map((v) => `${v.by} (${v.verdict}${v.note ? ` — ${v.note}` : ''})`)
               .join('; ')}.
-Question: ${review.question}`,
+Question: ${review.question}`),
             noteType: 'Decision',
             pinned: true,
             createdBy: by,

@@ -10,6 +10,7 @@ import { daysBetween, formatIso } from '@/lib/dates'
 import { canParent, nameOf, type WorkspaceState } from '@/lib/workspace'
 import { liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
+import { richTextToPlainText } from '@/lib/richText'
 import {
   KIND_ICON,
   KIND_LABEL,
@@ -130,7 +131,9 @@ export default function IssueFocus({
       issue
         ? {
             subject: issue.subject,
-            description: issue.description,
+            // Same plain-<textarea> flattening as Dialogs.tsx's EditForm; wrapped back at the
+            // same submitDialog dispatch boundary.
+            description: richTextToPlainText(issue.description),
             status: issue.status,
             severity: issue.severity,
             owner: issue.owner,

@@ -7,6 +7,7 @@ import { classify, provenanceNote, type InboundMessage, htmlToText, alreadyRecei
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { secretProblem, secretValue } from '@/lib/secrets'
+import { wrapPlainText } from '@/lib/richText'
 
 /**
  * Where work arrives from outside.
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
         {
           t: 'addNote',
           issueId: matched,
-          body: `${provenanceNote(full, draft)}\n\nMessage id: ${full.messageId}`,
+          body: wrapPlainText(`${provenanceNote(full, draft)}\n\nMessage id: ${full.messageId}`),
           noteType: 'Client Communication',
           pinned: true,
           now,
@@ -272,7 +273,7 @@ export async function POST(req: Request) {
       {
         t: 'addNote',
         issueId,
-        body: `${provenanceNote(full, draft)}\n\nMessage id: ${full.messageId}`,
+        body: wrapPlainText(`${provenanceNote(full, draft)}\n\nMessage id: ${full.messageId}`),
         noteType: 'Client Communication',
         pinned: true,
         now,

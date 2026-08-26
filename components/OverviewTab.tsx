@@ -16,6 +16,7 @@ import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { exposure, raidKindOf, RAID_SCALE_MAX } from '@/lib/raid'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
+import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
 
 /**
  * The current state of an issue, and where it is changed.
@@ -53,7 +54,8 @@ export interface IssueDraft {
 function draftOf(i: IssueRecord): IssueDraft {
   return {
     subject: i.subject,
-    description: i.description,
+    // Flattened for the plain <textarea> below; wrapped back to a RichDoc in save()'s patch.
+    description: richTextToPlainText(i.description),
     type: i.type,
     status: i.status,
     severity: i.severity,
@@ -159,6 +161,13 @@ export default function OverviewTab({
     for (const k of Object.keys(base) as (keyof IssueDraft)[]) {
       if (k === 'plannedStart' || k === 'plannedEnd') continue
       if (base[k] !== draft[k]) {
+        // `description` is IssueDraft's one field that isn't a 1:1 string on IssueRecord —
+        // wrapped explicitly here rather than through the generic cast below, so a plain
+        // string can never reach the RichDoc column silently.
+        if (k === 'description') {
+          patch.description = wrapPlainText(draft.description)
+          continue
+        }
         // An emptied outcome is "no outcome recorded", which is null — not the empty string.
         ;(patch as Record<string, unknown>)[k] =
           k === 'decisionOutcome' && draft[k] === '' ? null : draft[k]
@@ -409,7 +418,7 @@ export default function OverviewTab({
             <dt>Subject</dt>
             <dd>{issue.subject}</dd>
             <dt>Description</dt>
-            <dd className="ov-prose">{issue.description || '—'}</dd>
+            <dd className="ov-prose">{richTextToPlainText(issue.description) || '—'}</dd>
             <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
             <dd>
               {issue.client} · {issue.module}

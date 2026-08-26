@@ -7,6 +7,8 @@
  * They are stored in separate structures and never merged.
  */
 
+import type { RichDoc } from './richText'
+
 /* ================================================================== *
  * The tier vocabulary — declared once, derived everywhere
  * ================================================================== */
@@ -280,7 +282,7 @@ export interface IssueDetail {
   client: string
   module: string
   subject: string
-  description: string
+  description: RichDoc
   type: string
   /** What the source log called this, when `type` was mapped onto another taxonomy. */
   sourceType: string

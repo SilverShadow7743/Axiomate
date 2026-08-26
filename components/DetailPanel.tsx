@@ -34,6 +34,7 @@ import type { Actor } from '@/lib/actor'
 import type { Milestone } from '@/lib/milestone'
 import type { ScopeItem } from '@/lib/scope'
 import type { IssueNote, NoteType } from '@/lib/notes'
+import type { RichDoc } from '@/lib/richText'
 import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
 import type { EngagementDetail } from '@/lib/engagement'
@@ -126,7 +127,7 @@ interface Props {
   ) => boolean
   onAddNote: (
     issueId: string,
-    body: string,
+    body: RichDoc,
     noteType: NoteType,
     pinned: boolean,
     clientVisible: boolean,

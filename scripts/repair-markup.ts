@@ -54,6 +54,7 @@ import { htmlToText } from '../lib/intake'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'
+import { richTextToPlainText, wrapPlainText } from '../lib/richText'
 
 const APPLY = process.argv.includes('--apply')
 const TENANT = (process.env.AXIOMATE_TENANT ?? 'axiocloud') as TenantId
@@ -90,7 +91,7 @@ async function main() {
   const ACTOR: Actor = { id: operator.id, name: operator.name, email: operator.email }
 
   const candidates = Object.values(state.issues)
-    .filter((i) => !i.deletedAt && TAG.test(i.description ?? ''))
+    .filter((i) => !i.deletedAt && TAG.test(richTextToPlainText(i.description)))
     .sort((a, b) => a.id.localeCompare(b.id))
 
   console.log('AXIOMATE — MARKUP REPAIR\n')
@@ -106,7 +107,7 @@ async function main() {
   const refused: { id: string; before: number; after: number }[] = []
 
   for (const issue of candidates) {
-    const before = issue.description ?? ''
+    const before = richTextToPlainText(issue.description)
     const after = htmlToText(before)
     if (collapsed(before, after)) {
       refused.push({ id: issue.id, before: before.length, after: after.length })
@@ -162,7 +163,7 @@ async function main() {
         ({
           t: 'updateIssue',
           id: d.id,
-          patch: { description: d.after },
+          patch: { description: wrapPlainText(d.after) },
           reason: REASON,
           now: NOW,
         }) as Action,
@@ -179,7 +180,7 @@ async function main() {
   }
 
   const { state: after } = await loadWorkspace(TENANT)
-  const left = Object.values(after.issues).filter((i) => !i.deletedAt && TAG.test(i.description ?? ''))
+  const left = Object.values(after.issues).filter((i) => !i.deletedAt && TAG.test(richTextToPlainText(i.description)))
   console.log(`\n  Converted ${done}. Issues still carrying markup: ${left.length}${left.length ? ` (${left.map((i) => i.id).join(', ')})` : ''}`)
   console.log('  Each conversion is on the audit trail with its reason.')
 }

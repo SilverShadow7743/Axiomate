@@ -7,6 +7,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { classifyForm, provenanceNote, type InboundMessage } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
+import { wrapPlainText } from '@/lib/richText'
 
 /**
  * The form's half of intake — the second door that creates records from the internet.
@@ -137,7 +138,7 @@ export async function POST(req: Request) {
       {
         t: 'addNote',
         issueId,
-        body: `${provenanceNote(message, draft)}\n\nArrived via the “${form.name}” form.\nMessage id: ${message.messageId}`,
+        body: wrapPlainText(`${provenanceNote(message, draft)}\n\nArrived via the “${form.name}” form.\nMessage id: ${message.messageId}`),
         noteType: 'Client Communication',
         pinned: true,
         now,

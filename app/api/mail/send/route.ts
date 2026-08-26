@@ -9,6 +9,7 @@ import { alreadySent, isOutboundRefusal, outboundNoteBody, sendingMailboxFor } f
 import { sendAsMailbox } from '@/lib/mail'
 import type { Action } from '@/lib/workspace'
 import type { IssueNote } from '@/lib/notes'
+import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
 
 /**
  * The outward door — and the only one of the three that WRITES OUTWARD.
@@ -154,7 +155,7 @@ export async function POST(req: Request) {
     const note: Action = {
       t: 'addNote',
       issueId,
-      body: noteBody,
+      body: wrapPlainText(noteBody),
       noteType: 'Client Communication',
       pinned: true,
       // What was said to the client is client-visible by definition — the one auto-visible note.
@@ -185,7 +186,11 @@ export async function POST(req: Request) {
         stored =
           Object.values(after.state.notes)
             .filter(
-              (n) => n.issueId === issueId && n.body === noteBody && n.createdAt === now && !n.deletedAt,
+              (n) =>
+                n.issueId === issueId &&
+                richTextToPlainText(n.body) === noteBody &&
+                n.createdAt === now &&
+                !n.deletedAt,
             )
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
       }

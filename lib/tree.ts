@@ -4,6 +4,7 @@ import { disciplineLabel, kindLabel, resolveLabels } from './config'
 import type { IssueRecord, WorkspaceState } from './workspace'
 import { computeDurations, computeHealth, isTerminal, pausedCalendarDays, rollUp, STATUS_PROGRESS } from './schedule'
 import { maxIso, minIso } from './dates'
+import { richTextToPlainText } from './richText'
 
 /**
  * Build the row hierarchy from workspace state.
@@ -377,7 +378,7 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
     const hay =
       // `type` is in here because it was not: searching "change request" matched nothing
       // while forty-eight of them sat in the grid.
-      `${i.id} ${i.subject} ${i.owner} ${i.module} ${i.type} ${i.nextAction} ${i.description}`.toLowerCase()
+      `${i.id} ${i.subject} ${i.owner} ${i.module} ${i.type} ${i.nextAction} ${richTextToPlainText(i.description)}`.toLowerCase()
     if (!hay.includes(q)) return false
   }
   return true

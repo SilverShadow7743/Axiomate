@@ -1,6 +1,7 @@
 import type { IntakeMailbox } from './config'
 import { scopeChainOf, type WorkspaceState } from './workspace'
 import type { IssueNote } from './notes'
+import { richTextToPlainText } from './richText'
 
 /**
  * Outbound mail: the other half of intake's loop, resolved before anything is sent.
@@ -138,7 +139,7 @@ export function alreadySent(
       (n) =>
         n.issueId === issueId &&
         n.noteType === 'Client Communication' &&
-        n.body === noteBody &&
+        richTextToPlainText(n.body) === noteBody &&
         !n.deletedAt,
     ) ?? null
   )
