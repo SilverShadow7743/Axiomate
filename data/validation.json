@@ -1642,6 +1642,26 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "RC5",
+      "title": "addNote refuses an empty RichDoc, exactly as it refused empty text before",
+      "expected": "isEmptyRichDoc(body) is the new guard in front of a reducer arm that previously always succeeded once past its own !body.trim() check -- an empty document (no text, no image, no mention, no reference) gets the same refusal an empty string used to.",
+      "verdict": "PASS",
+      "actual": "error=\"A note needs something in it.\", notes unchanged at 0",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RC6",
+      "title": "updateNote's richDocsEqual diff reports no change when a body edit flattens to identical content",
+      "expected": "The generic note[k] !== next[k] diff was swapped for richDocsEqual on the body key alone, by content rather than by reference -- re-saving the same words as a freshly-built RichDoc (a different object, same content) must still read as \"Nothing changed.\", not as an edit with an empty diff.",
+      "verdict": "PASS",
+      "actual": "message=\"Nothing changed.\" error=undefined",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

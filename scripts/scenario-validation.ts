@@ -7199,6 +7199,42 @@ scenario(
   },
 )
 
+scenario(
+  'RC5',
+  'addNote refuses an empty RichDoc, exactly as it refused empty text before',
+  'isEmptyRichDoc(body) is the new guard in front of a reducer arm that previously always succeeded once past its own !body.trim() check -- an empty document (no text, no image, no mention, no reference) gets the same refusal an empty string used to.',
+  () => {
+    const before = Object.keys(BASE.notes).length
+    const refused = act(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: emptyRichDoc(), noteType: 'General Update', pinned: false, now: NOW,
+    } as Action)
+    const noNoteAdded = Object.keys(refused.state.notes).length === before
+    const good = refused.error === 'A note needs something in it.' && noNoteAdded
+    return good
+      ? { verdict: 'PASS', actual: `error=${JSON.stringify(refused.error)}, notes unchanged at ${before}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `error=${JSON.stringify(refused.error)} noNoteAdded=${noNoteAdded}`, stops: 'isEmptyRichDoc no longer catches a document with nothing in it, so a blank note can be added', severity: 'P1', impact: 'the empty-note guard silently stops working, and blank notes start accumulating on issues' } as const
+  },
+)
+
+scenario(
+  'RC6',
+  "updateNote's richDocsEqual diff reports no change when a body edit flattens to identical content",
+  'The generic note[k] !== next[k] diff was swapped for richDocsEqual on the body key alone, by content rather than by reference -- re-saving the same words as a freshly-built RichDoc (a different object, same content) must still read as "Nothing changed.", not as an edit with an empty diff.',
+  () => {
+    const withNote = ok(BASE, {
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('Unchanged text.'), noteType: 'General Update', pinned: false, now: NOW,
+    } as Action)
+    const noteId = Object.values(withNote.notes).find((n) => richTextToPlainText(n.body) === 'Unchanged text.')!.id
+    const resaved = act(withNote, {
+      t: 'updateNote', id: noteId, patch: { body: wrapPlainText('Unchanged text.') }, now: NOW,
+    } as Action)
+    const good = resaved.message === 'Nothing changed.' && resaved.error === undefined
+    return good
+      ? { verdict: 'PASS', actual: `message=${JSON.stringify(resaved.message)} error=${JSON.stringify(resaved.error)}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `message=${JSON.stringify(resaved.message)} error=${JSON.stringify(resaved.error)}`, stops: 'the body diff compares RichDoc objects by reference again, so re-saving unchanged text mints a spurious edit and a spurious audit entry', severity: 'P1', impact: 'every note save is misreported as a real edit even when nothing changed, noisy audit trail and false "edited by" labels' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */
