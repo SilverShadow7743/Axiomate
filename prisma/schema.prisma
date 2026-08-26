@@ -932,12 +932,13 @@ model IssueEstimate {
   issueId String
   issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
 
-  /// The five complexity parameters, 1–5 each. 0 means "not scored yet".
-  business    Int @default(0)
-  technical   Int @default(0)
-  integration Int @default(0)
-  testing     Int @default(0)
-  data        Int @default(0)
+  /// The five complexity parameters, 0–5 each, per the Axiomate Estimation Model. 0 is a real
+  /// score ("None — no meaningful effort in this dimension"); NULL means not scored yet.
+  business    Int?
+  technical   Int?
+  integration Int?
+  testing     Int?
+  data        Int?
 
   /// Null means "use the size the score implies" / "use the hours the size implies". A null
   /// here is a real state, not a missing value: it says nobody has overridden the derivation.
