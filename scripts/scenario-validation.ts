@@ -2138,7 +2138,8 @@ scenario(
       { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam', severity: 'High', percentOverride: 50, plannedEnd: null }, now: N },
       { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: N, expected: { owner: 'Priya' }, key: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa' },
       { t: 'updateIssue', id: 'OAPIL-1', patch: {}, now: N },
-      { t: 'addNote', issueId: 'OAPIL-1', body: 'x', noteType: 'General Update', pinned: false, now: N },
+      { t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('x'), noteType: 'General Update', pinned: false, now: N },
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { description: wrapPlainText('New description.') }, now: N },
     ]
 
     const hostile: [string, unknown][] = [
@@ -2151,6 +2152,16 @@ scenario(
       ['no discriminator at all', { id: 'OAPIL-1', now: N }],
       ['an array where an object belongs', ['updateIssue']],
       ['a missing required field', { t: 'updateIssue', patch: { owner: 'Sam' }, now: N }],
+      /*
+       * The exact bug this line exists to catch: found live, in a browser, against production,
+       * when addNote.body's runtime check still said `text` after every typed layer above it
+       * had already moved to RichDoc. tsc has no way to see this file at all — it validates
+       * `unknown` from the wire, which erases whatever TypeScript proved client-side. A plain
+       * string body must now be refused here, not silently accepted and then rejected only by
+       * the browser's own optimistic-queue error banner.
+       */
+      ['a plain-string note body, now that body is a RichDoc', { t: 'addNote', issueId: 'OAPIL-1', body: 'x', noteType: 'General Update', pinned: false, now: N }],
+      ['a plain-string description, now that description is a RichDoc', { t: 'updateIssue', id: 'OAPIL-1', patch: { description: 'x' }, now: N }],
     ]
 
     const wrongly = legitimate.filter(refused)

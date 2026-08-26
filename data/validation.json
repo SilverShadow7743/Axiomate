@@ -438,7 +438,7 @@
       "title": "A malformed or hostile write reaches the API",
       "expected": "It is rejected before it touches stored state.",
       "verdict": "PASS",
-      "actual": "9 malformed or hostile actions are refused before the database is considered, and 4 legitimate ones — including an empty patch, a concurrency expectation and an idempotency key — still pass. The refusal names the field rather than the request: \"Field 'patch' on updateIssue carries unrecognised field 'ownerr'.\". The patch is checked field by field, which is the part that matters: the reducer merges an edit with a spread, so an unrecognised key lands in the record and a mistyped one replaces a real field. Whether a status is one this firm uses is left to the reducer, which owns the transition graph and answers with the routes that exist — two lists here would be free to disagree.",
+      "actual": "11 malformed or hostile actions are refused before the database is considered, and 5 legitimate ones — including an empty patch, a concurrency expectation and an idempotency key — still pass. The refusal names the field rather than the request: \"Field 'patch' on updateIssue carries unrecognised field 'ownerr'.\". The patch is checked field by field, which is the part that matters: the reducer merges an edit with a spread, so an unrecognised key lands in the record and a mistyped one replaces a real field. Whether a status is one this firm uses is left to the reducer, which owns the transition graph and answers with the routes that exist — two lists here would be free to disagree.",
       "stops": "—",
       "severity": "—",
       "impact": "A client bug or a hostile caller can no longer write a field the record does not have, or a type it cannot hold."

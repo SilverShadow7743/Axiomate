@@ -299,6 +299,24 @@ const SUBJECT_KINDS: ReadonlySet<string> = new Set(['person.workingPattern'])
 /** Anything at all. Only ever used where a closed `subjectKind` already bounds the payload. */
 const opaque: Check = () => null
 
+/**
+ * A RichDoc — the closed document shape a description or a note body now carries
+ * (lib/richText.ts). Shape only, matching this module's own stated boundary: `type: 'doc'` and
+ * a `content` array is what every downstream reader (richTextToPlainText, isEmptyRichDoc,
+ * mentionedPeopleIn) actually needs before it starts walking the tree. A malformed inner node
+ * fails there, in the same reducer-owned way a malformed IssueRecord field would — this is not
+ * a second hand-maintained copy of the RichNode union.
+ */
+const richDoc: Check = (v) => {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    return `must be a rich-text document, received ${typeOf(v)}`
+  }
+  const obj = v as Record<string, unknown>
+  if (obj.type !== 'doc') return `must be a rich-text document (type "doc"), received ${typeOf(v)}`
+  if (!Array.isArray(obj.content)) return `must be a rich-text document with a content array`
+  return null
+}
+
 /** One of a closed vocabulary. The allowed values are ours, so listing them back is safe. */
 function oneOf(allowed: ReadonlySet<string>): Check {
   return (v) => {
@@ -467,7 +485,7 @@ const SHAPES = {
      */
     patch: req(
       patchOf({
-        parentId: idOrNull, client: text, module: text, subject: text, description: text,
+        parentId: idOrNull, client: text, module: text, subject: text, description: richDoc,
         type: text, sourceType: text, discipline: text, severity: text, status: text, owner: text,
         raisedBy: text, accountable: text, raised: textOrNull, lastActivity: textOrNull,
         actualEnd: textOrNull, age: num, daysSinceActivity: num, nextAction: text,
@@ -547,7 +565,7 @@ const SHAPES = {
   /* ---- NOTES ---- */
   addNote: {
     issueId: req(id),
-    body: req(text),
+    body: req(richDoc),
     noteType: req(oneOf(NOTE_KINDS)),
     pinned: req(bool),
     clientVisible: opt(bool),
