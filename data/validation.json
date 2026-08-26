@@ -1602,6 +1602,46 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "RC1",
+      "title": "A blank document is a paragraph with no content, never a text node holding an empty string",
+      "expected": "ProseMirror refuses a zero-length text node, so both emptyRichDoc() and wrapPlainText(’’) have to produce the same empty-content-array shape — and isEmptyRichDoc has to call both empty.",
+      "verdict": "PASS",
+      "actual": "emptyRichDoc() and wrapPlainText(’’) are structurally identical — one paragraph, an empty content array, no zero-length text node — and both report as empty.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RC2",
+      "title": "A plain string round-trips through wrapPlainText and back, and every node kind renders in the flattened text",
+      "expected": "wrapPlainText(’hello’) extracts back to exactly ’hello’, and a hand-built document mixing text, an image, a mention and an issue reference produces the expected concatenation — proving the extractor’s per-node-kind behaviour, not just the trivial case.",
+      "verdict": "PASS",
+      "actual": "rendered=\"See OAPIL-1 and @Priya. [image: screenshot.png]\" — text, issue reference, mention and image all render correctly, and an unresolved mention falls back to \"@someone\" rather than throwing or dropping the node.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RC3",
+      "title": "Structural equality holds across distinct objects, breaks on real content differences, and a table flattens row by row",
+      "expected": "richDocsEqual compares content, not object identity; a one-character difference is a real difference; a two-row table renders as two newline-separated, pipe-joined lines.",
+      "verdict": "PASS",
+      "actual": "Two distinct objects with the same content compare equal; a one-character difference compares unequal; the table renders as \"Size | Hours\\nM | 16\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "RC4",
+      "title": "mentionedPeopleIn collects each mentioned person once, however often they are mentioned",
+      "expected": "Two mention nodes for the same person return that person once — the mint pings once, matching mentionsIn’s own once-however-often-repeated behaviour for the plain-string case — and a document with no mentions returns nothing.",
+      "verdict": "PASS",
+      "actual": "mentioned=[\"P-1\",\"P-2\"] — P-1 repeated twice still yields one entry, in first-seen order, and a plain-text document with no mention nodes yields none.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

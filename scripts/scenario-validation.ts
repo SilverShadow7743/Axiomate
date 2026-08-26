@@ -125,6 +125,15 @@ import {
   NORMALISED_MAX,
 } from '../lib/estimation'
 import { proposeEstimate } from '../lib/estimator'
+import {
+  emptyRichDoc,
+  wrapPlainText,
+  isEmptyRichDoc,
+  richDocsEqual,
+  richTextToPlainText,
+  mentionedPeopleIn,
+  type RichDoc,
+} from '../lib/richText'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
@@ -7068,6 +7077,125 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `scores=${JSON.stringify(proposal.scores)}, outcome=${proposal.outcome} — Data proposes 0 rather than an assumed 1, Integration still gets its NO_SIGNAL_FLOOR of 1, and the proposal still counts as scored because the security rule actually fired.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `scores=${JSON.stringify(proposal.scores)} scored=${proposal.scored} outcome=${proposal.outcome}`, stops: 'the estimator still floors an untouched dimension, or dropping the floor broke whether a proposal counts as scored', severity: 'P1', impact: 'every future auto-proposed estimate either still inflates untouched dimensions, or stops being usable once a rule fires' } as const
+  },
+)
+
+/* ================================================================== *
+ * Rich content: descriptions and notes (design 2026-08-26)
+ * ================================================================== */
+
+scenario(
+  'RC1',
+  'A blank document is a paragraph with no content, never a text node holding an empty string',
+  'ProseMirror refuses a zero-length text node, so both emptyRichDoc() and wrapPlainText(’’) have to produce the same empty-content-array shape — and isEmptyRichDoc has to call both empty.',
+  () => {
+    const a = emptyRichDoc()
+    const b = wrapPlainText('')
+    const shapeRight =
+      a.content.length === 1 && a.content[0].type === 'paragraph' &&
+      'content' in a.content[0] && a.content[0].content.length === 0 &&
+      richDocsEqual(a, b)
+    const bothEmpty = isEmptyRichDoc(a) && isEmptyRichDoc(b)
+    const good = shapeRight && bothEmpty
+    return good
+      ? { verdict: 'PASS', actual: 'emptyRichDoc() and wrapPlainText(’’) are structurally identical — one paragraph, an empty content array, no zero-length text node — and both report as empty.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `shapeRight=${shapeRight} bothEmpty=${bothEmpty} a=${JSON.stringify(a)}`, stops: 'the empty-document shape disagrees with itself, or a document ProseMirror would refuse to load is being produced', severity: 'P1', impact: 'a blank description or note fails to load in the real editor' } as const
+  },
+)
+
+scenario(
+  'RC2',
+  'A plain string round-trips through wrapPlainText and back, and every node kind renders in the flattened text',
+  'wrapPlainText(’hello’) extracts back to exactly ’hello’, and a hand-built document mixing text, an image, a mention and an issue reference produces the expected concatenation — proving the extractor’s per-node-kind behaviour, not just the trivial case.',
+  () => {
+    const roundTrip = richTextToPlainText(wrapPlainText('hello')) === 'hello'
+    const mixed: RichDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'See ' },
+            { type: 'issueReference', attrs: { issueId: 'OAPIL-1' } },
+            { type: 'text', text: ' and ' },
+            { type: 'mention', attrs: { personId: 'P-1' } },
+            { type: 'text', text: '. ' },
+            { type: 'image', attrs: { documentId: 'doc-1', alt: 'screenshot.png' } },
+          ],
+        },
+      ],
+    }
+    const rendered = richTextToPlainText(mixed, { people: [{ id: 'P-1', name: 'Priya' }] })
+    const expected = 'See OAPIL-1 and @Priya. [image: screenshot.png]'
+    const mixedRight = rendered === expected
+    const unresolvedMention = richTextToPlainText(mixed, { people: [] }).includes('@someone')
+    const good = roundTrip && mixedRight && unresolvedMention
+    return good
+      ? { verdict: 'PASS', actual: `rendered="${rendered}" — text, issue reference, mention and image all render correctly, and an unresolved mention falls back to "@someone" rather than throwing or dropping the node.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `roundTrip=${roundTrip} rendered="${rendered}" expected="${expected}" unresolvedMention=${unresolvedMention}`, stops: 'the extractor renders one or more node kinds incorrectly', severity: 'P1', impact: 'search, auto-scoring or the audit trail read the wrong text for a rich description or note' } as const
+  },
+)
+
+scenario(
+  'RC3',
+  'Structural equality holds across distinct objects, breaks on real content differences, and a table flattens row by row',
+  'richDocsEqual compares content, not object identity; a one-character difference is a real difference; a two-row table renders as two newline-separated, pipe-joined lines.',
+  () => {
+    const docA: RichDoc = wrapPlainText('same text')
+    const docB: RichDoc = wrapPlainText('same text')
+    const docC: RichDoc = wrapPlainText('same text!')
+    const identicalContent = richDocsEqual(docA, docB) && docA !== docB
+    const differentContent = !richDocsEqual(docA, docC)
+
+    const table: RichDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'text', text: 'Size' }] }, { type: 'tableHeader', content: [{ type: 'text', text: 'Hours' }] }] },
+            { type: 'tableRow', content: [{ type: 'tableCell', content: [{ type: 'text', text: 'M' }] }, { type: 'tableCell', content: [{ type: 'text', text: '16' }] }] },
+          ],
+        },
+      ],
+    }
+    const tableText = richTextToPlainText(table)
+    const tableRight = tableText === 'Size | Hours\nM | 16'
+
+    const good = identicalContent && differentContent && tableRight
+    return good
+      ? { verdict: 'PASS', actual: `Two distinct objects with the same content compare equal; a one-character difference compares unequal; the table renders as "${tableText.replace(/\n/g, '\\n')}".`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `identicalContent=${identicalContent} differentContent=${differentContent} tableText="${tableText}"`, stops: 'richDocsEqual is comparing by reference rather than content, or the table extractor disagrees with its own documented row/cell separators', severity: 'P1', impact: 'a real edit is silently treated as no change (or the reverse), or a table reads as one run-together word in search and auto-scoring' } as const
+  },
+)
+
+scenario(
+  'RC4',
+  'mentionedPeopleIn collects each mentioned person once, however often they are mentioned',
+  'Two mention nodes for the same person return that person once — the mint pings once, matching mentionsIn’s own once-however-often-repeated behaviour for the plain-string case — and a document with no mentions returns nothing.',
+  () => {
+    const doc: RichDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'mention', attrs: { personId: 'P-1' } },
+            { type: 'text', text: ' and again ' },
+            { type: 'mention', attrs: { personId: 'P-1' } },
+            { type: 'text', text: ' and ' },
+            { type: 'mention', attrs: { personId: 'P-2' } },
+          ],
+        },
+      ],
+    }
+    const mentioned = mentionedPeopleIn(doc)
+    const dedup = mentioned.length === 2 && mentioned[0] === 'P-1' && mentioned[1] === 'P-2'
+    const none = mentionedPeopleIn(wrapPlainText('nobody mentioned here')).length === 0
+    const good = dedup && none
+    return good
+      ? { verdict: 'PASS', actual: `mentioned=${JSON.stringify(mentioned)} — P-1 repeated twice still yields one entry, in first-seen order, and a plain-text document with no mention nodes yields none.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `mentioned=${JSON.stringify(mentioned)} dedup=${dedup} none=${none}`, stops: 'mentionedPeopleIn does not deduplicate, or finds a mention where none was written', severity: 'P1', impact: 'a repeated mention pings somebody more than once, or a document with no mentions still notifies somebody' } as const
   },
 )
 
