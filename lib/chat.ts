@@ -493,6 +493,59 @@ const FIELD_ALIASES: Record<string, PatchableField> = {
 const ID_RE = /\b([A-Z]{2,10}-\d{1,4})\b/i
 
 /**
+ * Aliases for the search branch's facets — distinct from `FIELD_ALIASES`, which is scoped to
+ * `PatchableField` (the update vocabulary). `module`, `client` and `health` are not patchable
+ * fields and have no place there; `status`/`severity`/`owner` are repeated here rather than
+ * shared, because the two maps answer different questions ("what may a write touch" vs. "what
+ * may a search filter on") and happen to overlap only partially.
+ */
+type SearchFacetKey = 'status' | 'severity' | 'owner' | 'module' | 'client' | 'health'
+
+const SEARCH_FACET_ALIASES: Record<string, SearchFacetKey> = {
+  status: 'status',
+  state: 'status',
+  severity: 'severity',
+  priority: 'severity',
+  owner: 'owner',
+  assignee: 'owner',
+  module: 'module',
+  client: 'client',
+  health: 'health',
+  schedule: 'health',
+}
+
+/** A `key=value`/`key:value` token whose key is a plain word — deliberately not multi-word,
+ *  unlike `FIELD_ALIASES`'s "next action", since none of `SEARCH_FACET_ALIASES`'s keys are. */
+const FACET_TOKEN_RE = /\b([A-Za-z]+)\s*[=:]\s*([^\s,;]+)/g
+
+export interface ParsedSearchQuery {
+  facets: SearchArgs
+  text: string
+}
+
+/**
+ * Pulls recognised facet tokens out of a search query, leaving whatever remains for the usual
+ * keyword search.
+ *
+ * Only a token whose key matches `SEARCH_FACET_ALIASES` is ever consumed — free text that
+ * happens to contain a bare "=" or ":" (a quoted ratio, a pasted formula) is left exactly as
+ * typed, because its key does not resolve to anything. This is what keeps facet parsing from
+ * colliding with genuine free text: the risk is not "any equals sign", it is "one of these ten
+ * specific words followed by =", which is the same trade the update branch already makes with
+ * `FIELD_ALIASES`.
+ */
+export function parseSearchQuery(raw: string): ParsedSearchQuery {
+  const facets: SearchArgs = {}
+  const text = raw.replace(FACET_TOKEN_RE, (whole, key: string, value: string) => {
+    const field = SEARCH_FACET_ALIASES[norm(key)]
+    if (!field) return whole
+    facets[field] = value.replace(/^["']|["']$/g, '')
+    return ''
+  })
+  return { facets, text: text.replace(/\s+/g, ' ').trim() }
+}
+
+/**
  * The engine that answers when no API key is configured.
  *
  * It is not a language model and does not pretend to be one: it handles the structured
@@ -646,7 +699,8 @@ export function offlineReply(
 
   /* ---- otherwise: search ---- */
   const query = raw.replace(/^(?:find|search|show|list|look\s+up|get)\s+/i, '')
-  const hits = searchIndex(index, { text: query })
+  const { facets, text } = parseSearchQuery(query)
+  const hits = searchIndex(index, { ...facets, text })
   if (!hits.length) {
     return reply(
       `Nothing matched “${query}”. I search issue ids, subjects, process areas, owners, statuses and next actions.`,
