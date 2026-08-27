@@ -5671,6 +5671,25 @@ select.cell-editor {
   margin: 0;
 }
 
+/* A status nobody is in right now, narrowed to a rail rather than a full card column of
+   nothing — still a drop target (the section itself, unchanged), still named and counted. */
+.board-lane.collapsed {
+  flex: 0 0 84px;
+}
+.board-lane.collapsed .board-lane-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.board-lane-empty.collapsed {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px 4px;
+}
+
 /* The refusal, in the policy's words, where the drop happened. */
 .board-refusal {
   margin: 0;

@@ -78,10 +78,12 @@ export default function BoardView({
     <div className="board" role="region" aria-label="Status board">
       <div className="board-sub sentence">{describeBoard(lanes)}</div>
       <div className="board-lanes">
-        {lanes.map((lane) => (
+        {lanes.map((lane) => {
+          const empty = lane.rows.length === 0
+          return (
           <section
             key={lane.status}
-            className="board-lane"
+            className={`board-lane${empty ? ' collapsed' : ''}`}
             aria-label={lane.status}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -98,6 +100,12 @@ export default function BoardView({
                 {refusal.message}
               </p>
             )}
+            {empty ? (
+              // Collapsed to a thin rail rather than dropped from the vocabulary entirely — a
+              // status nobody is in right now is still a place a card can be dragged to, and
+              // the "Move" menu already lists it regardless of whether this section is here.
+              <p className="board-lane-empty collapsed">Drop here.</p>
+            ) : (
             <div className="board-cards">
               {lane.rows.map((row) => (
                 <div
@@ -164,10 +172,11 @@ export default function BoardView({
                   </span>
                 </div>
               ))}
-              {!lane.rows.length && <p className="board-lane-empty">Nothing here.</p>}
             </div>
+            )}
           </section>
-        ))}
+          )
+        })}
       </div>
 
       {asking && (
