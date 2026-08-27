@@ -647,6 +647,13 @@ export default function IssueWorkspace({
    */
   const [requestTab, setRequestTab] = useState<DetailTab | null>(null)
 
+  /**
+   * Set alongside `revealIssue` by Row-menu/toolbar "Edit" — DetailPanel's own `editing` is
+   * local state it does not otherwise expose, so this is how a click outside the panel puts it
+   * straight into edit mode instead of merely opening it. Mirrors `requestTab` above exactly.
+   */
+  const [requestEdit, setRequestEdit] = useState<string | null>(null)
+
   const [zoom, setZoom] = useState<ZoomLevel>('Week')
   const [view, setViewState] = useState<WorkspaceView>('tree')
   useEffect(() => {
@@ -1290,7 +1297,15 @@ export default function IssueWorkspace({
         if (!row.parentId) return
         setDialog({ t: 'add', parentId: row.parentId, kind })
       },
-      edit: (row) => setDialog({ t: 'edit', id: row.id }),
+      // An issue opens the canonical detail panel, straight into edit mode — everything else
+      // (a hierarchy node) still goes through the Dialogs form, unchanged.
+      edit: (row) => {
+        if (row.kind !== 'issue') {
+          setDialog({ t: 'edit', id: row.id })
+          return
+        }
+        if (requestSelect(row.id)) setRequestEdit(row.id)
+      },
       move: (row) => setDialog({ t: 'move', id: row.id }),
       link: (row) => setDialog({ t: 'link', issueId: row.id }),
       archive: (row) => setDialog({ t: 'delete', id: row.id }),
@@ -1343,16 +1358,6 @@ export default function IssueWorkspace({
     }),
     [sortedRows, state, dispatch, notify, requestSelect, scale],
   )
-
-  /** Which pending dialog is an issue form, and therefore opens in full-page focus mode. */
-  const issueForm = useMemo((): { mode: 'edit' | 'add'; targetId: string } | null => {
-    if (!dialog) return null
-    if (dialog.t === 'edit' && state.issues[dialog.id]) return { mode: 'edit', targetId: dialog.id }
-    if (dialog.t === 'add' && (dialog.kind === 'issue' || dialog.kind === 'sub-issue')) {
-      return { mode: 'add', targetId: dialog.parentId }
-    }
-    return null
-  }, [dialog, state.issues])
 
   /* ---------------- dialog submission ---------------- */
   const submitDialog = useCallback(
@@ -1642,9 +1647,7 @@ export default function IssueWorkspace({
       // it — so bailing out on INPUT/SELECT/TEXTAREA before testing Escape made Escape dead
       // in every dialog it was supposed to close.
       //
-      // The focus editor is excluded: it runs its own Escape handler that checks for unsaved
-      // changes first. Both listeners are on `window`, so stopPropagation would not help.
-      if (e.key === 'Escape' && dialog && !issueForm) {
+      if (e.key === 'Escape' && dialog) {
         setDialog(null)
         return
       }
@@ -1657,7 +1660,7 @@ export default function IssueWorkspace({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [dialog, issueForm])
+  }, [dialog])
 
   const orderedCols = useMemo(
     () =>
@@ -2248,6 +2251,8 @@ export default function IssueWorkspace({
           onTabChange={onTabChange}
           requestTab={requestTab}
           onTabRequestHandled={() => setRequestTab(null)}
+          requestEdit={requestEdit}
+          onEditRequestHandled={() => setRequestEdit(null)}
           onBuildLifecycle={buildLifecycle}
           onClearLifecycle={(id) =>
             dispatch({ t: 'clearLifecycle', issueId: id, now: new Date().toISOString() })
@@ -2417,30 +2422,16 @@ export default function IssueWorkspace({
           }
         />
 
-      {/* Editing an issue is a job in its own right, so it takes the page. Transactional
-          operations (move, link, dependency, archive, structural adds) stay as modals — each
-          is a single decision, not a working surface. Small field changes never come here at
-          all: they are edited inline in the grid. */}
-      {issueForm ? (
-        <IssueFocus
-          mode={issueForm.mode}
-          targetId={issueForm.targetId}
-          state={state}
-          ownerOptions={facets.owners}
-          statusPolicy={state.model.statusPolicy}
-          onClose={() => setDialog(null)}
-          onSubmit={submitDialog}
-          onManageEvidence={setEvidenceFor}
-        />
-      ) : (
-        <Dialogs
-          dialog={dialog}
-          state={state}
-          rows={sortedRows}
-          onClose={() => setDialog(null)}
-          onSubmit={submitDialog}
-        />
-      )}
+      {/* Issue edits now open the canonical detail panel (above), straight into edit mode via
+          requestEdit. Dialogs handles everything else: hierarchy-node edits, and issue/node
+          creation alike — "+ New Issue" lands here too, now that nothing intercepts it first. */}
+      <Dialogs
+        dialog={dialog}
+        state={state}
+        rows={sortedRows}
+        onClose={() => setDialog(null)}
+        onSubmit={submitDialog}
+      />
       </LabelProvider>
 
       {evidenceFor && state.issues[evidenceFor] && (

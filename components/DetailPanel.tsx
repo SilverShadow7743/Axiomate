@@ -92,6 +92,14 @@ interface Props {
    */
   requestTab?: Tab | null
   onTabRequestHandled?: () => void
+  /**
+   * An issue id the workspace is asking to be edited — Row-menu/toolbar "Edit" opening this
+   * panel already in edit mode rather than merely open. `editing` below is this panel's own
+   * local state, not otherwise reachable from outside; this is how a click elsewhere still
+   * reaches it. Same shape as `requestTab` above, cleared the same way.
+   */
+  requestEdit?: string | null
+  onEditRequestHandled?: () => void
   onBuildLifecycle: (id: string) => void
   onClearLifecycle: (id: string) => void
   onAcceptProposal: (id: string) => void
@@ -211,6 +219,8 @@ export default function DetailPanel({
   onTabChange,
   requestTab,
   onTabRequestHandled,
+  requestEdit,
+  onEditRequestHandled,
   onBuildLifecycle,
   onClearLifecycle,
   onAcceptProposal,
@@ -411,6 +421,18 @@ export default function DetailPanel({
   useEffect(() => {
     setEditing(false)
   }, [issue?.id])
+
+  // Declared after the reset above: both depend on issue?.id, and within one commit effects
+  // run in declaration order, so a fresh request's setEditing(true) is what sticks rather than
+  // being immediately undone by the reset. Also lands on Overview, the same way requestTab
+  // would, since edit mode only exists there.
+  useEffect(() => {
+    if (requestEdit && issue?.id === requestEdit) {
+      setEditing(true)
+      setTab('Overview')
+      onEditRequestHandled?.()
+    }
+  }, [requestEdit, issue?.id, onEditRequestHandled])
 
   const customResponsibilities = issue
     ? liveResponsibilities(state.model)
