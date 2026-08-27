@@ -1365,6 +1365,17 @@ select.cell-editor {
   white-space: nowrap;
 }
 
+/* Quick Edit (Subject/Status/Owner/Severity) — same fixed-position popover shell as
+   .status-editor, wider for a fourth field and Subject's own longer text. */
+.quick-edit-popover {
+  position: fixed;
+  width: 320px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
 /* ---------- small-viewport fallback ----------
    Below ~1100px the timeline has no honest width to draw in: the tree takes the row and the
    Gantt steps aside, stated by media query rather than left to crush itself. Board, Calendar,

@@ -10,6 +10,7 @@ import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
 import type { StatusPolicy } from '@/lib/statusPolicy'
 import RowMenu, { type RowActions } from './RowMenu'
 import StatusCellEditor from './StatusCellEditor'
+import QuickEditPopover from './QuickEditPopover'
 
 interface Props {
   rows: ScheduleRow[]
@@ -104,6 +105,8 @@ export default function TreeGrid({
 
   /* ---- inline cell editing ---- */
   const [editing, setEditing] = useState<{ rowId: string; colKey: string } | null>(null)
+  /** The row whose Subject cell was double-clicked into Quick Edit — see QuickEditPopover. */
+  const [quickEditId, setQuickEditId] = useState<string | null>(null)
 
   /**
    * Scroll a column clear of the frozen region and the right edge.
@@ -504,9 +507,10 @@ export default function TreeGrid({
                   /**
                    * The second tier of §6: a cell with no inline editor that still has a way in.
                    *
-                   * An issue's subject is edited in the full editor beside its description, so
-                   * the double-click that opens an editor everywhere else opens *that* here
-                   * rather than doing nothing — a cell that ignores the gesture reads as broken.
+                   * Subject itself is deliberately not a plain inline cell editor (lib/editing.ts
+                   * excludes it on purpose — a lone 392px cell divorces it from Description).
+                   * The double-click that opens an editor everywhere else opens Quick Edit here
+                   * instead: a small popover with room for a sentence, not the full record.
                    */
                   const opensEditor = !spec && c.key === 'name' && r.kind === 'issue'
                   return (
@@ -529,7 +533,7 @@ export default function TreeGrid({
                       onDoubleClick={(e) => {
                         if (opensEditor) {
                           e.stopPropagation()
-                          actions.edit(r)
+                          setQuickEditId(r.id)
                           return
                         }
                         if (!spec) return
@@ -540,13 +544,24 @@ export default function TreeGrid({
                         isEditing
                           ? undefined
                           : opensEditor
-                            ? 'Double-click to open the editor'
+                            ? 'Double-click to quick-edit'
                             : spec
                               ? 'Double-click to edit'
                               : undefined
                       }
                     >
-                      {isEditing && spec && c.key === 'status' ? (
+                      {opensEditor && quickEditId === r.id ? (
+                        <QuickEditPopover
+                          row={r}
+                          statusOptions={editorFor(r, 'status', ownerOptions, statusPolicy)?.options ?? []}
+                          ownerOptions={ownerOptions}
+                          onCommit={(colKey, value, reason) => onCellCommit(r.id, colKey, value, reason)}
+                          onClose={() => {
+                            setQuickEditId(null)
+                            focusRow(r.id)
+                          }}
+                        />
+                      ) : isEditing && spec && c.key === 'status' ? (
                         <StatusCellEditor
                           options={spec.options ?? []}
                           value={spec.value}
