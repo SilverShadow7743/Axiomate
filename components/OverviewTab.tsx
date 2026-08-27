@@ -18,6 +18,14 @@ import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 import { isEmptyRichDoc, richDocsEqual, type RichDoc } from '@/lib/richText'
 import RichTextEditor from './RichTextEditor'
+import {
+  KIND_ICON,
+  KIND_LABEL,
+  detectSourceDocument,
+  latestOf,
+  tallyByKind,
+  type EvidenceKind,
+} from '@/lib/evidence'
 
 /**
  * The current state of an issue, and where it is changed.
@@ -50,6 +58,8 @@ export interface IssueDraft {
   plannedEnd: string
   /** A decision's recorded outcome — meaningful on Decision-typed records. */
   decisionOutcome: string
+  /** A person's manual figure, overriding whatever the schedule would otherwise derive. */
+  percentOverride: number | null
 }
 
 function draftOf(i: IssueRecord): IssueDraft {
@@ -65,6 +75,7 @@ function draftOf(i: IssueRecord): IssueDraft {
     plannedStart: i.plannedStart ?? '',
     plannedEnd: i.plannedEnd ?? '',
     decisionOutcome: i.decisionOutcome ?? '',
+    percentOverride: i.percentOverride,
   }
 }
 
@@ -84,6 +95,7 @@ export default function OverviewTab({
   editing,
   setEditing,
   onUploadImage,
+  onManageEvidence,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
@@ -106,6 +118,8 @@ export default function OverviewTab({
   editing: boolean
   setEditing: (v: boolean) => void
   onUploadImage: (file: File) => Promise<{ documentId: string; alt: string } | null>
+  /** Opens the evidence manager; kept out of this form so it stays a form. */
+  onManageEvidence: (issueId: string) => void
 }) {
   const labels = useLabels()
   const record = state.issues[issue.id]
@@ -214,6 +228,26 @@ export default function OverviewTab({
      label keeps its semantics. Null for ordinary work, and every RAID surface below hides. */
   const raidKind = raidKindOf(state.model, record?.type ?? issue.type)
   const judged = exposure(record?.riskLikelihood, record?.riskImpact)
+
+  /* ---------------- supplementary context (ported from IssueFocus) ---------------- */
+
+  const activityCount = useMemo(
+    () => Object.values(state.activities).filter((a) => a.issueId === issue.id && !a.deletedAt).length,
+    [state.activities, issue.id],
+  )
+  const relationshipCount = useMemo(
+    () =>
+      state.relationships.filter((r) => r.sourceIssueId === issue.id || r.targetIssueId === issue.id)
+        .length,
+    [state.relationships, issue.id],
+  )
+  const evidenceItems = useMemo(
+    () => Object.values(state.evidence).filter((e) => e.issueId === issue.id && !e.deletedAt),
+    [state.evidence, issue.id],
+  )
+  const evidenceTally = useMemo(() => tallyByKind(evidenceItems), [evidenceItems])
+  const latestEvidence = useMemo(() => latestOf(evidenceItems), [evidenceItems])
+  const sourceDoc = useMemo(() => detectSourceDocument(issue), [issue])
 
   const [composing, setComposing] = useState(false)
   const [mailBody, setMailBody] = useState('')
@@ -444,6 +478,18 @@ export default function OverviewTab({
                 />
               )}
             </dd>
+            {sourceDoc && (
+              <>
+                <dt>Source artifact</dt>
+                <dd>
+                  {sourceDoc.fileName}
+                  <span className="prov">
+                    {' '}
+                    · detected in the issue {sourceDoc.detectedIn} · file not held by this app
+                  </span>
+                </dd>
+              </>
+            )}
             <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
             <dd>
               {issue.client} · {issue.module}
@@ -555,6 +601,23 @@ export default function OverviewTab({
               {formatIso(issue.lastActivity)}{' '}
               <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
             </dd>
+            <dt>Progress</dt>
+            <dd>
+              {row.percentComplete}%
+              <span className="prov">
+                {' '}
+                ·{' '}
+                {row.progressOrigin === 'user'
+                  ? 'manually overridden'
+                  : row.progressOrigin === 'rolled-up'
+                    ? `rolled up from ${activityCount} lifecycle ${activityCount === 1 ? 'activity' : 'activities'}`
+                    : `derived from status`}
+              </span>
+            </dd>
+            <dt>Lifecycle</dt>
+            <dd>{activityCount ? `${activityCount} activities` : 'Not planned'}</dd>
+            <dt>Relationships</dt>
+            <dd>{relationshipCount ? `${relationshipCount} linked` : 'None'}</dd>
             {customResponsibilities.map((t) => (
               <Fragment key={t.id}>
                 <dt>
@@ -578,6 +641,54 @@ export default function OverviewTab({
             ))}
           </dl>
         </div>
+
+        {/* A summary and a way in, not a document library — managing files happens in the
+            evidence manager this launches, not in a growing section here. */}
+        <section className="appr-block">
+          <h4 className="est-h">
+            Evidence &amp; documents
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ marginLeft: 8 }}
+              onClick={() => onManageEvidence(issue.id)}
+            >
+              Manage evidence →
+            </button>
+          </h4>
+          <div className="evi-strip">
+            {(['snapshot', 'data', 'document', 'link'] as EvidenceKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={`evi-cat${evidenceTally[k] === 0 ? ' empty' : ''}`}
+                onClick={() => onManageEvidence(issue.id)}
+              >
+                <span className="evi-cat-top">
+                  {KIND_ICON[k]} {KIND_LABEL[k]}
+                </span>
+                <span className="evi-cat-n">{evidenceTally[k]}</span>
+              </button>
+            ))}
+          </div>
+          {latestEvidence ? (
+            <div className="evi-latest">
+              <span className="ctx-label">Latest</span>
+              <span>
+                {KIND_ICON[latestEvidence.kind]} {latestEvidence.name}
+              </span>
+              {latestEvidence.purpose && <span className="evi-purpose">{latestEvidence.purpose}</span>}
+              <span className="mono" style={{ color: 'var(--text-faint)' }}>
+                {formatIso(latestEvidence.addedAt.slice(0, 10))}
+              </span>
+            </div>
+          ) : (
+            <p className="zone-note">
+              Nothing attached yet. The imported log records evidence only as quoted text, never
+              as files — attach snapshots, data files or documents to build an auditable record.
+            </p>
+          )}
+        </section>
 
         {/* Under the record rather than on a tab of its own: an approval here is never an
             abstract fact, it is the reason a particular move is blocked. */}
@@ -708,7 +819,11 @@ export default function OverviewTab({
             {needsEvidence && (
               <p className="ov-gate">
                 “{movingTo}” needs at least one piece of evidence on the record first — that is
-                what makes the closure producible later. Add it on the Evidence tab.
+                what makes the closure producible later.{' '}
+                <button type="button" className="link-btn" onClick={() => onManageEvidence(issue.id)}>
+                  Attach evidence
+                </button>
+                .
               </p>
             )}
           </dd>
@@ -728,6 +843,53 @@ export default function OverviewTab({
               </dd>
             </>
           )}
+          <dt>Progress</dt>
+          <dd>
+            {draft.percentOverride !== null ? (
+              <>
+                <div className="progress-slider">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={draft.percentOverride}
+                    onChange={(e) => set('percentOverride', Number(e.target.value))}
+                    aria-label="Progress override"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={draft.percentOverride}
+                    onChange={(e) => set('percentOverride', Number(e.target.value))}
+                    className="progress-num"
+                    aria-label="Progress override, percent"
+                  />
+                  <span className="mono">%</span>
+                </div>
+                <button type="button" className="link-btn" onClick={() => set('percentOverride', null)}>
+                  Use automatic progress instead
+                </button>
+              </>
+            ) : (
+              <div className="progress-auto">
+                <span className="fld-hint">
+                  {row.percentComplete}% ·{' '}
+                  {row.progressOrigin === 'rolled-up'
+                    ? `rolled up from ${activityCount} lifecycle ${activityCount === 1 ? 'activity' : 'activities'}`
+                    : `derived from status “${draft.status}”`}
+                </span>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => set('percentOverride', row.percentComplete)}
+                >
+                  Override manually
+                </button>
+              </div>
+            )}
+          </dd>
         </dl>
 
         <dl className="kv">

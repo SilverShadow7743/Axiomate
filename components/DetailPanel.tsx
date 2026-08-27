@@ -597,6 +597,7 @@ export default function DetailPanel({
             editing={editing}
             setEditing={setEditing}
             onUploadImage={(file) => onUploadImage(issue.id, file)}
+            onManageEvidence={onManageEvidence}
           />
         ) : tab === 'Estimation' ? (
           <EstimationTab
