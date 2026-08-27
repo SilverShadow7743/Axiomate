@@ -5709,6 +5709,22 @@ select.cell-editor {
   border-bottom: 1px solid var(--border);
 }
 
+/* A refusal can land on a lane collapsed to 84px (its status is hard to reach precisely
+   because it's rare) — widen back out and drop the collapsed layout so the policy's
+   sentence has room to read rather than being squeezed into a rail. */
+.board-lane.collapsed:has(.board-refusal) {
+  flex: 0 0 250px;
+}
+.board-lane.collapsed:has(.board-refusal) .board-lane-head {
+  flex-direction: row;
+  align-items: baseline;
+}
+.board-lane.collapsed:has(.board-refusal) .board-lane-empty.collapsed {
+  display: block;
+  text-align: left;
+  padding: 4px 2px;
+}
+
 /* The reason collector for a drop — a strip, not a modal, same as the rest of the app. */
 .board-ask {
   position: sticky;
