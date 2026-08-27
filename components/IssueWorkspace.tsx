@@ -203,7 +203,6 @@ export default function IssueWorkspace({
   const [evidenceFor, setEvidenceFor] = useState<string | null>(null)
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [timesheetsOpen, setTimesheetsOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
   const [slaOpen, setSlaOpen] = useState(false)
   /** Which client pack is open for print, if any. */
@@ -1992,21 +1991,10 @@ export default function IssueWorkspace({
             </div>
           )}
         </div>
-        <button
-          className={`btn${view === 'portfolio' ? ' primary' : ''}`}
-          onClick={() => setView('portfolio')}
-          title="Every engagement at once — what each one has overdue, blocked, unowned or quiet"
-        >
-          Portfolio
-        </button>
-        <button
-          className={`btn${view === 'mywork' ? ' primary' : ''}`}
-          onClick={() => setView('mywork')}
-          title="Everything waiting on you, across every engagement"
-        >
-          My work
-          {myWorkCount > 0 && <span className="mywork-count">{myWorkCount}</span>}
-        </button>
+        {/* Portfolio and My work used to repeat here as quick buttons — the exact same
+            destination the view-switch tab strip below already reaches via setView(), one
+            row apart. The tab strip is now the one place every view (including these two) is
+            reached from; My work's count moved onto its tab instead of disappearing. */}
         <button
           className={`btn${configOpen ? ' primary' : ''}`}
           onClick={() => setConfigOpen(true)}
@@ -2086,7 +2074,7 @@ export default function IssueWorkspace({
             ? Object.values(state.timesheets).filter((t) => t.status === 'Submitted').length
             : null
         }
-        onOpenTimesheets={() => setTimesheetsOpen(true)}
+        myWorkCount={myWorkCount}
         slaCandidates={slaPlan.rows.length}
         onPlanSla={() => setSlaOpen(true)}
         onOpenArchive={() => setArchiveOpen(true)}
@@ -2563,32 +2551,6 @@ export default function IssueWorkspace({
       )}
 
       {clientPack && <ClientPackView pack={clientPack.pack} onClose={() => setClientPack(null)} />}
-
-      {timesheetsOpen && (
-        <TimesheetPanel
-          state={state}
-          actor={actor}
-          today={today}
-          onSubmitWeek={(person, week) =>
-            dispatch({ t: 'submitTimesheet', person, weekStarting: week, now: new Date().toISOString() })
-          }
-          onDecideWeek={(id, decision, reason) =>
-            dispatch({ t: 'decideTimesheet', id, decision, reason, now: new Date().toISOString() })
-          }
-          onDecideMany={(ids) => {
-            /* ONE atomic batch — the panel pre-filtered with decideProblem, because a
-               single refused self-approval would abort every approval in it. */
-            const now = new Date().toISOString()
-            dispatchMany(ids.map((tid) => ({ t: 'decideTimesheet', id: tid, decision: 'approved', now }) as Action))
-          }}
-          onOpen={(issueId) => {
-            revealIssue(issueId)
-            setRequestTab('Time' as DetailTab)
-            setTimesheetsOpen(false)
-          }}
-          onClose={() => setTimesheetsOpen(false)}
-        />
-      )}
 
       {configOpen && (
         <ConfigWorkspace

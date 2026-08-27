@@ -156,10 +156,12 @@ interface Props {
   /**
    * Submitted weeks awaiting a decision — null for a viewer without time.approve, so the
    * badge never leaks the queue's size to somebody who cannot act on it. The permission is
-   * decided in IssueWorkspace; this bar stays dumb.
+   * decided in IssueWorkspace; this bar stays dumb. Shown on the Timesheets tab itself —
+   * there is no separate button to it any more, see the view-switch below.
    */
   timesheetQueue: number | null
-  onOpenTimesheets: () => void
+  /** Shown on the My work tab. Zero renders no badge, same as the queue count above. */
+  myWorkCount: number
   /** How many open records would get a due date. The action hides itself at zero. */
   slaCandidates: number
   onPlanSla: () => void
@@ -190,7 +192,7 @@ export default function FilterBar({
   archivedCount,
   onOpenArchive,
   timesheetQueue,
-  onOpenTimesheets,
+  myWorkCount,
   slaCandidates,
   onPlanSla,
 }: Props) {
@@ -267,17 +269,25 @@ export default function FilterBar({
       {/* Navigation first, filters after. Mid-row, this control was the 12th thing on the
           line and two whole program phases went unnoticed behind it. */}
       <div className="segmented view-switch" role="group" aria-label="Workspace view">
-        {VIEW_ORDER.map((v) => (
-          <button
-            key={v}
-            className={view === v ? 'active' : ''}
-            onClick={() => setView(v)}
-            title={VIEW_TITLE[v]}
-            aria-pressed={view === v}
-          >
-            {VIEW_LABEL[v]}
-          </button>
-        ))}
+        {VIEW_ORDER.map((v) => {
+          // The only counts a view carries in its own label: My work's personal queue and,
+          // for an approver, the Timesheets approval queue — the same two numbers a pair of
+          // now-removed quick buttons used to show beside a second, redundant way to reach
+          // these exact two destinations.
+          const count = v === 'mywork' ? myWorkCount : v === 'timesheet' ? timesheetQueue : null
+          return (
+            <button
+              key={v}
+              className={view === v ? 'active' : ''}
+              onClick={() => setView(v)}
+              title={VIEW_TITLE[v]}
+              aria-pressed={view === v}
+            >
+              {VIEW_LABEL[v]}
+              {count ? <span className="mywork-count">{count}</span> : null}
+            </button>
+          )
+        })}
       </div>
 
       <span className="sep" />
@@ -376,14 +386,6 @@ export default function FilterBar({
           Archive · {archivedCount}
         </button>
       )}
-
-      <button
-        className="btn ghost"
-        onClick={onOpenTimesheets}
-        title="Your week, gathered — and for approvers, the queue of submitted weeks"
-      >
-        Timesheets{timesheetQueue ? ` · ${timesheetQueue}` : ''}
-      </button>
 
       {view === 'tree' && (
       <div className="segmented" role="group" aria-label="Timeline zoom">
