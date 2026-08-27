@@ -80,6 +80,39 @@ export function richDocsEqual(a: RichDoc, b: RichDoc): boolean {
 }
 
 /**
+ * Tiptap's own JSON, normalised to this module's canonical empty-paragraph shape.
+ *
+ * `editor.getJSON()` omits `content` entirely on a truly empty paragraph — proven equivalent to
+ * an empty content array once ProseMirror re-parses it, but not byte-equal, which matters for
+ * `richDocsEqual`'s storage-vs-fresh-edit comparisons and for `emptyRichDoc`/`wrapPlainText('')`'s
+ * own already-established shape (`content: []`). Applied once, at the point a document leaves the
+ * editor and is about to be dispatched or compared, so every RichDoc that ever reaches storage
+ * agrees on one shape regardless of which side — the editor or this module's own constructors —
+ * produced it.
+ */
+export function normalizeRichDoc(doc: RichDoc): RichDoc {
+  return { type: 'doc', content: doc.content.map(normalizeNode) }
+}
+
+function normalizeNode(n: RichNode): RichNode {
+  switch (n.type) {
+    case 'paragraph':
+      return { type: 'paragraph', content: (n.content ?? []).map(normalizeNode) }
+    case 'table':
+    case 'tableRow':
+      return { type: n.type, content: n.content.map(normalizeNode) }
+    case 'tableCell':
+    case 'tableHeader':
+      return { type: n.type, attrs: n.attrs, content: (n.content ?? []).map(normalizeNode) }
+    case 'text':
+    case 'image':
+    case 'mention':
+    case 'issueReference':
+      return n
+  }
+}
+
+/**
  * A person lookup for rendering plain text. Optional and array-shaped, matching
  * `mentionSegments`'s own `{id, name}[]` convention in lib/mentions.ts — a caller that does not
  * care about resolving a real name (Step 4's search index, the auto-estimator) can omit it and

@@ -132,6 +132,7 @@ import {
   richDocsEqual,
   richTextToPlainText,
   mentionedPeopleIn,
+  normalizeRichDoc,
   type RichDoc,
 } from '../lib/richText'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
@@ -7243,6 +7244,51 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `message=${JSON.stringify(resaved.message)} error=${JSON.stringify(resaved.error)}`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `message=${JSON.stringify(resaved.message)} error=${JSON.stringify(resaved.error)}`, stops: 'the body diff compares RichDoc objects by reference again, so re-saving unchanged text mints a spurious edit and a spurious audit entry', severity: 'P1', impact: 'every note save is misreported as a real edit even when nothing changed, noisy audit trail and false "edited by" labels' } as const
+  },
+)
+
+scenario(
+  'RC7',
+  "normalizeRichDoc closes the gap between the editor's own empty-paragraph shape and this module's",
+  'editor.getJSON() omits `content` entirely on a truly empty paragraph, proven equivalent to an empty array once ProseMirror re-parses it but not byte-equal -- normalizeRichDoc fills it in, at every depth a paragraph can appear (top level, and inside a table cell), so richDocsEqual keeps comparing meaningfully once real editor output starts arriving alongside this module\'s own emptyRichDoc()/wrapPlainText() constructions.',
+  () => {
+    // Exactly what editor.getJSON() emits for a doc with one empty paragraph -- no `content`
+    // key at all, not `content: []`.
+    const rawEmptyParagraph = { type: 'doc', content: [{ type: 'paragraph' }] } as RichDoc
+    const topLevelRight = richDocsEqual(normalizeRichDoc(rawEmptyParagraph), emptyRichDoc())
+
+    // The same omission nested inside a table cell -- an empty cell still has a paragraph in it
+    // (ProseMirror's table content model requires one), and that paragraph can itself be empty.
+    const rawTableWithEmptyCell = {
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null, align: null }, content: [{ type: 'paragraph' }] },
+              ],
+            },
+          ],
+        },
+      ],
+    } as RichDoc
+    const normalized = normalizeRichDoc(rawTableWithEmptyCell)
+    const cell = (normalized.content[0] as { content: unknown[] }).content[0]
+    const row = (cell as { content: unknown[] }).content[0]
+    const nestedRight =
+      row !== undefined &&
+      JSON.stringify((row as { content: unknown[] }).content[0]).includes('"content":[]')
+
+    // A non-empty paragraph is untouched -- normalization must not perturb real content.
+    const untouched = richDocsEqual(normalizeRichDoc(wrapPlainText('hello')), wrapPlainText('hello'))
+
+    const good = topLevelRight && nestedRight && untouched
+    return good
+      ? { verdict: 'PASS', actual: 'A raw editor doc with an omitted-content empty paragraph normalises to exactly emptyRichDoc(), the same omission nested inside a table cell is filled in too, and a non-empty document round-trips unchanged.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `topLevelRight=${topLevelRight} nestedRight=${nestedRight} untouched=${untouched}`, stops: 'normalizeRichDoc misses the top-level case, a nested one inside a table, or corrupts real content while normalising', severity: 'P1', impact: 'richDocsEqual silently disagrees with itself once real editor output and this module\'s own constructors are compared -- a note re-saved unchanged reads as a real edit, or the reverse' } as const
   },
 )
 

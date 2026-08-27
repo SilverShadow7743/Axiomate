@@ -1662,6 +1662,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "RC7",
+      "title": "normalizeRichDoc closes the gap between the editor's own empty-paragraph shape and this module's",
+      "expected": "editor.getJSON() omits `content` entirely on a truly empty paragraph, proven equivalent to an empty array once ProseMirror re-parses it but not byte-equal -- normalizeRichDoc fills it in, at every depth a paragraph can appear (top level, and inside a table cell), so richDocsEqual keeps comparing meaningfully once real editor output starts arriving alongside this module's own emptyRichDoc()/wrapPlainText() constructions.",
+      "verdict": "PASS",
+      "actual": "A raw editor doc with an omitted-content empty paragraph normalises to exactly emptyRichDoc(), the same omission nested inside a table cell is filled in too, and a non-empty document round-trips unchanged.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
