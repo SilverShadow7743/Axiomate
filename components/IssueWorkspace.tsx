@@ -113,6 +113,22 @@ function clampFraction(f: number): number {
   return Math.max(0.1, Math.min(0.7, f))
 }
 
+/**
+ * Views whose own content is the point, not a row list meant to be read alongside the detail
+ * pane below it — opening a record here (`onOpen`) navigates away rather than pairing with a
+ * persistently visible detail, unlike Tree/Board/Calendar/My work/Portfolio/My calendar, which
+ * pass `onSelect`/`onSelectWork` and are documented (see `.view-dock` in globals.css) as
+ * deliberately docked peers of the detail pane.
+ *
+ * The pane's explicit-preference height (`panelPref` 'standard'/'expanded') is not re-checked
+ * against the real viewport the way the 'auto' default is (`autoStateFor`'s `viewportH < 700`
+ * floor) — so on a short window an explicit preference can leave nothing for `.view-dock`,
+ * which has no minimum height of its own and collapses to 0: an empty tab until the pane is
+ * collapsed by hand. Forcing compact here, independent of `panelPref`, is what actually stops
+ * that — narrowing the ceiling in `panelHeight()` would not, since it protects Tree/Gantt only.
+ */
+const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
+
 interface Props {
   issues: SeedIssueInput[]
   relationships: IssueRelationship[]
@@ -1574,7 +1590,8 @@ export default function IssueWorkspace({
    * the split above, which clamps the tree and Gantt scroll positions and loses the very
    * context focus mode is meant to preserve.
    */
-  const panelState: PanelState = naturalPanelState
+  const forceCompactPanel = DETAIL_INCOMPATIBLE_VIEWS.has(view)
+  const panelState: PanelState = forceCompactPanel ? 'compact' : naturalPanelState
 
   const detailHeight = panelHeight(
     panelState,
@@ -2001,7 +2018,14 @@ export default function IssueWorkspace({
         <button
           className="btn"
           onClick={() => setPanel(panelState === 'compact' ? 'standard' : 'compact')}
-          title={panelState === 'compact' ? 'Show the detail pane' : 'Collapse the detail pane'}
+          disabled={forceCompactPanel}
+          title={
+            forceCompactPanel
+              ? 'The detail pane is not shown on this tab'
+              : panelState === 'compact'
+                ? 'Show the detail pane'
+                : 'Collapse the detail pane'
+          }
         >
           {panelState === 'compact' ? 'Show details' : 'Hide details'}
         </button>
