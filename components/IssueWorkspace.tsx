@@ -91,7 +91,6 @@ import type { ApplyOutcome } from './ChatPanel'
  * is no server-rendered markup for these to produce.
  */
 const Dialogs = dynamic(() => import('./Dialogs'), { ssr: false })
-const IssueFocus = dynamic(() => import('./IssueFocus'), { ssr: false })
 const EvidencePanel = dynamic(() => import('./EvidencePanel'), { ssr: false })
 const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
 const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })

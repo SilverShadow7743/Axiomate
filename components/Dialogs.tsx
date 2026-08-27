@@ -17,7 +17,6 @@ import {
 import { formatIso } from '@/lib/dates'
 import { kindLabel, liveDisciplines, liveWorkTypes } from '@/lib/config'
 import { useLabels } from './labels'
-import { richTextToPlainText } from '@/lib/richText'
 
 export type DialogState =
   | { t: 'add'; parentId: string; kind: CreatableKind }
@@ -341,30 +340,15 @@ function EditForm({
   onClose: () => void
 }) {
   const node = state.nodes[id]
-  const issue = state.issues[id]
-  const parties = state.model.parties
   const act = state.activities[id]
   const labels = useLabels()
 
+  // Issues are edited through the canonical detail panel (OverviewTab), not here — this form
+  // now handles hierarchy nodes and activities only. See docs/plans/2026-08-27-issue-detail-
+  // consolidation-plan.md Step 3: this branch was already unreachable for issues before that
+  // plan (issueForm always intercepted an issue edit first) and stays that way after it.
   const [f, setF] = useState<Record<string, string>>((): Record<string, string> => {
     if (node) return { name: node.name, owner: node.owner ?? '' }
-    if (issue)
-      return {
-        subject: issue.subject,
-        // Flattened for this plain <textarea> — the form's own `description` field is a
-        // string throughout; wrapped back to a RichDoc at the dispatch boundary
-        // (submitDialog's updateIssue branch).
-        description: richTextToPlainText(issue.description),
-        status: issue.status,
-        severity: issue.severity,
-        owner: issue.owner,
-        accountable: issue.accountable,
-        type: issue.type,
-        nextAction: issue.nextAction,
-        plannedStart: issue.plannedStart ?? '',
-        plannedEnd: issue.plannedEnd ?? '',
-        percent: issue.percentOverride != null ? String(issue.percentOverride) : '',
-      }
     if (act)
       return {
         name: String(act.phase),
@@ -392,69 +376,6 @@ function EditForm({
           </Field>
           <Field label={labels.ISSUE_OWNER}>
             <input value={f.owner} onChange={(e) => set('owner', e.target.value)} />
-          </Field>
-        </>
-      )}
-
-      {issue && (
-        <>
-          <Field label="Subject">
-            <input autoFocus value={f.subject} onChange={(e) => set('subject', e.target.value)} required />
-          </Field>
-          <Field label="Description">
-            <textarea rows={3} value={f.description} onChange={(e) => set('description', e.target.value)} />
-          </Field>
-          <div className="fld-row">
-            <Field label="Status">
-              <select value={f.status} onChange={(e) => set('status', e.target.value)}>
-                {ISSUE_STATUSES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Severity">
-              <select value={f.severity} onChange={(e) => set('severity', e.target.value)}>
-                {['High', 'Medium', 'Low'].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div className="fld-row">
-            <Field label={labels.ISSUE_OWNER}>
-              <input value={f.owner} onChange={(e) => set('owner', e.target.value)} />
-            </Field>
-            <Field label="Accountable party">
-              <select value={f.accountable} onChange={(e) => set('accountable', e.target.value)}>
-                {parties.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field label="Next action">
-            <input value={f.nextAction} onChange={(e) => set('nextAction', e.target.value)} />
-          </Field>
-          <div className="fld-row">
-            <Field label="Planned start">
-              <input type="date" value={f.plannedStart} onChange={(e) => set('plannedStart', e.target.value)} />
-            </Field>
-            <Field label="Due date">
-              <input type="date" value={f.plannedEnd} onChange={(e) => set('plannedEnd', e.target.value)} />
-            </Field>
-          </div>
-          <Field
-            label="% complete"
-            hint="Leave blank to keep deriving progress from the status."
-          >
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={f.percent}
-              placeholder="derived from status"
-              onChange={(e) => set('percent', e.target.value)}
-            />
           </Field>
         </>
       )}
