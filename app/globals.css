@@ -1109,6 +1109,14 @@ select.cell-editor {
 .detail-grip.dragging {
   background: var(--accent);
 }
+/* Timesheets/Notifications/Mail log force the pane compact — dragging can't change that, so
+   the grip must not look draggable there. */
+.detail-grip.locked {
+  cursor: default;
+}
+.detail-grip.locked:hover {
+  background: var(--border);
+}
 .grip-marks {
   width: 30px;
   height: 3px;
