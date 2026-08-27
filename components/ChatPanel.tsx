@@ -25,6 +25,9 @@ export interface ApplyOutcome {
 interface Props {
   index: IssueIndexEntry[]
   today: string
+  /** Which engine will answer, decided server-side from ANTHROPIC_API_KEY — shown in the
+   *  header so the mode is known before a query is typed, not disclosed only in a reply. */
+  engine: ChatReply['engine']
   /** The operating-model slice the assistant runs under. */
   config: ChatConfig
   /** Select a row and make sure it is actually visible (expanded, not filtered away). */
@@ -98,7 +101,7 @@ function diffLines(p: Proposal, index: IssueIndexEntry[]): { label: string; from
     .map(([k, v]) => ({ label: label(k), from: '—', to: v }))
 }
 
-export default function ChatPanel({ index, today, config, onReveal, onApply, onClose }: Props) {
+export default function ChatPanel({ index, today, engine, config, onReveal, onApply, onClose }: Props) {
   const [turns, setTurns] = useState<Turn[]>(() => [greeting(config)])
   const [draft, setDraft] = useState('')
   /**
@@ -275,6 +278,16 @@ export default function ChatPanel({ index, today, config, onReveal, onApply, onC
     <aside className="chat" aria-label="Assistant">
       <header className="chat-head">
         <span className="chat-title">Assistant</span>
+        <span
+          className={`chat-mode-badge ${engine}`}
+          title={
+            engine === 'offline'
+              ? 'No ANTHROPIC_API_KEY is configured — structured phrasings only, no language model.'
+              : 'Answered by Claude.'
+          }
+        >
+          {engine === 'offline' ? 'Structured mode' : 'Claude'}
+        </span>
         <span className="grow" />
         <button className="btn ghost chat-x" onClick={onClose} aria-label="Close the assistant">
           ×

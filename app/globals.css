@@ -2994,6 +2994,29 @@ select.cell-editor {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+/* Which engine is live, stated before a query is typed rather than disclosed only in a
+   reply — offline is a degraded mode (structured phrasings only, no model), so it gets the
+   at-risk treatment; claude is the expected case and stays quiet. */
+.chat-mode-badge {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.chat-mode-badge.claude {
+  color: var(--text-faint);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.chat-mode-badge.offline {
+  color: var(--h-atrisk);
+  border: 1px solid color-mix(in srgb, var(--h-atrisk) 40%, transparent);
+  background: color-mix(in srgb, var(--h-atrisk) 10%, var(--bg));
+}
 .chat-x {
   width: 24px;
   height: 24px;

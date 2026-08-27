@@ -54,6 +54,13 @@ export interface Boot {
     error?: string
   }
   /**
+   * Which engine the Assistant panel will answer with, decided once here by whether
+   * `ANTHROPIC_API_KEY` is set — the same fact the chat route re-derives per turn to pick an
+   * engine, surfaced ahead of time so the panel can say which one is live before anybody has
+   * typed a question, rather than only after a reply names it.
+   */
+  assistant: { engine: 'claude' | 'offline' }
+  /**
    * When the scheduled pass last ran, and what it said — a stored fact from `scheduleWatch`,
    * written on every run. Null when it has never run (or nothing is stored), which is exactly
    * what the configuration screens must be able to say out loud: a recurrence rule marked
@@ -66,6 +73,9 @@ export async function boot(): Promise<Boot> {
   const seed = await loadSeed()
   // Resolved once, here, and passed down. Nothing further in the request re-derives it.
   const tenantId = currentTenantId()
+  const assistant: Boot['assistant'] = {
+    engine: process.env.ANTHROPIC_API_KEY ? 'claude' : 'offline',
+  }
   /**
    * Resolved through the boundary rather than the resolver, so a page render and a write
    * request agree about who is here. The page has no `Request` to hand — a server component
@@ -124,6 +134,7 @@ export async function boot(): Promise<Boot> {
         enabled: false,
         note: 'Sign in to see this workspace.',
       },
+      assistant,
       pass: { lastRunAt: null, lastSummary: null },
     }
   }
@@ -140,6 +151,7 @@ export async function boot(): Promise<Boot> {
         enabled: false,
         note: 'In-memory session. Set DATABASE_URL and run `npm run db:push` to save changes.',
       },
+      assistant,
       pass: { lastRunAt: null, lastSummary: null },
     }
   }
@@ -224,6 +236,7 @@ export async function boot(): Promise<Boot> {
           ? `${note} ${orphans.length} issues have no parent and are not shown in the tree.`
           : note,
       },
+      assistant,
       pass,
     }
   } catch (err) {
@@ -241,6 +254,7 @@ export async function boot(): Promise<Boot> {
         note: 'Running from the issue log. Changes are not being saved.',
         error: describeDbError(err),
       },
+      assistant,
       pass: { lastRunAt: null, lastSummary: null },
     }
   }

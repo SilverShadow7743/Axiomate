@@ -135,6 +135,8 @@ interface Props {
   /** Supplied when a database served the workspace; null means the seed file did. */
   initialState: WorkspaceState | null
   persistence: { enabled: boolean; note: string; error?: string }
+  /** Which engine the Assistant panel answers with, decided server-side from ANTHROPIC_API_KEY. */
+  assistant: { engine: 'claude' | 'offline' }
   /** When the scheduled pass last ran (null: never), read from the database at page load. */
   pass: { lastRunAt: string | null; lastSummary: string | null }
   /**
@@ -181,6 +183,7 @@ export default function IssueWorkspace({
   relationships,
   initialState,
   persistence,
+  assistant,
   pass,
   tenantId,
   actor,
@@ -2521,6 +2524,7 @@ export default function IssueWorkspace({
         <ChatPanel
           index={chatIndex}
           today={today}
+          engine={assistant.engine}
           config={{
             terms: {
               owner: scopedLabels.ISSUE_OWNER,

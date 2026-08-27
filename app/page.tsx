@@ -9,7 +9,7 @@ export default async function Page({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const { seed, state, persistence, tenantId, actor, signInRequired, verified, pass } = await boot()
+  const { seed, state, persistence, tenantId, actor, signInRequired, verified, assistant, pass } = await boot()
 
   /**
    * Nobody signed in sees this page at all.
@@ -59,6 +59,7 @@ export default async function Page({
       relationships={state ? [] : seed.relationships}
       initialState={state}
       persistence={persistence}
+      assistant={assistant}
       pass={pass}
       tenantId={tenantId}
       actor={actor}
