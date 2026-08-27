@@ -492,6 +492,29 @@ const FIELD_ALIASES: Record<string, PatchableField> = {
 
 const ID_RE = /\b([A-Z]{2,10}-\d{1,4})\b/i
 
+export const CREATE_VERB_RE = /^(?:new|create|log|raise|add)\s+(?:an?\s+)?(?:issue|ticket)\b/i
+
+export type CommandKind = 'create' | 'update' | 'search'
+
+/**
+ * Which of `offlineReply`'s three branches a message will take, without doing any of the actual
+ * parsing/validation that branch does.
+ *
+ * Exists so a live hint shown while typing can reuse the real grammar's own shape rather than a
+ * second, hand-maintained guess at it, and so `offlineReply` itself has exactly one place this
+ * decision is made rather than the two near-duplicate regexes it used to run inline — one for
+ * the autonomy gate (`looksLikeMutation`), one for the create match itself, agreeing by
+ * construction rather than by two people remembering to keep two patterns in sync.
+ *
+ * Empty input is the caller's concern, not this function's: it returns `'search'` for `''`, and
+ * `offlineReply`'s own `if (!raw)` greeting branch runs before this is ever reached.
+ */
+export function classifyCommand(raw: string): CommandKind {
+  if (CREATE_VERB_RE.test(raw)) return 'create'
+  if (ID_RE.test(raw) && /[=:]/.test(raw)) return 'update'
+  return 'search'
+}
+
 /**
  * Aliases for the search branch's facets — distinct from `FIELD_ALIASES`, which is scoped to
  * `PatchableField` (the update vocabulary). `module`, `client` and `health` are not patchable
@@ -582,9 +605,7 @@ export function offlineReply(
    * Enforced here rather than only in the UI: the autonomy setting is a policy about what the
    * assistant may do, and a policy that only hides a button is not a policy.
    */
-  const looksLikeMutation =
-    /^(?:new|create|log|raise|add)\s+(?:an?\s+)?(?:issue|ticket)\b/i.test(raw) ||
-    (ID_RE.test(raw) && /[=:]/.test(raw))
+  const looksLikeMutation = classifyCommand(raw) !== 'search'
   if (looksLikeMutation && !canPropose(cfg)) {
     return reply(
       `I am set to ${cfg.autonomy === 'suggest' ? 'suggest only' : 'off'} in this workspace, so I cannot draft that change. Raise it from the tree, or change the Workspace Assistant's autonomy in Configuration.`,
@@ -592,9 +613,8 @@ export function offlineReply(
   }
 
   /* ---- create: "new issue in OAPIL/Inventory: <subject>" ---- */
-  const create = raw.match(/^(?:new|create|log|raise|add)\s+(?:an?\s+)?(?:issue|ticket)\b(.*)$/i)
-  if (create) {
-    let rest = create[1].trim().replace(/^(?:for|in|under)\s+/i, '')
+  if (CREATE_VERB_RE.test(raw)) {
+    let rest = raw.replace(CREATE_VERB_RE, '').trim().replace(/^(?:for|in|under)\s+/i, '')
     let client = ''
     let module = ''
     const scope = rest.match(/^([A-Za-z0-9 &._-]+?)\s*\/\s*([A-Za-z0-9 &._-]+?)\s*[:\-–]\s*(.+)$/)
