@@ -140,13 +140,32 @@ evidence-summary line + "Manage evidence" button matching `IssueFocus`'s.
 
 `lib/editing.ts`'s `editorFor` already backs inline per-cell editors for Status, Severity and
 Owner in `TreeGrid` — double-click a cell with a spec opens the inline editor; falls back to
-`rowActions.edit` only when no spec exists for that column. Subject has no inline editor today,
-confirmed by grep — the one real gap against the requested scope (Status, Owner, Severity,
-Subject). Quick Edit is a Subject entry added to `editorFor`, in the same shape as the other
-three — not a new component, and not scoped narrowly to any one node in the tree: "unfiled-intake
-issues" (the motivating case) are ordinary rows under the real, already-existing `Unfiled intake`
-module node (`scripts/intake-mailbox.ts:63`), visible in the normal Tree wherever that node is
-expanded — the affordance applies everywhere the existing three already do, not to a special
+`rowActions.edit` only when no spec exists for that column.
+
+**Subject is not a missing case to add to that list — it is deliberately excluded**, and the
+exclusion is already reasoned in source (`lib/editing.ts:57–73`): "a subject is the sentence a
+client reads and it is written next to the description, which has no cell to be typed into.
+Editing it through a 392px cell with the description out of sight is how the two stop agreeing
+with each other." `TreeGrid.tsx:511` already gives the Subject column its own double-click
+behavior for exactly this reason (`opensEditor`, currently routing to the full editor rather than
+doing nothing).
+
+Found while writing the implementation plan, corrected here before it was written into one: since
+the user's own original request already named "row-level or small popover" as acceptable shapes
+for Quick Edit, the resolution is a **small popover**, not a fourth `editorFor` case. Double-click
+on the Subject cell (`TreeGrid.tsx:511`'s `opensEditor` branch) opens a compact popover carrying
+all four Quick Edit fields — Status, Owner, Severity, Subject — positioned off the cell the same
+way `StatusCellEditor` already positions itself off the Status cell. Each field commits
+independently and immediately, the same "no independent save/cancel lifecycle" behavior the other
+three inline editors already have — this is four fields shown together, not a form with its own
+submit. Row-menu "Edit" and toolbar "Edit" continue to open the full `DetailPanel` (via
+`revealIssue` + `requestEdit`) unchanged — double-click keeps meaning "fast inline edit" and the
+menu keeps meaning "the full editor," the same split every other column already has.
+
+Not scoped narrowly to any one node in the tree: "unfiled-intake issues" (the motivating case) are
+ordinary rows under the real, already-existing `Unfiled intake` module node
+(`scripts/intake-mailbox.ts:63`), visible in the normal Tree wherever that node is expanded — the
+affordance applies everywhere Status/Severity/Owner's inline editors already do, not to a special
 subset of rows.
 
 ## What would send this back
