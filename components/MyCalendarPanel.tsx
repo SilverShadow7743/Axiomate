@@ -82,6 +82,7 @@ export default function MyCalendarPanel({
     <div className="view-dock">
       <div className="cal docked" role="region" aria-label="My calendar">
         <div className="cal-head">
+          <span className="cal-title">My calendar</span>
           <div className="segmented" role="group" aria-label="Month">
             <button onClick={() => shift(-1)} aria-label="Previous month">‹</button>
             <button

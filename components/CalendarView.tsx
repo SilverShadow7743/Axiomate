@@ -45,6 +45,7 @@ export default function CalendarView({
   return (
     <div className="cal" role="region" aria-label="Calendar">
       <div className="cal-head">
+        <span className="cal-title">Calendar</span>
         <div className="segmented" role="group" aria-label="Month">
           <button onClick={() => shift(-1)} aria-label="Previous month">‹</button>
           <button

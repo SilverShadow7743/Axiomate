@@ -19,6 +19,10 @@
 
   --accent: #b92a2a;
   --accent-soft: #fbeaea;
+  /* Calendar vs My calendar, and nothing else — a second accent kept scoped to that one
+     distinction rather than becoming a general-purpose color. */
+  --accent-2: #4a3f9e;
+  --accent-2-soft: #ece9fa;
 
   --grid-line: #eceff3;
   --grid-line-strong: #dde2e8;
@@ -77,6 +81,8 @@
     --text-faint: #6f7b87;
     --accent: #e05a5a;
     --accent-soft: #35201f;
+    --accent-2: #8b7fe8;
+    --accent-2-soft: #241f3d;
     --grid-line: #21262b;
     --grid-line-strong: #2c333a;
     --today: #e05a5a;
@@ -109,6 +115,8 @@
   --text-faint: #6f7b87;
   --accent: #e05a5a;
   --accent-soft: #35201f;
+  --accent-2: #8b7fe8;
+  --accent-2-soft: #241f3d;
   --grid-line: #21262b;
   --grid-line-strong: #2c333a;
   --today: #e05a5a;
@@ -5755,6 +5763,12 @@ select.cell-editor {
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  border-top: 3px solid var(--accent);
+}
+/* My calendar, docked — the one place `.cal` renders private-to-you content, so it gets the
+   second accent rather than the one used for the team's own calendar and everywhere else. */
+.cal.docked {
+  border-top-color: var(--accent-2);
 }
 
 .cal-head {
@@ -5762,6 +5776,17 @@ select.cell-editor {
   align-items: center;
   gap: 12px;
   padding: 8px 12px 0;
+}
+
+.cal-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cal.docked .cal-title {
+  color: var(--accent-2);
 }
 
 .cal-month {
