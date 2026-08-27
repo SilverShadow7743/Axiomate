@@ -79,6 +79,10 @@ interface Props {
   audit: AuditEntry[]
   height: number
   panelState: PanelState
+  /** True on views (Timesheets, Notifications, Mail log) that force `panelState` to 'compact'
+   *  regardless of preference — the size controls below have nothing to change, so they render
+   *  disabled rather than as live buttons that silently do nothing. */
+  panelLocked?: boolean
   /** Report a dragged pixel height; the workspace stores it as a fraction. */
   onResize: (px: number) => void
   onSetPanel: (s: PanelState) => void
@@ -214,6 +218,7 @@ export default function DetailPanel({
   audit,
   height,
   panelState,
+  panelLocked = false,
   onResize,
   onSetPanel,
   onTabChange,
@@ -452,8 +457,8 @@ export default function DetailPanel({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- resize is a pointer comfort affordance; the panel's content stays keyboard-reachable at any height */}
       <div
         className={`detail-grip${resizing ? ' dragging' : ''}`}
-        onMouseDown={() => setResizing(true)}
-        title="Drag to resize"
+        onMouseDown={() => !panelLocked && setResizing(true)}
+        title={panelLocked ? 'The detail pane is not shown on this tab' : 'Drag to resize'}
       >
         <span className="grip-marks" />
       </div>
@@ -483,7 +488,14 @@ export default function DetailPanel({
           <button
             className="btn ghost"
             onClick={() => onSetPanel(panelState === 'compact' ? 'standard' : 'compact')}
-            title={panelState === 'compact' ? 'Open the detail pane' : 'Collapse to tabs'}
+            disabled={panelLocked}
+            title={
+              panelLocked
+                ? 'The detail pane is not shown on this tab'
+                : panelState === 'compact'
+                  ? 'Open the detail pane'
+                  : 'Collapse to tabs'
+            }
             aria-label={panelState === 'compact' ? 'Open detail pane' : 'Collapse detail pane'}
           >
             {panelState === 'compact' ? '▲' : '▼'}
@@ -491,7 +503,14 @@ export default function DetailPanel({
           <button
             className="btn ghost"
             onClick={() => onSetPanel(panelState === 'expanded' ? 'standard' : 'expanded')}
-            title={panelState === 'expanded' ? 'Restore normal height' : 'Expand the detail pane'}
+            disabled={panelLocked}
+            title={
+              panelLocked
+                ? 'The detail pane is not shown on this tab'
+                : panelState === 'expanded'
+                  ? 'Restore normal height'
+                  : 'Expand the detail pane'
+            }
             aria-label="Expand detail pane"
           >
             {panelState === 'expanded' ? '⤡' : '⤢'}

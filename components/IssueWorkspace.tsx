@@ -1599,12 +1599,19 @@ export default function IssueWorkspace({
     availableH,
   )
 
+  /**
+   * Guarded centrally rather than at each caller (the toolbar toggle, DetailPanel's own
+   * collapse/expand buttons, `onTabChange`) — a forced-compact view has nothing to show for a
+   * changed preference, so persisting one anyway would silently change what a later Tree visit
+   * looks like for a click that appeared to do nothing here.
+   */
   const setPanel = useCallback(
     (next: PanelState) => {
+      if (forceCompactPanel) return
       setPanelPref(next)
       savePrefs({ pref: next, fraction: panelFraction })
     },
-    [panelFraction],
+    [panelFraction, forceCompactPanel],
   )
 
   // Selecting a row is the signal that the detail pane is wanted. Only overrides an
@@ -1630,13 +1637,16 @@ export default function IssueWorkspace({
   /** Drag stores a fraction of the available height, not a pixel value. */
   const onPanelResize = useCallback(
     (px: number) => {
+      // Same reasoning as `setPanel` above — dragging a grip that can't visibly move must not
+      // persist a preference for it.
+      if (forceCompactPanel) return
       const f = clampFraction(px / availableH)
       setPanelFraction(f)
       const next: PanelState = panelState === 'compact' ? 'standard' : panelState
       setPanelPref(next)
       savePrefs({ pref: next, fraction: f })
     },
-    [availableH, panelState],
+    [availableH, panelState, forceCompactPanel],
   )
 
   /* ---------------- splitter ---------------- */
@@ -2269,6 +2279,7 @@ export default function IssueWorkspace({
           audit={state.audit}
           height={detailHeight}
           panelState={panelState}
+          panelLocked={forceCompactPanel}
           onResize={onPanelResize}
           onSetPanel={setPanel}
           onTabChange={onTabChange}
