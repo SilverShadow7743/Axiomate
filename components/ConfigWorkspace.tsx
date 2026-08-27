@@ -4408,7 +4408,24 @@ function Rates({
   const [kind, setKind] = useState<RateKind>('cost')
   const [from, setFrom] = useState('')
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('GBP')
+  /* The form's own one-time default, not a live-tracked value — a new entry should default to
+     what's already on the books, but once the field is set it stays whatever the person typed
+     even if another rate is recorded elsewhere while this form is open. Falls back to GBP only
+     when nothing is recorded yet, i.e. there is no "already in use" to default to — the first
+     rate ever recorded for a firm that bills outside GBP still needs typing over once. */
+  const [currency, setCurrency] = useState(() => {
+    const counts = new Map<string, number>()
+    for (const r of rates) counts.set(r.currency, (counts.get(r.currency) ?? 0) + 1)
+    let best: string | null = null
+    let bestCount = 0
+    for (const [c, n] of counts) {
+      if (n > bestCount) {
+        best = c
+        bestCount = n
+      }
+    }
+    return best ?? 'GBP'
+  })
   const [why, setWhy] = useState('')
   const [correcting, setCorrecting] = useState<string | null>(null)
   const [newAmount, setNewAmount] = useState('')
