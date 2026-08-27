@@ -25,12 +25,30 @@
 
 export type RichMark = 'bold' | 'italic'
 
+/**
+ * Node shapes here are the real output of `editor.getJSON()`, verified against the installed
+ * Tiptap packages before this type was changed to match (see the spike this comment replaces
+ * in git history) — not a guess. Two things a hand-authored schema would get wrong by default:
+ *
+ * - `paragraph.content` is optional, not a required empty array. ProseMirror omits the key
+ *   entirely on a truly empty paragraph (`{"type":"paragraph"}`, no `content` at all) rather
+ *   than emitting `content: []` — the two parse back to the identical document, but only one of
+ *   them is what the editor actually writes.
+ * - `text.marks` is an array of `{ type: 'bold' }` objects, never bare strings.
+ * - `tableCell`/`tableHeader` always carry `attrs` (colspan, rowspan, colwidth, align) — this
+ *   isn't cosmetic metadata to strip at the boundary, it's what a merged or resized column
+ *   *is*; stripping it would silently undo a real edit on save.
+ */
 export type RichNode =
-  | { type: 'paragraph'; content: RichNode[] }
-  | { type: 'text'; text: string; marks?: RichMark[] }
+  | { type: 'paragraph'; content?: RichNode[] }
+  | { type: 'text'; text: string; marks?: { type: RichMark }[] }
   | { type: 'table'; content: RichNode[] }
   | { type: 'tableRow'; content: RichNode[] }
-  | { type: 'tableCell' | 'tableHeader'; content: RichNode[] }
+  | {
+      type: 'tableCell' | 'tableHeader'
+      attrs?: { colspan: number; rowspan: number; colwidth: number[] | null; align: string | null }
+      content?: RichNode[]
+    }
   | { type: 'image'; attrs: { documentId: string; alt?: string } }
   | { type: 'mention'; attrs: { personId: string } }
   | { type: 'issueReference'; attrs: { issueId: string } }
@@ -98,7 +116,7 @@ function nodeText(n: RichNode, lookups: RichTextLookups): string {
     case 'paragraph':
     case 'tableCell':
     case 'tableHeader':
-      return n.content.map((c) => nodeText(c, lookups)).join('')
+      return (n.content ?? []).map((c) => nodeText(c, lookups)).join('')
   }
 }
 

@@ -7104,7 +7104,7 @@ scenario(
     const b = wrapPlainText('')
     const shapeRight =
       a.content.length === 1 && a.content[0].type === 'paragraph' &&
-      'content' in a.content[0] && a.content[0].content.length === 0 &&
+      'content' in a.content[0] && (a.content[0].content?.length ?? -1) === 0 &&
       richDocsEqual(a, b)
     const bothEmpty = isEmptyRichDoc(a) && isEmptyRichDoc(b)
     const good = shapeRight && bothEmpty
