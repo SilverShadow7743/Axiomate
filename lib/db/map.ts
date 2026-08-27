@@ -65,7 +65,6 @@ import type {
 } from '../milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { TenantId } from '../tenant'
-import { richTextToPlainText, wrapPlainText } from '../richText'
 
 /**
  * Translation between stored rows and the shapes the reducer works in.
@@ -194,11 +193,7 @@ export function issueToRow(
     tenantId,
     id: i.id,
     subject: i.subject,
-    // TEMPORARY: the column is still `text` (the rich-content migration was reverted live —
-    // see prisma/migrations/20260826000003_revert_rich_content_json). Flattened here so the
-    // app-level RichDoc has somewhere to land; becomes a straight pass-through once the Json
-    // migration is re-applied alongside this code at deploy.
-    description: richTextToPlainText(i.description),
+    description: i.description as unknown as Prisma.InputJsonValue,
     nodeId: parentIsIssue ? null : i.parentId,
     parentIssueId: parentIsIssue ? i.parentId : null,
     client: i.client,
@@ -248,8 +243,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     client: r.client,
     module: r.module,
     subject: r.subject,
-    // TEMPORARY: same bridge as issueToRow, in reverse.
-    description: wrapPlainText(r.description),
+    description: r.description as unknown as IssueRecord['description'],
     type: r.type,
     sourceType: r.sourceType,
     discipline: r.discipline,
@@ -460,8 +454,7 @@ export function noteToRow(tenantId: TenantId, n: IssueNote): Prisma.IssueNoteUnc
     tenantId,
     id: n.id,
     issueId: n.issueId,
-    // TEMPORARY: same bridge as issueToRow/issueFromRow, for IssueNote.body.
-    body: richTextToPlainText(n.body),
+    body: n.body as unknown as Prisma.InputJsonValue,
     noteType: n.noteType,
     pinned: n.pinned,
     clientVisible: n.clientVisible ?? false,
@@ -477,8 +470,7 @@ export function noteFromRow(r: IssueNoteRow): IssueNote {
   return {
     id: r.id,
     issueId: r.issueId,
-    // TEMPORARY: same bridge, in reverse.
-    body: wrapPlainText(r.body),
+    body: r.body as unknown as IssueNote['body'],
     // Widened rather than asserted against the current list, same as `EngagementDetail.type`:
     // the column is free text so a note filed under a type this build no longer names still
     // reads back as what it was written as.

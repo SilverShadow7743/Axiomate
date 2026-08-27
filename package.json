@@ -30,6 +30,7 @@
     "@prisma/client": "^7.8.0",
     "@tiptap/core": "^3.30.5",
     "@tiptap/extension-table": "^3.30.5",
+    "@tiptap/extensions": "^3.30.5",
     "@tiptap/pm": "^3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",

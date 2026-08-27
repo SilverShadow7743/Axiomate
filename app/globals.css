@@ -4269,6 +4269,199 @@ select.cell-editor {
   gap: 6px;
 }
 
+/* ---------- rich text editor (descriptions, notes) ---------- */
+.rte {
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.rte-readonly {
+  border-color: transparent;
+  background: transparent;
+}
+.rte-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.rte-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 2px 2px;
+}
+.rte-btn {
+  height: 24px;
+  min-width: 24px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rte-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.rte-btn.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.rte-btn.rte-italic {
+  font-style: italic;
+}
+.rte-file-input {
+  display: none;
+}
+.rte-upload-error {
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--h-overdue);
+  border-top: 1px solid var(--border);
+}
+
+.rte-content {
+  min-height: 72px;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 8px 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.rte-readonly .rte-content {
+  min-height: 0;
+  max-height: none;
+  overflow-y: visible;
+  padding: 0;
+}
+.rte-content:focus {
+  outline: none;
+}
+.rte-content p {
+  margin: 0 0 0.6em 0;
+}
+.rte-content p:last-child {
+  margin-bottom: 0;
+}
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.rte-content table {
+  border-collapse: collapse;
+  margin: 0.4em 0;
+  width: 100%;
+}
+.rte-content table td,
+.rte-content table th {
+  border: 1px solid var(--border-strong);
+  padding: 4px 7px;
+  vertical-align: top;
+  font-size: 12px;
+}
+.rte-content table th {
+  background: var(--surface-2);
+  font-weight: 600;
+  text-align: left;
+}
+.rte-content table .selectedCell {
+  background: var(--accent-soft);
+}
+
+.rte-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.rte-issue-ref {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--bar-issue);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.rte-issue-ref-status {
+  font-family: var(--sans);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.rte-image-wrap {
+  display: inline-block;
+  max-width: 100%;
+}
+.rte-image {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.rte-suggest-popup {
+  position: absolute;
+  z-index: var(--z-overlay-stacked);
+}
+.rte-suggest-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  min-width: 180px;
+  max-width: 320px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.rte-suggest-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.rte-suggest-list li.on,
+.rte-suggest-list li:hover {
+  background: var(--surface-2);
+}
+.rte-suggest-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.rte-suggest-sub {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rte-suggest-empty {
+  padding: 8px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
 /* A menu item that carries a line of explanation under its label. */
 .menu-item .menu-sub {
   display: block;

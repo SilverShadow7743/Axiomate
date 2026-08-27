@@ -352,7 +352,7 @@ export default function IssueWorkspace({
       evidenceId: string | null,
       /** A new version of an existing document — the reducer validates the chain. */
       supersedesId?: string,
-    ): Promise<string | null> => {
+    ): Promise<{ document: DocumentRecord } | { error: string }> => {
       const form = new FormData()
       form.append('file', file)
       form.append('subjectKind', subjectKind)
@@ -365,14 +365,14 @@ export default function IssueWorkspace({
       try {
         res = await fetch('/api/documents', { method: 'POST', body: form })
       } catch {
-        return 'The file could not be sent. Check the connection and try again — nothing has been stored.'
+        return { error: 'The file could not be sent. Check the connection and try again — nothing has been stored.' }
       }
       const body = (await res.json().catch(() => null)) as
         | { ok?: boolean; error?: string; document?: DocumentRecord; evidenceId?: string | null }
         | null
 
       if (!res.ok || !body?.ok || !body.document?.id) {
-        return body?.error ?? `The file could not be stored (${res.status}).`
+        return { error: body?.error ?? `The file could not be stored (${res.status}).` }
       }
 
       /*
@@ -393,9 +393,28 @@ export default function IssueWorkspace({
             : s.evidence,
       }))
       notify(`${doc.name} stored.`)
-      return null
+      return { document: doc }
     },
     [notify],
+  )
+
+  /**
+   * An image pasted, dropped or inserted into a rich-text description or note — the same
+   * `uploadDocument` path `EvidencePanel` uses, so an embedded image stays visible in the
+   * issue's own Documents list too, rather than living in a second, editor-only store nothing
+   * else can see. Unlike evidence, an inline image is never itself the evidence for something
+   * (`evidenceId: null`), and it can never supersede an earlier version.
+   */
+  const uploadInlineImage = useCallback(
+    async (issueId: string, file: File): Promise<{ documentId: string; alt: string } | null> => {
+      const res = await uploadDocument(file, 'issue', issueId, null)
+      if ('error' in res) {
+        notify(res.error)
+        return null
+      }
+      return { documentId: res.document.id, alt: res.document.name }
+    },
+    [uploadDocument, notify],
   )
 
   /**
@@ -2248,6 +2267,7 @@ export default function IssueWorkspace({
           onUnlink={(id) => dispatch({ t: 'unlink', id, now: new Date().toISOString() })}
           evidence={Object.values(state.evidence)}
           onManageEvidence={setEvidenceFor}
+          onUploadImage={(issueId, file) => uploadInlineImage(issueId, file)}
           onRemoveDependency={(id) =>
             dispatch({ t: 'removeDependency', id, now: new Date().toISOString() })
           }
@@ -2440,7 +2460,10 @@ export default function IssueWorkspace({
           mayAttach={can(state.model, actor, 'document.upload')}
           mayAddEvidence={can(state.model, actor, 'evidence.add')}
           mayRemove={can(state.model, actor, 'evidence.remove')}
-          onUpload={(file, evidenceId) => uploadDocument(file, 'issue', evidenceFor, evidenceId)}
+          onUpload={async (file, evidenceId) => {
+            const res = await uploadDocument(file, 'issue', evidenceFor, evidenceId)
+            return 'error' in res ? res.error : null
+          }}
           onWithdrawDocument={(id) =>
             dispatch({ t: 'removeDocument', id, now: new Date().toISOString() })
           }
@@ -2461,9 +2484,10 @@ export default function IssueWorkspace({
           onWithdrawReview={(reviewId) =>
             dispatch({ t: 'withdrawDocumentReview', reviewId, now: new Date().toISOString() })
           }
-          onUploadVersion={(file, supersedesId) =>
-            uploadDocument(file, 'issue', evidenceFor, null, supersedesId)
-          }
+          onUploadVersion={async (file, supersedesId) => {
+            const res = await uploadDocument(file, 'issue', evidenceFor, null, supersedesId)
+            return 'error' in res ? res.error : null
+          }}
           onClose={() => setEvidenceFor(null)}
         />
       )}

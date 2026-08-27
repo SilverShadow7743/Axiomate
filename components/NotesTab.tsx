@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { canAddNote, canEditNote } from '@/lib/permissions'
 import { NOTE_TYPES, DEFAULT_NOTE_TYPE, notesFor, wasEdited, type IssueNote, type NoteType } from '@/lib/notes'
-import { mentionSegments } from '@/lib/mentions'
-import { richTextToPlainText, wrapPlainText, type RichDoc } from '@/lib/richText'
+import { emptyRichDoc, isEmptyRichDoc, richDocsEqual, type RichDoc } from '@/lib/richText'
 import type { WorkspaceState } from '@/lib/workspace'
+import RichTextEditor from './RichTextEditor'
 
 /**
  * The working record of an issue: what was tried, said, decided and ruled out.
@@ -23,6 +23,7 @@ export default function NotesTab({
   onAdd,
   onUpdate,
   onDelete,
+  onUploadImage,
   onWriteReply,
 }: {
   issueId: string
@@ -34,6 +35,7 @@ export default function NotesTab({
     patch: Partial<Pick<IssueNote, 'body' | 'noteType' | 'pinned' | 'clientVisible'>>,
   ) => void
   onDelete: (id: string) => void
+  onUploadImage: (file: File) => Promise<{ documentId: string; alt: string } | null>
   /**
    * Present when this record can be replied to (a claimed address, the grant, a mailbox).
    * The sent replies land in this thread as pinned notes, so the place they are READ offers
@@ -43,20 +45,25 @@ export default function NotesTab({
 }) {
   const notes = useMemo(() => notesFor(state.notes, issueId), [state.notes, issueId])
   const mayAdd = canAddNote(state.model, actor)
+  const people = useMemo(() => Object.values(state.model.people).map((p) => ({ id: p.id, name: p.name })), [state.model.people])
+  const issues = useMemo(
+    () => Object.values(state.issues).map((i) => ({ id: i.id, subject: i.subject, status: i.status })),
+    [state.issues],
+  )
 
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState<RichDoc>(emptyRichDoc())
   const [draftType, setDraftType] = useState<NoteType>(DEFAULT_NOTE_TYPE)
   const [draftPinned, setDraftPinned] = useState(false)
   /** Born internal unless the writer says otherwise — the boundary's default, restated here. */
   const [draftVisible, setDraftVisible] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editBody, setEditBody] = useState('')
+  const [editBody, setEditBody] = useState<RichDoc>(emptyRichDoc())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const submit = () => {
-    if (!draft.trim()) return
-    onAdd(wrapPlainText(draft), draftType, draftPinned, draftVisible)
-    setDraft('')
+    if (isEmptyRichDoc(draft)) return
+    onAdd(draft, draftType, draftPinned, draftVisible)
+    setDraft(emptyRichDoc())
     setDraftType(DEFAULT_NOTE_TYPE)
     setDraftPinned(false)
     setDraftVisible(false)
@@ -74,18 +81,14 @@ export default function NotesTab({
       )}
       {mayAdd.allowed ? (
         <div className="note-compose">
-          <textarea
-            className="note-input"
+          <RichTextEditor
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={setDraft}
+            editable
+            people={people}
+            issues={issues}
+            onUploadImage={onUploadImage}
             placeholder="What happened, what was tried, what was decided…"
-            rows={3}
-            aria-label="New note"
-            // Enter is for paragraphs — a note is prose, and losing a half-written one to a
-            // stray keystroke is worse than reaching for the button.
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
-            }}
           />
           <div className="note-compose-row">
             <select
@@ -117,8 +120,7 @@ export default function NotesTab({
               Show to client
             </label>
             <span className="grow" />
-            <span className="fld-hint">⌘/Ctrl + Enter</span>
-            <button className="btn primary" disabled={!draft.trim()} onClick={submit}>
+            <button className="btn primary" disabled={isEmptyRichDoc(draft)} onClick={submit}>
               Add note
             </button>
           </div>
@@ -166,10 +168,7 @@ export default function NotesTab({
                           className="btn ghost"
                           onClick={() => {
                             setEditingId(n.id)
-                            // Flattened to plain text for this plain <textarea> — lossy for a
-                            // note with real structure (none exist yet; Step 5's real editor
-                            // replaces this whole edit path before that changes).
-                            setEditBody(richTextToPlainText(n.body))
+                            setEditBody(n.body)
                           }}
                         >
                           Edit
@@ -221,13 +220,13 @@ export default function NotesTab({
 
                 {editing ? (
                   <div className="note-edit">
-                    <textarea
-                      className="note-input"
+                    <RichTextEditor
                       value={editBody}
-                      onChange={(e) => setEditBody(e.target.value)}
-                      rows={4}
-                      aria-label="Edit note"
-                      autoFocus
+                      onChange={setEditBody}
+                      editable
+                      people={people}
+                      issues={issues}
+                      onUploadImage={onUploadImage}
                     />
                     <div className="note-compose-row">
                       <select
@@ -245,9 +244,9 @@ export default function NotesTab({
                       </button>
                       <button
                         className="btn primary"
-                        disabled={!editBody.trim() || editBody.trim() === richTextToPlainText(n.body)}
+                        disabled={isEmptyRichDoc(editBody) || richDocsEqual(editBody, n.body)}
                         onClick={() => {
-                          onUpdate(n.id, { body: wrapPlainText(editBody) })
+                          onUpdate(n.id, { body: editBody })
                           setEditingId(null)
                         }}
                       >
@@ -256,21 +255,16 @@ export default function NotesTab({
                     </div>
                   </div>
                 ) : (
-                  // `white-space: pre-wrap` in the stylesheet: notes are structured plain text,
-                  // and paragraph breaks someone typed are part of what they wrote. Mentions
-                  // render through the same parser the mint reads, so the highlight and the
-                  // ping cannot disagree.
-                  <p className="note-body">
-                    {mentionSegments(richTextToPlainText(n.body), Object.values(state.model.people)).map((seg, i) =>
-                      seg.kind === 'mention' ? (
-                        <span key={i} className="note-mention" title="They were told">
-                          {seg.text}
-                        </span>
-                      ) : (
-                        <span key={i}>{seg.text}</span>
-                      ),
-                    )}
-                  </p>
+                  <div className="note-body">
+                    <RichTextEditor
+                      value={n.body}
+                      onChange={() => {}}
+                      editable={false}
+                      people={people}
+                      issues={issues}
+                      onUploadImage={async () => null}
+                    />
+                  </div>
                 )}
               </li>
             )

@@ -16,7 +16,8 @@ import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { exposure, raidKindOf, RAID_SCALE_MAX } from '@/lib/raid'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
-import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
+import { isEmptyRichDoc, richDocsEqual, type RichDoc } from '@/lib/richText'
+import RichTextEditor from './RichTextEditor'
 
 /**
  * The current state of an issue, and where it is changed.
@@ -38,7 +39,7 @@ import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
 
 export interface IssueDraft {
   subject: string
-  description: string
+  description: RichDoc
   type: string
   status: IssueStatus
   severity: Severity
@@ -54,8 +55,7 @@ export interface IssueDraft {
 function draftOf(i: IssueRecord): IssueDraft {
   return {
     subject: i.subject,
-    // Flattened for the plain <textarea> below; wrapped back to a RichDoc in save()'s patch.
-    description: richTextToPlainText(i.description),
+    description: i.description,
     type: i.type,
     status: i.status,
     severity: i.severity,
@@ -83,6 +83,7 @@ export default function OverviewTab({
   mailEnabled,
   editing,
   setEditing,
+  onUploadImage,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
@@ -104,11 +105,20 @@ export default function OverviewTab({
   mailEnabled: boolean
   editing: boolean
   setEditing: (v: boolean) => void
+  onUploadImage: (file: File) => Promise<{ documentId: string; alt: string } | null>
 }) {
   const labels = useLabels()
   const record = state.issues[issue.id]
   const may = canEditIssue(state.model, actor)
   const workTypes = useMemo(() => liveWorkTypes(state.model).map((t) => t.label), [state.model])
+  const rtePeople = useMemo(
+    () => Object.values(state.model.people).map((p) => ({ id: p.id, name: p.name })),
+    [state.model.people],
+  )
+  const rteIssues = useMemo(
+    () => Object.values(state.issues).map((i) => ({ id: i.id, subject: i.subject, status: i.status })),
+    [state.issues],
+  )
 
   const [draft, setDraft] = useState<IssueDraft>(() => (record ? draftOf(record) : draftOf(issue as IssueRecord)))
   /** Held outside the draft: it explains a change rather than being part of the record. */
@@ -140,7 +150,9 @@ export default function OverviewTab({
   const dirty = useMemo(() => {
     if (!record) return false
     const base = draftOf(record)
-    return (Object.keys(base) as (keyof IssueDraft)[]).some((k) => base[k] !== draft[k])
+    return (Object.keys(base) as (keyof IssueDraft)[]).some((k) =>
+      k === 'description' ? !richDocsEqual(base.description, draft.description) : base[k] !== draft[k],
+    )
   }, [record, draft])
 
   // The unsaved-work signal lives below the compose state it also reads — see after sendMail.
@@ -160,14 +172,14 @@ export default function OverviewTab({
     const patch: Partial<IssueRecord> = {}
     for (const k of Object.keys(base) as (keyof IssueDraft)[]) {
       if (k === 'plannedStart' || k === 'plannedEnd') continue
+      // `description` is IssueDraft's one non-primitive field — compared and copied by
+      // content, never by the generic `!==`/cast below, so a structurally-unchanged RichDoc
+      // (a fresh object from the same edit) is never mistaken for a real change.
+      if (k === 'description') {
+        if (!richDocsEqual(base.description, draft.description)) patch.description = draft.description
+        continue
+      }
       if (base[k] !== draft[k]) {
-        // `description` is IssueDraft's one field that isn't a 1:1 string on IssueRecord —
-        // wrapped explicitly here rather than through the generic cast below, so a plain
-        // string can never reach the RichDoc column silently.
-        if (k === 'description') {
-          patch.description = wrapPlainText(draft.description)
-          continue
-        }
         // An emptied outcome is "no outcome recorded", which is null — not the empty string.
         ;(patch as Record<string, unknown>)[k] =
           k === 'decisionOutcome' && draft[k] === '' ? null : draft[k]
@@ -418,7 +430,20 @@ export default function OverviewTab({
             <dt>Subject</dt>
             <dd>{issue.subject}</dd>
             <dt>Description</dt>
-            <dd className="ov-prose">{richTextToPlainText(issue.description) || '—'}</dd>
+            <dd className="ov-prose">
+              {isEmptyRichDoc(issue.description) ? (
+                '—'
+              ) : (
+                <RichTextEditor
+                  value={issue.description}
+                  onChange={() => {}}
+                  editable={false}
+                  people={rtePeople}
+                  issues={rteIssues}
+                  onUploadImage={async () => null}
+                />
+              )}
+            </dd>
             <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
             <dd>
               {issue.client} · {issue.module}
@@ -599,11 +624,13 @@ export default function OverviewTab({
           </dd>
           <dt>Description</dt>
           <dd>
-            <textarea
-              rows={4}
+            <RichTextEditor
               value={draft.description}
-              onChange={(e) => set('description', e.target.value)}
-              aria-label="Description"
+              onChange={(doc) => set('description', doc)}
+              editable
+              people={rtePeople}
+              issues={rteIssues}
+              onUploadImage={onUploadImage}
             />
           </dd>
           {raidKind === 'decision' && (

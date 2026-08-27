@@ -209,7 +209,9 @@ model Issue {
   /// The issue key from the log — `OAPIL-010`. Never regenerated. Unique within the tenant.
   id      String
   subject String
-  description String @db.Text
+  /// A Tiptap-shaped RichDoc (lib/richText.ts), not a plain string -- see
+  /// docs/plans/2026-08-26-rich-content-design.md.
+  description Json
 
   /// Where this issue sits. Either under a hierarchy node, or under another issue
   /// (a sub-issue) — never both.
@@ -481,7 +483,9 @@ model IssueNote {
   issueId String
   issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
 
-  body String @db.Text
+  /// A Tiptap-shaped RichDoc (lib/richText.ts), not a plain string -- see
+  /// docs/plans/2026-08-26-rich-content-design.md.
+  body Json
   /// String, not an enum. The vocabulary is owned by the app (`NOTE_TYPES`), and an enum here
   /// would reject a type added in a later build until a migration caught up with it.
   noteType String

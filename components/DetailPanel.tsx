@@ -99,6 +99,8 @@ interface Props {
   onRemoveDependency: (dependencyId: string) => void
   evidence: EvidenceItem[]
   onManageEvidence: (issueId: string) => void
+  /** An image pasted, dropped or inserted through a description's or note's rich editor. */
+  onUploadImage: (issueId: string, file: File) => Promise<{ documentId: string; alt: string } | null>
   hasLifecycle: (id: string) => boolean
   sla: SlaPolicy
   meta: {
@@ -216,6 +218,7 @@ export default function DetailPanel({
   onRemoveDependency,
   evidence,
   onManageEvidence,
+  onUploadImage,
   hasLifecycle,
   sla,
   meta,
@@ -593,6 +596,7 @@ export default function DetailPanel({
             onDecideApproval={onDecideApproval}
             editing={editing}
             setEditing={setEditing}
+            onUploadImage={(file) => onUploadImage(issue.id, file)}
           />
         ) : tab === 'Estimation' ? (
           <EstimationTab
@@ -625,6 +629,7 @@ export default function DetailPanel({
             }
             onUpdate={onUpdateNote}
             onDelete={onDeleteNote}
+            onUploadImage={(file) => onUploadImage(issue.id, file)}
             onWriteReply={
               mailEnabled &&
               can(state.model, actor, 'mail.send').allowed &&
