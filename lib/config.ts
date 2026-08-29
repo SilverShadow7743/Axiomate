@@ -87,6 +87,7 @@ export const LABEL_KEYS = {
   TIER_ORGANIZATION: 'Client',
   TIER_ENGAGEMENT: 'Engagement',
   TIER_PROJECT: 'Project',
+  TIER_OUTCOME: 'Outcome',
   TIER_MODULE: 'Process Area',
 
   /* Record kinds */
@@ -684,6 +685,13 @@ export const DEFAULT_TIERS: readonly TierDef[] = [
   { kind: 'client', externalParty: true },
   { kind: 'engagement' },
   { kind: 'project' },
+  /*
+   * A result with a definition of done, between the project that funds it and the work that
+   * delivers it. Optional by parenting rule — work may still sit directly under a project —
+   * per the platform-evolution design: forcing it would have minted taxonomy wearing a
+   * result's name over records whose real outcomes nobody has defined yet.
+   */
+  { kind: 'outcome' },
   { kind: 'module' },
 ]
 
@@ -1699,6 +1707,7 @@ const TIER_LABEL_KEY: Record<DefaultNodeKind, LabelKey> = {
   client: 'TIER_ORGANIZATION',
   engagement: 'TIER_ENGAGEMENT',
   project: 'TIER_PROJECT',
+  outcome: 'TIER_OUTCOME',
   module: 'TIER_MODULE',
 }
 

@@ -28,7 +28,7 @@ import type { RichDoc } from './richText'
  * them, and the database enum is their uppercase form. So this consolidates the declarations
  * and changes no spelling — every id already stored in a browser or a database still parses.
  */
-export const NODE_KINDS = ['company', 'client', 'engagement', 'project', 'module'] as const
+export const NODE_KINDS = ['company', 'client', 'engagement', 'project', 'outcome', 'module'] as const
 
 /**
  * The DEFAULT tier kinds — the shipped structural vocabulary, no longer the only possible

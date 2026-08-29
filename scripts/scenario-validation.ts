@@ -7293,6 +7293,52 @@ scenario(
 )
 
 /* ================================================================== *
+ * Tier definitions — the configurable chain and the Outcome tier
+ * ================================================================== */
+
+scenario(
+  'TD1',
+  'An Outcome sits between a project and its work, optionally, and everything derived still derives',
+  'The default chain gained an `outcome` tier (platform-evolution E0 step 5): a result with a definition of done, creatable under a project, holding work — while work may still sit directly under the project, because the tier is optional by parenting rule rather than forced by migration. An outcome must refuse to sit under the root or under an issue, work filed under one must still inherit its client through the flag-based ancestor walk, and rollups must aggregate through the new tier without it being registered anywhere but the tier list.',
+  () => {
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+
+    let s = ok(BASE, { t: 'create', parentId: clientId, kind: 'project', draft: { name: 'Finance transformation' }, now: NOW } as Action)
+    const projectId = Object.values(s.nodes).find((n) => n.kind === 'project')!.id
+    s = ok(s, { t: 'create', parentId: projectId, kind: 'outcome', draft: { name: 'Faster month-end close' }, now: NOW } as Action)
+    const outcomeId = Object.values(s.nodes).find((n) => n.kind === 'outcome')!.id
+
+    // The refusals that make the tier a tier rather than a free-floating label.
+    const underRoot = act(s, { t: 'create', parentId: companyId, kind: 'outcome', draft: { name: 'Loose' }, now: NOW } as Action)
+    const underIssue = act(s, { t: 'create', parentId: 'OAPIL-1', kind: 'outcome', draft: { name: 'Nested' }, now: NOW } as Action)
+    const refusalsHold = Boolean(underRoot.error) && Boolean(underIssue.error)
+
+    // Work under the outcome inherits its client through the externalParty ancestor walk —
+    // which now has to pass THROUGH a tier that did not exist when the walk was written.
+    s = ok(s, { t: 'create', parentId: outcomeId, kind: 'issue', draft: { name: 'Close books in three days' }, now: NOW } as Action)
+    const work = Object.values(s.issues).find((i) => i.parentId === outcomeId)
+    const inherits = work?.client === 'OAPIL'
+
+    // And work may STILL sit directly under the project — the optionality half of the design.
+    const direct = act(s, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Direct under project' }, now: NOW } as Action)
+    const optional = !direct.error
+
+    // The rollup walk is kind-agnostic: the outcome row summarises the work beneath it.
+    // Through visibleRows, because that is where attachRollups actually runs — buildTree
+    // rows carry no rollup (found by this scenario's own first run, which read the wrong
+    // helper and blamed the product).
+    const outcomeRow = visibleRows(rowsOf(s), EMPTY_FILTERS, new Set()).find((r) => r.id === outcomeId)
+    const rollsUp = outcomeRow?.rollup?.issues === 1 && outcomeRow?.rollup?.open === 1
+
+    const good = refusalsHold && inherits && optional && rollsUp
+    return good
+      ? { verdict: 'PASS', actual: 'An outcome is created under a project and refused under the root and under an issue; work filed under it inherits the client through the flag-based walk; work still files directly under the project; and the outcome row rolls up 1 issue, 1 open, with the tier registered nowhere but the tier list.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `refusalsHold=${refusalsHold} inherits=${inherits} (client=${work?.client}) optional=${optional} rollsUp=${rollsUp} (rollup=${JSON.stringify(outcomeRow?.rollup)})`, stops: 'at the tier machinery — a derived rule, walk or rollup did not survive a tier it had never seen', severity: 'P1', impact: 'the Outcome tier ships broken in some derived surface, which is exactly the class of breakage the derivation was supposed to make impossible' } as const
+  },
+)
+
+/* ================================================================== *
  * Report
  * ================================================================== */
 

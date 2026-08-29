@@ -121,6 +121,7 @@ const NODE_KIND_TO_DB: Record<DefaultNodeKind, string> = {
   client: 'CLIENT',
   engagement: 'ENGAGEMENT',
   project: 'PROJECT',
+  outcome: 'OUTCOME',
   module: 'MODULE',
 }
 
@@ -129,6 +130,7 @@ const NODE_KIND_FROM_DB: Record<string, NodeKind> = {
   CLIENT: 'client',
   ENGAGEMENT: 'engagement',
   PROJECT: 'project',
+  OUTCOME: 'outcome',
   MODULE: 'module',
 }
 

@@ -1672,6 +1672,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "TD1",
+      "title": "An Outcome sits between a project and its work, optionally, and everything derived still derives",
+      "expected": "The default chain gained an `outcome` tier (platform-evolution E0 step 5): a result with a definition of done, creatable under a project, holding work — while work may still sit directly under the project, because the tier is optional by parenting rule rather than forced by migration. An outcome must refuse to sit under the root or under an issue, work filed under one must still inherit its client through the flag-based ancestor walk, and rollups must aggregate through the new tier without it being registered anywhere but the tier list.",
+      "verdict": "PASS",
+      "actual": "An outcome is created under a project and refused under the root and under an issue; work filed under it inherits the client through the flag-based walk; work still files directly under the project; and the outcome row rolls up 1 issue, 1 open, with the tier registered nowhere but the tier list.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
