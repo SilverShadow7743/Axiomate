@@ -63,6 +63,23 @@ grounding pass did not sweep `components/`), add it to Step 3's list before Step
 **Verify:** the written list in Step 3 matches the grep output. This step exists because the
 design's own send-back clause hangs on this enumeration being complete.
 
+**Step 1 conclusion (run 2026-08-29).** The `components/` sweep found seven more production
+`'client'` sites beyond lib's seven — all display/picker/form logic, all confirmed by reading
+to generalize to the same two helpers (flag test, ancestor walk); Step 3's list is updated
+below. Two scoping findings, neither a send-back:
+
+- **Engagement is a well-known tier, not a generic one.** SOW filing (`lib/workspace.ts:5457`,
+  `:5988`), blueprints (`lib/blueprint.ts:105`, `components/RowMenu.tsx:220`), the
+  `Engagement` Prisma relation ("present only on engagement nodes"), and the
+  default-engagement lookup (`lib/engagement.ts:183`) all key on the literal `'engagement'`
+  kind. E0 does **not** generalize these: default tier kinds are *well-known strings* that
+  optional machinery may key on, and an org that omits the engagement tier simply has no SOW
+  filing targets. Only the client boundary moves to the `externalParty` flag. This refines the
+  design's tier-definition section without reopening it.
+- **Module literal tests** (`lib/autosave.ts:446`, `lib/blueprint.ts:105`,
+  `lib/workspace.ts:640/1808/2780`, `scripts/intake-mailbox.ts:97`) are Step 8's business,
+  untouched by Step 3.
+
 ## Step 2 — Tier definitions in the model layer (pure logic)
 
 **Files:** `lib/config.ts`, `lib/types.ts`, `lib/workspace.ts`.
@@ -96,13 +113,28 @@ it (a support ticket). The design doc's send-back clause — "if any boundary ma
 structurally on *which* tier is the client tier" — is decided here.
 
 **Files:** `lib/access.ts` or `lib/config.ts` (new helpers), then `lib/autosave.ts`,
-`lib/reports/clientPack.ts`, `lib/tree.ts`, `lib/workspace.ts` (four sites).
+`lib/reports/clientPack.ts`, `lib/tree.ts`, `lib/workspace.ts` (four sites), and per Step 1's
+completed enumeration: `components/ConfigWorkspace.tsx:869` and `:2798` (scope pickers),
+`components/DetailPanel.tsx:568` (node-detail branch), `components/Dialogs.tsx:178` (the
+client form branch — its own comment already says "derived from the tier list rather than
+named"; the flag completes that intent), `components/GanttChart.tsx:387` (bar color, may key
+on tier order instead), `components/IssueWorkspace.tsx:1562` (default parent for "+ New
+Issue"), `components/ScopePanel.tsx:44/:229` (unassigned-under count), and
+`components/TreeGrid.tsx:782` (top-of-tree banner styling — order-based, not flag-based: the
+banner belongs to the top two tier orders, whatever they are).
 
 - Two helpers, written first: `isExternalPartyTier(model, kind)` and
   `nearestExternalPartyAncestor(state, rowId)` (the `lib/tree.ts:448` walk, generalized).
-- Each of the seven sites rewritten against them. `lib/workspace.ts:6925` (the `clientScopeId`
+- Each site rewritten against them (or against tier *order* where the test was really "top of
+  tree", per the two cosmetic sites above). `lib/workspace.ts:6925` (the `clientScopeId`
   validation) becomes "names a node whose tier is flagged externalParty".
+- `IssueWorkspace.tsx:1562`'s default parent must handle a flat org with no externalParty
+  tier: first externalParty node, else first node of the coarsest configured tier — never
+  null-crash on an org shape the default tenant doesn't have.
 - `clientView` itself is untouched — it is already scope-id-driven; state that in the commit.
+- Fixture-class scripts (`persistence-proof.ts:699`, `restore-proof.ts:96`,
+  `seed-allocations.ts:109`) keep their literal selectors — the default tier set preserves the
+  kind strings, so they pass unchanged.
 
 **Verify:** **[gates]**, with specific attention to the client-boundary scenario block
 (`scripts/scenario-validation.ts:5044`, 5544–6177) — these drive `clientView` and the scoped
