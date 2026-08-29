@@ -248,6 +248,19 @@ grammar needs nothing: `ID_RE` matches displayIds, which do not change. One comm
   facet filtering them; post one test intake message end-to-end, confirm it files and remove
   it. Each migration its own commit.
 
+**Step 8a amendment (found during Step 7, before 8a was attempted).** `Issue.module String`
+already exists as a denormalised, reducer-maintained column (`prisma/schema.prisma`'s Issue
+model; the create arm's inheritance walk and the move arm's re-derivation both write it) — the
+classification label is ALREADY STORED, and 8a as written above would add a duplicate column
+beside it. 8a is therefore not a migration at all. What actually remains before 8b can run:
+the reducer's walks are the only writers of `module`, and they read it off a module ANCESTOR —
+once 8b retires the module containers, a newly created issue under a project would get an
+empty classification with no way to set one. So the real pre-8b step is making `module` an
+editable classification field in its own right (a picker on the create dialog and the detail
+editor, offering the tenant's existing module names), with the walks' ancestor-derived value
+becoming the default rather than the only source. The FilterBar module facet already reads the
+stored value and needs nothing. 8b itself is unchanged.
+
 ## Details most likely to be got wrong
 
 1. **Node ids are opaque and never rewritten** — `module:OAPIL:Inventory` keeps that id even
