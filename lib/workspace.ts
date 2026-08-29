@@ -943,6 +943,9 @@ export type Action =
   | {
       t: 'addTime'
       issueId: string
+      /** Record against one task of the issue. Optional — absent means work-level, the shape
+       *  every entry had before task-level time existed. Must belong to `issueId`. */
+      activityId?: string
       person: string
       date: string
       hours: number
@@ -3675,6 +3678,20 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       if (problem) return { state, error: problem.message }
 
       /*
+       * A task-level entry must name a live task of THIS issue. Checked before anything else
+       * about the entry is judged, because an entry filed against another record's task would
+       * pass every remaining rule and then sum into the wrong task's actual forever — hours
+       * are the thing this workspace is least free to misattribute.
+       */
+      if (a.activityId) {
+        const task = state.activities[a.activityId]
+        if (!task || task.deletedAt) return { state, error: 'That task no longer exists.' }
+        if (task.issueId !== a.issueId) {
+          return { state, error: 'That task belongs to a different record.' }
+        }
+      }
+
+      /*
        * Authority first, and this rule stays here rather than moving into `timeEntryAllowed`.
        *
        * The two are NOT the same question. This asks whether the actor may record hours for the
@@ -3745,6 +3762,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const entry: TimeEntry = {
         id,
         issueId: a.issueId,
+        activityId: a.activityId ?? null,
         person: a.person.trim(),
         personId: directoryIdByName(state.model, a.person),
         date: a.date,
@@ -3770,7 +3788,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             rowId: a.issueId,
             field: 'time',
             from: '',
-            to: `${a.hours}h · ${a.activity} · ${a.person}${a.billable ? '' : ' · non-billable'}${lateness.justificationRequired ? ` · ${lateness.days} days late` : ''}`,
+            to: `${a.hours}h · ${a.activity} · ${a.person}${a.activityId ? ` · on ${state.activities[a.activityId]?.phase ?? a.activityId}` : ''}${a.billable ? '' : ' · non-billable'}${lateness.justificationRequired ? ` · ${lateness.days} days late` : ''}`,
             at: a.now,
             by,
           }),

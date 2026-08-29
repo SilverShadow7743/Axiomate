@@ -689,6 +689,7 @@ export function timeToRow(tenantId: TenantId, e: TimeEntry): Prisma.TimeEntryUnc
     tenantId,
     id: e.id,
     issueId: e.issueId,
+    activityId: e.activityId ?? null,
     person: e.person,
     personId: e.personId ?? null,
     // A plain day, so it uses the date helper — unlike the timestamps below, which carry a
@@ -711,6 +712,7 @@ export function timeFromRow(r: TimeRow): TimeEntry {
   return {
     id: r.id,
     issueId: r.issueId,
+    activityId: r.activityId ?? null,
     person: r.person,
     personId: r.personId ?? null,
     date: fromDate(r.date) ?? '',

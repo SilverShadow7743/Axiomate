@@ -321,6 +321,28 @@ async function main() {
     entry ? `${entry.hours}h, billable=${entry.billable}` : 'no entry',
   )
   check(
+    'a work-level entry carries no task — absent stays absent, not empty-string or 0',
+    entry != null && (entry.activityId ?? null) === null,
+    entry ? `activityId=${JSON.stringify(entry.activityId)}` : 'no entry',
+  )
+
+  /*
+   * A task-level entry, in a second batch because the task's id is minted by buildLifecycle
+   * inside the first — it can only be named after a real reload, which is also the honest
+   * shape: the browser that records against a task learned that task's id the same way.
+   */
+  const proofTask = Object.values(state.activities).find((t) => t.issueId === 'PROOF-2' && !t.deletedAt)
+  const taskWrote = await persistActions(TENANT, A, [
+    { t: 'addTime', issueId: 'PROOF-2', activityId: proofTask?.id, person: 'Priya', date: '2026-08-04', hours: 1.75, activity: 'Testing', billable: true, note: 'Task-level', justification: 'Proof entry — dated fixture, recorded late by design.', now: NOW } as Action,
+  ])
+  const taskState = (await loadWorkspace(TENANT)).state
+  const taskEntry = Object.values(taskState.timeEntries).find((e) => e.note === 'Task-level')
+  check(
+    'a task-level entry keeps its task reference AND its work reference through Postgres',
+    taskWrote.ok && taskEntry?.activityId === proofTask?.id && taskEntry?.issueId === 'PROOF-2',
+    taskEntry ? `activityId=${taskEntry.activityId} issueId=${taskEntry.issueId}` : (taskWrote.error ?? 'no entry'),
+  )
+  check(
     'a risk’s judged halves and a decision’s outcome survive — and no exposure column exists',
     state.issues['PROOF-1']?.riskLikelihood === 4 &&
       state.issues['PROOF-1']?.riskImpact === 5 &&

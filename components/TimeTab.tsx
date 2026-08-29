@@ -75,6 +75,8 @@ export default function TimeTab({
     activity: TimeActivity
     billable: boolean
     note: string
+    /** Record against one task of this issue. Absent means work-level — the default. */
+    activityId?: string
     /** Required by the reducer when the entry lags the work past the workspace's allowance. */
     justification?: string
   }) => boolean
@@ -120,6 +122,18 @@ export default function TimeTab({
   const [billable, setBillable] = useState(true)
   const [note, setNote] = useState('')
   const [justification, setJustification] = useState('')
+  /** Which task the hours executed — '' is work-level, the shape every entry had before
+   *  task-level time and still the default: a picker in front of the ordinary case would be
+   *  the same friction the date default exists to avoid. */
+  const [taskId, setTaskId] = useState('')
+
+  const tasks = useMemo(
+    () =>
+      Object.values(state.activities)
+        .filter((t) => t.issueId === issueId && !t.deletedAt)
+        .sort((x, y) => x.order - y.order),
+    [state.activities, issueId],
+  )
 
   const parsed = Number(hours)
   const problem = hours.trim() ? checkEntry({ hours: parsed, date, person }, today) : null
@@ -383,12 +397,15 @@ export default function TimeTab({
         activity,
         billable,
         note,
+        activityId: taskId || undefined,
         justification: needsReason ? justification.trim() : undefined,
       })
     ) {
       setHours('')
       setNote('')
       setJustification('')
+      // The task selection deliberately survives the reset: several entries against the same
+      // task in a row is the normal shape of a working day.
     }
   }
 
@@ -568,6 +585,21 @@ export default function TimeTab({
                 ))}
               </select>
             </label>
+            {/* Only when this issue actually has tasks — a picker with one option ("whole
+                record") is a question with no answer, and most records have no lifecycle. */}
+            {tasks.length > 0 && (
+              <label className="fld">
+                <span className="fld-label">On task</span>
+                <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+                  <option value="">— whole record —</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.phase}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="fld time-fld-billable">
               <span className="fld-label">Billable</span>
               <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
@@ -639,7 +671,15 @@ export default function TimeTab({
                   <td className="mono">{formatIso(e.date)}</td>
                   <td>{e.person}</td>
                   <td className="mono">{e.hours}</td>
-                  <td>{e.activity}</td>
+                  <td>
+                    {e.activity}
+                    {/* The task the hours executed, when recorded at task level. Reads from
+                        stored state, so an entry against a since-archived task still says
+                        where it went rather than going quiet. */}
+                    {e.activityId && (
+                      <span className="prov"> · {state.activities[e.activityId]?.phase ?? e.activityId}</span>
+                    )}
+                  </td>
                   <td>{e.billable ? 'Yes' : <span className="prov">No</span>}</td>
                   <td>
                     {e.note || <span className="prov">—</span>}

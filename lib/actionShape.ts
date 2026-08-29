@@ -583,6 +583,7 @@ const SHAPES = {
   /* ---- TIME ---- */
   addTime: {
     issueId: req(id),
+    activityId: opt(id),
     person: req(text),
     date: req(text),
     hours: req(num),

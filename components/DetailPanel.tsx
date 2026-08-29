@@ -168,7 +168,7 @@ interface Props {
   onSaveEstimate: (issueId: string, patch: Partial<Estimate>, reason?: string) => boolean
   onAddTime: (
     issueId: string,
-    entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string; justification?: string },
+    entry: { person: string; date: string; hours: number; activity: TimeActivity; billable: boolean; note: string; activityId?: string; justification?: string },
   ) => boolean
   onRemoveTime: (id: string) => void
   onSubmitWeek: (person: string, week: string) => boolean

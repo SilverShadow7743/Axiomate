@@ -7338,6 +7338,37 @@ scenario(
   },
 )
 
+scenario(
+  'TD2',
+  'Hours can land on a task, the work still sums both shapes, and a foreign task is refused',
+  'Task-level time (platform-evolution E0 step 6): an entry may carry the id of one of its issue\'s own lifecycle activities. The work\'s actual must be the sum over issueId — counting work-level and task-level entries alike, the transitional rule that lets attested history stay untouched — while the task\'s own sum reads off activityId. An entry naming another record\'s task must be refused before any other rule gets a say, and a work-level entry must stay exactly what it always was.',
+  () => {
+    // A lifecycle on OAPIL-1 supplies real tasks; OAPIL-2's tasks supply the foreign one.
+    let s = ok(BASE, { t: 'buildLifecycle', issueId: 'OAPIL-1', slaDays: 5, now: NOW } as Action)
+    s = ok(s, { t: 'buildLifecycle', issueId: 'OAPIL-2', slaDays: 5, now: NOW } as Action)
+    const mine = Object.values(s.activities).find((t) => t.issueId === 'OAPIL-1')!
+    const foreign = Object.values(s.activities).find((t) => t.issueId === 'OAPIL-2')!
+
+    const base = { t: 'addTime' as const, issueId: 'OAPIL-1', person: 'Validator', date: TODAY, hours: 2, activity: 'Investigation' as const, billable: true, now: NOW }
+    s = ok(s, { ...base, note: 'work-level' } as Action)
+    s = ok(s, { ...base, activityId: mine.id, hours: 3, note: 'task-level' } as Action)
+
+    const refused = act(s, { ...base, activityId: foreign.id, note: 'foreign' } as Action)
+    const refusal = Boolean(refused.error) && /different record/.test(refused.error ?? '')
+
+    const entries = Object.values(s.timeEntries).filter((e) => e.issueId === 'OAPIL-1' && !e.deletedAt)
+    const workActual = entries.reduce((sum, e) => sum + e.hours, 0)
+    const taskActual = entries.filter((e) => e.activityId === mine.id).reduce((sum, e) => sum + e.hours, 0)
+    const workLevel = entries.find((e) => e.note === 'work-level')
+    const shapes = (workLevel?.activityId ?? null) === null && workActual === 5 && taskActual === 3
+
+    const good = refusal && shapes
+    return good
+      ? { verdict: 'PASS', actual: 'A task-level entry records against its own issue\'s task and is refused against another record\'s in the transition\'s own words; the work sums 5h across both shapes while the task sums its 3h alone; the work-level entry carries no task reference.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `refusal=${refusal} (error=${refused.error}) workActual=${workActual} taskActual=${taskActual} workLevelActivityId=${JSON.stringify(workLevel?.activityId)}`, stops: 'at the transitional actuals rule — hours either misattribute to the wrong task or vanish from the work\'s own sum', severity: 'P1', impact: 'actuals are the thing this workspace is least free to misattribute, and one of the two sums is wrong' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

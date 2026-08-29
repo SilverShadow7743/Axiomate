@@ -1682,6 +1682,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "TD2",
+      "title": "Hours can land on a task, the work still sums both shapes, and a foreign task is refused",
+      "expected": "Task-level time (platform-evolution E0 step 6): an entry may carry the id of one of its issue's own lifecycle activities. The work's actual must be the sum over issueId — counting work-level and task-level entries alike, the transitional rule that lets attested history stay untouched — while the task's own sum reads off activityId. An entry naming another record's task must be refused before any other rule gets a say, and a work-level entry must stay exactly what it always was.",
+      "verdict": "PASS",
+      "actual": "A task-level entry records against its own issue's task and is refused against another record's in the transition's own words; the work sums 5h across both shapes while the task sums its 3h alone; the work-level entry carries no task reference.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

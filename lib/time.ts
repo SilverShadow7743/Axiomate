@@ -51,6 +51,16 @@ export interface TimeEntry {
   /** `time-12`, minted from the workspace counter. */
   id: string
   issueId: string
+  /**
+   * The task (lifecycle activity) this effort executed, when recorded at task level.
+   *
+   * Nullable and additive: every entry predating task-level time is work-level attested
+   * history, never rewritten, and an entry not tied to one task stays work-level by choice.
+   * `issueId` above is required on EVERY entry including task-level ones — that is what makes
+   * the transitional actuals rule automatic: the work's actual is still the sum over
+   * `issueId`, counting both shapes, and only the task's own sum (over this field) is new.
+   */
+  activityId?: string | null
   /** Who did the work, by name — the display half of the reference. */
   person: string
   /** The directory id, resolved at write time; null when the name did not uniquely resolve. */
