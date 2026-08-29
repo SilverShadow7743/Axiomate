@@ -344,6 +344,8 @@ model IssueActivity {
 
   predecessors IssueDependency[] @relation("DepSuccessor")
   successors   IssueDependency[] @relation("DepPredecessor")
+  /// Hours recorded against this task specifically. See TimeEntry.activityId.
+  timeEntries  TimeEntry[]       @relation("TaskTime")
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -888,6 +890,17 @@ model TimeEntry {
   issueId String
   issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
 
+  /// The task (IssueActivity) this effort executed, when recorded at task level. Nullable:
+  /// every entry before E0 step 6 is work-level attested history and is never rewritten, and
+  /// an entry not tied to one task stays work-level by choice. `issueId` above stays REQUIRED
+  /// on every entry INCLUDING task-level ones — that is what makes the transitional actuals
+  /// rule automatic: Work.actual = sum of entries where issueId = W is unchanged and already
+  /// counts both shapes; only Task.actual (sum where activityId = T) is new. Restrict, not
+  /// cascade: activities soft-delete through the reducer, and a hard delete reaching this
+  /// constraint means something went around it — fail loudly rather than orphan hours.
+  activityId  String?
+  activityRef IssueActivity? @relation("TaskTime", fields: [tenantId, activityId], references: [tenantId, id], onDelete: Restrict)
+
   /// Who did the work, by name — the same join the rest of the model uses until people have keys.
   person String
   personId String?
@@ -910,9 +923,10 @@ model TimeEntry {
   deletedAt DateTime?
 
   @@id([tenantId, id])
-  /// The three questions asked of this table: what did this issue cost, what did this person
-  /// do, and what happened in this period.
+  /// The four questions asked of this table: what did this issue cost, what did this task
+  /// cost, what did this person do, and what happened in this period.
   @@index([tenantId, issueId])
+  @@index([tenantId, activityId])
   @@index([tenantId, person, date])
   @@index([tenantId, date])
 }
