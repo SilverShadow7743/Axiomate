@@ -192,6 +192,8 @@ import { type IntakeForm,
   DEFAULT_TIERS,
   tiersOf,
   isTierKind,
+  isExternalPartyKind,
+  externalPartyKinds,
   tierIndex,
   type OrganizationIdentity,
   type DocumentFiling,
@@ -625,6 +627,9 @@ export function initWorkspace(
     if (!nodes[cId]) {
       nodes[cId] = {
         id: cId,
+        // Literal by construction, not an unconverted flag test: the seed imports a client
+        // log, whose shape IS the default chain — its node ids embed these kind strings
+        // (`client:OAPIL`). An organisation with a different chain does not arrive by seed.
         kind: 'client',
         name: i.client,
         parentId: COMPANY_NODE_ID,
@@ -1812,14 +1817,16 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         if (!canParent('issue', parentKind, tiersOf(state.model))) {
           return { state, error: `An issue cannot sit under a ${parentKind}.` }
         }
-        // Inherit client/module from wherever it was created.
+        // Inherit client/module from wherever it was created. "Client" is the nearest
+        // ancestor on an externalParty tier — the flag, not the literal kind.
+        const external = externalPartyKinds(tiersOf(state.model))
         let client = ''
         let mod = ''
         let cursor: string | null = a.parentId
         while (cursor) {
           const n = state.nodes[cursor]
           if (n?.kind === 'module' && !mod) mod = n.name
-          if (n?.kind === 'client') client = n.name
+          if (n && external.has(n.kind)) client = n.name
           const iss = state.issues[cursor]
           if (iss) {
             client = client || iss.client
@@ -2794,14 +2801,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const issues = { ...state.issues }
       if (nodes[a.id]) nodes[a.id] = { ...nodes[a.id], parentId: a.newParentId }
       else if (issues[a.id]) {
-        // Keep the denormalised client/module in step with the new position.
+        // Keep the denormalised client/module in step with the new position. Same flag-based
+        // test as the create arm's inheritance walk — the two must agree or a move rewrites
+        // what a create derived.
+        const external = externalPartyKinds(tiersOf(state.model))
         let client = issues[a.id].client
         let mod = issues[a.id].module
         let cursor: string | null = a.newParentId
         while (cursor) {
           const n: HierarchyNode | undefined = nodes[cursor]
           if (n?.kind === 'module') mod = n.name
-          if (n?.kind === 'client') client = n.name
+          if (n && external.has(n.kind)) client = n.name
           const next: string | null = n ? n.parentId : (issues[cursor]?.parentId ?? null)
           cursor = next
         }
@@ -6941,11 +6951,13 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         : undefined
       if (sameEmail) return { state, error: `${sameEmail.name} already has that address.` }
 
-      /* The scope must be a real client node — a typo here would silently scope a guest
-         to nothing, which the deny-default turns into an empty view nobody can explain. */
+      /* The scope must be a real node on an externalParty tier — a typo here would silently
+         scope a guest to nothing, which the deny-default turns into an empty view nobody can
+         explain. The flag, not the literal kind: whichever tier(s) this organisation marks as
+         naming external parties are the ones a guest can be scoped to. */
       if (op.clientScopeId) {
         const node = state.nodes[op.clientScopeId]
-        if (!node || node.kind !== 'client') {
+        if (!node || !isExternalPartyKind(tiersOf(state.model), node.kind)) {
           return { state, error: 'The client scope must be one of the client nodes in the tree.' }
         }
       }

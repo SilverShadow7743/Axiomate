@@ -436,6 +436,10 @@ function reconcileHierarchy(state: WorkspaceState, seed: WorkspaceState): Worksp
   }
 
   for (const node of Object.values(nodes)) {
+    // Literal kinds throughout this reconciliation, deliberately: it repairs SEEDED node
+    // shapes (ids matched by `SEEDED_NODE_ID`, built from the default chain's kinds), and a
+    // seeded node's kind is one of the defaults by construction. An org-defined tier never
+    // has a seeded id and never enters these branches.
     if (node.kind === 'client' && node.parentId === null && nodes[COMPANY_NODE_ID]) {
       nodes[node.id] = { ...node, parentId: COMPANY_NODE_ID }
       changed = true

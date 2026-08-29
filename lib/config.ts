@@ -708,6 +708,24 @@ export function tierIndex(tiers: readonly TierDef[], kind: string): number {
   return tiers.findIndex((t) => t.kind === kind)
 }
 
+/**
+ * The kinds of this chain's externalParty tiers, as a set for the ancestor walks.
+ *
+ * This — not the literal string 'client' — is what the boundary machinery keys on. Every
+ * former `kind === 'client'` test in production code either became a membership test against
+ * this set, or was found to be asking a different question (top-of-tree styling asks about
+ * tier ORDER; seed and mirror-reconciliation repair are about the default chain by
+ * construction) and says so at the site.
+ */
+export function externalPartyKinds(tiers: readonly TierDef[]): ReadonlySet<string> {
+  return new Set(tiers.filter((t) => t.externalParty).map((t) => t.kind))
+}
+
+/** Whether a kind names one of this chain's externalParty tiers. */
+export function isExternalPartyKind(tiers: readonly TierDef[], kind: string): boolean {
+  return tiers.some((t) => t.kind === kind && t.externalParty)
+}
+
 /* ================================================================== *
  * The model
  * ================================================================== */

@@ -11,6 +11,7 @@ import {
   type EngagementDetail,
 } from '@/lib/engagement'
 import { formatIso } from '@/lib/dates'
+import { isExternalPartyKind, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
 
 /**
@@ -41,7 +42,10 @@ export default function ScopePanel({
   const isEngagement = row.kind === 'engagement'
   const detail = state.engagements[row.id] ?? null
   const scope = summariseScope(state, row.id)
-  const unassigned = row.kind === 'client' ? unassignedUnder(state, row.id) : 0
+  // An external party's node (by flag) is where unattributed work rolls up, whatever the
+  // organisation calls that tier.
+  const isParty = isExternalPartyKind(tiersOf(state.model), row.kind)
+  const unassigned = isParty ? unassignedUnder(state, row.id) : 0
   const done = detail ? recordedCount(detail) : { filled: 0, total: 0 }
 
   const set = (patch: Partial<EngagementDetail>) => onUpdateEngagement(row.id, patch)
@@ -226,7 +230,7 @@ export default function ScopePanel({
           </dl>
         )}
 
-        {row.kind === 'client' && unassigned > 0 && (
+        {isParty && unassigned > 0 && (
           <p className="scope-note">
             {unassigned} of these sit directly under the {labels.TIER_ORGANIZATION.toLowerCase()},
             not under any {labels.TIER_ENGAGEMENT.toLowerCase()}.

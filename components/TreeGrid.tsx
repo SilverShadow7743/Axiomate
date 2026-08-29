@@ -779,6 +779,10 @@ function Cell({
        * are a banner for the top of the tree and a lighter one for the tiers beneath it.
        */
       const levelClass =
+        // Literal default kinds, deliberately: this is styling, not a boundary decision. The
+        // banner treatment belongs to the top of the DEFAULT chain; an org-defined tier falls
+        // through to the ordinary group treatment below, which is the right look for a
+        // mid-chain tier and a harmless one for any other.
         row.kind === 'company' || row.kind === 'client'
           ? 'lvl-client'
           : isGroupRow(row.kind)

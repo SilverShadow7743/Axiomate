@@ -15,7 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
-import { isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
+import { isExternalPartyKind, isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
 
 export type DialogState =
@@ -173,9 +173,12 @@ function AddForm({
   const labels = useLabels()
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }))
   const isIssue = dialog.kind === 'issue' || dialog.kind === 'sub-issue'
-  // A tier below the client — derived from the tier list rather than named, so a new tier
-  // gets the structural form instead of silently falling into the client branch.
-  const isStructural = isTierKind(tiersOf(state.model), dialog.kind) && dialog.kind !== 'client'
+  // A tier that is not an external party — derived from the tier list and its flags rather
+  // than named, so a new tier gets the structural form instead of silently falling into the
+  // named-party branch, whatever this organisation calls its client tier.
+  const isStructural =
+    isTierKind(tiersOf(state.model), dialog.kind) &&
+    !isExternalPartyKind(tiersOf(state.model), dialog.kind)
   // Read from the operating model, so a type or party added in configuration is selectable
   // here without a code change — which is the entire premise of the configuration plane.
   const workTypes = liveWorkTypes(state.model).map((t) => t.label)

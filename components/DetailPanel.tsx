@@ -38,7 +38,7 @@ import type { RichDoc } from '@/lib/richText'
 import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
 import type { EngagementDetail } from '@/lib/engagement'
-import { liveResponsibilities, resolveRequired } from '@/lib/config'
+import { isExternalPartyKind, liveResponsibilities, resolveRequired, tiersOf } from '@/lib/config'
 import { readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
 import {
   KIND_ICON,
@@ -565,7 +565,7 @@ export default function DetailPanel({
           // work on these rows too — otherwise the tab is visible and inert, which reads as
           // broken rather than as not-applicable.
           <History audit={audit} />
-        ) : !issue && (row.kind === 'engagement' || row.kind === 'client') ? (
+        ) : !issue && (row.kind === 'engagement' || isExternalPartyKind(tiersOf(state.model), row.kind)) ? (
           <>
             <ScopePanel row={row} state={state} onUpdateEngagement={onUpdateEngagement} />
             {/* Commercial detail belongs on the engagement, under the scope it is about,

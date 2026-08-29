@@ -389,6 +389,12 @@ export function visibleRows(
   all: ScheduleRow[],
   filters: FilterState,
   collapsed: Set<string>,
+  /**
+   * Which tier kinds name an external party, from the organisation's chain
+   * (`externalPartyKinds(tiersOf(model))`). Defaults to the shipped chain's flag so callers
+   * without a model in hand keep today's behaviour; the workspace passes the real set.
+   */
+  externalKinds: ReadonlySet<string> = new Set(['client']),
 ): ScheduleRow[] {
   const byId = new Map(all.map((r) => [r.id, r]))
   const keep = new Set<string>()
@@ -430,9 +436,10 @@ export function visibleRows(
   // work within a client" the way severity or owner are — it is "show me this client's branch
   // of the tree" — so an empty branch belonging to a DIFFERENT client riding along regardless
   // is not the same kind of harmless as an empty branch riding along past a severity filter.
-  // Checked by walking up to the nearest `kind === 'client'` ancestor's name, the same value
-  // `matchesFilters` compares `i.client` against — a row with no client ancestor at all (above
-  // the client tier, or the client filter is 'All') is unaffected, matching prior behaviour.
+  // Checked by walking up to the nearest externalParty-tier ancestor's name — the same
+  // flag-based test the reducer's inheritance walk uses to derive the `i.client` that
+  // `matchesFilters` compares against, so the two walks cannot disagree. A row with no such
+  // ancestor at all (above that tier, or the client filter is 'All') is unaffected.
   const hasIssueDescendant = new Set<string>()
   for (const row of all) {
     if (row.kind !== 'issue') continue
@@ -445,7 +452,7 @@ export function visibleRows(
   const clientOf = (row: ScheduleRow): string | null => {
     let cur: ScheduleRow | undefined = row
     while (cur) {
-      if (cur.kind === 'client') return cur.name
+      if (externalKinds.has(cur.kind)) return cur.name
       cur = cur.parentId ? byId.get(cur.parentId) : undefined
     }
     return null

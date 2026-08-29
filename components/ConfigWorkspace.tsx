@@ -25,6 +25,7 @@ import {
   resolveLabels,
   resolveRequired,
   resolveTemplate,
+  isExternalPartyKind,
   tierIndex,
   tiersOf,
   type AgentFamily,
@@ -866,10 +867,12 @@ function RolesAndPeople({
                         })
                       }
                     >
-                      {/* Unattached is deny-by-default: the seat sees nothing until this is set. */}
+                      {/* Unattached is deny-by-default: the seat sees nothing until this is set.
+                          Lists exactly the nodes the reducer's scope validation accepts — the
+                          externalParty tiers, by flag. */}
                       <option value="">not attached — sees nothing</option>
                       {Object.values(state.nodes)
-                        .filter((n) => n.kind === 'client' && !n.deletedAt)
+                        .filter((n) => isExternalPartyKind(tiersOf(state.model), n.kind) && !n.deletedAt)
                         .map((n) => (
                           <option key={n.id} value={n.id}>
                             {n.name}
@@ -2798,8 +2801,16 @@ function Blueprints({
     [state.nodes],
   )
   const targets = useMemo(
-    () => Object.values(state.nodes).filter((n) => !n.deletedAt && (n.kind === 'client' || n.kind === 'engagement')),
-    [state.nodes],
+    // An engagement structure can be stamped under an engagement (well-known kind — the SOW
+    // and blueprint machinery legitimately keys on it) or under an external party's node,
+    // whichever tier this organisation flags as one.
+    () =>
+      Object.values(state.nodes).filter(
+        (n) =>
+          !n.deletedAt &&
+          (isExternalPartyKind(tiersOf(state.model), n.kind) || n.kind === 'engagement'),
+      ),
+    [state.nodes, state.model],
   )
 
   /* ---- extract flow ---- */

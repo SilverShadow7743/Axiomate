@@ -23,6 +23,7 @@ import {
   resolveLabels,
   saveModel,
   tiersOf,
+  externalPartyKinds,
   type Autonomy,
 } from '@/lib/config'
 import { LabelProvider } from './labels'
@@ -734,8 +735,8 @@ export default function IssueWorkspace({
   )
 
   const rows = useMemo(
-    () => visibleRows(sortedRows, filters, collapsed),
-    [sortedRows, filters, collapsed],
+    () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model))),
+    [sortedRows, filters, collapsed, state.model],
   )
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
@@ -1555,14 +1556,21 @@ export default function IssueWorkspace({
   }, [selected, dispatch])
 
   /**
-   * Default parent for "+ New Issue" when nothing is selected. A client is a predictable
-   * landing place; dropping the issue into whichever process area happened to be created
-   * first would be arbitrary. The Add dialog names the parent either way.
+   * Default parent for "+ New Issue" when nothing is selected. An external party's node is a
+   * predictable landing place; dropping the issue into whichever process area happened to be
+   * created first would be arbitrary. Falls back to the coarsest non-root tier for a chain
+   * with no externalParty tier at all — a flat internal org still needs a default, and the
+   * root is the one place an issue may not sit. The Add dialog names the parent either way.
    */
-  const defaultParentId = useMemo(
-    () => Object.values(state.nodes).find((n) => n.kind === 'client' && !n.deletedAt)?.id ?? null,
-    [state.nodes],
-  )
+  const defaultParentId = useMemo(() => {
+    const tiers = tiersOf(state.model)
+    const external = externalPartyKinds(tiers)
+    const live = Object.values(state.nodes).filter((n) => !n.deletedAt)
+    const externalNode = live.find((n) => external.has(n.kind))
+    if (externalNode) return externalNode.id
+    const secondTier = tiers[1]?.kind
+    return (secondTier && live.find((n) => n.kind === secondTier)?.id) ?? null
+  }, [state.nodes, state.model])
 
   /* ---------------- adaptive detail pane sizing ---------------- */
 

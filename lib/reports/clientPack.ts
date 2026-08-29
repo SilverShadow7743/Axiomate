@@ -1,5 +1,6 @@
 import type { WorkspaceState } from '../workspace'
 import { clientView } from '../clientBoundary'
+import { externalPartyKinds, tiersOf } from '../config'
 import { isTerminal } from '../schedule'
 
 /**
@@ -83,10 +84,13 @@ export interface MonthlyGovernancePack {
   }
 }
 
-/** Resolves a client name (what `filters.client` carries) to that client's own node id. */
+/** Resolves a client name (what `filters.client` carries) to that client's own node id — a
+ *  node on an externalParty tier, by flag rather than by the literal kind. */
 export function clientScopeIdFor(state: WorkspaceState, clientName: string): string | null {
+  const external = externalPartyKinds(tiersOf(state.model))
   return (
-    Object.values(state.nodes).find((n) => n.kind === 'client' && n.name === clientName)?.id ?? null
+    Object.values(state.nodes).find((n) => external.has(n.kind) && n.name === clientName)?.id ??
+    null
   )
 }
 

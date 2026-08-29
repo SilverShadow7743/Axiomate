@@ -384,6 +384,8 @@ function RowBars({
             left,
             width,
             top: y + 9,
+            // Literal default kind, deliberately: bar shading, not a boundary decision. An
+            // org-defined tier gets the ordinary group bar, which is the right look for it.
             background: row.kind === 'client' ? 'var(--text-muted)' : 'var(--bar-group)',
           }}
           // `e` falls back to today when nothing beneath has a rolled-up end date. Saying
