@@ -110,21 +110,21 @@ export function fromDateOrEmpty(d: Date | null | undefined): string {
  * ================================================================== */
 
 /*
- * Keyed on the DEFAULT tier kinds because the database column is still the five-value
- * NodeKind enum — an org-defined tier cannot be stored yet, and the reducer's tier-membership
- * validation is what keeps one from reaching here. Step 4 of the E0 plan (enum → string)
- * retires this pair; until then `nodeToRow` narrows with a cast that is safe for exactly
- * that reason.
+ * The default kinds are stored as the UPPERCASE labels of the enum this column used to be
+ * (migration 20260829000001 converted the type and deliberately left the values alone, so
+ * the release serving during the migration window kept reading its own spellings). An
+ * org-defined tier has no historical spelling to honour and is stored as its kind string
+ * verbatim — both functions below pass unknown kinds through unchanged.
  */
-const NODE_KIND_TO_DB = {
+const NODE_KIND_TO_DB: Record<DefaultNodeKind, string> = {
   company: 'COMPANY',
   client: 'CLIENT',
   engagement: 'ENGAGEMENT',
   project: 'PROJECT',
   module: 'MODULE',
-} as const satisfies Record<DefaultNodeKind, NodeRow['kind']>
+}
 
-const NODE_KIND_FROM_DB: Record<NodeRow['kind'], NodeKind> = {
+const NODE_KIND_FROM_DB: Record<string, NodeKind> = {
   COMPANY: 'company',
   CLIENT: 'client',
   ENGAGEMENT: 'engagement',
@@ -162,7 +162,7 @@ export function nodeToRow(tenantId: TenantId, n: HierarchyNode): Prisma.Hierarch
     sowId: n.sowId ?? null,
     tenantId,
     id: n.id,
-    kind: NODE_KIND_TO_DB[n.kind as DefaultNodeKind],
+    kind: NODE_KIND_TO_DB[n.kind as DefaultNodeKind] ?? n.kind,
     name: n.name,
     owner: n.owner,
     parentId: n.parentId,
@@ -174,7 +174,7 @@ export function nodeFromRow(r: NodeRow): HierarchyNode {
   return {
     sowId: r.sowId,
     id: r.id,
-    kind: NODE_KIND_FROM_DB[r.kind],
+    kind: NODE_KIND_FROM_DB[r.kind] ?? r.kind,
     name: r.name,
     parentId: r.parentId,
     owner: r.owner,

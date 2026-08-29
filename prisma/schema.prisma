@@ -53,14 +53,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum NodeKind {
-  COMPANY
-  CLIENT
-  ENGAGEMENT
-  PROJECT
-  MODULE
-}
-
 enum Severity {
   HIGH
   MEDIUM
@@ -167,7 +159,11 @@ model HierarchyNode {
   /// Application-supplied and meaningful — e.g. `client:OAPIL`, `module:OAPIL:Inventory`.
   /// Configuration scope overrides are keyed on this value. Unique within the tenant only.
   id       String   @default(cuid())
-  kind     NodeKind
+  /// A tier kind from the organisation's configured chain. Text, not an enum, because the
+  /// chain above Project is per-organisation configuration (E0 Step 2). Default kinds are
+  /// stored as the historical uppercase enum labels; org-defined kinds as their kind string
+  /// verbatim — lib/db/map.ts owns that mapping.
+  kind     String
   name     String
   owner    String?
 
