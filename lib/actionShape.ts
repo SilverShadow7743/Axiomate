@@ -90,25 +90,29 @@ const DEPENDENCY_TYPES = allOf<DependencyType>()(['FS', 'SS', 'FF', 'SF'] as con
 const DECISIONS = allOf<ApprovalDecision>()(['approved', 'rejected'] as const)
 
 /**
- * `CreatableKind` is assembled from three other unions, so this list is assembled the same way.
+ * The RECORD kinds — the invariant execution core plus its create aliases. Closed, and staying
+ * closed: `sub-issue`, the activity phases and `Milestone` are the vocabulary every
+ * organisation shares.
  *
- * `lib/workspace.ts` notes that deriving the type from `NodeKind` means "a new tier is creatable
- * without a second edit here". This is that second edit, and it is deliberate: a tier the browser
- * can create but the boundary has never heard of would be refused at the API with a 400, so the
- * validator has to learn about it too. `allOf` makes that a compile error rather than a bug
- * report — which is the whole difference between a rule and a comment.
+ * The tier kinds are deliberately NOT listed any more. They were (`client` … `module`, with a
+ * comment calling the duplication the price of the boundary knowing the vocabulary), but tiers
+ * are now per-organisation configuration, and this module validates shape without a workspace
+ * in hand — it cannot know which tier kinds THIS organisation has. So the boundary checks that
+ * a non-record kind is a plausible tier token, and the reducer — which has the model — decides
+ * membership: an unconfigured tier is refused by its `isTierKind` check, and a string that is
+ * neither tier nor record is refused by the create arm's closed leaf-vocabulary check before
+ * anything is cast. The 400 moved one layer in and became a better answer.
  */
-const CREATABLE_KINDS = allOf<CreatableKind>()([
-  // `Exclude<NodeKind, 'company'>` — the company is the root and is never created through here.
-  'client',
-  'engagement',
-  'project',
-  'module',
-  'issue',
-  'sub-issue',
-  ...ACTIVITY_PHASES,
-  'Milestone',
-] as const)
+const RECORD_KINDS = new Set<string>(['issue', 'sub-issue', ...ACTIVITY_PHASES, 'Milestone'])
+
+/** A tier kind as stored on nodes: a short lowercase token (`client`, `module`, `outcome`). */
+const TIER_KIND_RE = /^[a-z][a-z0-9_-]{0,39}$/
+
+const creatableKind: Check = (v) => {
+  if (typeof v !== 'string') return `must be a string, received ${typeOf(v)}`
+  if (RECORD_KINDS.has(v) || TIER_KIND_RE.test(v)) return null
+  return `must be a record kind (${[...RECORD_KINDS].join(', ')}) or a tier kind (a short lowercase token)`
+}
 
 /**
  * The operations `config` will carry.
@@ -466,7 +470,7 @@ const patchOf = (fields: Record<string, Check>): Check => {
  */
 const SHAPES = {
   /* ---- CRUD ---- */
-  create: { parentId: req(id), kind: req(oneOf(CREATABLE_KINDS)), draft: req(draft), now },
+  create: { parentId: req(id), kind: req(creatableKind), draft: req(draft), now },
   /**
    * Four fields, and none of them is the relationship.
    *

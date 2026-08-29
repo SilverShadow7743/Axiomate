@@ -28,7 +28,7 @@
  * settings screen that quietly corrupts the schedule.
  */
 
-import { DEFAULT_SLA, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
+import { DEFAULT_SLA, type DefaultNodeKind, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import type { Recurrence } from './recurrence'
 import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
@@ -647,10 +647,77 @@ export function emptyOverride(): ScopeOverride {
 }
 
 /* ================================================================== *
+ * Structural tiers
+ * ================================================================== */
+
+/**
+ * One tier of the container chain above the execution core.
+ *
+ * The chain above Project is per-organisation configuration; the core beneath it
+ * (issue → activity → milestone, renamed Work/Task at the surface) is invariant. Order is the
+ * array position in the organisation's tier list, coarse → fine.
+ */
+export interface TierDef {
+  /**
+   * The stored kind string. Load-bearing DATA, not just a label: node ids embed it
+   * (`client:OAPIL`), scope overrides key on those ids, and the mirror-reconciliation regex
+   * matches on the default kinds. Never rewritten once nodes of this tier exist.
+   */
+  kind: string
+  /**
+   * This tier names an external party — a customer, not a desk. Setting it is what activates
+   * the client-boundary machinery for nodes of this tier: the visibility boundary keyed off a
+   * reader's scope node, client-visible flags, reply-to-client, client packs, intake routing.
+   * The boundary asks "is there a flagged tier and is this node under the reader's scope
+   * node", never "is this tier literally called client".
+   */
+  externalParty?: boolean
+}
+
+/**
+ * The shipped tier chain — Axiocloud's shape, and the default for any organisation that has
+ * not configured its own. The kind strings are the historical `NODE_KINDS` verbatim, so every
+ * stored node id, override key and scenario fixture predating configurability still parses.
+ */
+export const DEFAULT_TIERS: readonly TierDef[] = [
+  { kind: 'company' },
+  { kind: 'client', externalParty: true },
+  { kind: 'engagement' },
+  { kind: 'project' },
+  { kind: 'module' },
+]
+
+/**
+ * An organisation's tier chain. Falls back to the shipped default when the stored model
+ * predates configurability (every production model today) — which is also why the field on
+ * `OperatingModel` is optional rather than backfilled: absent means "the default, tracking
+ * whatever the default is", not a frozen copy of it.
+ */
+export function tiersOf(model: OperatingModel): readonly TierDef[] {
+  return model.tiers?.length ? model.tiers : DEFAULT_TIERS
+}
+
+/** Whether a kind names one of THIS organisation's tiers. The validation-side test —
+ *  `isGroupRow` in `./types` answers the display-side question and accepts any non-leaf. */
+export function isTierKind(tiers: readonly TierDef[], kind: string): boolean {
+  return tiers.some((t) => t.kind === kind)
+}
+
+/** Position in the chain, coarse → fine; -1 for a kind that is not one of these tiers. */
+export function tierIndex(tiers: readonly TierDef[], kind: string): number {
+  return tiers.findIndex((t) => t.kind === kind)
+}
+
+/* ================================================================== *
  * The model
  * ================================================================== */
 
 export interface OperatingModel {
+  /**
+   * The organisation's structural tier chain, coarse → fine. Absent means the shipped
+   * `DEFAULT_TIERS` — see `tiersOf`, which is the only sanctioned way to read this.
+   */
+  tiers?: TierDef[]
   /** The delivery firm operating this workspace. */
   organization: OrganizationIdentity
   /** Where uploaded documents are filed in the library. See `DocumentFiling`. */
@@ -1609,7 +1676,7 @@ export function clearStoredModel(tenantId: string): void {
  * database and in every browser mirror — so renaming one orphans every override that carries
  * it. Same rule that keeps `partyCode` separate from the display name.
  */
-const TIER_LABEL_KEY: Record<NodeKind, LabelKey> = {
+const TIER_LABEL_KEY: Record<DefaultNodeKind, LabelKey> = {
   company: 'TIER_COMPANY',
   client: 'TIER_ORGANIZATION',
   engagement: 'TIER_ENGAGEMENT',

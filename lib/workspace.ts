@@ -35,7 +35,7 @@ import type {
   Severity,
   SlaPolicy,
 } from './types'
-import { ACTIVITY_PHASES, isNodeKind } from './types'
+import { ACTIVITY_PHASES } from './types'
 
 /**
  * Re-exported so the many callers that reach for `NodeKind` from the workspace keep working.
@@ -188,6 +188,11 @@ import { type IntakeForm,
   type IntakeMailbox,
   type LabelKey,
   type OperatingModel,
+  type TierDef,
+  DEFAULT_TIERS,
+  tiersOf,
+  isTierKind,
+  tierIndex,
   type OrganizationIdentity,
   type DocumentFiling,
   type OrgRole,
@@ -441,32 +446,29 @@ export interface WorkspaceState {
  * ================================================================== */
 
 /**
- * What a user can create. Every structural tier except `company`, which is the root the
- * workspace is anchored at rather than something anyone adds — derived from the tier list so
- * a new tier is creatable without a second edit here.
+ * What a user can create: any non-root tier of the organisation's chain, plus the invariant
+ * record kinds. A string rather than a union, because the tier part is open configuration —
+ * the closed vocabulary here is the leaf set, and `canParent` is what validates a kind, not
+ * this type.
  */
-export type CreatableKind =
-  | Exclude<NodeKind, 'company'>
-  | 'issue'
-  | 'sub-issue'
-  | ActivityPhase
-  | 'Milestone'
+export type CreatableKind = string
 
 /**
  * What `+ Add` offers for the selected row. The parent is always implied by the selection.
  *
- * Keyed exhaustively over `RowKind` rather than `string`: a new tier now fails to compile
- * until someone says what can be created under it, instead of silently offering nothing.
+ * Derived from the tier chain rather than tabulated: the offers under a tier are exactly the
+ * kinds `canParent` would accept there, so the menu and the Move validation cannot drift —
+ * they are two readings of one rule. (The table this replaces was keyed exhaustively over
+ * `RowKind` so a new tier failed to compile until someone stated its offers; with tiers as
+ * configuration that guarantee is impossible, and agreement-by-derivation replaces it.)
  */
-export const CREATE_MENU: Record<RowKind, CreatableKind[]> = {
-  company: ['client'],
-  client: ['engagement', 'project', 'module', 'issue'],
-  engagement: ['project', 'module', 'issue'],
-  project: ['module', 'issue'],
-  module: ['issue'],
-  issue: ['sub-issue', ...ACTIVITY_PHASES, 'Milestone'],
-  activity: ['Milestone'],
-  milestone: [],
+export function createMenuFor(kind: RowKind, tiers: readonly TierDef[] = DEFAULT_TIERS): CreatableKind[] {
+  if (kind === 'issue') return ['sub-issue', ...ACTIVITY_PHASES, 'Milestone']
+  if (kind === 'activity') return ['Milestone']
+  if (kind === 'milestone') return []
+  const out: CreatableKind[] = tiers.filter((t) => canParent(t.kind, kind, tiers)).map((t) => t.kind)
+  if (canParent('issue', kind, tiers)) out.push('issue')
+  return out
 }
 
 /**
@@ -485,29 +487,38 @@ function termFor(state: WorkspaceState, kind: string): string {
   return key ? resolveLabel(state.model, key) : kind
 }
 
-/** Which parents each kind may legally sit under — enforced by Move. */
 /**
- * Keyed exhaustively over every row kind that can have a parent — `company` is excluded
- * because it is the root. A new tier is a compile error here until its legal parents are
- * stated, which is the point: this table decides what Move will accept.
+ * Which parents each kind may legally sit under — enforced by Move and Create.
+ *
+ * Derived from the tier chain rather than tabulated. The rule, which reproduces the old
+ * exhaustive table exactly for the default tiers (proven by the Step 2 verification script
+ * before the table was deleted):
+ *
+ *   - A tier may sit under any strictly coarser tier that is not the root — work belongs to
+ *     the parties and containers beneath the root, not loose under the organisation itself —
+ *     EXCEPT the second tier, whose only coarser tier is the root and which may sit there.
+ *     (For the defaults: client under company; engagement/project/module skip freely among
+ *     client/engagement/project but never sit under company.)
+ *   - An issue may sit under any non-root tier, or under another issue.
+ *   - Activities sit under issues; milestones under issues or activities. Invariant.
+ *
+ * Kinds arrive as plain strings from dialogs and actions, so unknown kinds simply fail every
+ * test. Callers with a workspace in hand pass `tiersOf(state.model)`; the default keeps the
+ * signature compatible for callers that can only mean the shipped chain.
  */
-const ALLOWED_PARENTS: Record<Exclude<RowKind, 'company'>, RowKind[]> = {
-  // Without this, `canParent('client', 'company')` is false and Move refuses to reparent a
-  // client — leaving a root tier nothing can legally sit under.
-  client: ['company'],
-  engagement: ['client'],
-  project: ['client', 'engagement'],
-  module: ['client', 'engagement', 'project'],
-  issue: ['client', 'engagement', 'project', 'module', 'issue'],
-  activity: ['issue'],
-  milestone: ['issue', 'activity'],
-}
-
-/** Kinds arrive here as plain strings from dialogs and actions, so the lookup is defensive. */
-export function canParent(childKind: string, parentKind: string): boolean {
-  const allowed: readonly string[] | undefined =
-    ALLOWED_PARENTS[childKind as Exclude<RowKind, 'company'>]
-  return allowed ? allowed.includes(parentKind) : false
+export function canParent(
+  childKind: string,
+  parentKind: string,
+  tiers: readonly TierDef[] = DEFAULT_TIERS,
+): boolean {
+  if (childKind === 'activity') return parentKind === 'issue'
+  if (childKind === 'milestone') return parentKind === 'issue' || parentKind === 'activity'
+  if (childKind === 'issue') return parentKind === 'issue' || tierIndex(tiers, parentKind) > 0
+  const child = tierIndex(tiers, childKind)
+  if (child <= 0) return false // unknown kind, or the root, which has no parent
+  const parent = tierIndex(tiers, parentKind)
+  if (parent < 0 || parent >= child) return false
+  return parent > 0 || child === 1
 }
 
 /* ================================================================== *
@@ -1761,9 +1772,11 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const name = (a.draft.name || '').trim()
       if (!name) return { state, error: 'A name is required.' }
 
-      // -- structural node
-      if (isNodeKind(a.kind)) {
-        if (!canParent(a.kind, parentKind)) {
+      // -- structural node. Membership in THIS organisation's tier chain, not "any non-leaf
+      // string" — the open tier vocabulary means the complement test would mint a node of
+      // whatever kind a caller typed, and validation is exactly what this arm is for.
+      if (isTierKind(tiersOf(state.model), a.kind)) {
+        if (!canParent(a.kind, parentKind, tiersOf(state.model))) {
           return { state, error: `A ${termFor(state, a.kind)} cannot sit under a ${termFor(state, parentKind)}.` }
         }
         const id = `${a.kind}:${seq}`
@@ -1796,7 +1809,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
 
       // -- issue or sub-issue
       if (a.kind === 'issue' || a.kind === 'sub-issue') {
-        if (!canParent('issue', parentKind)) {
+        if (!canParent('issue', parentKind, tiersOf(state.model))) {
           return { state, error: `An issue cannot sit under a ${parentKind}.` }
         }
         // Inherit client/module from wherever it was created.
@@ -1969,6 +1982,16 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
 
       // -- lifecycle activity or milestone (parent must be an issue, or an activity for a milestone)
+      //
+      // Closed vocabulary, checked HERE and not only at the API boundary. This used to be the
+      // fall-through branch: any kind that was neither a tier nor an issue landed here and was
+      // cast into `phase`, which was safe only because `actionShape`'s allowlist refused
+      // anything else before the reducer saw it. With tiers as open configuration that
+      // allowlist can no longer be closed over tier kinds, so the leaf vocabulary — which IS
+      // closed, per the design's invariant execution core — is enforced where the cast happens.
+      if (a.kind !== 'Milestone' && !(ACTIVITY_PHASES as readonly string[]).includes(a.kind)) {
+        return { state, error: `"${a.kind}" is not something that can be created.` }
+      }
       const issueId =
         parentKind === 'issue' ? a.parentId : state.activities[a.parentId]?.issueId
       if (!issueId) return { state, error: 'Activities must be created under an issue.' }
@@ -2758,7 +2781,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const parentKind = kindOf(state, a.newParentId)
       if (!kind || !parentKind) return { state, error: 'Record not found.' }
       if (a.id === a.newParentId) return { state, error: 'A record cannot be its own parent.' }
-      if (!canParent(kind, parentKind)) {
+      if (!canParent(kind, parentKind, tiersOf(state.model))) {
         return { state, error: `A ${kind} cannot sit under a ${parentKind}.` }
       }
       if (descendantsOf(state, a.id).includes(a.newParentId)) {
@@ -7470,7 +7493,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const scopeId = op.patch.scopeId ?? existing?.scopeId ?? ''
       const scopeKind = kindOf(state, scopeId)
       if (!scopeKind) return { state, error: 'The scope this rule files into does not exist.' }
-      if (!canParent('issue', scopeKind)) {
+      if (!canParent('issue', scopeKind, tiersOf(state.model))) {
         return { state, error: `An issue cannot live under a ${scopeKind}, so this rule could never file anything.` }
       }
 
@@ -7567,7 +7590,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const scopeId = op.patch.scopeId ?? existing?.scopeId ?? ''
       const scopeKind = kindOf(state, scopeId)
       if (!scopeKind) return { state, error: 'The scope this form files into does not exist.' }
-      if (!canParent('issue', scopeKind)) {
+      if (!canParent('issue', scopeKind, tiersOf(state.model))) {
         return { state, error: `An issue cannot live under a ${scopeKind}, so this form could never file anything.` }
       }
 

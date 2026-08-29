@@ -22,6 +22,7 @@ import {
   resolveAutonomy,
   resolveLabels,
   saveModel,
+  tiersOf,
   type Autonomy,
 } from '@/lib/config'
 import { LabelProvider } from './labels'
@@ -34,7 +35,7 @@ import {
   kindOf,
   moduleNodeId,
   scopeChainOf,
-  CREATE_MENU,
+  createMenuFor,
   type Action,
   type CreatableKind,
   type IssueRecord,
@@ -1298,7 +1299,7 @@ export default function IssueWorkspace({
    */
   const rowActions = useMemo<RowActions>(
     () => ({
-      childKinds: (row) => CREATE_MENU[row.kind] ?? [],
+      childKinds: (row) => createMenuFor(row.kind, tiersOf(state.model)),
       /**
        * A sibling is the same `create` arm with the parent of the selection, so what may be
        * created beside a row is whatever may be created under its parent — read off the parent
@@ -1307,7 +1308,7 @@ export default function IssueWorkspace({
       siblingKinds: (row) => {
         if (!row.parentId) return []
         const parent = sortedRows.find((r) => r.id === row.parentId)
-        return parent ? (CREATE_MENU[parent.kind] ?? []) : []
+        return parent ? createMenuFor(parent.kind, tiersOf(state.model)) : []
       },
       addChild: (row, kind) => setDialog({ t: 'add', parentId: row.id, kind }),
       addSibling: (row, kind) => {

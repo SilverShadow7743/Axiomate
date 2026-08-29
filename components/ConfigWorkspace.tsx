@@ -25,6 +25,8 @@ import {
   resolveLabels,
   resolveRequired,
   resolveTemplate,
+  tierIndex,
+  tiersOf,
   type AgentFamily,
   type Autonomy,
   type DocumentFiling,
@@ -36,7 +38,7 @@ import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { describeRecurrence, type Cadence } from '@/lib/recurrence'
 import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/lib/blueprint'
-import { ISSUE_STATUSES, NODE_KINDS, type IssueStatus, type NodeKind } from '@/lib/types'
+import { ISSUE_STATUSES, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
 import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/skills'
@@ -188,7 +190,8 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
       // than as the delivery chain it is.
       .sort(
         (a, b) =>
-          NODE_KINDS.indexOf(a.kind) - NODE_KINDS.indexOf(b.kind) || a.name.localeCompare(b.name),
+          tierIndex(tiersOf(model), a.kind) - tierIndex(tiersOf(model), b.kind) ||
+          a.name.localeCompare(b.name),
       )
     // ROOT carries no kind. It used to be handed a synthetic `organization` — a sixth tier
     // name that existed nowhere in the tree and kept an alias alive in `KIND_LABEL_KEY`.

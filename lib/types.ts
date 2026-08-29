@@ -30,40 +30,55 @@ import type { RichDoc } from './richText'
  */
 export const NODE_KINDS = ['company', 'client', 'engagement', 'project', 'module'] as const
 
-/** Structural tiers above an issue. Engagement/Project exist only if a user creates them. */
-export type NodeKind = (typeof NODE_KINDS)[number]
+/**
+ * The DEFAULT tier kinds — the shipped structural vocabulary, no longer the only possible
+ * one. Tiers are configurable per organisation (`tiersOf` in `./config`), so the closed set
+ * in this file is `LEAF_ROW_KINDS`: the execution core every organisation shares. This list
+ * remains load-bearing where only defaults can appear — the seed path, the mirror
+ * reconciliation regex, and the database kind mapping that Step 4 of the E0 plan retires.
+ */
+export type DefaultNodeKind = (typeof NODE_KINDS)[number]
 
-/** Rows that carry work rather than summarising it. */
+/**
+ * A structural tier kind. Open, because the tier chain above Project is per-organisation
+ * configuration — the invariant vocabulary is the leaf set below, not this.
+ */
+export type NodeKind = string
+
+/** Rows that carry work rather than summarising it. THE closed vocabulary of this file. */
 export const LEAF_ROW_KINDS = ['issue', 'activity', 'milestone'] as const
+export type LeafRowKind = (typeof LEAF_ROW_KINDS)[number]
 
-/** Every row in the tree is one of these kinds. Depth is generic; grouping keys are configurable. */
+/** The default row kinds — default tiers plus the invariant leaves. */
 export const ROW_KINDS = [...NODE_KINDS, ...LEAF_ROW_KINDS] as const
-export type RowKind = (typeof ROW_KINDS)[number]
+export type RowKind = string
 
-const GROUP_KINDS: ReadonlySet<string> = new Set(NODE_KINDS)
+const LEAF_KINDS: ReadonlySet<string> = new Set(LEAF_ROW_KINDS)
 
 /**
  * Rows that summarise the rows beneath them rather than carrying work of their own.
  *
- * Named once because several places need the same answer, and they used to spell it out as
- * `client || module` — which silently excluded the Engagement and Project tiers the moment
- * those became real rows, rendering them as if they were issues. Now it is a membership test
- * against the tier list above, so a new tier is a group row without anyone remembering.
+ * The membership test is INVERTED from what it used to be: it enumerates the leaves, not the
+ * tiers, because the leaf set is the invariant execution core while the tier set is open
+ * configuration. Any kind that is not a leaf is a group row — which is how an org-defined
+ * tier gets the group treatment (banner rendering, no inline editors, rollup rows) without
+ * anyone remembering to register it in a display list.
  */
 export function isGroupRow(kind: RowKind): boolean {
-  return GROUP_KINDS.has(kind)
+  return !LEAF_KINDS.has(kind)
 }
 
-/**
- * Narrow an arbitrary kind to a structural tier.
+/*
+ * There is deliberately no `isNodeKind` any more.
  *
- * The same membership test as `isGroupRow`, typed as a guard, for the places that need the
- * narrowed type rather than a boolean — the reducer deciding whether a create action makes a
- * hierarchy node, for instance, which previously spelled the tiers out a second time.
+ * It narrowed a string to the closed tier union, and callers used it on two DIFFERENT
+ * vocabularies: row kinds (where "not a leaf" is the right test — that is `isGroupRow`) and
+ * creatable kinds, which include `sub-issue`, the activity phases and `Milestone` — strings
+ * that are neither leaves nor tiers, and which a complement test would misclassify as tiers
+ * the moment the tier set opened up. The question those callers were really asking is "is
+ * this one of THIS organisation's tiers", and that needs the organisation's tier list:
+ * `isTierKind(tiersOf(model), kind)` in `./config`.
  */
-export function isNodeKind(kind: string): kind is NodeKind {
-  return GROUP_KINDS.has(kind)
-}
 
 /** Lifecycle activity phases an issue can be decomposed into (spec §5). */
 export const ACTIVITY_PHASES = [

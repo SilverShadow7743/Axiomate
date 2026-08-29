@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ScheduleRow } from '@/lib/types'
 import { isGroupRow } from '@/lib/types'
-import { CREATE_MENU, type CreatableKind } from '@/lib/workspace'
+import { createMenuFor, type CreatableKind } from '@/lib/workspace'
 import { kindLabel } from '@/lib/config'
 import { useLabels } from './labels'
 
@@ -78,7 +78,7 @@ export default function SelectionToolbar({
    * branches were unreachable, and reading a structural decision out of a user-renameable
    * label would have started returning the wrong menu the moment somebody renamed a tier.
    */
-  const addOptions = CREATE_MENU[row.kind] ?? []
+  const addOptions = createMenuFor(row.kind)
   const isActivity = row.kind === 'activity' || row.kind === 'milestone'
   const isIssue = row.kind === 'issue'
   // Structural rows are archived, not deleted — every tier of them. Naming two of the five

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import type { DependencyType, IssueStatus, ScheduleRow, Severity } from '@/lib/types'
-import { ISSUE_STATUSES, isNodeKind } from '@/lib/types'
+import { ISSUE_STATUSES } from '@/lib/types'
 import {
   canParent,
   childrenOf,
@@ -15,7 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
-import { kindLabel, liveDisciplines, liveWorkTypes } from '@/lib/config'
+import { isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
 
 export type DialogState =
@@ -175,7 +175,7 @@ function AddForm({
   const isIssue = dialog.kind === 'issue' || dialog.kind === 'sub-issue'
   // A tier below the client — derived from the tier list rather than named, so a new tier
   // gets the structural form instead of silently falling into the client branch.
-  const isStructural = isNodeKind(dialog.kind) && dialog.kind !== 'client'
+  const isStructural = isTierKind(tiersOf(state.model), dialog.kind) && dialog.kind !== 'client'
   // Read from the operating model, so a type or party added in configuration is selectable
   // here without a code change — which is the entire premise of the configuration plane.
   const workTypes = liveWorkTypes(state.model).map((t) => t.label)

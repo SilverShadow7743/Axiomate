@@ -33,7 +33,7 @@ import type {
   ScopeItem as ScopeItemRow,
   Prisma,
 } from '@prisma/client'
-import type { AccountableParty, DependencyType, IssueStatus, Severity } from '../types'
+import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
 import type { DocumentReview, DocumentReviewAnswer } from '../proofing'
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
@@ -109,13 +109,20 @@ export function fromDateOrEmpty(d: Date | null | undefined): string {
  * Enums
  * ================================================================== */
 
+/*
+ * Keyed on the DEFAULT tier kinds because the database column is still the five-value
+ * NodeKind enum — an org-defined tier cannot be stored yet, and the reducer's tier-membership
+ * validation is what keeps one from reaching here. Step 4 of the E0 plan (enum → string)
+ * retires this pair; until then `nodeToRow` narrows with a cast that is safe for exactly
+ * that reason.
+ */
 const NODE_KIND_TO_DB = {
   company: 'COMPANY',
   client: 'CLIENT',
   engagement: 'ENGAGEMENT',
   project: 'PROJECT',
   module: 'MODULE',
-} as const satisfies Record<NodeKind, NodeRow['kind']>
+} as const satisfies Record<DefaultNodeKind, NodeRow['kind']>
 
 const NODE_KIND_FROM_DB: Record<NodeRow['kind'], NodeKind> = {
   COMPANY: 'company',
@@ -155,7 +162,7 @@ export function nodeToRow(tenantId: TenantId, n: HierarchyNode): Prisma.Hierarch
     sowId: n.sowId ?? null,
     tenantId,
     id: n.id,
-    kind: NODE_KIND_TO_DB[n.kind],
+    kind: NODE_KIND_TO_DB[n.kind as DefaultNodeKind],
     name: n.name,
     owner: n.owner,
     parentId: n.parentId,
