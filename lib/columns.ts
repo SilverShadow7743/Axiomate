@@ -34,14 +34,14 @@ export const COLUMNS: ColumnDef[] = [
   {
     key: 'name',
     labelKey: 'RECORD_ISSUE',
-    // The column shows every row kind the tree carries, not just issues and activities — the
-    // structural tiers (Company/Client/Engagement/Project/Process Area) render here too, and
-    // "Outcome" is what names that group; "Activity" names the lifecycle/milestone rows under
-    // an issue. Only the middle term is configurable — a firm can rename what it calls an
-    // "Issue"; the other two describe this app's own row kinds and are not a business term.
+    // The column shows every row kind the tree carries — the structural tiers (now including
+    // a literal Outcome tier) render here too, and "Outcome" names that group; "Task" names
+    // the lifecycle/milestone rows under a work item. Only the middle term is configurable —
+    // a firm can rename what it calls its work records; the other two describe this app's own
+    // row kinds and are not a business term.
     labelPrefix: 'Outcome / ',
-    labelSuffix: ' / Activity',
-    label: 'Outcome / Issue / Activity',
+    labelSuffix: ' / Task',
+    label: 'Outcome / Work / Task',
     // Widened when the tree gained the Company and Engagement tiers: five levels of indent
     // plus rollup badges left the name itself with almost nothing at the old 320.
     width: 392,

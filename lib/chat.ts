@@ -122,7 +122,7 @@ export const DEFAULT_CHAT_CONFIG: ChatConfig = {
     owner: 'Owner',
     accountable: 'Accountable Party',
     raisedBy: 'Raised By',
-    issue: 'Issue',
+    issue: 'Work',
     module: 'Process Area',
     organization: 'Client',
   },

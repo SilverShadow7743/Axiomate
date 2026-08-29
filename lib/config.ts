@@ -90,9 +90,13 @@ export const LABEL_KEYS = {
   TIER_OUTCOME: 'Outcome',
   TIER_MODULE: 'Process Area',
 
-  /* Record kinds */
-  RECORD_ISSUE: 'Issue',
-  RECORD_SUB_ISSUE: 'Sub-Issue',
+  /* Record kinds. 'Work' and its child, per the platform-evolution design's vocabulary
+     (Outcome = result, Work = commitment, Task = execution): shipped DEFAULTS, not a code
+     rename — an organisation that prefers Issue configures it back in one field, and every
+     identifier in this codebase still says issue because the rendered word is configuration
+     (the same reasoning that deleted the RowType union). */
+  RECORD_ISSUE: 'Work',
+  RECORD_SUB_ISSUE: 'Sub-Work',
   RECORD_MILESTONE: 'Milestone',
 
   /* Responsibilities */
