@@ -64,6 +64,26 @@ export default function ClientPackView({ pack, onClose }: { pack: Pack; onClose:
           </div>
         </section>
 
+        <section>
+          <h2>Progress</h2>
+          <div className="pack-position">
+            <span>
+              Closed {pack.progress.periodDeltas.closed} · Newly raised{' '}
+              {pack.progress.periodDeltas.raised} this {weekly ? 'week' : 'month'} (from record
+              dates)
+            </span>
+            <span>
+              {pack.progress.schedule.pctComplete !== null
+                ? `${pack.progress.schedule.pctComplete}% complete`
+                : 'Completion not measurable'}{' '}
+              · On track {pack.progress.schedule.onTrack} · Overdue {pack.progress.schedule.overdue}
+              {pack.progress.schedule.projectedFinish
+                ? ` · Projected finish ${pack.progress.schedule.projectedFinish}`
+                : ''}
+            </span>
+          </div>
+        </section>
+
         {weekly ? (
           <section>
             <h2>Activity this week</h2>

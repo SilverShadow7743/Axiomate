@@ -2,6 +2,7 @@ import type { WorkspaceState } from '../workspace'
 import { clientView } from '../clientBoundary'
 import { externalPartyKinds, tiersOf } from '../config'
 import { isTerminal } from '../schedule'
+import { buildTree } from '../tree'
 
 /**
  * Weekly and monthly packs handed to a client — built on `clientView()`, never re-deriving what
@@ -57,6 +58,29 @@ export interface ClientPackDisclosure {
   total: number
 }
 
+/**
+ * Progress for the period — "understanding of progress", the user's own requirement.
+ *
+ * Computed from `clientView()`'s RETURN and nothing else, so only client-visible records feed
+ * every number here; the disclosure line keeps counting what was withheld. The deltas come from
+ * record dates (`actualEnd`, `raised`) deliberately rather than from the capped audit trail, so
+ * they are complete however old the period — the monthly pack's audit-based `movement` (with
+ * its own honesty flag) stays beside them, measuring the same month from a different source.
+ * The schedule half reuses `buildTree`'s own row logic (override → activity roll-up →
+ * status-derived), so a pack can never disagree with the grid; projected finish is the latest
+ * planned end — a SCHEDULE field, never estimate hours, which `clientView` strips anyway.
+ */
+export interface PackProgress {
+  periodDeltas: { closed: number; raised: number }
+  schedule: {
+    /** Mean per-record completion, 0–100, rounded. Null when nothing is visible. */
+    pctComplete: number | null
+    onTrack: number
+    overdue: number
+    projectedFinish: string | null
+  }
+}
+
 export interface WeeklyClientPack {
   client: string
   asOf: string
@@ -67,6 +91,7 @@ export interface WeeklyClientPack {
   window: { from: string; to: string }
   /** Client-visible issues with activity inside the window. */
   lines: ClientPackLine[]
+  progress: PackProgress
 }
 
 export interface MonthlyGovernancePack {
@@ -82,6 +107,7 @@ export interface MonthlyGovernancePack {
     raised: number
     resolved: number
   }
+  progress: PackProgress
 }
 
 /** Resolves a client name (what `filters.client` carries) to that client's own node id — a
@@ -139,6 +165,33 @@ function positionOf(issues: { status: string; severity: string }[]): Position {
   }
 }
 
+/**
+ * `visible` MUST be `clientView()`'s return, never the raw state — passing the raw state here
+ * would put internal records' existence into a client document with nothing on screen looking
+ * wrong. RP2's sentinel scan is the tripwire for exactly that mistake.
+ */
+function progressOf(visible: WorkspaceState, from: string, asOf: string): PackProgress {
+  const issues = Object.values(visible.issues).filter((i) => !i.deletedAt)
+  const inWindow = (d: string | null) => d != null && d >= from && d <= asOf
+  const rows = buildTree(visible, asOf).filter((r) => r.kind === 'issue')
+  const open = rows.filter((r) => !isTerminal(r.status as never))
+  const ends = open.map((r) => r.plannedEndDate).filter((d): d is string => d != null)
+  return {
+    periodDeltas: {
+      closed: issues.filter((i) => inWindow(i.actualEnd)).length,
+      raised: issues.filter((i) => inWindow(i.raised)).length,
+    },
+    schedule: {
+      pctComplete: rows.length
+        ? Math.round(rows.reduce((t, r) => t + r.percentComplete, 0) / rows.length)
+        : null,
+      onTrack: open.filter((r) => r.scheduleHealth === 'On Track').length,
+      overdue: open.filter((r) => r.scheduleHealth === 'Overdue').length,
+      projectedFinish: ends.length ? ends.reduce((a, b) => (a > b ? a : b)) : null,
+    },
+  }
+}
+
 export function buildWeeklyClientPack(
   state: WorkspaceState,
   clientScopeId: string,
@@ -162,6 +215,7 @@ export function buildWeeklyClientPack(
     position: positionOf(visibleIssues),
     window: { from, to: asOf },
     lines,
+    progress: progressOf(visible, from, asOf),
   }
 }
 
@@ -203,5 +257,6 @@ export function buildMonthlyGovernancePack(
       raised,
       resolved,
     },
+    progress: progressOf(visible, from, asOf),
   }
 }
