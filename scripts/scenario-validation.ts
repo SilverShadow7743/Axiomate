@@ -121,6 +121,7 @@ import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
 import { searchWorkspace } from '../lib/search'
+import { firstRunState, firstRunVisible } from '../lib/firstRun'
 import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
@@ -2293,6 +2294,41 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: "Priya's view stores trimmed, creator-stamped and audited, with the junk key dropped and the mistyped boolean defaulted; a blank name refuses; Sam's rewrite and delete both bounce naming the grant while the admin's rewrite lands; Priya's own delete empties the list.", stops: '—', severity: '—', impact: 'Views are team records with ownership, not browser state — the level above Hive the design named.' } as const
       : { verdict: 'FAIL', actual: `stored=${stored} failClosed=${failClosed} audited=${audited} nameRequired=${nameRequired} rewriteBounces=${rewriteBounces} (${(rewrite.error ?? '').slice(0, 60)}) adminMay=${adminMay} deleteBounces=${deleteBounces} deleted=${deleted}`, stops: 'at the arm — storage, parsing, ownership or the audit line is wrong', severity: 'P2', impact: 'shared views either rot, hijack, or vanish without a trace' } as const
+  },
+)
+
+scenario(
+  'FR1',
+  'First-run shows itself to exactly the seats that need it, and retires on evidence',
+  "The first-run helper pure-driven: a roled consultant with no recorded hours is eligible; recording one entry marks the step done (and keeps the card up until the week is submitted); a timesheet marks submission done and retires the card; a config.manage holder never sees it; an actor matching nobody — including a would-be client-seat guest — never sees internal onboarding.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? 'P?'
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    const fresh = firstRunState(staffed, priya)
+    const eligible = fresh.eligible && !fresh.recordedFirstHours && !fresh.submittedFirstWeek && firstRunVisible(fresh)
+
+    const logged = ok(staffed, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: TODAY,
+      hours: 2, activity: 'Investigation', billable: true, note: '', now: NOW,
+    } as Action)
+    const after1 = firstRunState(logged, priya)
+    const stepOne = !after1.eligible && after1.recordedFirstHours && !after1.submittedFirstWeek && firstRunVisible(after1)
+
+    const sres = apply(logged, { t: 'submitTimesheet', person: 'Priya', weekStarting: weekStarting(TODAY), now: NOW } as Action, priya)
+    const after2 = firstRunState(sres.state, priya)
+    const retired = !sres.error && after2.submittedFirstWeek && !firstRunVisible(after2)
+
+    const admin = firstRunState(staffed, A)
+    const adminNever = !admin.eligible && !firstRunVisible(admin)
+    const stranger = firstRunState(staffed, { id: 'nobody', name: 'No Body' })
+    const strangerNever = !stranger.eligible && !firstRunVisible(stranger)
+
+    const good = eligible && stepOne && retired && adminNever && strangerNever
+    return good
+      ? { verdict: 'PASS', actual: 'A roled, entry-less Priya sees the card; her first entry marks the step and keeps the card until the week goes in; the submitted week retires it; the admin and an unmatched sign-in never see it at all.', stops: '—', severity: '—', impact: 'Onboarding that computes itself from evidence, shown only to the seats that need it.' } as const
+      : { verdict: 'FAIL', actual: `eligible=${eligible} stepOne=${stepOne} retired=${retired} adminNever=${adminNever} strangerNever=${strangerNever}`, stops: 'at the helper — the card would nag the wrong seat or vanish before the loop is learned', severity: 'P3', impact: 'onboarding noise for operators, or silence for the consultant it exists for' } as const
   },
 )
 

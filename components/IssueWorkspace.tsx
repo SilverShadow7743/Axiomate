@@ -66,6 +66,7 @@ import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyI
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './ClientPackView'
 import FinanceReportDialog from './FinanceReportDialog'
+import FirstRunCard from './FirstRunCard'
 import SearchResults from './SearchResults'
 import { searchWorkspace, type SearchHit } from '@/lib/search'
 import { planSlaDates, slaReason } from '@/lib/sla'
@@ -2255,7 +2256,10 @@ export default function IssueWorkspace({
       />
 
       {view === 'mywork' ? (
-        <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
+        <>
+          <FirstRunCard state={state} actor={actor} />
+          <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
+        </>
       ) : view === 'portfolio' ? (
         <PortfolioPanel state={state} today={today} onSelect={revealIssue} docked />
       ) : view === 'calendar' ? (

@@ -6293,3 +6293,23 @@ select.cell-editor {
 /* The toolbar link to this page shows only at phone widths — the grid's users never see it. */
 .mw-link { display: none; }
 @media (max-width: 700px) { .mw-link { display: inline-flex; } }
+
+/* First-run — the checklist that computes itself (My work, new delivery seats only). */
+.fr-card {
+  max-width: 720px;
+  margin: 12px auto 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: var(--bg);
+}
+.fr-head { display: flex; justify-content: space-between; align-items: center; }
+.fr-head h3 { margin: 0; font-size: 15px; }
+.fr-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.fr-steps li { display: flex; gap: 9px; font-size: 13px; color: var(--text-muted); }
+.fr-steps li b { color: var(--text); }
+.fr-steps li.done { opacity: 0.65; }
+.fr-steps li.done b { text-decoration: line-through; }
+.fr-mark { color: var(--accent); font-weight: 700; width: 14px; flex: none; }
+.fr-steps li.done .fr-mark { color: #2e7d32; }
