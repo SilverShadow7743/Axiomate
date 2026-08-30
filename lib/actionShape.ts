@@ -135,6 +135,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'upsertSkill',
   'deleteSkill',
   'setSla',
+  'setHolidays',
   'setSizeBands',
   'setStatusPolicy',
   'setTimePolicy',

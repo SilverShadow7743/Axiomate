@@ -38,7 +38,10 @@ import type { RichDoc } from '@/lib/richText'
 import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
 import type { EngagementDetail } from '@/lib/engagement'
-import { isExternalPartyKind, liveResponsibilities, resolveRequired, tiersOf } from '@/lib/config'
+import { holidaySetOf, isExternalPartyKind, liveResponsibilities, resolveRequired, tiersOf } from '@/lib/config'
+import { describeForecast, forecastFor } from '@/lib/forecast'
+import { profileAt } from '@/lib/capacity'
+import { directoryIdByName } from '@/lib/access'
 import { readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
 import {
   KIND_ICON,
@@ -199,6 +202,7 @@ interface Props {
   onCorrectPattern: (versionId: string, validFrom: string, reason: string) => boolean
   onCommit: (c: { person: string; kind: CommitmentKind; startDate: string; endDate: string; hoursPerDay: number; note: string }) => boolean
   onReleaseCommitment: (id: string) => void
+  onDecideLeave: (id: string, decision: 'approved' | 'returned') => void
   onAddMember: (projectId: string, person: string, projectRoleId: string) => boolean
   onUpdateMemberRole: (id: string, projectRoleId: string) => void
   onRemoveMember: (id: string) => void
@@ -263,6 +267,7 @@ export default function DetailPanel({
   onCorrectPattern,
   onCommit,
   onReleaseCommitment,
+  onDecideLeave,
   onUpdateTime,
   actor,
   onSaveIssue,
@@ -613,6 +618,7 @@ export default function DetailPanel({
             onRecordPattern={onRecordPattern}
             onCorrectPattern={onCorrectPattern}
             onCommit={onCommit}
+            onDecideLeave={onDecideLeave}
             onReleaseCommitment={onReleaseCommitment}
           />
         ) : !issue ? (
@@ -722,6 +728,34 @@ export default function DetailPanel({
               <dt>Schedule health</dt>
               <dd className={`hl-${issueRow!.scheduleHealth.toLowerCase().replace(/\s/g, '')}`}>
                 {issueRow!.scheduleHealth}
+              </dd>
+              {/* The future, beside the health that reads the past — deliberately separate
+                  vocabularies (the E1 design). One sentence, from the one place sentences
+                  come from, so Portfolio can never disagree with this tab. */}
+              <dt>Forecast</dt>
+              <dd>
+                {describeForecast(
+                  forecastFor({
+                    issueId: issue.id,
+                    owner: issue.owner,
+                    ownerId: directoryIdByName(state.model, issue.owner),
+                    plannedEnd: issueRow!.plannedEndDate,
+                    estimate: state.estimates[issue.id],
+                    bands: state.model.sizeBands,
+                    timeEntries: state.timeEntries,
+                    profile: profileAt(
+                      Object.values(state.versions),
+                      state.model.resourceProfiles,
+                      directoryIdByName(state.model, issue.owner) ?? '',
+                      today,
+                    ),
+                    commitments: Object.values(state.commitments),
+                    allocations: Object.values(state.allocations),
+                    today,
+                    holidays: holidaySetOf(state.model),
+                  }),
+                  issue.owner,
+                )}
               </dd>
             </dl>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

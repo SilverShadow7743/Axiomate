@@ -189,6 +189,7 @@ import { type IntakeForm,
   type LabelKey,
   type OperatingModel,
   type TierDef,
+  type Holiday,
   DEFAULT_TIERS,
   tiersOf,
   isTierKind,
@@ -1325,6 +1326,7 @@ export type ConfigOp =
   | { k: 'upsertSkill'; id: string | null; name: string; category: string; description: string }
   | { k: 'deleteSkill'; id: string }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
+  | { k: 'setHolidays'; holidays: Holiday[] }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
   | { k: 'setTimePolicy'; patch: Partial<TimePolicy> }
@@ -6821,6 +6823,31 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sla: next },
         { rowId: 'SLA', field: 'sla', from: before, to: after, at: now, by },
         `Service levels updated — ${after}.`,
+      )
+    }
+
+    case 'setHolidays': {
+      /*
+       * The whole list, replaced — a holiday calendar is edited as a document, not as rows,
+       * and a replace op cannot leave a phantom date behind the way per-row deletes can.
+       * Validated for what the date math would silently mistrust: a malformed date never
+       * matches the working-day set, so it would be a holiday that never fires.
+       */
+      const seen = new Set<string>()
+      for (const h of op.holidays) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(h.date) || Number.isNaN(Date.parse(`${h.date}T00:00:00Z`))) {
+          return { state, error: `"${h.date}" is not a real calendar date (YYYY-MM-DD).` }
+        }
+        if (!h.name.trim()) return { state, error: `The holiday on ${h.date} needs a name.` }
+        if (seen.has(h.date)) return { state, error: `${h.date} is listed twice.` }
+        seen.add(h.date)
+      }
+      const sorted = [...op.holidays].map((h) => ({ date: h.date, name: h.name.trim() })).sort((x, y) => x.date.localeCompare(y.date))
+      const before = (m.holidays ?? []).length
+      return done(
+        { ...m, holidays: sorted },
+        { rowId: 'HOLIDAYS', field: 'holidays', from: `${before} day(s)`, to: `${sorted.length} day(s)`, at: now, by },
+        `${sorted.length} holiday(s) recorded. The working-day math skips them for everyone.`,
       )
     }
 

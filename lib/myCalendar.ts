@@ -79,7 +79,19 @@ export function myCalendarMonth(
   for (const c of Object.values(state.commitments)) {
     if (c.deletedAt || c.personId !== personId) continue
     for (const d of daysOf(c.startDate, c.endDate)) {
-      push(d, { kind: 'commitment', id: c.id, label: c.kind, date: d })
+      // A leave request that is not yet a fact says so — shown, never hidden, per the E1
+      // design's conflict posture; a returned one says that instead of quietly vanishing.
+      push(d, {
+        kind: 'commitment',
+        id: c.id,
+        label:
+          c.kind === 'Leave' && c.status === 'Requested'
+            ? 'Leave (requested)'
+            : c.kind === 'Leave' && c.status === 'Returned'
+              ? 'Leave (returned)'
+              : c.kind,
+        date: d,
+      })
     }
   }
 

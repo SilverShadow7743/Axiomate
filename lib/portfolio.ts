@@ -1,3 +1,7 @@
+import { forecastFor } from './forecast'
+import { profileAt } from './capacity'
+import { holidaySetOf } from './config'
+import { directoryIdByName } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
 import { issuesUnder } from './engagement'
 
@@ -51,7 +55,7 @@ const STALE_DAYS = 14
  * itself. `stale` is last of the four because quiet is weaker evidence than any of the others —
  * a fortnight of silence on a small engagement may be correct.
  */
-export const CONCERN_ORDER = ['overdue', 'blocked', 'unowned', 'stale'] as const
+export const CONCERN_ORDER = ['overdue', 'forecast', 'blocked', 'unowned', 'stale'] as const
 export type ConcernKind = (typeof CONCERN_ORDER)[number]
 
 export interface Concern {
@@ -128,7 +132,7 @@ export function portfolio(state: WorkspaceState, today: string): PortfolioLine[]
       open: open.length,
       projects: projectsUnder(state, node.id),
       high: open.filter((i) => i.severity === ('High' satisfies Severity)).length,
-      concerns: concernsFor(open, lastActivity, today),
+      concerns: concernsFor(state, open, lastActivity, today),
       lastActivity,
     })
   }
@@ -175,12 +179,54 @@ function hasAncestor(state: WorkspaceState, from: string | null, target: string)
  * a portfolio that counted it would never improve no matter what anybody did — which is the
  * fastest way to make a screen ignored.
  */
-function concernsFor(open: IssueRecord[], lastActivity: string | null, today: string): Concern[] {
+function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: string | null, today: string): Concern[] {
   const out: Concern[] = []
 
   const overdue = open.filter((i) => i.plannedEnd && i.plannedEnd < today).length
   if (overdue) {
     out.push({ kind: 'overdue', count: overdue, phrase: `${overdue} past its date` })
+  }
+
+  /*
+   * The future, from the one forecast module — the same verdicts the Schedule tab shows, so
+   * the two surfaces can never disagree about a record. Only records that CAN be forecast
+   * participate (an estimate and a due date); the rest are honest absences, already counted
+   * by the other concerns. The phrase names the worst shortfall rather than summing them:
+   * shortfalls on different owners do not add up to anything a reader can act on.
+   */
+  const holidays = holidaySetOf(state.model)
+  const commitments = Object.values(state.commitments)
+  const allocations = Object.values(state.allocations)
+  const versions = Object.values(state.versions)
+  let shortCount = 0
+  let worst: { name: string; by: number } | null = null
+  for (const i of open) {
+    if (!i.plannedEnd || i.plannedEnd < today || !state.estimates[i.id]) continue
+    const ownerId = directoryIdByName(state.model, i.owner)
+    const f = forecastFor({
+      issueId: i.id,
+      owner: i.owner,
+      ownerId,
+      plannedEnd: i.plannedEnd,
+      estimate: state.estimates[i.id],
+      bands: state.model.sizeBands,
+      timeEntries: state.timeEntries,
+      profile: profileAt(versions, state.model.resourceProfiles, ownerId ?? '', today),
+      commitments,
+      allocations,
+      today,
+      holidays,
+    })
+    if (f.kind !== 'short') continue
+    shortCount++
+    if (!worst || f.deltaHours > worst.by) worst = { name: i.id, by: f.deltaHours }
+  }
+  if (shortCount && worst) {
+    out.push({
+      kind: 'forecast',
+      count: shortCount,
+      phrase: `${shortCount} forecast short (worst ${worst.name}, by ${worst.by}h)`,
+    })
   }
 
   const blocked = open.filter((i) => BLOCKED_STATUSES.includes(i.status)).length

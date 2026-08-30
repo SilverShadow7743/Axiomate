@@ -43,6 +43,7 @@ export default function CapacityPanel({
   onRecordPattern,
   onCorrectPattern,
   onCommit,
+  onDecideLeave,
   onReleaseCommitment,
 }: {
   row: ScheduleRow
@@ -71,7 +72,10 @@ export default function CapacityPanel({
     endDate: string
     hoursPerDay: number
     note: string
+    /** Leave only: why, for the approver. Private — the server withholds it from everyone else. */
+    reason?: string
   }) => boolean
+  onDecideLeave: (id: string, decision: 'approved' | 'returned') => void
   /** Withdraw one. */
   onReleaseCommitment: (id: string) => void
 }) {
@@ -79,6 +83,7 @@ export default function CapacityPanel({
   // A different grant: committing somebody to a project is a claim on time that is not yours;
   // recording that they are on leave is a fact about their diary. See lib/access.ts.
   const mayRecord = can(state.model, actor, 'capacity.record')
+  const mayDecideLeave = can(state.model, actor, 'leave.approve').allowed
 
   const [from, setFrom] = useState(row.plannedStartDate ?? today)
   const [to, setTo] = useState(row.plannedEndDate ?? addDays(today, 90))
@@ -273,6 +278,7 @@ export default function CapacityPanel({
                 <th>From</th>
                 <th>To</th>
                 <th>Hours a day</th>
+                <th>Status</th>
                 <th>Note</th>
                 <th />
               </tr>
@@ -285,8 +291,34 @@ export default function CapacityPanel({
                   <td className="mono">{c.startDate}</td>
                   <td className="mono">{c.endDate}</td>
                   <td className="mono">{c.hoursPerDay}h</td>
-                  <td>{c.note}</td>
                   <td>
+                    {/* Non-Leave kinds are recorded facts with nothing to decide. Absent status
+                        is Approved — pre-approval history; the engine owns that rule. */}
+                    {c.kind !== 'Leave' ? (
+                      <span className="prov">—</span>
+                    ) : (c.status ?? 'Approved') === 'Requested' ? (
+                      <span className="cap-leave-pending">Requested</span>
+                    ) : (
+                      c.status ?? 'Approved'
+                    )}
+                  </td>
+                  <td>
+                    {c.note}
+                    {/* The private reason — the server has already decided whether this reader
+                        gets it, so presence IS permission; nothing here re-checks. */}
+                    {c.reason && <span className="prov"> · {c.reason}</span>}
+                  </td>
+                  <td>
+                    {c.kind === 'Leave' && (c.status ?? 'Approved') === 'Requested' && mayDecideLeave && (
+                      <>
+                        <button className="btn-link" onClick={() => onDecideLeave(c.id, 'approved')}>
+                          Approve
+                        </button>{' '}
+                        <button className="btn-link" onClick={() => onDecideLeave(c.id, 'returned')}>
+                          Return
+                        </button>{' '}
+                      </>
+                    )}
                     {mayRecord.allowed && (
                       <button className="btn-link" onClick={() => onReleaseCommitment(c.id)}>
                         Withdraw
@@ -685,6 +717,7 @@ function CommitmentForm({
     endDate: string
     hoursPerDay: number
     note: string
+    reason?: string
   }) => boolean
 }) {
   const [person, setPerson] = useState('')
@@ -693,6 +726,7 @@ function CommitmentForm({
   const [endDate, setEnd] = useState(defaultFrom)
   const [hoursPerDay, setHours] = useState('7.5')
   const [note, setNote] = useState('')
+  const [reason, setReason] = useState('')
 
   const needsNote = kind === 'Internal' || kind === 'Training'
   const ready =
@@ -705,9 +739,10 @@ function CommitmentForm({
 
   const submit = () => {
     if (!ready) return
-    if (onCommit({ person, kind, startDate, endDate, hoursPerDay: Number(hoursPerDay), note })) {
+    if (onCommit({ person, kind, startDate, endDate, hoursPerDay: Number(hoursPerDay), note, reason: kind === 'Leave' ? reason.trim() || undefined : undefined })) {
       setPerson('')
       setNote('')
+      setReason('')
     }
   }
 
@@ -773,6 +808,16 @@ function CommitmentForm({
             placeholder={needsNote ? 'What this is' : ''}
           />
         </label>
+        {kind === 'Leave' && (
+          <label className="fld time-fld-note">
+            <span className="fld-label">Why (private)</span>
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Only you and whoever decides leave will read this"
+            />
+          </label>
+        )}
         <button className="btn" disabled={!ready} onClick={submit} title={ready ? 'Record it' : needsNote && !note.trim() ? 'Internal work needs a note saying what it is' : 'Fill in who and when'}>
           Record
         </button>

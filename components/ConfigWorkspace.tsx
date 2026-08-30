@@ -1341,8 +1341,8 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
     {
       id: 'serviceLevels',
       title: 'Service levels',
-      what: 'Working days allowed per severity. Drives targets, at-risk and overdue.',
-      now: `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low}`,
+      what: 'Working days allowed per severity, and the org holiday calendar the date math skips.',
+      now: `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low} · ${(m.holidays ?? []).length} holiday(s)`,
     },
     {
       id: 'sizing',
@@ -3248,6 +3248,9 @@ function ServiceLevels({
   onConfig: (op: ConfigOp) => boolean
 }) {
   const sla = state.model.sla
+  const holidays = state.model.holidays ?? []
+  const [newDate, setNewDate] = useState('')
+  const [newName, setNewName] = useState('')
   const labels = useLabels()
 
   /** Open records already carrying a due date — the ones a change here will not move. */
@@ -3320,6 +3323,51 @@ function ServiceLevels({
           </>
         )}
       </p>
+
+      <h3 className="cfg-h">Holidays</h3>
+      <p className="cfg-note">
+        Days the whole organisation is not at work. The working-day math skips them once, for
+        everyone — targets, capacity and forecasts alike — instead of each being entered as a
+        per-person commitment. A holiday one person observes alone stays a personal commitment
+        on the Capacity tab.
+      </p>
+      <div className="cfg-card">
+        {holidays.length === 0 && <p className="cfg-inherit">None recorded. Weekends are always skipped.</p>}
+        {holidays.map((h) => (
+          <div className="cfg-fld-row" key={h.date}>
+            <span className="mono">{h.date}</span>
+            <span style={{ flex: 1 }}>{h.name}</span>
+            <button
+              className="btn-link"
+              onClick={() => onConfig({ k: 'setHolidays', holidays: holidays.filter((x) => x.date !== h.date) })}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Date</span>
+            <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+          </label>
+          <label className="cfg-fld">
+            <span>Name</span>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="What the day is" />
+          </label>
+          <button
+            className="btn"
+            disabled={!newDate || !newName.trim()}
+            onClick={() => {
+              if (onConfig({ k: 'setHolidays', holidays: [...holidays, { date: newDate, name: newName.trim() }] })) {
+                setNewDate('')
+                setNewName('')
+              }
+            }}
+          >
+            Add
+          </button>
+        </div>
+      </div>
     </section>
   )
 }

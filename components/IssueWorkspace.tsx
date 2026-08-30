@@ -2411,6 +2411,9 @@ export default function IssueWorkspace({
           onReleaseCommitment={(id) =>
             dispatch({ t: 'removeCommitment', id, now: new Date().toISOString() })
           }
+          onDecideLeave={(id, decision) =>
+            dispatch({ t: 'decideLeave', id, decision, now: new Date().toISOString() })
+          }
           onUpdateTime={(id, patch) =>
             dispatch({ t: 'updateTime', id, patch, now: new Date().toISOString() })
           }
