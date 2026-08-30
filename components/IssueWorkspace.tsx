@@ -2129,6 +2129,9 @@ export default function IssueWorkspace({
             const now = new Date().toISOString()
             dispatchMany(ids.map((tid) => ({ t: 'decideTimesheet', id: tid, decision: 'approved', now }) as Action))
           }}
+          onDecideLeave={(id, decision, note) =>
+            dispatch({ t: 'decideLeave', id, decision, note, now: new Date().toISOString() })
+          }
           onOpen={(issueId) => {
             revealIssue(issueId)
             setRequestTab('Time' as DetailTab)

@@ -6,7 +6,9 @@ import { useOverlay } from './useOverlay'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { directoryPersonFor } from '@/lib/access'
-import { addDays, formatIso } from '@/lib/dates'
+import type { Commitment } from '@/lib/capacity'
+import { holidaySetOf } from '@/lib/config'
+import { addDays, formatIso, workingDaysBetween } from '@/lib/dates'
 import {
   daysOfWeek,
   decideProblem,
@@ -41,6 +43,7 @@ export default function TimesheetPanel({
   onSubmitWeek,
   onDecideWeek,
   onDecideMany,
+  onDecideLeave,
   onOpen,
   onClose,
   docked = false,
@@ -52,6 +55,8 @@ export default function TimesheetPanel({
   onDecideWeek: (id: string, decision: 'approved' | 'rejected', reason?: string) => boolean
   /** The batch — dispatched as ONE dispatchMany, which is atomic; the caller pre-filtered. */
   onDecideMany: (ids: string[]) => void
+  /** The other queue this view clears (E2): decideLeave, note included on a return. */
+  onDecideLeave: (id: string, decision: 'approved' | 'returned', note?: string) => boolean
   onOpen: (issueId: string) => void
   onClose: () => void
   /**
@@ -68,6 +73,8 @@ export default function TimesheetPanel({
   const [week, setWeek] = useState(() => weekStarting(today))
   const [returnReason, setReturnReason] = useState('')
   const [returning, setReturning] = useState<string | null>(null)
+  const [leaveReturning, setLeaveReturning] = useState<string | null>(null)
+  const [leaveNote, setLeaveNote] = useState('')
 
   const entries = useMemo(() => Object.values(state.timeEntries), [state.timeEntries])
   const grid = useMemo(() => weekGrid(entries, actor.name, week, meId), [entries, actor.name, week, meId])
@@ -99,6 +106,29 @@ export default function TimesheetPanel({
     () => submitted.filter((t) => !decideProblem(t, 'approved', undefined, attester)),
     [submitted, attester.name, attester.mayApprove],
   )
+
+  /* ---- the other queue: leave (E2) ----
+   * Firm-wide by design — NOT CapacityPanel's allocation filter, whose reuse would recreate
+   * the exact hole this queue closes: an unallocated person's request being undecidable
+   * through any screen. Own requests are excluded; they live on My calendar, and the arm
+   * refuses them anyway. The reason renders when present: this section only exists for
+   * leave.approve holders, and the server already withheld it from everyone else. */
+  const mayDecideLeave = can(state.model, actor, 'leave.approve').allowed
+  const myName = actor.name.trim().toLowerCase()
+  const pendingLeave = useMemo(
+    () =>
+      Object.values(state.commitments)
+        .filter(
+          (c): c is Commitment =>
+            !c.deletedAt &&
+            c.kind === 'Leave' &&
+            c.status === 'Requested' &&
+            !(c.personId ? c.personId === meId : c.person.trim().toLowerCase() === myName),
+        )
+        .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.person.localeCompare(b.person)),
+    [state.commitments, meId, myName],
+  )
+  const holidays = useMemo(() => holidaySetOf(state.model), [state.model])
 
   const lateFor = (t: Timesheet) =>
     entriesInWeek(entries, t.person, t.weekStarting, t.personId).filter((e) => e.justification)
@@ -298,6 +328,79 @@ export default function TimesheetPanel({
                           Approve
                         </button>
                         <button className="btn ghost" onClick={() => setReturning(t.id)}>
+                          Return…
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        )}
+
+        {/* ---------------- leave to decide (E2) ---------------- */}
+        {mayDecideLeave && (
+          <section className="ts-queue">
+            <div className="ts-week-bar">
+              <b>Leave to decide</b>
+              <span className="prov">
+                {pendingLeave.length === 0
+                  ? 'nothing requested'
+                  : `${pendingLeave.length} request${pendingLeave.length === 1 ? '' : 's'}`}
+              </span>
+              <span className="grow" />
+              <span className="prov">your own requests live on My calendar</span>
+            </div>
+
+            {pendingLeave.map((c) => {
+              const days = workingDaysBetween(c.startDate, c.endDate, holidays)
+              return (
+                <div key={c.id} className="ts-queue-row">
+                  <div className="ts-queue-who">
+                    <b>{c.person}</b>
+                    <span className="prov">
+                      {formatIso(c.startDate)} → {formatIso(c.endDate)} · {days} working day
+                      {days === 1 ? '' : 's'} · {c.hoursPerDay}h/day
+                    </span>
+                    {c.reason && (
+                      <span className="prov" title="Private — visible only to leave approvers and the person themselves">
+                        Why (private): {c.reason}
+                      </span>
+                    )}
+                    {c.note && <span className="prov">{c.note}</span>}
+                  </div>
+                  <div className="ts-queue-actions">
+                    {leaveReturning === c.id ? (
+                      <>
+                        <input
+                          className="fld-input"
+                          placeholder="A note for the person (optional)"
+                          value={leaveNote}
+                          onChange={(e) => setLeaveNote(e.target.value)}
+                          aria-label={`Note for returning ${c.person}'s leave`}
+                        />
+                        <button
+                          className="btn"
+                          onClick={() => {
+                            if (onDecideLeave(c.id, 'returned', leaveNote.trim() || undefined)) {
+                              setLeaveReturning(null)
+                              setLeaveNote('')
+                            }
+                          }}
+                        >
+                          Return
+                        </button>
+                        <button className="btn ghost" onClick={() => setLeaveReturning(null)}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn" onClick={() => onDecideLeave(c.id, 'approved')}>
+                          Approve
+                        </button>
+                        <button className="btn ghost" onClick={() => setLeaveReturning(c.id)}>
                           Return…
                         </button>
                       </>
