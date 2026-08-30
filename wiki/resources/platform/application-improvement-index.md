@@ -17,7 +17,7 @@ impression. Re-score after each phase; the honest gaps ARE the backlog.
 
 | Dimension | Score | Evidence | The gap |
 |---|---|---|---|
-| Quality | 8.5 | 188 scenarios / 0 FAIL; four audits; sentinel scans; golden values | 23 PARTIALs; P1s D (one Graph consent) and ST2b (test tenant) |
+| Quality | 8.5 | 188 scenarios / 0 FAIL (164 PASS after TW1's extension landed); six audits; sentinel scans; golden values | 22 PARTIALs; P1s D (one Graph consent) and ST2b (test tenant) |
 | Maintainability | 9 | design+plan per phase; doctrine comments; the suite as a corrected map; session memory | keep the map honest as it grows |
 | Cost | 9 | B1 + flexible Postgres + 2 Logic Apps on sponsorship; heavy deps out of the client bundle | upsize only when measured |
 | Reliability | 7 | Serializable tx; idempotency + pruning; honest run reports; proven daily pass | single instance; NO alerting on pass failures / delivery refusals |
