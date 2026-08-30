@@ -46,7 +46,7 @@ import {
 import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
 import { sortTree } from '@/lib/sort'
-import { availabilityForAssignment, refusesAssignment } from '@/lib/availability'
+import { availabilityForAssignment, refusesAssignment } from '@/lib/assignment'
 import UserMenu from './UserMenu'
 import { addDays, maxIso, minIso } from '@/lib/dates'
 import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'

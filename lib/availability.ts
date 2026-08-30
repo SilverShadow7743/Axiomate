@@ -1,236 +1,146 @@
-import { capacityFor, profileAt, describeCapacity, type Allocation, type Commitment, type CapacityPosition } from './capacity'
-import { directoryIdByName } from './access'
-import type { IssueRecord, WorkspaceState } from './workspace'
+import { workingDaysBetween } from './dates'
+import type { Allocation, Commitment, ResourceProfile } from './capacity'
 
 /**
- * Whether the person being given work is there to do it.
+ * The availability engine — the ONE place "who has time, when" is computed.
  *
- * ---------------------------------------------------------------------------
- * What was missing
+ * Extracted from `capacityFor` (E1; see `2026-08-30-e1-availability-forecast-design.md`),
+ * whose arithmetic this preserves verbatim: the same 2dp rounding at every aggregate, the same
+ * `Math.max(0, …)` floor on available hours, the same window-average treatment of a short week
+ * (a four-day week is four fifths of the calendar's working days — which day is off is a fact
+ * this model does not carry), and the same id-or-name person join. `capacityFor`, `planCheck`,
+ * the assignment warning, the time-entry day warning and the forecast all consult this;
+ * a second engine answering the same question is the drift the parent design forbids.
  *
- * Capacity was already modelled — a working pattern, leave, and allocations, with the
- * arithmetic in `./capacity` — and `upsertAllocation` consults it before committing somebody's
- * hours. Assignment did not. Ownership is the field a delivery firm actually changes twenty
- * times a day, and it went through the reducer untouched: an issue could be handed to a person
- * on leave for the fortnight, to somebody already committed past their week, or to a name that
- * exists nowhere but in the cell it was typed into.
+ * The formula, and where each term stands today:
  *
- * ---------------------------------------------------------------------------
- * Three answers, not two
+ *     available = pattern-derived gross
+ *               − approved leave and other commitments
+ *               − holidays            (via the working-day math's optional set)
+ *               − meetings            (ZERO until E4 — no meetings exist yet; stated, not hidden)
+ *     remaining = available − allocations
  *
- * The verdict is deliberately not a boolean. A capacity model over a half-filled directory
- * produces two very different "no problem"s, and collapsing them is the failure this module
- * exists to avoid:
+ * **Pending leave never subtracts.** A Requested absence is not a fact about the calendar yet;
+ * it is returned as a named conflict for every consumer to surface. That is the parent
+ * design's "don't silently change plans" made structural: the plan's numbers hold still, and
+ * the person deciding sees the question. A Returned request subtracts nothing and raises no
+ * conflict either — it was declined, and its subject edits or withdraws it.
  *
- *  - **clear** — computed. There are records about this person's time, and they leave room.
- *  - **unknown** — there are no records. `capacityFor` will still return a number here,
- *    because it falls back to a default working pattern, and that number is 7.5 hours a day of
- *    somebody nobody has ever described. Reporting it as availability would be inventing the
- *    fact the whole check exists to establish.
- *
- * A firm importing sixty owner names from a spreadsheet is in the second case for every one of
- * them. Telling them "Priya is free" on that evidence is worse than telling them nothing: it is
- * the same silence, wearing a number.
- *
- * ---------------------------------------------------------------------------
- * Refusing versus saying so
- *
- * Only absence refuses. The line is between a fact and a judgement:
- *
- *  - **away** — every working hour in the window is leave, a public holiday or an internal
- *    commitment. The person is not at work. Naming them owner asserts something that is not
- *    true, and the reducer refuses it — with the same escape hatch `upsertAllocation` gives
- *    overallocation, because a manager assigning cover for someone's return is making a real
- *    decision and a system that forbids it gets worked around.
- *  - **committed** — they are at work and have nothing left. That is a load judgement, and
- *    ownership consumes no hours in this model: refusing it would block the triage that names
- *    who is looking at something. It is recorded, in the audit trail, against the change that
- *    caused it — which is the part that was missing, not the veto.
+ * A Leave commitment with ABSENT status is Approved: every row written before approval existed
+ * is attested history recorded under the old rules. This is the one place that rule is
+ * interpreted; the mapper and the UI read the field, they do not re-decide it.
  */
 
-export type AvailabilityKind =
-  /** Nothing in the window is theirs to work. */
-  | 'away'
-  /** At work, with nothing left over the window. */
-  | 'committed'
-  /** Room to spare, and records to say so. */
-  | 'clear'
-  /** No records. Not the same as free. */
-  | 'unknown'
-
-/**
- * When the work is expected to be done.
- *
- * Planned dates when the record carries them; otherwise the day the decision is being made.
- * The fallback is not a guess about the plan — it is the narrowest honest question, "is this
- * person at work today", and it is the only one an unplanned record supports. `source` travels
- * with the dates so a refusal can say which window it judged, rather than quoting figures the
- * reader cannot place.
- *
- * The alternative was to derive a window from the SLA due date, which would have covered more
- * records and invented a start date for every one of them.
- */
-export interface AssignmentWindow {
-  from: string
-  to: string
-  source: 'planned' | 'today'
+export interface PendingLeave {
+  id: string
+  startDate: string
+  endDate: string
+  /** Working days of the request that overlap the asked-about window. */
+  days: number
 }
 
-export interface AvailabilityVerdict {
-  kind: AvailabilityKind
-  person: string
-  window: AssignmentWindow
-  /** null when nothing is known — the arithmetic would be over a default nobody entered. */
-  position: CapacityPosition | null
-  /** One sentence naming the person, the window and the work, for a refusal or the audit trail. */
-  message: string
+export interface AvailabilityPosition {
+  workingDays: number
+  grossHours: number
+  /** Approved leave, holidays-as-commitments, internal time. Pending leave is NOT here. */
+  committedHours: number
+  availableHours: number
+  allocatedHours: number
+  remainingHours: number
+  overallocated: boolean
+  utilisationPct: number | null
+  basis: 'stated' | 'default'
+  /** Requested leave overlapping the window — the conflict every consumer must surface. */
+  pendingLeave: PendingLeave[]
 }
 
-export function assignmentWindow(
-  issue: Pick<IssueRecord, 'plannedStart' | 'plannedEnd'>,
-  now: string,
-): AssignmentWindow {
-  const today = now.slice(0, 10)
-  const from = issue.plannedStart || ''
-  const to = issue.plannedEnd || ''
-  // Both ends, or neither. One planned date describes a deadline, not a period, and stretching
-  // it to the other end of the window would be reading a plan nobody wrote.
-  if (from && to && to >= from) return { from, to, source: 'planned' }
-  return { from: today, to: today, source: 'today' }
+const round = (n: number) => Math.round(n * 100) / 100
+
+/** Working days two inclusive ranges share, holiday-aware. */
+export function overlapWorkingDays(
+  aFrom: string,
+  aTo: string,
+  bFrom: string,
+  bTo: string,
+  holidays?: ReadonlySet<string>,
+): number {
+  const from = aFrom > bFrom ? aFrom : bFrom
+  const to = aTo < bTo ? aTo : bTo
+  if (to < from) return 0
+  return workingDaysBetween(from, to, holidays)
 }
 
-/** How the window reads inside a sentence about somebody's time. */
-function windowPhrase(w: AssignmentWindow): string {
-  return w.source === 'planned'
-    ? `over ${w.from} → ${w.to}, when this work is planned`
-    : `today (${w.from})`
+/** Whether a leave-shaped commitment counts against the calendar. Absent status is Approved —
+ *  pre-E1 history, recorded under the old rules. */
+export function commitmentCounts(c: Commitment): boolean {
+  if (c.kind !== 'Leave') return true
+  return (c.status ?? 'Approved') === 'Approved'
 }
 
-/** Live records of this person's that touch the window at all. */
-function touching<T extends { person: string; personId?: string | null; startDate: string; endDate: string; deletedAt: string | null }>(
-  records: T[],
-  key: string,
-  w: AssignmentWindow,
+export function availabilityFor(
+  person: string,
+  profile: ResourceProfile | undefined,
+  commitments: Commitment[],
+  allocations: Allocation[],
+  from: string,
+  to: string,
+  /** The person's directory id when known — id-joined rows match through a rename. */
   personId?: string | null,
-): T[] {
-  return records.filter(
-    (r) =>
-      !r.deletedAt &&
-      (r.personId && personId ? r.personId === personId : r.person.trim().toLowerCase() === key) &&
-      r.startDate <= w.to &&
-      r.endDate >= w.from,
+  holidays?: ReadonlySet<string>,
+): AvailabilityPosition {
+  // 7.5 over 5 mirrors `defaultProfile` in ./capacity, spelled here rather than imported
+  // because that import would be a runtime cycle (capacity delegates to this module). The
+  // golden-value check is what holds the two spellings together.
+  const hoursPerDay = profile?.hoursPerDay ?? 7.5
+  const daysPerWeek = profile?.daysPerWeek ?? 5
+  // No profile at all is a default just as surely as a profile that says it is one.
+  const basis: 'stated' | 'default' = profile?.source === 'stated' ? 'stated' : 'default'
+  const calendarWorkingDays = workingDaysBetween(from, to, holidays)
+  const workingDays = Math.round(calendarWorkingDays * (daysPerWeek / 5) * 100) / 100
+  const grossHours = round(workingDays * hoursPerDay)
+
+  const key = person.trim().toLowerCase()
+  const isPerson = (r: { person: string; personId?: string | null }) =>
+    r.personId && personId ? r.personId === personId : r.person.trim().toLowerCase() === key
+
+  const live = commitments.filter((c) => !c.deletedAt && isPerson(c))
+  const committedHours = round(
+    live
+      .filter(commitmentCounts)
+      .reduce((n, c) => n + overlapWorkingDays(c.startDate, c.endDate, from, to, holidays) * c.hoursPerDay, 0),
   )
-}
+  const pendingLeave: PendingLeave[] = live
+    .filter((c) => c.kind === 'Leave' && c.status === 'Requested')
+    .map((c) => ({
+      id: c.id,
+      startDate: c.startDate,
+      endDate: c.endDate,
+      days: overlapWorkingDays(c.startDate, c.endDate, from, to, holidays),
+    }))
+    .filter((p) => p.days > 0)
 
-/**
- * What is known about one person's time over one window.
- *
- * Everything is read from the commitment and allocation records on each call. Nothing about
- * availability is stored on a person, and could not be: it is true of a window, and the window
- * moves every time somebody drags a date.
- */
-export function availabilityOf(
-  state: WorkspaceState,
-  person: string,
-  window: AssignmentWindow,
-  /** What is being assigned, so a refusal names both sides of the clash. */
-  about: string,
-): AvailabilityVerdict {
-  const name = person.trim()
-  const base = { person: name, window, position: null }
+  const availableHours = round(Math.max(0, grossHours - committedHours))
 
-  // "Unassigned" is the absence of an owner, not a person with a diary.
-  if (!name || name === 'Unassigned') {
-    return { ...base, kind: 'clear', message: `${about} has no owner named, so there is nobody whose time it could clash with.` }
-  }
-
-  const key = name.toLowerCase()
-  const match = Object.values(state.model.people).find((p) => p.name.trim().toLowerCase() === key)
-  if (!match) {
-    return {
-      ...base,
-      kind: 'unknown',
-      message: `“${name}” is not in the people directory, so nothing can be checked about their time — ${about} has an owner the workspace cannot find, which is not the same as one who is free.`,
-    }
-  }
-
-  // At the start of the window, not as it stands today — the same reading `profileFor` takes.
-  const profile = profileAt(
-    Object.values(state.versions),
-    state.model.resourceProfiles,
-    match.id,
-    window.from,
+  const allocatedHours = round(
+    allocations
+      .filter((a) => !a.deletedAt && isPerson(a))
+      .reduce((n, a) => {
+        const days = overlapWorkingDays(a.startDate, a.endDate, from, to, holidays)
+        return n + days * hoursPerDay * (a.percentage / 100)
+      }, 0),
   )
-  const pid = directoryIdByName(state.model, name)
-  const commitments = touching(Object.values(state.commitments) as Commitment[], key, window, pid)
-  const allocations = touching(Object.values(state.allocations) as Allocation[], key, window, pid)
 
-  /**
-   * No working pattern, no leave, no allocations — and `capacityFor` would answer anyway, from
-   * a default profile. That answer is arithmetic over an assumption, so it is not reported.
-   */
-  if (!profile && !commitments.length && !allocations.length) {
-    return {
-      ...base,
-      kind: 'unknown',
-      message: `Nothing is recorded about ${name}'s time ${windowPhrase(window)}: no working pattern, no leave and no allocations. ${about} may be going to somebody who is not there — the workspace cannot say either way.`,
-    }
+  const remainingHours = round(availableHours - allocatedHours)
+  return {
+    workingDays,
+    grossHours,
+    committedHours,
+    availableHours,
+    allocatedHours,
+    remainingHours,
+    overallocated: remainingHours < 0,
+    utilisationPct: availableHours > 0 ? round((allocatedHours / availableHours) * 100) : null,
+    basis,
+    pendingLeave,
   }
-
-  const position = capacityFor(name, profile, commitments, allocations, window.from, window.to, pid)
-
-  if (position.availableHours === 0) {
-    return {
-      ...base,
-      position,
-      kind: 'away',
-      message: `${name} is not at work ${windowPhrase(window)}: ${position.grossHours}h of working time in that window and all of it is leave, holiday or internal commitment. Owning ${about} means being on it while they are away.`,
-    }
-  }
-
-  if (position.remainingHours <= 0) {
-    return {
-      ...base,
-      position,
-      kind: 'committed',
-      message: `${name} is already committed to ${position.allocatedHours}h against ${position.availableHours}h available ${windowPhrase(window)}, so ${about} goes to somebody with no time left for it.`,
-    }
-  }
-
-  return { ...base, position, kind: 'clear', message: describeCapacity(position) }
-}
-
-/**
- * The verdict on giving one record to one person.
- *
- * Takes the whole workspace and returns a judgement, so the rule can be exercised — and
- * argued with — without a database, a request or a screen.
- */
-export function availabilityForAssignment(
-  state: WorkspaceState,
-  issue: Pick<IssueRecord, 'id' | 'plannedStart' | 'plannedEnd'>,
-  person: string,
-  now: string,
-): AvailabilityVerdict {
-  return availabilityOf(state, person, assignmentWindow(issue, now), issue.id)
-}
-
-/**
- * Whether this verdict stops the assignment.
- *
- * Separate from the verdict so the judgement and the policy over it can move independently: a
- * firm that wants overcommitment to refuse as well changes this, and every caller obeys.
- */
-export function refusesAssignment(v: AvailabilityVerdict): boolean {
-  return v.kind === 'away'
-}
-
-/**
- * What the audit trail should carry about this assignment, if anything.
- *
- * Absent for a clear verdict — a change that had nothing wrong with it needs no explanation,
- * and a reason on every owner change would make the ones that matter unreadable.
- */
-export function availabilityNote(v: AvailabilityVerdict): string | undefined {
-  return v.kind === 'clear' ? undefined : v.message
 }

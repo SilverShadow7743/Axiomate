@@ -27,26 +27,42 @@ export function isWeekend(iso: string): boolean {
   return d === 0 || d === 6
 }
 
-/** Inclusive count of Mon–Fri days between two dates. */
-export function workingDaysBetween(startIso: string, endIso: string): number {
+/**
+ * Inclusive count of Mon–Fri days between two dates, minus any listed holidays.
+ *
+ * `holidays` is optional and absent means none — the same optional-configuration pattern as
+ * the tier list: every existing caller keeps byte-identical behaviour until one passes the
+ * organisation's list. A holiday that falls on a weekend subtracts nothing, because the day
+ * already did not count — the guard against double-subtraction lives here, once, rather than
+ * in every caller's list hygiene.
+ */
+export function workingDaysBetween(
+  startIso: string,
+  endIso: string,
+  holidays?: ReadonlySet<string>,
+): number {
   let count = 0
   const end = toUtc(endIso)
   for (let t = toUtc(startIso); t <= end; t += DAY_MS) {
     const d = new Date(t).getUTCDay()
-    if (d !== 0 && d !== 6) count++
+    if (d !== 0 && d !== 6 && !holidays?.has(fromUtc(t))) count++
   }
   return count
 }
 
-/** Advance `n` working days from a date (n=0 returns the next working day on/after start). */
-export function addWorkingDays(startIso: string, n: number): string {
+/** Advance `n` working days from a date (n=0 returns the next working day on/after start).
+ *  A listed holiday is not a working day, same optional set as `workingDaysBetween`. */
+export function addWorkingDays(startIso: string, n: number, holidays?: ReadonlySet<string>): string {
+  const isWorking = (t: number): boolean => {
+    const d = new Date(t).getUTCDay()
+    return d !== 0 && d !== 6 && !holidays?.has(fromUtc(t))
+  }
   let t = toUtc(startIso)
   let remaining = n
-  while (new Date(t).getUTCDay() === 0 || new Date(t).getUTCDay() === 6) t += DAY_MS
+  while (!isWorking(t)) t += DAY_MS
   while (remaining > 0) {
     t += DAY_MS
-    const d = new Date(t).getUTCDay()
-    if (d !== 0 && d !== 6) remaining--
+    if (isWorking(t)) remaining--
   }
   return fromUtc(t)
 }

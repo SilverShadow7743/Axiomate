@@ -1,4 +1,5 @@
 import { workingDaysBetween } from './dates'
+import { availabilityFor, overlapWorkingDays } from './availability'
 import { valueAt, type Version } from './versioning'
 
 /**
@@ -211,6 +212,19 @@ export interface Commitment {
    */
   hoursPerDay: number
   note: string
+  /**
+   * Leave only (E1): Requested | Approved | Returned. ABSENT MEANS APPROVED — every row
+   * written before approval existed is history recorded under the old rules, and
+   * `commitmentCounts` in ./availability is the one place that rule is interpreted.
+   * Always null on non-Leave kinds, which are recorded facts with nothing to decide.
+   */
+  status?: 'Requested' | 'Approved' | 'Returned' | null
+  /**
+   * Leave only (E1): why, for the approver. PRIVATE — withheld server-side from every reader
+   * except the person themselves and leave.approve holders (the rates posture; see
+   * redactForReader). `note` above stays what it always was: a visible operational note.
+   */
+  reason?: string | null
   createdBy: string
   createdAt: string
   deletedAt: string | null
@@ -270,20 +284,19 @@ export interface CapacityPosition {
   basis: 'stated' | 'default'
 }
 
-/** Days of overlap between two periods, counted in working days. */
-function overlapWorkingDays(aFrom: string, aTo: string, bFrom: string, bTo: string): number {
-  const from = aFrom > bFrom ? aFrom : bFrom
-  const to = aTo < bTo ? aTo : bTo
-  if (from > to) return 0
-  return workingDaysBetween(from, to)
-}
-
 /**
  * Where one person stands over a window.
  *
  * Everything is recomputed from the records each time. A stored utilisation figure would be
  * wrong the moment somebody books a day off, and a capacity number that is quietly out of date
  * is worse than none — it is used to make a promise.
+ */
+/**
+ * A consumer of the availability engine since E1 — the arithmetic lives in
+ * `lib/availability.ts`, verbatim, and this returns exactly the shape it always returned.
+ * Built field-by-field rather than spread so the engine's `pendingLeave` (a conflict for the
+ * consumers that ask for it) never silently joins this position's JSON — the golden-value
+ * equivalence the extraction was proven against depends on the shape holding still.
  */
 export function capacityFor(
   person: string,
@@ -294,52 +307,22 @@ export function capacityFor(
   to: string,
   /** The person's directory id when known — id-joined rows match through a rename. */
   personId?: string | null,
+  holidays?: ReadonlySet<string>,
 ): CapacityPosition {
-  const hoursPerDay = profile?.hoursPerDay ?? defaultProfile('').hoursPerDay
-  const daysPerWeek = profile?.daysPerWeek ?? 5
-  // No profile at all is a default just as surely as a profile that says it is one.
-  const basis: 'stated' | 'default' = profile?.source === 'stated' ? 'stated' : 'default'
-  const calendarWorkingDays = workingDaysBetween(from, to)
-  // A four-day week is four fifths of the working days in the calendar, not four days a week
-  // aligned to particular ones — which day is off is a fact this model does not carry, and
-  // pretending otherwise would give a precise answer to a question it cannot see.
-  const workingDays = Math.round(calendarWorkingDays * (daysPerWeek / 5) * 100) / 100
-  const grossHours = round(workingDays * hoursPerDay)
-
-  const key = person.trim().toLowerCase()
-  const isPerson = (r: { person: string; personId?: string | null }) =>
-    r.personId && personId ? r.personId === personId : r.person.trim().toLowerCase() === key
-  const committedHours = round(
-    commitments
-      .filter((c) => !c.deletedAt && isPerson(c))
-      .reduce((n, c) => n + overlapWorkingDays(c.startDate, c.endDate, from, to) * c.hoursPerDay, 0),
-  )
-
-  const availableHours = round(Math.max(0, grossHours - committedHours))
-
-  const allocatedHours = round(
-    allocations
-      .filter((a) => !a.deletedAt && isPerson(a))
-      .reduce((n, a) => {
-        const days = overlapWorkingDays(a.startDate, a.endDate, from, to)
-        return n + days * hoursPerDay * (a.percentage / 100)
-      }, 0),
-  )
-
-  const remainingHours = round(availableHours - allocatedHours)
+  const p = availabilityFor(person, profile, commitments, allocations, from, to, personId, holidays)
   return {
     person,
     from,
     to,
-    workingDays,
-    grossHours,
-    committedHours,
-    availableHours,
-    allocatedHours,
-    remainingHours,
-    overallocated: remainingHours < 0,
-    utilisationPct: availableHours > 0 ? round((allocatedHours / availableHours) * 100) : null,
-    basis,
+    workingDays: p.workingDays,
+    grossHours: p.grossHours,
+    committedHours: p.committedHours,
+    availableHours: p.availableHours,
+    allocatedHours: p.allocatedHours,
+    remainingHours: p.remainingHours,
+    overallocated: p.overallocated,
+    utilisationPct: p.utilisationPct,
+    basis: p.basis,
   }
 }
 
@@ -396,6 +379,7 @@ export function planCheck(
   projectId: string,
   from: string,
   to: string,
+  holidays?: ReadonlySet<string>,
 ): PlanCheck {
   const allocatedHours = round(
     allocations
@@ -403,7 +387,7 @@ export function planCheck(
       .reduce((n, a) => {
         const personId = peopleByName[a.person.trim().toLowerCase()]
         const hoursPerDay = profiles[personId]?.hoursPerDay ?? defaultProfile('').hoursPerDay
-        const days = overlapWorkingDays(a.startDate, a.endDate, from, to)
+        const days = overlapWorkingDays(a.startDate, a.endDate, from, to, holidays)
         return n + days * hoursPerDay * (a.percentage / 100)
       }, 0),
   )

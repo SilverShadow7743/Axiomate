@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "64 of 64 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-29. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "64 of 64 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -528,7 +528,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-29: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-08-30: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
@@ -1701,6 +1701,16 @@
       "actual": "A record filed under the Inventory container derives Inventory; one created with an explicit Payroll label keeps it despite where it was filed; and the label is patched to Warehouse afterwards through updateIssue like any other field.",
       "stops": "",
       "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "E1A",
+      "title": "The availability engine: holidays subtract once, approved leave subtracts, pending leave only speaks",
+      "expected": "E1's one-engine rule (2026-08-30 design): availabilityFor is where \"who has time\" is computed, and its terms behave differently on purpose. An org holiday stops a weekday counting, once, for everyone. Approved leave — including every pre-E1 row, whose ABSENT status means approved — subtracts hours. A Requested absence subtracts NOTHING and comes back as a named conflict instead, because an unapproved request is not a fact about the calendar yet and \"don't silently change plans\" means the numbers hold still while a person decides.",
+      "verdict": "PASS",
+      "actual": "A midweek org holiday drops the window to 8 working days once for everyone; absent-status and Approved leave subtract 15h together; the Requested absence moves nothing and returns as a named 2-day conflict; a Returned one is silent; and an absent holiday set reproduces today's arithmetic exactly.",
+      "stops": "",
+      "severity": "P1",
       "impact": "none"
     }
   ]

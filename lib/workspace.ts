@@ -131,7 +131,7 @@ import {
   availabilityForAssignment,
   availabilityNote,
   refusesAssignment,
-} from './availability'
+} from './assignment'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'

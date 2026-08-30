@@ -743,6 +743,26 @@ export function isExternalPartyKind(tiers: readonly TierDef[], kind: string): bo
 }
 
 /* ================================================================== *
+ * Holidays
+ * ================================================================== */
+
+/** One org-wide non-working day. `date` is `YYYY-MM-DD`; the name is for the reader. */
+export interface Holiday {
+  date: string
+  name: string
+}
+
+/**
+ * The organisation's holiday dates as the set the date math takes. Absent configuration means
+ * an empty set — today's behaviour, the same optional pattern as `tiersOf`. One list for the
+ * whole organisation in E1; a per-region calendar is a later, additive refinement (see the E1
+ * design), not something to pre-build a shape for.
+ */
+export function holidaySetOf(model: OperatingModel): ReadonlySet<string> {
+  return new Set((model.holidays ?? []).map((h) => h.date))
+}
+
+/* ================================================================== *
  * The model
  * ================================================================== */
 
@@ -752,6 +772,11 @@ export interface OperatingModel {
    * `DEFAULT_TIERS` — see `tiersOf`, which is the only sanctioned way to read this.
    */
   tiers?: TierDef[]
+  /**
+   * The organisation's non-working days. Absent means none — see `holidaySetOf`, the only
+   * sanctioned way to read this into the date math.
+   */
+  holidays?: Holiday[]
   /** The delivery firm operating this workspace. */
   organization: OrganizationIdentity
   /** Where uploaded documents are filed in the library. See `DocumentFiling`. */

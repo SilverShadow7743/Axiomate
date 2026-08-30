@@ -56,7 +56,8 @@ import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
-import { availabilityForAssignment } from '../lib/availability'
+import { availabilityForAssignment } from '../lib/assignment'
+import { availabilityFor } from '../lib/availability'
 import {
   backdated,
   dailyCap,
@@ -7391,6 +7392,44 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A record filed under the Inventory container derives Inventory; one created with an explicit Payroll label keeps it despite where it was filed; and the label is patched to Warehouse afterwards through updateIssue like any other field.', stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `derives=${derives} (${derived?.module}) overrides=${overrides} (${explicit?.module}) patched=${patched}`, stops: 'at the label — either the walk stopped supplying the default or the explicit value cannot be set, and 8b would strand new records as Unclassified', severity: 'P2', impact: 'once containers convert to labels, records created after the conversion have no way to carry a classification' } as const
+  },
+)
+
+scenario(
+  'E1A',
+  'The availability engine: holidays subtract once, approved leave subtracts, pending leave only speaks',
+  "E1's one-engine rule (2026-08-30 design): availabilityFor is where \"who has time\" is computed, and its terms behave differently on purpose. An org holiday stops a weekday counting, once, for everyone. Approved leave — including every pre-E1 row, whose ABSENT status means approved — subtracts hours. A Requested absence subtracts NOTHING and comes back as a named conflict instead, because an unapproved request is not a fact about the calendar yet and \"don't silently change plans\" means the numbers hold still while a person decides.",
+  () => {
+    const profile = { personId: 'P1', hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: 'stated' as const }
+    const base = { person: 'Priya', personId: 'P1', hoursPerDay: 7.5, note: '', createdBy: 'x', createdAt: 'x', deletedAt: null }
+    const commitments = [
+      // Absent status: pre-E1 history, counts as approved.
+      { ...base, id: 'c1', kind: 'Leave' as const, startDate: '2026-09-01', endDate: '2026-09-01' },
+      // Explicitly approved: counts.
+      { ...base, id: 'c2', kind: 'Leave' as const, status: 'Approved' as const, startDate: '2026-09-03', endDate: '2026-09-03' },
+      // Requested: never subtracts; must come back named.
+      { ...base, id: 'c3', kind: 'Leave' as const, status: 'Requested' as const, startDate: '2026-09-07', endDate: '2026-09-08' },
+      // Returned: declined — neither subtracts nor conflicts.
+      { ...base, id: 'c4', kind: 'Leave' as const, status: 'Returned' as const, startDate: '2026-09-09', endDate: '2026-09-09' },
+    ]
+    const holidays = new Set(['2026-09-02']) // a Wednesday inside the window
+
+    // Two working weeks, Tue 1 Sep – Fri 11 Sep = 9 weekdays, minus the holiday = 8.
+    const p = availabilityFor('Priya', profile, commitments, [], '2026-09-01', '2026-09-11', 'P1', holidays)
+
+    const holidayCounted = p.workingDays === 8 && p.grossHours === 60
+    // c1 (absent=approved) + c2 = 2 days × 7.5h; c3 and c4 contribute nothing.
+    const approvedOnly = p.committedHours === 15 && p.availableHours === 45
+    const conflictNamed = p.pendingLeave.length === 1 && p.pendingLeave[0].id === 'c3' && p.pendingLeave[0].days === 2
+
+    // The same window with no holiday set: one more day, and byte-stable arithmetic.
+    const bare = availabilityFor('Priya', profile, commitments, [], '2026-09-01', '2026-09-11', 'P1')
+    const optional = bare.workingDays === 9 && bare.grossHours === 67.5
+
+    const good = holidayCounted && approvedOnly && conflictNamed && optional
+    return good
+      ? { verdict: 'PASS', actual: "A midweek org holiday drops the window to 8 working days once for everyone; absent-status and Approved leave subtract 15h together; the Requested absence moves nothing and returns as a named 2-day conflict; a Returned one is silent; and an absent holiday set reproduces today's arithmetic exactly.", stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `holidayCounted=${holidayCounted} (wd=${p.workingDays} gross=${p.grossHours}) approvedOnly=${approvedOnly} (committed=${p.committedHours} avail=${p.availableHours}) conflictNamed=${conflictNamed} (${JSON.stringify(p.pendingLeave)}) optional=${optional}`, stops: 'at the engine — a term subtracts when it should speak, or speaks when it should subtract', severity: 'P1', impact: 'every capacity, allocation and forecast figure flows through this arithmetic' } as const
   },
 )
 
