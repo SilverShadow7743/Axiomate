@@ -423,6 +423,16 @@
       "impact": "The pass can only ever send a complete period, once."
     },
     {
+      "id": "GS1",
+      "title": "One search over everything the reader may see, and nothing else",
+      "expected": "Global search driven twice on the same fixture: for relevance (an id hit outranks a body hit, every query token must land on the record, deleted rows never appear, the cap holds, one-letter queries return nothing) and for the boundary composition that is the feature's whole point — sentinels reachable by the corpus (an internal note body, an internal record's subject, a mail body, an internal document name) are FOUND searching the raw state and ABSENT searching the same state after the client-reader cut, while rates and leave reasons cannot be found even raw because those stores are structurally outside the corpus.",
+      "verdict": "PASS",
+      "actual": "An id query puts its issue first; a term living in both a subject and a note body ranks the subject's issue above the note; a query with an unmatched token returns nothing; the deleted record never appears; sixty matching rows cap at fifty; a one-letter query is silence; people, meetings and note-anchored hits all resolve. And the composition holds: the four corpus-reachable sentinels (note body, internal record subject, mail body, document name) are all FOUND searching the raw state and produce ZERO hits after clientView — while the same cut state still finds the record the client may see — and the rate amount and leave reason are unfindable even raw, because those stores are simply not corpus.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Search reaches everything the reader may see and structurally nothing else — the property the design exists for, now executable."
+    },
+    {
       "id": "AU1",
       "title": "Every meaningful change answers who, what, when, before, after and why",
       "expected": "The trail is complete enough to defend a decision months later.",

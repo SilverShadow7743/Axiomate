@@ -120,6 +120,7 @@ import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
+import { searchWorkspace } from '../lib/search'
 import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
@@ -2151,6 +2152,94 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. PDF smoke is appended by the async block below.', stops: '—', severity: '—', impact: 'The pass can only ever send a complete period, once.' } as const
       : { verdict: 'FAIL', actual: `midweek=${midweek} priorWeek=${priorWeek} (${monday.weeklyFor}) priorMonth=${priorMonth} (${first.monthlyFor}) yearRollover=${yearRollover} weekendQuiet=${weekendQuiet} stampHolds=${stampHolds} weekStampHolds=${weekStampHolds} monthStampHolds=${monthStampHolds} offByDefault=${offByDefault} noRecipients=${noRecipients} failsClosed=${failsClosed}`, stops: 'at the due-logic — a period still in flight would be mailed, a send repeated, or a disabled workspace would email', severity: 'P1', impact: 'unattended automation that spams, goes silent, or mails an incomplete week to be forwarded to a client' } as const
+  },
+)
+
+scenario(
+  'GS1',
+  'One search over everything the reader may see, and nothing else',
+  "Global search driven twice on the same fixture: for relevance (an id hit outranks a body hit, every query token must land on the record, deleted rows never appear, the cap holds, one-letter queries return nothing) and for the boundary composition that is the feature's whole point — sentinels reachable by the corpus (an internal note body, an internal record's subject, a mail body, an internal document name) are FOUND searching the raw state and ABSENT searching the same state after the client-reader cut, while rates and leave reasons cannot be found even raw because those stores are structurally outside the corpus.",
+  () => {
+    const NOTE_S = 'SENTINEL-NOTE-GS'
+    const REC_S = 'SENTINEL-REC-GS'
+    const MAIL_S = 'SENTINEL-MAIL-GS'
+    const DOC_S = 'SENTINEL-DOC-GS'
+    const RATE_S = '77123.45'
+    const REASON_S = 'SENTINEL-REASON-GS'
+
+    const bulk: Record<string, (typeof BASE.issues)[string]> = {}
+    for (let i = 0; i < 60; i++) {
+      bulk[`BULK-${i}`] = { ...BASE.issues['OAPIL-1'], id: `BULK-${i}`, subject: `bulk fixture row ${i}`, owner: 'Bulk Fixture' }
+    }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? null
+
+    const st: WorkspaceState = {
+      ...BASE,
+      issues: {
+        ...BASE.issues,
+        ...bulk,
+        'OAPIL-1': { ...BASE.issues['OAPIL-1'], clientVisible: true },
+        'OAPIL-2': { ...BASE.issues['OAPIL-2'], subject: 'Review the MPPR walkthrough' },
+        'OAPIL-3': { ...BASE.issues['OAPIL-3'], subject: REC_S },
+        'OAPIL-9': { ...BASE.issues['OAPIL-1'], id: 'OAPIL-9', subject: 'ghost walkthrough', deletedAt: NOW },
+      },
+      notes: {
+        g1: { id: 'g1', issueId: 'OAPIL-1', body: wrapPlainText(`${NOTE_S} covers the walkthrough follow-up`), noteType: 'General', pinned: false, clientVisible: false, createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null, deletedAt: null } as never,
+      },
+      inboundMail: {
+        gm1: { id: 'gm1', mailbox: 'x@x.com', from: 'client@oapil.com', subject: `${MAIL_S} item master`, body: `${MAIL_S} body text`, messageId: 'mid-1', receivedAt: NOW, issueId: 'OAPIL-1', refusalReason: null, createdAt: NOW } as never,
+      },
+      documents: {
+        gd1: { id: 'gd1', subjectKind: 'issue', subjectId: 'OAPIL-3', name: `${DOC_S}.pdf`, mimeType: 'application/pdf', sizeBytes: 10, locator: null, uploadedAt: NOW, deletedAt: null } as never,
+      },
+      meetings: {
+        gmt1: { id: 'gmt1', title: 'Steering sync', startAt: `${TODAY}T10:00:00.000Z`, endAt: `${TODAY}T11:00:00.000Z`, attendeeIds: [], deletedAt: null } as never,
+      },
+      rates: { r1: { id: 'r1', amount: 77123.45, person: 'Priya' } as never },
+      commitments: {
+        c1: { id: 'c1', person: 'Priya', personId: priyaId, kind: 'Leave', status: 'Approved', reason: REASON_S, startDate: TODAY, endDate: TODAY, hoursPerDay: 7.5, note: '', createdBy: 'x', createdAt: 'x', deletedAt: null },
+      },
+    }
+
+    /* ---- relevance ---- */
+    const byId = searchWorkspace(st, 'OAPIL-2', TODAY)
+    const idFirst = byId[0]?.kind === 'issue' && byId[0]?.id === 'OAPIL-2'
+    const mixed = searchWorkspace(st, 'walkthrough', TODAY)
+    const subjectOutranksBody =
+      mixed.findIndex((h) => h.id === 'OAPIL-2') !== -1 &&
+      mixed.findIndex((h) => h.kind === 'note') !== -1 &&
+      mixed.findIndex((h) => h.id === 'OAPIL-2') < mixed.findIndex((h) => h.kind === 'note')
+    const allTokens = searchWorkspace(st, 'walkthrough zzz-nowhere', TODAY).length === 0
+    const deletedGone = !searchWorkspace(st, 'ghost', TODAY).some((h) => h.id === 'OAPIL-9')
+    const capHolds = searchWorkspace(st, 'bulk fixture', TODAY).length === 50
+    const shortQuiet = searchWorkspace(st, 'a', TODAY).length === 0
+    const personHit = searchWorkspace(st, 'priya', TODAY).some((h) => h.kind === 'person' && h.anchorId === null)
+    const meetingHit = searchWorkspace(st, 'steering', TODAY).some((h) => h.kind === 'meeting')
+    const noteAnchors = searchWorkspace(st, NOTE_S, TODAY).some((h) => h.kind === 'note' && h.anchorId === 'OAPIL-1')
+
+    /* ---- the boundary composition ---- */
+    const rawHits = searchWorkspace(st, 'sentinel', TODAY)
+    const rawKinds = new Set(rawHits.map((h) => h.kind))
+    const corpusReaches =
+      rawKinds.has('note') && rawKinds.has('issue') && rawKinds.has('mail') && rawKinds.has('document')
+
+    const scopeId = clientScopeIdFor(st, 'OAPIL')
+    const visible = scopeId ? clientView(st, scopeId) : null
+    const cutHits = visible ? searchWorkspace(visible, 'sentinel', TODAY) : [{}]
+    const cutSilent = cutHits.length === 0
+    /* Not vacuous: the cut state still finds what the client MAY see. */
+    const cutStillWorks = visible ? searchWorkspace(visible, 'OAPIL-1', TODAY).some((h) => h.id === 'OAPIL-1') : false
+
+    /* Rates and leave reasons are outside the corpus STRUCTURALLY — unfindable even raw. */
+    const outsideCorpus =
+      searchWorkspace(st, RATE_S, TODAY).length === 0 && searchWorkspace(st, REASON_S, TODAY).length === 0
+
+    const good =
+      idFirst && subjectOutranksBody && allTokens && deletedGone && capHolds && shortQuiet &&
+      personHit && meetingHit && noteAnchors && corpusReaches && cutSilent && cutStillWorks && outsideCorpus
+    return good
+      ? { verdict: 'PASS', actual: "An id query puts its issue first; a term living in both a subject and a note body ranks the subject's issue above the note; a query with an unmatched token returns nothing; the deleted record never appears; sixty matching rows cap at fifty; a one-letter query is silence; people, meetings and note-anchored hits all resolve. And the composition holds: the four corpus-reachable sentinels (note body, internal record subject, mail body, document name) are all FOUND searching the raw state and produce ZERO hits after clientView — while the same cut state still finds the record the client may see — and the rate amount and leave reason are unfindable even raw, because those stores are simply not corpus.", stops: '—', severity: '—', impact: 'Search reaches everything the reader may see and structurally nothing else — the property the design exists for, now executable.' } as const
+      : { verdict: 'FAIL', actual: `idFirst=${idFirst} subjectOutranksBody=${subjectOutranksBody} allTokens=${allTokens} deletedGone=${deletedGone} capHolds=${capHolds} (${searchWorkspace(st, 'bulk fixture', TODAY).length}) shortQuiet=${shortQuiet} personHit=${personHit} meetingHit=${meetingHit} noteAnchors=${noteAnchors} corpusReaches=${corpusReaches} (${[...rawKinds].join(',')}) cutSilent=${cutSilent} (${cutHits.length}) cutStillWorks=${cutStillWorks} outsideCorpus=${outsideCorpus}`, stops: 'at the scan or the boundary — either relevance is wrong, or a sentinel crossed the reader cut', severity: 'P1', impact: 'either search is noise, or it is a leak path around every redaction the product proves elsewhere' } as const
   },
 )
 
