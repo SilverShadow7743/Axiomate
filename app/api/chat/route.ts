@@ -42,7 +42,13 @@ export const runtime = 'nodejs'
 /** Never cached: every turn depends on the catalogue the client just posted. */
 export const dynamic = 'force-dynamic'
 
-const MODEL = 'claude-opus-5'
+/**
+ * The code default when the registry has not chosen (E5). Every read goes through
+ * `modelFor` — a stale browser mirror posting no modelId must land HERE, never on a crash:
+ * the one live AI path breaks on exactly the day everyone watches it otherwise.
+ */
+const DEFAULT_MODEL = 'claude-sonnet-5'
+const modelFor = (config: ChatConfig): string => config.modelId?.trim() || DEFAULT_MODEL
 /** Enough headroom for adaptive thinking plus a short answer. */
 const MAX_TOKENS = 4000
 /** search → propose → summarise is three; the rest is slack for a follow-up search. */
@@ -130,6 +136,9 @@ function parseConfig(raw: unknown): ChatConfig {
     parties: parties.length ? parties : d.parties,
     workTypes,
     autonomy,
+    // Same fail-safe philosophy as autonomy: anything unrecognised means "no choice made",
+    // and modelFor lands that on the code default — never the most expensive model by accident.
+    modelId: typeof c.modelId === 'string' && c.modelId.trim() ? c.modelId.trim() : undefined,
   }
 }
 
@@ -259,7 +268,7 @@ async function runClaude(
 
   for (let turn = 0; turn < MAX_ITERATIONS; turn++) {
     const response = await client.messages.create({
-      model: MODEL,
+      model: modelFor(cfg),
       max_tokens: MAX_TOKENS,
       // Adaptive thinking with low effort: this is lookup and field extraction against a
       // small tool surface, and it sits in an interactive chat box where latency is the
@@ -424,7 +433,7 @@ async function runClaude(
     matches,
     proposals,
     engine: 'claude',
-    model: MODEL,
+    model: modelFor(cfg),
     rejected: [...new Set(rejected)],
   }
 }

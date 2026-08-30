@@ -556,6 +556,12 @@ export interface AgentRecord {
   maxAutonomy: Autonomy
   /** Human approval required before an applied change takes effect. */
   requireApproval: boolean
+  /**
+   * Which model answers, for agents with a live runtime — E5. Absent means the code default
+   * (`claude-sonnet-5`): a stored registry predating this field, or a row that never chose,
+   * must land on the default, never on a crash or on the most expensive model by accident.
+   */
+  modelId?: string
 }
 
 export interface WorkflowStep {

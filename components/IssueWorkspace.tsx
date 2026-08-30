@@ -2593,6 +2593,9 @@ export default function IssueWorkspace({
             parties: state.model.parties,
             workTypes: liveWorkTypes(state.model).map((t) => t.label),
             autonomy: assistantAutonomy,
+            // E5: the registry's model choice rides the same posted slice as autonomy;
+            // absent lands on the route's code default.
+            modelId: state.model.agents['AGENT_WORKSPACE_ASSISTANT']?.modelId,
           }}
           onReveal={revealIssue}
           onApply={applyProposal}

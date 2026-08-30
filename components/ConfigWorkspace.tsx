@@ -3659,6 +3659,25 @@ function Agents({ state, onConfig }: { state: WorkspaceState; onConfig: (op: Con
                       <option value="no">No approval step</option>
                     </select>
                   </label>
+
+                  {/* E5: which model answers, for the agents that actually run. Blank means
+                      the code default — stated in the placeholder rather than copied into
+                      every stored registry. Committed on blur, not per keystroke. */}
+                  {a.runtime === 'live' && (
+                    <label className="cfg-fld">
+                      <span>Model</span>
+                      <input
+                        defaultValue={a.modelId ?? ''}
+                        placeholder="claude-sonnet-5 (default)"
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v !== (a.modelId ?? '')) {
+                            onConfig({ k: 'setAgent', id: a.id, patch: { modelId: v } })
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
 
                 {a.runtime === 'live' && (

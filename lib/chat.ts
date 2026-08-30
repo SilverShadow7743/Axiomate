@@ -115,6 +115,8 @@ export interface ChatConfig {
   workTypes: string[]
   /** How much the assistant may do here, from the agent registry. */
   autonomy: 'off' | 'suggest' | 'propose' | 'act'
+  /** Which model answers (E5) — the registry's choice; absent means the code default. */
+  modelId?: string
 }
 
 export const DEFAULT_CHAT_CONFIG: ChatConfig = {

@@ -1400,7 +1400,7 @@ export type ConfigOp =
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
   | { k: 'deleteResponsibility'; id: string }
   | { k: 'setParties'; parties: string[] }
-  | { k: 'setAgent'; id: string; patch: { enabled?: boolean; autonomy?: Autonomy; requireApproval?: boolean } }
+  | { k: 'setAgent'; id: string; patch: { enabled?: boolean; autonomy?: Autonomy; requireApproval?: boolean; modelId?: string } }
   | { k: 'setWorkflowEnabled'; id: string; enabled: boolean }
   /** `null` clears the override so the parent scope decides again. */
   | { k: 'setScopeAgent'; scopeId: string; agentId: string; value: boolean | null }
@@ -7951,8 +7951,10 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const next = { ...agent, ...op.patch }
       // The ceiling comes from what the build implements, never from stored settings.
       if (op.patch.autonomy) next.autonomy = clampToMax(op.patch.autonomy, agent.maxAutonomy)
-      const from = `${agent.enabled ? 'on' : 'off'} · ${agent.autonomy}${agent.requireApproval ? ' · approval required' : ''}`
-      const to = `${next.enabled ? 'on' : 'off'} · ${next.autonomy}${next.requireApproval ? ' · approval required' : ''}`
+      // The model id is part of the change summary, or a modelId-only patch would compare
+      // as a no-op and be dropped silently (E5).
+      const from = `${agent.enabled ? 'on' : 'off'} · ${agent.autonomy}${agent.requireApproval ? ' · approval required' : ''}${agent.modelId ? ` · ${agent.modelId}` : ''}`
+      const to = `${next.enabled ? 'on' : 'off'} · ${next.autonomy}${next.requireApproval ? ' · approval required' : ''}${next.modelId ? ` · ${next.modelId}` : ''}`
       if (from === to) return { state }
       return done(
         { ...m, agents: { ...m.agents, [op.id]: next } },
