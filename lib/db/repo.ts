@@ -358,6 +358,20 @@ export async function loadWorkspace(
  * object to the resolvers. A configuration that has been corrupted should look like defaults,
  * not like a broken app.
  */
+/**
+ * The operating model alone — for server paths that need permissions and the directory
+ * without folding the whole workspace (E3's discussion poll runs every ~15s; `loadWorkspace`
+ * reads nineteen collections). Same stored row, same merge, same corrupted-input fallback.
+ * The seed's owner/type lists are empty because a stored model carries its people wholesale;
+ * a workspace with NO stored model gets the bare seed, which is also what boot would show it.
+ */
+export async function loadModelOnly(tenantId: TenantId): Promise<OperatingModel> {
+  const config = await withTenant(tenantId, (tx) =>
+    tx.operatingModel.findUnique({ where: { tenantId } }),
+  )
+  return readModel(config?.model, [], [])
+}
+
 function readModel(raw: unknown, owners: string[], types: string[]): OperatingModel {
   const seed = initModel([...new Set(owners)], [...new Set(types)])
   if (!raw || typeof raw !== 'object') return seed

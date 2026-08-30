@@ -1,0 +1,55 @@
+{
+  "asAt": "2026-08-30T05:58:57.972Z",
+  "checks": [
+    {
+      "what": "a first post creates the thread and the message, attributed to the actor",
+      "ok": true,
+      "detail": "author=Priya authorId=PERSON_1"
+    },
+    {
+      "what": "the author-owner follows once, not twice",
+      "ok": true,
+      "detail": "following=true count=1"
+    },
+    {
+      "what": "the second post appends to the one thread",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "what": "the follower hears under chat, the mentioned under mention — one record each",
+      "ok": true,
+      "detail": "Priya:New message on DISC-1 | Sam:Discussion Proof mentioned you on DISC-1"
+    },
+    {
+      "what": "a muted follower gets no record, and the audit line says why",
+      "ok": true,
+      "detail": "records=2"
+    },
+    {
+      "what": "follow and unfollow round-trip through Postgres",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "what": "removing another's message is refused in words; removing your own leaves a stub",
+      "ok": true,
+      "detail": "Only the person who said it can take it back."
+    },
+    {
+      "what": "two concurrent first posts land on ONE thread, both kept",
+      "ok": true,
+      "detail": "threads=1 messages(all)=5"
+    },
+    {
+      "what": "a reader without internal.view is refused, reading and posting alike",
+      "ok": true,
+      "detail": "See internal records is not something Client User can do here."
+    },
+    {
+      "what": "the other tenant sees no thread on the same scope id — RLS plus explicit scoping",
+      "ok": true,
+      "detail": "count=0"
+    }
+  ]
+}

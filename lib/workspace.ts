@@ -1141,6 +1141,11 @@ export type Action =
       body: string
       aboutId: string
       ruleId: string
+      /** Which preference governs this record. ABSENT MEANS 'automation' — every existing
+       *  rule fires kind-less, and changing that default would silently re-route their
+       *  mute/email choices (E3; scenario NP1 is the tripwire). The discussion module sends
+       *  'chat' for follower traffic and 'mention' for summons. */
+      kind?: NotificationKind
       now: string
     }
   | { t: 'markNotificationRead'; id: string; now: string }
@@ -5497,7 +5502,9 @@ Question: ${review.question}`),
        * in-app+email adds the email record only when the rule was not already emailing.
        */
       const prefId = directoryIdByName(state.model, a.to)
-      const prefMode = modeFor(state.model.notificationPrefs, prefId, 'automation')
+      // The kind the action names, else 'automation' — the default every existing rule
+      // relies on. See the union's comment; NP1 pins the unchanged path.
+      const prefMode = modeFor(state.model.notificationPrefs, prefId, a.kind ?? 'automation')
       if (prefMode === 'mute') {
         return {
           state: {

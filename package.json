@@ -19,6 +19,7 @@
     "audit:restore": "npx tsx scripts/restore-proof.ts",
     "audit:estimation": "npx tsx scripts/estimation-proof.ts",
     "audit:a11y": "eslint components app",
+    "audit:discussion": "npx tsx --conditions=react-server scripts/discussion-proof.ts",
     "audit:persistence": "npx tsx --conditions=react-server scripts/persistence-proof.ts",
     "audit:rls": "npx tsx --conditions=react-server scripts/rls-proof.ts",
     "validate:scenarios": "npx tsx scripts/scenario-validation.ts",

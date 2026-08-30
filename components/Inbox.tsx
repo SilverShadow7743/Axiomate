@@ -214,6 +214,9 @@ function PrefRows({
     // One preference for both approval loops — leave and timesheets, asked and answered.
     // The mint consults this kind; the notification's ruleId only routes the click.
     { kind: 'approval', label: 'When leave or a timesheet needs or gets a decision', show: true },
+    // The per-thread-subscribe decision (E3): following a discussion is what turns this on
+    // per thread; this row is the whole-kind say over that traffic. Mentions stay their own.
+    { kind: 'chat', label: 'When a discussion I follow gets a message', show: true },
   ]
   const MODES: { mode: NotificationMode; label: string }[] = [
     { mode: 'in-app', label: 'tell me here' },
