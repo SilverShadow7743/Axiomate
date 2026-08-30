@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "64 of 64 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "65 of 65 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -718,7 +718,7 @@
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 44 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 45 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
@@ -1709,6 +1709,26 @@
       "expected": "E1's one-engine rule (2026-08-30 design): availabilityFor is where \"who has time\" is computed, and its terms behave differently on purpose. An org holiday stops a weekday counting, once, for everyone. Approved leave — including every pre-E1 row, whose ABSENT status means approved — subtracts hours. A Requested absence subtracts NOTHING and comes back as a named conflict instead, because an unapproved request is not a fact about the calendar yet and \"don't silently change plans\" means the numbers hold still while a person decides.",
       "verdict": "PASS",
       "actual": "A midweek org holiday drops the window to 8 working days once for everyone; absent-status and Approved leave subtract 15h together; the Requested absence moves nothing and returns as a named 2-day conflict; a Returned one is silent; and an absent holiday set reproduces today's arithmetic exactly.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E1B",
+      "title": "Leave asks and somebody else grants: the timesheet rule, applied to absence",
+      "expected": "E1 leave approval: a person recording their OWN absence lands Requested, whoever they are; an approver recording somebody else’s lands Approved in one step (recorder is not subject, so never-your-own holds, and the team-leave flow keeps working); deciding requires leave.approve and refuses your own request in plain words; a decided row re-opens when its dates change, because the thing that was approved is not the thing now recorded; and status is computed in the arm — the boundary refuses it from the wire.",
+      "verdict": "PASS",
+      "actual": "Priya’s own request lands Requested with its reason held; deciding it herself is refused in the arm’s words; a second approver approves; re-deciding refuses; editing the approved dates re-opens it with the reason intact; an approver recording Sam’s leave lands Approved in one step; and a status smuggled onto the wire bounces off the boundary’s unknown-key refusal.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E1C",
+      "title": "A leave reason reaches its subject and its deciders, and nobody else",
+      "expected": "E1 privacy: the reason on a leave request is withheld server-side — the rates posture — while the dates, hours and status stay visible to every internal reader, because availability is the point of the record. Driven against the pure redaction the boot path calls, the same split that makes clientView provable.",
+      "verdict": "PASS",
+      "actual": "A reader with no grant and no stake gets the dates, hours, status and visible note but a null reason; the subject keeps their own; a leave.approve holder keeps all; a non-Leave commitment passes through by reference, untouched.",
       "stops": "",
       "severity": "P1",
       "impact": "none"

@@ -64,6 +64,7 @@ const KINDS = new Set([
   'upsertAllocation',
   'removeAllocation',
   'upsertCommitment',
+  'decideLeave',
   'removeCommitment',
   'recordVersion',
   'correctVersion',

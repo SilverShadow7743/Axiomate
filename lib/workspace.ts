@@ -1233,8 +1233,17 @@ export type Action =
       endDate: string
       hoursPerDay: number
       note: string
+      /** Leave only: why, for the approver. Private — see redactForReader. */
+      reason?: string
       now: string
     }
+  /**
+   * Decide a requested absence. Leave only, decider needs `leave.approve`, and never their
+   * own — the timesheet rule, applied to the other thing a person asks somebody to grant.
+   * There is deliberately NO status field on `upsertCommitment` itself: status is computed
+   * in the arm from who is writing, so approval can never be smuggled in on a write.
+   */
+  | { t: 'decideLeave'; id: string; decision: 'approved' | 'returned'; note?: string; now: string }
   | { t: 'removeCommitment'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
@@ -5959,6 +5968,37 @@ Question: ${review.question}`),
       if (a.id && !existing) return { state, error: 'That record no longer exists.' }
       const seq = existing ? state.seq : state.seq + 1
       const id = existing?.id ?? `commit-${seq}`
+      /*
+       * Leave carries an approval status, COMPUTED here and never accepted from the wire —
+       * the boundary refuses unknown keys, and this arm deciding from who is writing is what
+       * keeps approval from being smuggled in on a write (the E1 design's own send-back
+       * clause). The rule:
+       *
+       *   - An approver recording somebody ELSE's absence lands Approved in one step — they
+       *     could approve it anyway, and recorder ≠ subject keeps the never-your-own rule
+       *     intact. This is also what preserves today's one-step flow for the person who has
+       *     always recorded the team's leave.
+       *   - Anyone writing their OWN leave — approver included — lands Requested.
+       *   - Editing a decided row's dates or hours re-opens it: the thing that was approved
+       *     is not the thing now recorded. An edit that changes neither keeps the decision.
+       *
+       * Non-Leave kinds are recorded facts: both fields stay null, exactly as before.
+       */
+      const isLeave = a.kind === 'Leave'
+      const selfWrite =
+        (directoryIdByName(state.model, a.person) ?? '__none__') ===
+          (directoryPersonFor(state.model, actor)?.id ?? '__self__') ||
+        a.person.trim().toLowerCase() === by.trim().toLowerCase()
+      const mayDecide = can(state.model, actor, 'leave.approve').allowed
+      const datesChanged =
+        !!existing && (existing.startDate !== a.startDate || existing.endDate !== a.endDate || existing.hoursPerDay !== a.hoursPerDay)
+      const status: Commitment['status'] = !isLeave
+        ? null
+        : mayDecide && !selfWrite
+          ? 'Approved'
+          : existing && !datesChanged
+            ? (existing.status ?? 'Approved')
+            : 'Requested'
       const next: Commitment = {
         id,
         person: a.person.trim(),
@@ -5968,6 +6008,8 @@ Question: ${review.question}`),
         endDate: a.endDate,
         hoursPerDay: a.hoursPerDay,
         note: a.note.trim(),
+        status,
+        reason: isLeave ? (a.reason ?? existing?.reason ?? '').trim() || null : null,
         createdBy: existing?.createdBy ?? by,
         createdAt: existing?.createdAt ?? a.now,
         deletedAt: null,
@@ -6000,9 +6042,54 @@ Question: ${review.question}`),
             by,
           }),
         },
-        message: position.overallocated
-          ? `Recorded. ${describeCapacity(position)}`
-          : 'Recorded.',
+        message:
+          (next.status === 'Requested' ? 'Requested — awaiting a decision. ' : 'Recorded. ') +
+          (position.overallocated ? describeCapacity(position) : ''),
+      }
+    }
+
+    /**
+     * Decide a requested absence. The mirror of `decideTimesheet`, for the other thing a
+     * person asks somebody to grant: Leave only, `leave.approve` required, never your own.
+     */
+    case 'decideLeave': {
+      const c = state.commitments[a.id]
+      if (!c || c.deletedAt) return { state, error: 'That request no longer exists.' }
+      if (c.kind !== 'Leave') return { state, error: 'Only leave carries a decision.' }
+      if ((c.status ?? 'Approved') !== 'Requested') {
+        return { state, error: 'This is not awaiting a decision.' }
+      }
+      const may = can(state.model, actor, 'leave.approve')
+      if (!may.allowed) return { state, error: may.reason ?? 'Deciding leave needs the leave.approve grant.' }
+      const deciderId = directoryPersonFor(state.model, actor)?.id ?? null
+      const own =
+        (c.personId && deciderId && c.personId === deciderId) ||
+        c.person.trim().toLowerCase() === by.trim().toLowerCase()
+      if (own) {
+        return { state, error: 'Your own request is not yours to decide, whatever you hold. Ask another approver.' }
+      }
+      const next: Commitment = {
+        ...c,
+        status: a.decision === 'approved' ? 'Approved' : 'Returned',
+      }
+      return {
+        state: {
+          ...state,
+          commitments: { ...state.commitments, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: 'CAPACITY',
+            field: 'leave',
+            from: `${c.person}: Requested ${c.startDate}→${c.endDate}`,
+            to: a.decision === 'approved' ? 'Approved' : 'Returned',
+            at: a.now,
+            by,
+            reason: (a.note ?? '').trim() || undefined,
+          }),
+        },
+        message:
+          a.decision === 'approved'
+            ? `${c.person}'s leave ${c.startDate}→${c.endDate} approved.`
+            : `Returned to ${c.person}.`,
       }
     }
 

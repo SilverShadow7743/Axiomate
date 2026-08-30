@@ -643,8 +643,12 @@ const SHAPES = {
     endDate: req(text),
     hoursPerDay: req(num),
     note: req(text),
+    reason: opt(text),
     now,
   },
+  // No status field above, deliberately: status is computed in the arm from who is writing,
+  // and the unknown-key refusal is what keeps a caller from smuggling an approval in.
+  decideLeave: { id: req(id), decision: req(oneOf(new Set(['approved', 'returned']))), note: opt(text), now },
   removeCommitment: { id: req(id), now },
   /* ---- LIFECYCLE ---- */
   buildLifecycle: { issueId: req(id), slaDays: req(num), now },

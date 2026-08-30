@@ -380,9 +380,27 @@ async function main() {
   const allocation = Object.values(state.allocations)[0]
   const commitment = Object.values(state.commitments)[0]
   check(
-    'a pre-approval commitment keeps its ABSENT status — null means Approved in code, not in storage',
-    commitment != null && (commitment.status ?? null) === null && (commitment.reason ?? null) === null,
+    // The fixture leave is recorded BY the proof operator FOR Priya — recorder is not subject,
+    // so the E1 arm stamps Approved in one step, and that stamp must round-trip as written.
+    // (A genuinely ABSENT status is pre-E1 history the current arm can no longer produce;
+    // absent-stays-absent lives in the mapper's ?? null both ways and scenario E1C.)
+    "an approver-recorded leave lands Approved and the stamp survives Postgres",
+    commitment != null && commitment.status === 'Approved' && (commitment.reason ?? null) === null,
     commitment ? `status=${JSON.stringify(commitment.status)} reason=${JSON.stringify(commitment.reason)}` : 'missing',
+  )
+
+  /* A subject's own request: Requested, with its private reason held through the round-trip.
+     A second actor whose name IS the row's person makes the arm's self-write branch fire. */
+  const asPriya = { id: 'proof-priya', name: 'Priya' }
+  const reqWrote = await persistActions(TENANT, asPriya, [
+    { t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave', startDate: '2026-09-21', endDate: '2026-09-22', hoursPerDay: 7.5, note: '', reason: 'Proof reason — private.', now: NOW } as Action,
+  ])
+  const reqState = (await loadWorkspace(TENANT)).state
+  const reqRow = Object.values(reqState.commitments).find((c) => c.startDate === '2026-09-21')
+  check(
+    "a subject's own request lands Requested and its private reason round-trips",
+    reqWrote.ok && reqRow?.status === 'Requested' && reqRow?.reason === 'Proof reason — private.',
+    reqRow ? `status=${reqRow.status} reason=${JSON.stringify(reqRow.reason)}` : (reqWrote.error ?? 'missing'),
   )
   check(
     'an allocation and a commitment keep their dates',

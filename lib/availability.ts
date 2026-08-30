@@ -77,6 +77,28 @@ export function commitmentCounts(c: Commitment): boolean {
   return (c.status ?? 'Approved') === 'Approved'
 }
 
+/**
+ * The leave-reason redaction, pure so the scenario suite can drive exactly what leaves the
+ * server (the same split as `clientView`). Every reader keeps dates, hours and status —
+ * availability is the point of the record; the private reason survives only when the reader
+ * may decide leave (`mayReadReasons`) or the row is their own (`mine` is their directory id).
+ * boot()'s `redactForReader` is the caller; the UI never re-decides this.
+ */
+export function redactLeaveReasons(
+  commitments: Record<string, Commitment>,
+  mayReadReasons: boolean,
+  mine: string | null,
+): Record<string, Commitment> {
+  if (mayReadReasons) return commitments
+  return Object.fromEntries(
+    Object.entries(commitments).map(([id, c]) => {
+      if (c.kind !== 'Leave' || !c.reason) return [id, c]
+      const own = c.personId && mine ? c.personId === mine : false
+      return [id, own ? c : { ...c, reason: null }]
+    }),
+  )
+}
+
 export function availabilityFor(
   person: string,
   profile: ResourceProfile | undefined,

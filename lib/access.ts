@@ -76,6 +76,7 @@ export const PERMISSIONS = [
     what: 'Record or correct a cost or charge-out rate, from a date, with a reason.',
   },
   { key: 'time.approve', label: 'Decide a timesheet', what: 'Approve a submitted week, or return it with a reason. Never your own: the person who submitted may not decide it, whatever they hold.' },
+  { key: 'leave.approve', label: 'Decide leave', what: 'Approve a requested absence, or return it with a note. Never your own, whatever you hold. Also the grant that reveals the private reason on a request; without it a reader sees the dates and hours only.' },
   /*
    * Two keys, split on the axis that matters commercially. Recording a payment schedule and
    * saying the work has landed are both delivery acts and share `milestone.edit`. Saying the
@@ -248,14 +249,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit', 'project.staff'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit', 'project.staff'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here

@@ -1,5 +1,6 @@
 import { can, directoryPersonFor, isExempt } from '../access'
 import { clientView } from '../clientBoundary'
+import { redactLeaveReasons } from '../availability'
 import { memberProjectIdsFor, projectView } from '../projectBoundary'
 import { personalEventsFor } from '../personalEvents'
 import { redactPersonSkill } from '../skills'
@@ -325,7 +326,20 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
    */
   const personalEvents = personalEventsFor(state.personalEvents, mine)
 
-  const base = { ...state, rates, personSkills, documents, personalEvents }
+  /*
+   * Leave reasons — the rates posture, applied to the other thing people are sensitive about.
+   * Every internal reader keeps the DATES, hours and status, because availability is the
+   * point of the record; the private `reason` survives only for `leave.approve` holders (the
+   * people who decide on it) and for the row's own subject. Withheld where the payload is
+   * built, never merely hidden on screen. Non-Leave kinds carry no reason to withhold.
+   */
+  const commitments = redactLeaveReasons(
+    state.commitments,
+    can(state.model, actor, 'leave.approve').allowed,
+    mine,
+  )
+
+  const base = { ...state, rates, personSkills, documents, personalEvents, commitments }
 
   /*
    * The client boundary — the same posture as the rate redaction above, applied to content.

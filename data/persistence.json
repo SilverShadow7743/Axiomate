@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-30T03:15:26.656Z",
+  "at": "2026-08-30T03:31:08.483Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 65,
+  "passed": 66,
   "failed": 0,
   "checks": [
     {
@@ -80,9 +80,14 @@
       "detail": "GBP 12345.67"
     },
     {
-      "what": "a pre-approval commitment keeps its ABSENT status — null means Approved in code, not in storage",
+      "what": "an approver-recorded leave lands Approved and the stamp survives Postgres",
       "ok": true,
-      "detail": "status=null reason=null"
+      "detail": "status=\"Approved\" reason=null"
+    },
+    {
+      "what": "a subject's own request lands Requested and its private reason round-trips",
+      "ok": true,
+      "detail": "status=Requested reason=\"Proof reason — private.\""
     },
     {
       "what": "an allocation and a commitment keep their dates",
@@ -147,7 +152,7 @@
     {
       "what": "a submitted week comes back out of Postgres",
       "ok": true,
-      "detail": "ts-20 · Priya · 2026-08-03 · Submitted · by Priya"
+      "detail": "ts-21 · Priya · 2026-08-03 · Submitted · by Priya"
     },
     {
       "what": "and the freeze survives the reload — a guard that holds only in memory is not a guard",
@@ -182,12 +187,12 @@
     {
       "what": "and a redacted row is refused by the mapper rather than saved as an erased level",
       "ok": true,
-      "detail": "Refusing to persist a redacted person-skill (pskill-21). Levels are stripped for reading only."
+      "detail": "Refusing to persist a redacted person-skill (pskill-22). Levels are stripped for reading only."
     },
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 36607 chars · 1 visible issues · 9 audit rows"
+      "detail": "payload 36655 chars · 1 visible issues · 9 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -217,7 +222,7 @@
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
       "ok": true,
-      "detail": "Refusing to persist document doc-30 with no locator. The locator is stripped for reading only."
+      "detail": "Refusing to persist document doc-31 with no locator. The locator is stripped for reading only."
     },
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
@@ -242,22 +247,22 @@
     {
       "what": "a timeline comes back out of Postgres with its boundaries and reasons intact",
       "ok": true,
-      "detail": "ver-32 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-33 2026-07-01→open \"Moved to a four-day week\" by proof"
+      "detail": "ver-33 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-34 2026-07-01→open \"Moved to a four-day week\" by proof"
     },
     {
       "what": "and the exclusive boundary survives it — 30 June is the old week, 1 July the new",
       "ok": true,
-      "detail": "30 Jun → ver-32, 1 Jul → ver-33, before any period → null"
+      "detail": "30 Jun → ver-33, 1 Jul → ver-34, before any period → null"
     },
     {
       "what": "a correction moves the timeline and does not move a stamp",
       "ok": true,
-      "detail": "the period now starts 2025-12-01 and December resolves to ver-32; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-32. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
+      "detail": "the period now starts 2025-12-01 and December resolves to ver-33; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-33. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
     },
     {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 33, state seq 16"
+      "detail": "stored seq 34, state seq 16"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",

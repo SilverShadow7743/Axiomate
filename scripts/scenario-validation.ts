@@ -57,7 +57,7 @@ import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/assignment'
-import { availabilityFor } from '../lib/availability'
+import { availabilityFor, redactLeaveReasons } from '../lib/availability'
 import {
   backdated,
   dailyCap,
@@ -7430,6 +7430,82 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: "A midweek org holiday drops the window to 8 working days once for everyone; absent-status and Approved leave subtract 15h together; the Requested absence moves nothing and returns as a named 2-day conflict; a Returned one is silent; and an absent holiday set reproduces today's arithmetic exactly.", stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `holidayCounted=${holidayCounted} (wd=${p.workingDays} gross=${p.grossHours}) approvedOnly=${approvedOnly} (committed=${p.committedHours} avail=${p.availableHours}) conflictNamed=${conflictNamed} (${JSON.stringify(p.pendingLeave)}) optional=${optional}`, stops: 'at the engine — a term subtracts when it should speak, or speaks when it should subtract', severity: 'P1', impact: 'every capacity, allocation and forecast figure flows through this arithmetic' } as const
+  },
+)
+
+scenario(
+  "E1B",
+  "Leave asks and somebody else grants: the timesheet rule, applied to absence",
+  "E1 leave approval: a person recording their OWN absence lands Requested, whoever they are; an approver recording somebody else’s lands Approved in one step (recorder is not subject, so never-your-own holds, and the team-leave flow keeps working); deciding requires leave.approve and refuses your own request in plain words; a decided row re-opens when its dates change, because the thing that was approved is not the thing now recorded; and status is computed in the arm — the boundary refuses it from the wire.",
+  () => {
+    const P: Actor = { id: "priya-actor", name: "Priya" } // directory person, no roles
+    const B: Actor = { id: "val2", name: "Second Approver" } // unknown -> default Administrator
+
+    // 1. Priya requests her own leave, with a private reason.
+    let r = apply(BASE, { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "", reason: "medical appointment", now: NOW } as Action, P)
+    if (r.error) throw new Error(`request refused: ${r.error}`)
+    let st = r.state
+    const req = Object.values(st.commitments).find((c) => c.kind === "Leave" && c.person === "Priya")!
+    const landsRequested = req.status === "Requested" && req.reason === "medical appointment"
+
+    // 2. Deciding your own is refused even for an admin-approver.
+    const own = apply(st, { t: "decideLeave", id: req.id, decision: "approved", now: NOW } as Action, { id: "x", name: "Priya" })
+    const ownRefused = Boolean(own.error) && /not yours to decide/.test(own.error ?? "")
+
+    // 3. Another approver approves it.
+    r = apply(st, { t: "decideLeave", id: req.id, decision: "approved", now: NOW } as Action, B)
+    if (r.error) throw new Error(`decide refused: ${r.error}`)
+    st = r.state
+    const approved = st.commitments[req.id].status === "Approved"
+
+    // 4. Deciding a decided row is refused.
+    const again = apply(st, { t: "decideLeave", id: req.id, decision: "returned", now: NOW } as Action, B)
+    const settledRefused = Boolean(again.error) && /not awaiting a decision/.test(again.error ?? "")
+
+    // 5. The subject edits the approved row’s dates: it re-opens, reason intact.
+    r = apply(st, { t: "upsertCommitment", id: req.id, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-10", hoursPerDay: 7.5, note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`edit refused: ${r.error}`)
+    const reopened = r.state.commitments[req.id].status === "Requested" && r.state.commitments[req.id].reason === "medical appointment"
+
+    // 6. An approver recording somebody ELSE’s absence lands Approved in one step.
+    r = apply(st, { t: "upsertCommitment", id: null, person: "Sam", kind: "Leave", startDate: "2026-09-14", endDate: "2026-09-15", hoursPerDay: 7.5, note: "", now: NOW } as Action, B)
+    if (r.error) throw new Error(`approver-record refused: ${r.error}`)
+    const oneStep = Object.values(r.state.commitments).find((c) => c.person === "Sam")?.status === "Approved"
+
+    // 7. Status cannot arrive over the wire: the boundary refuses the unknown key.
+    const smuggled = actionProblem({ t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "", status: "Approved", now: NOW })
+    const wireRefused = smuggled !== null
+
+    const good = landsRequested && ownRefused && approved && settledRefused && reopened && oneStep && wireRefused
+    return good
+      ? { verdict: "PASS", actual: "Priya’s own request lands Requested with its reason held; deciding it herself is refused in the arm’s words; a second approver approves; re-deciding refuses; editing the approved dates re-opens it with the reason intact; an approver recording Sam’s leave lands Approved in one step; and a status smuggled onto the wire bounces off the boundary’s unknown-key refusal.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `landsRequested=${landsRequested} ownRefused=${ownRefused} approved=${approved} settledRefused=${settledRefused} reopened=${reopened} oneStep=${oneStep} wireRefused=${wireRefused}`, stops: "at the approval rule — either status leaks in from a write, or the never-your-own rule has a hole", severity: "P1", impact: "approval is decorative: whoever writes the row decides it" } as const
+  },
+)
+
+scenario(
+  "E1C",
+  "A leave reason reaches its subject and its deciders, and nobody else",
+  "E1 privacy: the reason on a leave request is withheld server-side — the rates posture — while the dates, hours and status stay visible to every internal reader, because availability is the point of the record. Driven against the pure redaction the boot path calls, the same split that makes clientView provable.",
+  () => {
+    const rows: Record<string, Commitment> = {
+      c1: { id: "c1", person: "Priya", personId: "P1", kind: "Leave", status: "Requested", reason: "medical", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "out these days", createdBy: "x", createdAt: "x", deletedAt: null },
+      c2: { id: "c2", person: "Sam", personId: "P2", kind: "Internal", startDate: "2026-09-01", endDate: "2026-09-30", hoursPerDay: 1, note: "practice meeting", createdBy: "x", createdAt: "x", deletedAt: null },
+    }
+    const stranger = redactLeaveReasons(rows, false, "P9")
+    const subject = redactLeaveReasons(rows, false, "P1")
+    const approver = redactLeaveReasons(rows, true, null)
+
+    const strangerBlind = stranger.c1.reason === null
+    const strangerStillSees = stranger.c1.startDate === "2026-09-07" && stranger.c1.status === "Requested" && stranger.c1.note === "out these days"
+    const subjectKeeps = subject.c1.reason === "medical"
+    const approverKeeps = approver.c1.reason === "medical"
+    const nonLeaveUntouched = stranger.c2 === rows.c2
+
+    const good = strangerBlind && strangerStillSees && subjectKeeps && approverKeeps && nonLeaveUntouched
+    return good
+      ? { verdict: "PASS", actual: "A reader with no grant and no stake gets the dates, hours, status and visible note but a null reason; the subject keeps their own; a leave.approve holder keeps all; a non-Leave commitment passes through by reference, untouched.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `strangerBlind=${strangerBlind} strangerStillSees=${strangerStillSees} subjectKeeps=${subjectKeeps} approverKeeps=${approverKeeps} nonLeaveUntouched=${nonLeaveUntouched}`, stops: "at the payload — a reason travels to a reader it should not, or the dates vanish with it", severity: "P1", impact: "either a private reason ships to the whole firm, or PMs lose the availability data the record exists to carry" } as const
   },
 )
 
