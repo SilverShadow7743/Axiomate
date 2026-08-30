@@ -342,6 +342,9 @@ export interface IntakeDraft {
   type: string
   severity: Severity
   raisedBy: string
+  /** Classification for the filed record, when the mailbox states one (see
+   *  IntakeMailbox.classification). Absent: the create arm's ancestor walk decides. */
+  module?: string
   /** Responsibility assignments the routing rules proposed. */
   assignments: { responsibilityTypeId: string; value: string }[]
   /** Which rules fired, in order, so a person can see why it landed where it did. */
@@ -402,7 +405,7 @@ export function classify(
     }
   }
 
-  return { draft: draftFor(mailbox.scopeId, message, model) }
+  return { draft: draftFor(mailbox.scopeId, message, model, undefined, mailbox.classification) }
 }
 
 /**
@@ -421,6 +424,7 @@ export function draftFor(
   message: InboundMessage,
   model: OperatingModel,
   stated?: { severity: Severity },
+  classification?: string | null,
 ): IntakeDraft {
   const haystack = `${message.subject} ${message.body}`.toLowerCase()
 
@@ -459,6 +463,7 @@ export function draftFor(
 
   return {
     parentId: scopeId,
+    ...(classification ? { module: classification } : {}),
     subject: message.subject.trim() || firstLine(message.body),
     description: message.body.trim(),
     type,

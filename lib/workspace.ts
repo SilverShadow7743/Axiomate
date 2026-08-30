@@ -7490,6 +7490,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         id,
         address,
         scopeId: op.patch.scopeId ?? existing?.scopeId ?? ROOT_SCOPE,
+        classification: op.patch.classification ?? existing?.classification ?? null,
         workflowId: op.patch.workflowId ?? existing?.workflowId ?? null,
         enabled: op.patch.enabled ?? existing?.enabled ?? false,
       }

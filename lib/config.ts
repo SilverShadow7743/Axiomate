@@ -608,6 +608,10 @@ export interface IntakeMailbox {
   address: string
   /** Scope id new issues are filed under. */
   scopeId: string
+  /** Classification stamped on what files here. Set when a mailbox's old module-container
+   *  scope converted to a label (E0 step 8b), so filed work keeps classifying exactly as the
+   *  container used to classify it. Null: the ancestor walk supplies whatever it finds. */
+  classification?: string | null
   /** Agents that would process a message arriving here, in order. */
   workflowId: string | null
   enabled: boolean

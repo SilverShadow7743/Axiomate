@@ -241,6 +241,9 @@ export async function POST(req: Request) {
         draft: {
           name: draft.subject,
           description: draft.description,
+          // The mailbox's stated classification, when it has one — otherwise absent, and the
+          // create arm's ancestor walk decides (see IntakeMailbox.classification).
+          ...(draft.module ? { module: draft.module } : {}),
           type: draft.type,
           severity: draft.severity,
           raisedBy: draft.raisedBy,
