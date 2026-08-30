@@ -58,6 +58,7 @@ import { actionProblem } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/assignment'
 import { availabilityFor, redactLeaveReasons } from '../lib/availability'
+import { forecastFor, describeForecast } from '../lib/forecast'
 import {
   backdated,
   dailyCap,
@@ -7506,6 +7507,71 @@ scenario(
     return good
       ? { verdict: "PASS", actual: "A reader with no grant and no stake gets the dates, hours, status and visible note but a null reason; the subject keeps their own; a leave.approve holder keeps all; a non-Leave commitment passes through by reference, untouched.", stops: "", severity: "P1", impact: "none" } as const
       : { verdict: "FAIL", actual: `strangerBlind=${strangerBlind} strangerStillSees=${strangerStillSees} subjectKeeps=${subjectKeeps} approverKeeps=${approverKeeps} nonLeaveUntouched=${nonLeaveUntouched}`, stops: "at the payload — a reason travels to a reader it should not, or the dates vanish with it", severity: "P1", impact: "either a private reason ships to the whole firm, or PMs lose the availability data the record exists to carry" } as const
+  },
+)
+
+scenario(
+  "E1D",
+  "Forecast v1 answers in kinds, not zeros: no estimate, no date, short, achievable — and pending leave rides along",
+  "E1 forecast: remaining = max(0, estimate-derived hours − actuals); available = the owner’s remaining capacity today → due date, from the one availability engine. The honest answers differ in KIND — a record with no estimate or no due date gets told so, not scored zero — and the sentence is built in one place so the Schedule tab and Portfolio can never disagree. A Requested absence moves no number but rides the verdict as the question the decider should see.",
+  () => {
+    const bands = BASE.model.sizeBands
+    // emptyEstimate supplies every field deriveEffort walks (steps, capacity, overrides);
+    // the scores are what this fixture states.
+    const est = { ...emptyEstimate("2026-01-01"), scores: { business: 3, technical: 3, integration: 2, testing: 2, data: 1 } }
+    const estHours = deriveEffort(est, bands).effortHours
+    if (!estHours || estHours <= 0) throw new Error(`fixture estimate derived ${estHours}h`)
+
+    const profile = { personId: "P1", hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: "stated" as const }
+    const deps = { issueId: "OAPIL-1", owner: "Priya", ownerId: "P1", estimate: est, bands, timeEntries: {} as Record<string, TimeEntry>, profile, commitments: [] as Commitment[], allocations: [] as Allocation[], today: "2026-09-01" }
+
+    // 1. No estimate: a kind, not a zero.
+    const none = forecastFor({ ...deps, estimate: undefined, plannedEnd: "2026-09-30" })
+    const noEstimate = none.kind === "no-estimate" && /Nothing estimated/.test(describeForecast(none, "Priya"))
+
+    // 2. No due date: needs its hours, has no target.
+    const undated = forecastFor({ ...deps, plannedEnd: null })
+    const unscheduled = undated.kind === "unscheduled" && undated.remainingHours === estHours
+
+    // 3. A month of clear runway: achievable, with the arithmetic holding together.
+    const clear = forecastFor({ ...deps, plannedEnd: "2026-09-30" })
+    const achievable =
+      clear.kind === "achievable" &&
+      clear.remainingHours === estHours &&
+      clear.availableHours > estHours &&
+      clear.deltaHours === Math.round((clear.availableHours - estHours) * 100) / 100
+
+    // 4. Actuals shrink the remainder — never below zero.
+    const entry: TimeEntry = { id: "t1", issueId: "OAPIL-1", person: "Priya", date: "2026-08-28", hours: estHours + 10, activity: "Resolution", billable: true, note: "", createdBy: "x", createdAt: "x", updatedBy: null, updatedAt: null, deletedAt: null }
+    const done = forecastFor({ ...deps, timeEntries: { t1: entry }, plannedEnd: "2026-09-30" })
+    const floored = done.kind === "achievable" && done.remainingHours === 0
+
+    // 5. A two-day window cannot hold the work: short, by the difference.
+    const tight = forecastFor({ ...deps, plannedEnd: "2026-09-02" })
+    const short =
+      tight.kind === "short" &&
+      tight.availableHours === 15 &&
+      tight.deltaHours === Math.round((estHours - 15) * 100) / 100 &&
+      /short by/.test(describeForecast(tight, "Priya"))
+
+    // 6. A Requested absence moves nothing and rides the sentence.
+    const pendingRow: Commitment = { id: "c1", person: "Priya", personId: "P1", kind: "Leave", status: "Requested", startDate: "2026-09-07", endDate: "2026-09-08", hoursPerDay: 7.5, note: "", createdBy: "x", createdAt: "x", deletedAt: null }
+    const withPending = forecastFor({ ...deps, commitments: [pendingRow], plannedEnd: "2026-09-30" })
+    const pendingRides =
+      withPending.kind === "achievable" &&
+      clear.kind === "achievable" &&
+      withPending.availableHours === clear.availableHours &&
+      withPending.pendingLeave.length === 1 &&
+      /requested leave day/.test(describeForecast(withPending, "Priya"))
+
+    // 7. An unresolved owner is named as an assumption, exactly as capacity names it.
+    const assumed = forecastFor({ ...deps, owner: "Nobody Known", ownerId: null, profile: undefined, plannedEnd: "2026-09-30" })
+    const assumptionNamed = assumed.kind !== "no-estimate" && assumed.kind !== "unscheduled" && assumed.basis === "default" && /assumed/.test(describeForecast(assumed, "Nobody Known"))
+
+    const good = noEstimate && unscheduled && achievable && floored && short && pendingRides && assumptionNamed
+    return good
+      ? { verdict: "PASS", actual: `With a ${estHours}h estimate: no-estimate and unscheduled answer in kind; a clear month is achievable with the spare stated; actuals floor the remainder at zero; a two-day window is short by the difference; a Requested absence leaves every number untouched while riding the sentence; and an unknown owner’s figures are named as assumed.`, stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `noEstimate=${noEstimate} unscheduled=${unscheduled} achievable=${achievable} floored=${floored} short=${short} pendingRides=${pendingRides} assumptionNamed=${assumptionNamed}`, stops: "at the verdict — a missing input scored as zero, or an unapproved absence moved a number", severity: "P1", impact: "the forecast either lies about most records (which carry no estimate) or silently reschedules around undecided leave" } as const
   },
 )
 

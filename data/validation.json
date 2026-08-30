@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "65 of 65 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "66 of 66 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -1729,6 +1729,16 @@
       "expected": "E1 privacy: the reason on a leave request is withheld server-side — the rates posture — while the dates, hours and status stay visible to every internal reader, because availability is the point of the record. Driven against the pure redaction the boot path calls, the same split that makes clientView provable.",
       "verdict": "PASS",
       "actual": "A reader with no grant and no stake gets the dates, hours, status and visible note but a null reason; the subject keeps their own; a leave.approve holder keeps all; a non-Leave commitment passes through by reference, untouched.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E1D",
+      "title": "Forecast v1 answers in kinds, not zeros: no estimate, no date, short, achievable — and pending leave rides along",
+      "expected": "E1 forecast: remaining = max(0, estimate-derived hours − actuals); available = the owner’s remaining capacity today → due date, from the one availability engine. The honest answers differ in KIND — a record with no estimate or no due date gets told so, not scored zero — and the sentence is built in one place so the Schedule tab and Portfolio can never disagree. A Requested absence moves no number but rides the verdict as the question the decider should see.",
+      "verdict": "PASS",
+      "actual": "With a 16h estimate: no-estimate and unscheduled answer in kind; a clear month is achievable with the spare stated; actuals floor the remainder at zero; a two-day window is short by the difference; a Requested absence leaves every number untouched while riding the sentence; and an unknown owner’s figures are named as assumed.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
