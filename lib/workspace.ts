@@ -1816,7 +1816,30 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       (a as { op: { k: string; patch?: object } }).op.k === 'upsertRecurrence' &&
       (a as { op: { id?: string | null } }).op.id != null &&
       Object.keys((a as { op: { patch?: object } }).op.patch ?? {}).join(',') === 'lastRaisedOn'
-    const need = guardOnly ? 'work.create' : permissionForAction(a.t, { closing })
+    /**
+     * One narrow self-exception (E2): asking for your OWN absence is not a claim on anybody
+     * else's time — the arm lands it Requested, for somebody who holds the DECIDING grant to
+     * answer. Requiring `capacity.record` here would make My calendar's "Request leave" a
+     * dead button for exactly the people it exists for (DELIVERY_CORE deliberately lacks
+     * that grant: it is the planner's, for recording the team's time off). Recording anybody
+     * else's absence, or any non-Leave commitment, keeps the grant; withdrawing rides the
+     * same exception only for your own Leave row. The subject join is the arm's own:
+     * directory id when it resolves, trimmed name otherwise.
+     */
+    const isSelf = (person: string, personId?: string | null): boolean =>
+      (personId ?? directoryIdByName(state.model, person) ?? '__none__') ===
+        (directoryPersonFor(state.model, actor)?.id ?? '__self__') ||
+      person.trim().toLowerCase() === actor.name.trim().toLowerCase()
+    const ownLeave =
+      (a.t === 'upsertCommitment' &&
+        (a as { kind: string }).kind === 'Leave' &&
+        isSelf((a as { person: string }).person)) ||
+      (a.t === 'removeCommitment' &&
+        (() => {
+          const c = state.commitments[(a as { id: string }).id]
+          return Boolean(c && c.kind === 'Leave' && isSelf(c.person, c.personId))
+        })())
+    const need = ownLeave ? null : guardOnly ? 'work.create' : permissionForAction(a.t, { closing })
     if (need) {
       const verdict = can(state.model, actor, need)
       if (!verdict.allowed) return { state, error: verdict.reason ?? 'Not permitted.' }

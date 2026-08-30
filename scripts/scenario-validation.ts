@@ -7642,10 +7642,27 @@ scenario(
     const r5 = ok(setup, { t: "upsertCommitment", id: null, person: "Priya", kind: "Internal", startDate: "2026-09-21", endDate: "2026-09-21", hoursPerDay: 2, note: "practice", now: NOW } as Action)
     const nonLeaveSilent = Object.values(r5.notifications).length === 0
 
-    const good = fanOut && counterAdvanced && muteHolds && emailAdded && oneStepTellsSubject && nonLeaveSilent
+    // 6. A consultant whose role lacks capacity.record can still ask for their OWN absence —
+    //    and only that: another person's leave, or any non-Leave kind, keeps the grant; a
+    //    withdrawal of their own request rides the same exception.
+    const withPetra = ok(setup, { t: "config", op: { k: "upsertPerson", id: null, name: "Plain Petra", roleIds: ["ROLE_FUNCTIONAL"] }, now: NOW } as Action)
+    const petra: Actor = { id: "e2-petra", name: "Plain Petra" }
+    const own = apply(withPetra, { t: "upsertCommitment", id: null, person: "Plain Petra", kind: "Leave", startDate: "2026-10-05", endDate: "2026-10-05", hoursPerDay: 7.5, note: "", now: NOW } as Action, petra)
+    const ownRow = own.error ? undefined : Object.values(own.state.commitments).find((c) => c.person === "Plain Petra")
+    const withdrawn = ownRow ? apply(own.state, { t: "removeCommitment", id: ownRow.id, now: NOW } as Action, petra) : { error: "no row" as string | undefined, state: withPetra }
+    const othersRefused = apply(withPetra, { t: "upsertCommitment", id: null, person: "Sam", kind: "Leave", startDate: "2026-10-05", endDate: "2026-10-05", hoursPerDay: 7.5, note: "", now: NOW } as Action, petra)
+    const internalRefused = apply(withPetra, { t: "upsertCommitment", id: null, person: "Plain Petra", kind: "Internal", startDate: "2026-10-05", endDate: "2026-10-05", hoursPerDay: 1, note: "", now: NOW } as Action, petra)
+    const selfException =
+      !own.error &&
+      ownRow?.status === "Requested" &&
+      !withdrawn.error &&
+      Boolean(othersRefused.error) &&
+      Boolean(internalRefused.error)
+
+    const good = fanOut && counterAdvanced && muteHolds && emailAdded && oneStepTellsSubject && nonLeaveSilent && selfException
     return good
-      ? { verdict: "PASS", actual: "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; and the seq counter advanced once per record past the row's own id.", stops: "", severity: "P1", impact: "none" } as const
-      : { verdict: "FAIL", actual: `fanOut=${fanOut} counterAdvanced=${counterAdvanced} (seq ${setup.seq}->${r.state.seq}) muteHolds=${muteHolds} emailAdded=${emailAdded} oneStepTellsSubject=${oneStepTellsSubject} nonLeaveSilent=${nonLeaveSilent}`, stops: "at the mint — the fan-out reaches the wrong people, a preference silences the wrong holder, or the seq bookkeeping reuses an id", severity: "P1", impact: "either approvers never hear that a request is waiting, or every capacity write in the product mints noise or silently overwrites a notification" } as const
+      ? { verdict: "PASS", actual: "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; the seq counter advanced once per record past the row's own id; and Petra — whose role lacks capacity.record — asks for and withdraws her OWN absence while Sam's leave and her own Internal time still need the grant.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `fanOut=${fanOut} counterAdvanced=${counterAdvanced} (seq ${setup.seq}->${r.state.seq}) muteHolds=${muteHolds} emailAdded=${emailAdded} oneStepTellsSubject=${oneStepTellsSubject} nonLeaveSilent=${nonLeaveSilent} selfException=${selfException} (own=${own.error ?? "ok"} withdraw=${withdrawn.error ?? "ok"} others=${othersRefused.error ? "refused" : "ALLOWED"} internal=${internalRefused.error ? "refused" : "ALLOWED"})`, stops: "at the mint or the gate — the fan-out reaches the wrong people, a preference silences the wrong holder, the seq bookkeeping reuses an id, or the self-exception is too wide or too narrow", severity: "P1", impact: "either approvers never hear that a request is waiting, consultants cannot ask for their own absence at all, or the exception lets anyone record anybody's time off" } as const
   },
 )
 
