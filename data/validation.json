@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "66 of 66 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "68 of 68 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -1748,7 +1748,7 @@
       "title": "Decision traffic fans out to the holders, per each holder's own preference — and to nobody else",
       "expected": "E2 minting (2026-08-30 design): a self-request mints leave-requested to the leave.approve holders and never to the subject; each recipient's own preference is consulted at the mint (mute silences one holder without silencing the rest, and the audit still answers why); in-app+email adds exactly one pending record for the scheduled pass's drain; the approver-records-other flow mints leave-decided to the subject and asks nobody; a non-Leave commitment mints nothing; and the arm's seq counter — which already spent state.seq+1 on the row's own id — advances once per record so no id is ever reused.",
       "verdict": "PASS",
-      "actual": "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; and the seq counter advanced once per record past the row's own id.",
+      "actual": "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; the seq counter advanced once per record past the row's own id; and Petra — whose role lacks capacity.record — asks for and withdraws her OWN absence while Sam's leave and her own Internal time still need the grant.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
@@ -1771,6 +1771,36 @@
       "actual": "6 notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.",
       "stops": "",
       "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E3A",
+      "title": "A post reaches followers, mentions win, and the author hears nothing",
+      "expected": "E3 discussion notifications (2026-08-30 design, the per-thread-subscribe decision): every follower of a thread hears a post under the chat kind EXCEPT the author and except anyone the post @mentions — a mention wins and mints the mention kind instead, one record per person per message. Pure and pinned here before any storage exists, because the server module consumes this rule rather than restating it.",
+      "verdict": "PASS",
+      "actual": "A plain post reaches both other followers under chat; @Sam moves Sam to the mention list and off chat; a mentioned non-follower is summoned without joining chat; the author is silent even when self-mentioned; duplicate follower ids collapse to one record each.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E3B",
+      "title": "A thread's birth signs up the author always, the record's owner on issue scope only",
+      "expected": "E3 auto-follow: posting IS following, so the author is signed up on any scope; an issue thread also signs up the record's owner (their record is being discussed; they can unfollow); a project thread conscripts nobody else — subscribe was chosen for quiet, and a whole staff auto-followed at birth would make it loud exactly where it should not be.",
+      "verdict": "PASS",
+      "actual": "An issue thread's birth follows author and owner; an owner posting on their own record follows once, not twice; a project birth follows only the author; unresolved ids drop instead of following ghosts.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "E3C",
+      "title": "A record's mail reads as one exchange, and the log groups by conversation without inventing threads",
+      "expected": "E3 mail deepened: the record's timeline interleaves inbound rows with recorded outbound replies — which live as Client Communication NOTES with outboundNoteBody's exact prefix, there being no outbound mail table — in time order; the log groups rows sharing a conversationId and keeps every null-conversation row as its own singleton, because the intake form writes none and a shared bucket would thread strangers together.",
+      "verdict": "PASS",
+      "actual": "OAPIL-1's timeline runs inbound, the recorded reply, the client's answer — in time order, with the hand-filed Client Communication note and the other record's rows excluded; the log groups conv-1's two rows in order, keeps both form rows as singletons, and reads newest-first.",
+      "stops": "",
+      "severity": "P2",
       "impact": "none"
     }
   ]

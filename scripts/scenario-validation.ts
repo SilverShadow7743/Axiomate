@@ -59,6 +59,7 @@ import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '
 import { availabilityForAssignment } from '../lib/assignment'
 import { availabilityFor, redactLeaveReasons } from '../lib/availability'
 import { forecastFor, describeForecast } from '../lib/forecast'
+import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
 import {
   backdated,
   dailyCap,
@@ -7774,6 +7775,132 @@ scenario(
     return good
       ? { verdict: "PASS", actual: `${all.length} notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.`, stops: "", severity: "P1", impact: "none" } as const
       : { verdict: "FAIL", actual: `minted=${minted} (${all.length}) reasonHeld=${reasonHeld} rowKeeps=${rowKeeps}`, stops: "at the mint — a private reason composed into a body would ride email into mailboxes no redaction reaches", severity: "P1", impact: "the one privacy promise leave carries is broken at the exact channel that cannot be un-sent" } as const
+  },
+)
+
+scenario(
+  "E3A",
+  "A post reaches followers, mentions win, and the author hears nothing",
+  "E3 discussion notifications (2026-08-30 design, the per-thread-subscribe decision): every follower of a thread hears a post under the chat kind EXCEPT the author and except anyone the post @mentions — a mention wins and mints the mention kind instead, one record per person per message. Pure and pinned here before any storage exists, because the server module consumes this rule rather than restating it.",
+  () => {
+    const people = [
+      { id: "P1", name: "Priya" },
+      { id: "P2", name: "Sam" },
+      { id: "P3", name: "Nishant Sekhar" },
+      { id: "P4", name: "Lead Lena" },
+    ]
+
+    // 1. Plain post: followers minus the author, nobody mentioned.
+    const plain = recipientsFor({ followerIds: ["P1", "P2", "P3"], authorId: "P1", body: "Shipping tomorrow.", people })
+    const plainSplit = plain.mentions.length === 0 && plain.chat.length === 2 && plain.chat.includes("P2") && plain.chat.includes("P3")
+
+    // 2. A mentioned FOLLOWER moves lists: mention kind, not chat — one record, not two.
+    const summoned = recipientsFor({ followerIds: ["P1", "P2", "P3"], authorId: "P1", body: "@Sam can you confirm?", people })
+    const mentionWins =
+      summoned.mentions.length === 1 &&
+      summoned.mentions[0].id === "P2" &&
+      summoned.chat.length === 1 &&
+      summoned.chat[0] === "P3"
+
+    // 3. A mentioned NON-follower is still summoned; the longest name beats its own prefix.
+    const outside = recipientsFor({ followerIds: ["P1"], authorId: "P1", body: "@Nishant Sekhar should see this", people })
+    const summonsOutside = outside.mentions.length === 1 && outside.mentions[0].id === "P3" && outside.chat.length === 0
+
+    // 4. The author never hears themselves — followed, mentioned, or both.
+    const self = recipientsFor({ followerIds: ["P1", "P2"], authorId: "P1", body: "as @Priya said", people })
+    const authorSilent = self.mentions.length === 0 && self.chat.length === 1 && self.chat[0] === "P2"
+
+    // 5. Duplicate follows collapse; an unknown author (null id) excludes nobody by accident.
+    const dupes = recipientsFor({ followerIds: ["P2", "P2", "P3"], authorId: null, body: "note", people })
+    const dedup = dupes.chat.length === 2
+
+    const good = plainSplit && mentionWins && summonsOutside && authorSilent && dedup
+    return good
+      ? { verdict: "PASS", actual: "A plain post reaches both other followers under chat; @Sam moves Sam to the mention list and off chat; a mentioned non-follower is summoned without joining chat; the author is silent even when self-mentioned; duplicate follower ids collapse to one record each.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `plainSplit=${plainSplit} mentionWins=${mentionWins} summonsOutside=${summonsOutside} authorSilent=${authorSilent} dedup=${dedup}`, stops: "at the split — a person double-notified, an author pinged by their own post, or a summons lost", severity: "P1", impact: "the subscribe model mints noise or silence, and the server module inherits whichever it is" } as const
+  },
+)
+
+scenario(
+  "E3B",
+  "A thread's birth signs up the author always, the record's owner on issue scope only",
+  "E3 auto-follow: posting IS following, so the author is signed up on any scope; an issue thread also signs up the record's owner (their record is being discussed; they can unfollow); a project thread conscripts nobody else — subscribe was chosen for quiet, and a whole staff auto-followed at birth would make it loud exactly where it should not be.",
+  () => {
+    const issueBirth = autoFollowsAt({ scopeKind: "issue", authorId: "P1", ownerId: "P3" })
+    const issueBoth = issueBirth.length === 2 && issueBirth.includes("P1") && issueBirth.includes("P3")
+
+    const ownRecord = autoFollowsAt({ scopeKind: "issue", authorId: "P1", ownerId: "P1" })
+    const ownOnce = ownRecord.length === 1 && ownRecord[0] === "P1"
+
+    const projectBirth = autoFollowsAt({ scopeKind: "project", authorId: "P1", ownerId: "P3" })
+    const projectAuthorOnly = projectBirth.length === 1 && projectBirth[0] === "P1"
+
+    const unresolved = autoFollowsAt({ scopeKind: "issue", authorId: null, ownerId: null })
+    const nullsDrop = unresolved.length === 0
+
+    const good = issueBoth && ownOnce && projectAuthorOnly && nullsDrop
+    return good
+      ? { verdict: "PASS", actual: "An issue thread's birth follows author and owner; an owner posting on their own record follows once, not twice; a project birth follows only the author; unresolved ids drop instead of following ghosts.", stops: "", severity: "P2", impact: "none" } as const
+      : { verdict: "FAIL", actual: `issueBoth=${issueBoth} ownOnce=${ownOnce} projectAuthorOnly=${projectAuthorOnly} nullsDrop=${nullsDrop}`, stops: "at the birth — somebody conscripted who should not be, or the owner left out of their own record's discussion", severity: "P2", impact: "either the chat kind is loud for people who never opted in, or the one person the design promises awareness never gets it" } as const
+  },
+)
+
+scenario(
+  "E3C",
+  "A record's mail reads as one exchange, and the log groups by conversation without inventing threads",
+  "E3 mail deepened: the record's timeline interleaves inbound rows with recorded outbound replies — which live as Client Communication NOTES with outboundNoteBody's exact prefix, there being no outbound mail table — in time order; the log groups rows sharing a conversationId and keeps every null-conversation row as its own singleton, because the intake form writes none and a shared bucket would thread strangers together.",
+  () => {
+    const mail = (over: Partial<InboundMail> & { id: string }): InboundMail => ({
+      mailbox: "help@x", from: "client@x", subject: "S", body: "B", messageId: `m-${over.id}`,
+      receivedAt: "2026-08-01T09:00:00Z", issueId: "OAPIL-1", refusalReason: null,
+      createdAt: "2026-08-01T09:00:00Z", conversationId: "conv-1", ...over,
+    })
+    const inbound = [
+      mail({ id: "im1", receivedAt: "2026-08-01T09:00:00Z", subject: "Item master fails" }),
+      mail({ id: "im2", receivedAt: "2026-08-03T09:00:00Z", subject: "RE: Item master fails" }),
+      mail({ id: "im3", receivedAt: "2026-08-02T12:00:00Z", issueId: "OAPIL-2", conversationId: "conv-2" }),
+    ]
+    const notes = [
+      { id: "n1", issueId: "OAPIL-1", noteType: "Client Communication", plainText: "Sent to client@x as help@x\nSubject: RE: Item master fails\n\nWe are on it.", createdAt: "2026-08-02T10:00:00Z" },
+      // Hand-filed commentary of the same type: NOT a send, must not appear as one.
+      { id: "n2", issueId: "OAPIL-1", noteType: "Client Communication", plainText: "Client called, sounded calm.", createdAt: "2026-08-02T11:00:00Z" },
+      { id: "n3", issueId: "OAPIL-2", noteType: "Client Communication", plainText: "Sent to client@x as help@x\nSubject: other\n\nDifferent record.", createdAt: "2026-08-02T13:00:00Z" },
+    ]
+
+    // 1. The record's timeline: its own rows only, interleaved in time, the reply in the middle.
+    const line = issueMailTimeline(inbound, notes, "OAPIL-1")
+    const ordered =
+      line.length === 3 &&
+      line[0].id === "im1" &&
+      line[1].id === "n1" &&
+      line[2].id === "im2" &&
+      line[1].kind === "outbound" &&
+      line[1].subject === "RE: Item master fails" &&
+      line[1].body === "We are on it." &&
+      !line.some((e) => e.id === "n2" || e.id === "im3" || e.id === "n3")
+
+    // 2. The log's grouping: conv-1 holds two rows in order; the null rows stay singletons.
+    const entries: MailEntry[] = [
+      { kind: "inbound", id: "a", at: "2026-08-01T09:00:00Z", from: "x", subject: "s", body: "b", conversationId: "conv-1" },
+      { kind: "inbound", id: "b", at: "2026-08-04T09:00:00Z", from: "x", subject: "s2", body: "b", conversationId: "conv-1" },
+      { kind: "inbound", id: "c", at: "2026-08-02T09:00:00Z", from: "form", subject: "form row", body: "b", conversationId: null },
+      { kind: "inbound", id: "d", at: "2026-08-05T09:00:00Z", from: "form", subject: "form row 2", body: "b", conversationId: null },
+    ]
+    const groups = groupByConversation(entries)
+    const conv = groups.find((g) => g.conversationId === "conv-1")
+    const singletons = groups.filter((g) => g.conversationId === null)
+    const grouped =
+      groups.length === 3 &&
+      conv?.entries.length === 2 &&
+      conv.entries[0].id === "a" &&
+      singletons.length === 2 &&
+      singletons.every((g) => g.entries.length === 1) &&
+      groups[0].conversationId === null && groups[0].entries[0].id === "d"
+
+    const good = ordered && grouped
+    return good
+      ? { verdict: "PASS", actual: "OAPIL-1's timeline runs inbound, the recorded reply, the client's answer — in time order, with the hand-filed Client Communication note and the other record's rows excluded; the log groups conv-1's two rows in order, keeps both form rows as singletons, and reads newest-first.", stops: "", severity: "P2", impact: "none" } as const
+      : { verdict: "FAIL", actual: `ordered=${ordered} (${line.map((e) => e.id).join(",")}) grouped=${grouped} (${groups.map((g) => `${g.conversationId}:${g.entries.length}`).join(" ")})`, stops: "at the grouping — a stranger threaded in, a reply lost, or commentary shown as a send", severity: "P2", impact: "the exchange view says the firm sent things it did not, or hides the reply it did send" } as const
   },
 )
 
