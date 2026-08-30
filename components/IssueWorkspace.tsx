@@ -1918,6 +1918,14 @@ export default function IssueWorkspace({
             dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
           }}
           onOpen={(issueId, n) => {
+            // Approval traffic is about a commitment or a timesheet, not an issue — route to
+            // the surface that acts on it rather than hunting the tree for an id it cannot
+            // hold (revealIssue would answer "no longer in the workspace", which is wrong).
+            if (n.ruleId === 'leave-decided') { setView('mycalendar'); return }
+            if (n.ruleId === 'leave-requested' || n.ruleId === 'timesheet-submitted' || n.ruleId === 'timesheet-decided') {
+              setView('timesheet')
+              return
+            }
             revealIssue(issueId)
             // Land on the tab the notification is about, through the panel's own request
             // mechanism — an assignment reads on Overview, hours on Time, mail on Notes.
@@ -2141,6 +2149,12 @@ export default function IssueWorkspace({
             dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
           }}
           onOpen={(issueId, n) => {
+            // Same routing as the toolbar bell above: approval traffic goes to its surface.
+            if (n.ruleId === 'leave-decided') { setView('mycalendar'); return }
+            if (n.ruleId === 'leave-requested' || n.ruleId === 'timesheet-submitted' || n.ruleId === 'timesheet-decided') {
+              setView('timesheet')
+              return
+            }
             revealIssue(issueId)
             const tab =
               n.ruleId === 'assignment'
@@ -2165,6 +2179,21 @@ export default function IssueWorkspace({
           }
           onRemove={(id) => dispatch({ t: 'removePersonalEvent', id, now: new Date().toISOString() })}
           onSelectWork={revealIssue}
+          onRequestLeave={(input) =>
+            dispatch({
+              t: 'upsertCommitment', id: null, person: actor.name, kind: 'Leave',
+              startDate: input.startDate, endDate: input.endDate, hoursPerDay: input.hoursPerDay,
+              note: input.note, reason: input.reason, now: new Date().toISOString(),
+            })
+          }
+          onUpdateLeave={(id, input) =>
+            dispatch({
+              t: 'upsertCommitment', id, person: actor.name, kind: 'Leave',
+              startDate: input.startDate, endDate: input.endDate, hoursPerDay: input.hoursPerDay,
+              note: input.note, reason: input.reason, now: new Date().toISOString(),
+            })
+          }
+          onWithdrawLeave={(id) => dispatch({ t: 'removeCommitment', id, now: new Date().toISOString() })}
         />
       ) : view === 'mail' ? (
         <MailLog state={state} />

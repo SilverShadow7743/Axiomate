@@ -211,6 +211,9 @@ function PrefRows({
     },
     { kind: 'automation', label: 'When a watch rule fires for me', show: true },
     { kind: 'mention', label: 'When somebody mentions me', show: true },
+    // One preference for both approval loops — leave and timesheets, asked and answered.
+    // The mint consults this kind; the notification's ruleId only routes the click.
+    { kind: 'approval', label: 'When leave or a timesheet needs or gets a decision', show: true },
   ]
   const MODES: { mode: NotificationMode; label: string }[] = [
     { mode: 'in-app', label: 'tell me here' },

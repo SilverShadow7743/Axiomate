@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
+import { profileAt, type Commitment } from '@/lib/capacity'
 import { myCalendarMonth, type MyCalendarEntry } from '@/lib/myCalendar'
 import type { WorkspaceState } from '@/lib/workspace'
 
@@ -15,16 +16,27 @@ export interface PersonalEventInput {
   attendees: string
 }
 
+export interface LeaveInput {
+  startDate: string
+  endDate: string
+  hoursPerDay: number
+  /** Private to the subject and the leave.approve holders — never in any notification body. */
+  reason?: string
+  note: string
+}
+
 /**
  * One person's month — events, leave, allocation and their own due dates, gathered. Always
  * docked: unlike TimesheetPanel/Inbox, there is no existing modal to preserve here, so this
  * has no scrim/portal machinery at all — it is rendered once, inside `.view-dock`, the same
  * wrapper `MyWorkPanel`/`TimesheetPanel`/`Inbox` already use for their docked instance.
  *
- * Only events are editable here. Leave, allocation and work are facts recorded elsewhere
- * (Capacity, the Time tab, the tree) — this screen gathers them, it does not manage them, the
- * same posture `TimesheetPanel`'s own header comment states about itself: "It GATHERS and it
- * decides; it never edits."
+ * Events and the person's OWN leave are editable here (E2: leave is calendar-shaped, and this
+ * is where a person stands to ask for it — the Capacity panel remains the team view and the
+ * approver-records-other flow). Allocation and work stay facts recorded elsewhere (Capacity,
+ * the tree) — gathered, not managed. A leave write goes through the same `upsertCommitment`
+ * arm as everywhere else, so a self-write lands Requested by the arm's rule, never by this
+ * screen's opinion.
  */
 export default function MyCalendarPanel({
   state,
@@ -34,6 +46,9 @@ export default function MyCalendarPanel({
   onUpdate,
   onRemove,
   onSelectWork,
+  onRequestLeave,
+  onUpdateLeave,
+  onWithdrawLeave,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -42,11 +57,16 @@ export default function MyCalendarPanel({
   onUpdate: (id: string, patch: Partial<PersonalEventInput>) => void
   onRemove: (id: string) => void
   onSelectWork: (issueId: string) => void
+  onRequestLeave: (input: LeaveInput) => boolean
+  onUpdateLeave: (id: string, input: LeaveInput) => boolean
+  onWithdrawLeave: (id: string) => void
 }) {
   const meId = directoryPersonFor(state.model, actor)?.id ?? null
   const [monthIso, setMonthIso] = useState(today.slice(0, 10))
   const [dayIso, setDayIso] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  /** 'new' for a fresh request; a commitment id when editing an existing one. */
+  const [leaveEditing, setLeaveEditing] = useState<string | null>(null)
 
   const month = useMemo(() => myCalendarMonth(state, meId, monthIso), [state, meId, monthIso])
   const monthKey = month.monthStart.slice(0, 7)
@@ -97,12 +117,17 @@ export default function MyCalendarPanel({
           </div>
           <span className="cal-month">{monthName}</span>
           <span className="grow" />
+          <button className="btn" onClick={() => setLeaveEditing('new')}>
+            Request leave
+          </button>
           <button className="btn primary" onClick={() => setEditingId('new')}>
             Add event
           </button>
         </div>
         <div className="board-sub sentence">
-          Private to you — nobody else, including an administrator, can see this.
+          Private to you — nobody else, including an administrator, can see this. Leave is the
+          one exception: its dates are visible to the firm&rsquo;s planners because they move
+          availability; its reason stays private to you and leave approvers.
         </div>
 
         <div className="cal-body">
@@ -142,9 +167,32 @@ export default function MyCalendarPanel({
                   {dayIso} · {dayEntries.length} {dayEntries.length === 1 ? 'item' : 'items'}
                 </h3>
                 {!dayEntries.length && <p className="board-lane-empty">Nothing on this day.</p>}
-                {dayEntries.map((e) => (
-                  <EntryRow key={e.id} entry={e} onSelectWork={onSelectWork} onEdit={setEditingId} onRemove={onRemove} />
-                ))}
+                {dayEntries.map((e) => {
+                  // Own leave is manageable here — the grid only ever holds the viewer's rows,
+                  // so a commitment entry that resolves to a Leave row is theirs to act on.
+                  const leave = e.kind === 'commitment' ? state.commitments[e.id] : undefined
+                  return leave && leave.kind === 'Leave' ? (
+                    <div key={e.id} className="board-card">
+                      <span className="board-card-name">
+                        Leave {leave.startDate} → {leave.endDate} · {leave.hoursPerDay}h/day
+                      </span>
+                      <span className="prov">
+                        {leave.status ?? 'Approved'}
+                        {leave.status === 'Returned' && ' — edit the dates to ask again, or withdraw it'}
+                      </span>
+                      <span className="board-card-meta">
+                        <button className="btn-link" onClick={() => setLeaveEditing(leave.id)}>
+                          Edit
+                        </button>
+                        <button className="btn-link" onClick={() => onWithdrawLeave(leave.id)}>
+                          Withdraw
+                        </button>
+                      </span>
+                    </div>
+                  ) : (
+                    <EntryRow key={e.id} entry={e} onSelectWork={onSelectWork} onEdit={setEditingId} onRemove={onRemove} />
+                  )
+                })}
               </>
             ) : (
               <>
@@ -179,6 +227,111 @@ export default function MyCalendarPanel({
           onClose={() => setEditingId(null)}
         />
       )}
+
+      {leaveEditing && (
+        <LeaveForm
+          existing={leaveEditing !== 'new' ? state.commitments[leaveEditing] : undefined}
+          defaultDate={dayIso ?? today}
+          defaultHours={
+            profileAt(Object.values(state.versions), state.model.resourceProfiles, meId ?? '', today)?.hoursPerDay ?? 7.5
+          }
+          onSave={(input) => {
+            const saved = leaveEditing === 'new' ? onRequestLeave(input) : onUpdateLeave(leaveEditing, input)
+            if (saved) setLeaveEditing(null)
+          }}
+          onClose={() => setLeaveEditing(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function LeaveForm({
+  existing,
+  defaultDate,
+  defaultHours,
+  onSave,
+  onClose,
+}: {
+  existing?: Commitment
+  defaultDate: string
+  defaultHours: number
+  onSave: (input: LeaveInput) => void
+  onClose: () => void
+}) {
+  const [startDate, setStartDate] = useState(existing?.startDate ?? defaultDate)
+  const [endDate, setEndDate] = useState(existing?.endDate ?? defaultDate)
+  const [hoursPerDay, setHours] = useState(String(existing?.hoursPerDay ?? defaultHours))
+  const [reason, setReason] = useState(existing?.reason ?? '')
+  const [note, setNote] = useState(existing?.note ?? '')
+  const valid = Boolean(startDate && endDate && endDate >= startDate && Number(hoursPerDay) > 0)
+  const reopens = Boolean(existing && (existing.status ?? 'Approved') !== 'Requested')
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal via the Cancel button
+    <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-label={existing ? 'Edit leave request' : 'Request leave'}>
+        <div className="modal-head">
+          <b>{existing ? 'Edit leave request' : 'Request leave'}</b>
+          <span className="grow" />
+          <button className="btn ghost" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="prov">
+            Your request lands with the leave approvers to decide. The dates are visible to the
+            firm&rsquo;s planners because they move availability; the reason below is private to
+            you and leave approvers.
+          </p>
+          {reopens && (
+            <p className="prov">
+              This request was already decided — changing its dates or hours re-opens it for a
+              fresh decision.
+            </p>
+          )}
+          <label className="fld">
+            <span className="fld-label">First day</span>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} autoFocus />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Last day</span>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Hours per day</span>
+            <input type="number" min="0.5" step="0.5" value={hoursPerDay} onChange={(e) => setHours(e.target.value)} />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Why (private)</span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Optional — only you and leave approvers see this" />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Note</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional — visible like any commitment note" />
+          </label>
+          <div className="time-row">
+            <button
+              className="btn primary"
+              disabled={!valid}
+              onClick={() =>
+                onSave({
+                  startDate,
+                  endDate,
+                  hoursPerDay: Number(hoursPerDay),
+                  reason: reason.trim() || undefined,
+                  note,
+                })
+              }
+            >
+              {existing ? 'Save' : 'Request'}
+            </button>
+            <button className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
