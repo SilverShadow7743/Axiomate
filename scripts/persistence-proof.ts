@@ -402,6 +402,36 @@ async function main() {
     reqWrote.ok && reqRow?.status === 'Requested' && reqRow?.reason === 'Proof reason — private.',
     reqRow ? `status=${reqRow.status} reason=${JSON.stringify(reqRow.reason)}` : (reqWrote.error ?? 'missing'),
   )
+
+  /* E2: the decision itself must survive. decideLeave had NO case in the persist writer until
+     the live check watched a Returned stamp evaporate on reload — the arm changed state, the
+     writer's default arm wrote nothing, and no screen could reach it to notice. A second
+     approver returns Priya's request; the reload must show the stamp AND the leave-decided
+     notification the arm now mints to her — note carried, private reason absent. */
+  const decideWrote = reqRow
+    ? await persistActions(TENANT, A, [
+        { t: 'decideLeave', id: reqRow.id, decision: 'returned', note: 'Proof note — pick another week.', now: NOW } as Action,
+      ])
+    : { ok: false, error: 'no request row to decide' }
+  const decidedState = (await loadWorkspace(TENANT)).state
+  const decidedRow = reqRow ? decidedState.commitments[reqRow.id] : undefined
+  // The RETURNED one specifically — the fixture's approver-records-other flow above also
+  // mints (and persists) a leave-decided row, which is its own quiet proof of the upsert mint.
+  const decidedNote = Object.values(decidedState.notifications).find(
+    (n) => n.ruleId === 'leave-decided' && /returned/.test(n.body),
+  )
+  check(
+    'a leave decision survives Postgres — the arm that had no persist case now has one',
+    decideWrote.ok && decidedRow?.status === 'Returned',
+    decidedRow ? `status=${decidedRow.status}` : ((decideWrote as { error?: string }).error ?? 'missing'),
+  )
+  check(
+    "and the subject's leave-decided notification lands with it, note carried, reason absent",
+    decidedNote != null &&
+      /Proof note — pick another week/.test(decidedNote.body) &&
+      !/Proof reason/.test(decidedNote.subject + decidedNote.body),
+    decidedNote ? `${decidedNote.ruleId} to ${decidedNote.to}: ${decidedNote.body.slice(0, 70)}` : 'no notification row survived',
+  )
   check(
     'an allocation and a commitment keep their dates',
     allocation?.startDate === '2026-09-01' && commitment?.startDate === '2026-09-07' && commitment.hoursPerDay === 7.5,

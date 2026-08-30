@@ -521,7 +521,13 @@ export async function persistSteps(
     }
 
     case 'upsertCommitment':
-    case 'removeCommitment': {
+    case 'removeCommitment':
+    case 'decideLeave': {
+      // decideLeave was MISSING from this switch until E2's live check found its decision
+      // evaporating on reload — the arm changed state, the default arm wrote nothing, and no
+      // screen could reach it to notice (E1 shipped the arm with no surface). The commitment
+      // loop covers all three; the notification diff carries the approval traffic the arms
+      // now mint (leave-requested to the holders, leave-decided to the subject).
       for (const [id, c] of Object.entries(after.commitments)) {
         if (before.commitments[id] === c) continue
         const row = commitmentToRow(tenantId, c)
@@ -531,6 +537,7 @@ export async function persistSteps(
           update: row,
         })
       }
+      await persistNotificationDiff(tx, tenantId, before, after)
       return
     }
 
@@ -567,6 +574,8 @@ export async function persistSteps(
           update: row,
         })
       }
+      // The E2 mints: submitted to the deciders, decided to the submitter.
+      await persistNotificationDiff(tx, tenantId, before, after)
       return
     }
 

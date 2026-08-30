@@ -302,7 +302,6 @@ model Issue {
   estimate          IssueEstimate?
   timeEntries       TimeEntry[]
   approvals         Approval[]
-  notifications     Notification[]
   notes             IssueNote[]
 
   deletedAt DateTime?
@@ -827,9 +826,12 @@ model Notification {
   subject String @db.Text
   body    String @db.Text
 
-  /// The record it is about.
+  /// The record it is about — an issue, a commitment (leave), or a timesheet. A reference,
+  /// not a foreign key, since E2: approval traffic is about records that are not issues, and
+  /// the old issue FK refused the first leave-requested row it met. Deletion hygiene is
+  /// unaffected — nothing hard-deletes issues outside the proof harness, which removes
+  /// notifications explicitly.
   aboutId String
-  issue   Issue  @relation(fields: [tenantId, aboutId], references: [tenantId, id], onDelete: Cascade)
   /// Which rule raised it, so a noisy rule can be found and switched off.
   ruleId  String
 
