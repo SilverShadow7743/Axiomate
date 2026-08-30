@@ -4,7 +4,11 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
 import { profileAt, type Commitment } from '@/lib/capacity'
+import { holidaySetOf } from '@/lib/config'
+import { addDays } from '@/lib/dates'
 import { myCalendarMonth, type MyCalendarEntry } from '@/lib/myCalendar'
+import type { Meeting } from '@/lib/meetings'
+import { suggestDays } from '@/lib/scheduling'
 import type { WorkspaceState } from '@/lib/workspace'
 
 export interface PersonalEventInput {
@@ -22,6 +26,14 @@ export interface LeaveInput {
   hoursPerDay: number
   /** Private to the subject and the leave.approve holders — never in any notification body. */
   reason?: string
+  note: string
+}
+
+export interface MeetingInput {
+  title: string
+  startAt: string
+  endAt: string
+  attendeeIds: string[]
   note: string
 }
 
@@ -49,6 +61,8 @@ export default function MyCalendarPanel({
   onRequestLeave,
   onUpdateLeave,
   onWithdrawLeave,
+  onUpsertMeeting,
+  onCancelMeeting,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -60,6 +74,8 @@ export default function MyCalendarPanel({
   onRequestLeave: (input: LeaveInput) => boolean
   onUpdateLeave: (id: string, input: LeaveInput) => boolean
   onWithdrawLeave: (id: string) => void
+  onUpsertMeeting: (id: string | null, input: MeetingInput) => boolean
+  onCancelMeeting: (id: string) => void
 }) {
   const meId = directoryPersonFor(state.model, actor)?.id ?? null
   const [monthIso, setMonthIso] = useState(today.slice(0, 10))
@@ -67,6 +83,8 @@ export default function MyCalendarPanel({
   const [editingId, setEditingId] = useState<string | null>(null)
   /** 'new' for a fresh request; a commitment id when editing an existing one. */
   const [leaveEditing, setLeaveEditing] = useState<string | null>(null)
+  /** 'new' for a fresh booking; a meeting id when the organizer edits one. */
+  const [meetingEditing, setMeetingEditing] = useState<string | null>(null)
 
   const month = useMemo(() => myCalendarMonth(state, meId, monthIso), [state, meId, monthIso])
   const monthKey = month.monthStart.slice(0, 7)
@@ -117,6 +135,9 @@ export default function MyCalendarPanel({
           </div>
           <span className="cal-month">{monthName}</span>
           <span className="grow" />
+          <button className="btn" onClick={() => setMeetingEditing('new')}>
+            Add meeting
+          </button>
           <button className="btn" onClick={() => setLeaveEditing('new')}>
             Request leave
           </button>
@@ -125,9 +146,10 @@ export default function MyCalendarPanel({
           </button>
         </div>
         <div className="board-sub sentence">
-          Private to you — nobody else, including an administrator, can see this. Leave is the
-          one exception: its dates are visible to the firm&rsquo;s planners because they move
-          availability; its reason stays private to you and leave approvers.
+          Private to you — nobody else, including an administrator, can see this. Two stated
+          exceptions: leave&rsquo;s dates are visible to the firm&rsquo;s planners (its reason
+          stays private to you and leave approvers), and meetings are visible to everyone
+          invited to them.
         </div>
 
         <div className="cal-body">
@@ -168,6 +190,32 @@ export default function MyCalendarPanel({
                 </h3>
                 {!dayEntries.length && <p className="board-lane-empty">Nothing on this day.</p>}
                 {dayEntries.map((e) => {
+                  // A meeting shows its people; the organizer can move or cancel it here.
+                  const meeting = e.kind === 'meeting' ? state.meetings[e.id] : undefined
+                  if (meeting) {
+                    const organizes = Boolean(meId) && (meeting.organizerId ? meeting.organizerId === meId : false)
+                    return (
+                      <div key={e.id} className="board-card">
+                        <span className="board-card-name">
+                          {meeting.title} · {meeting.startAt.slice(11, 16)}–{meeting.endAt.slice(11, 16)}
+                        </span>
+                        <span className="prov">
+                          {meeting.attendeeIds.map((pid) => state.model.people[pid]?.name ?? pid).join(', ')}
+                          {' · '}organized by {meeting.organizer}
+                        </span>
+                        {organizes && (
+                          <span className="board-card-meta">
+                            <button className="btn-link" onClick={() => setMeetingEditing(meeting.id)}>
+                              Edit
+                            </button>
+                            <button className="btn-link" onClick={() => onCancelMeeting(meeting.id)}>
+                              Cancel meeting
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    )
+                  }
                   // Own leave is manageable here — the grid only ever holds the viewer's rows,
                   // so a commitment entry that resolves to a Leave row is theirs to act on.
                   const leave = e.kind === 'commitment' ? state.commitments[e.id] : undefined
@@ -225,6 +273,21 @@ export default function MyCalendarPanel({
             }
           }}
           onClose={() => setEditingId(null)}
+        />
+      )}
+
+      {meetingEditing && (
+        <MeetingForm
+          state={state}
+          existing={meetingEditing !== 'new' ? state.meetings[meetingEditing] : undefined}
+          defaultDate={dayIso ?? today}
+          meId={meId}
+          onSave={(input) => {
+            if (onUpsertMeeting(meetingEditing === 'new' ? null : meetingEditing, input)) {
+              setMeetingEditing(null)
+            }
+          }}
+          onClose={() => setMeetingEditing(null)}
         />
       )}
 
@@ -346,6 +409,8 @@ function entryLabel(e: MyCalendarEntry): string {
       return e.label
     case 'work':
       return e.title
+    case 'meeting':
+      return e.title
   }
 }
 
@@ -379,6 +444,15 @@ function EntryRow({
             Remove
           </button>
         </span>
+      </div>
+    )
+  }
+  // Meetings never reach this row — the rail renders them inline with organizer controls —
+  // but the union says they could, and a stray one showing its title beats a crash.
+  if (entry.kind === 'meeting') {
+    return (
+      <div className="board-card">
+        <span className="board-card-name">{entry.title}</span>
       </div>
     )
   }
@@ -461,6 +535,155 @@ function EventForm({
               }
             >
               Save
+            </button>
+            <button className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MeetingForm({
+  state,
+  existing,
+  defaultDate,
+  meId,
+  onSave,
+  onClose,
+}: {
+  state: WorkspaceState
+  existing?: Meeting
+  defaultDate: string
+  meId: string | null
+  onSave: (input: MeetingInput) => void
+  onClose: () => void
+}) {
+  const [title, setTitle] = useState(existing?.title ?? '')
+  const [date, setDate] = useState(existing?.startAt.slice(0, 10) ?? defaultDate)
+  const [startTime, setStartTime] = useState(existing?.startAt.slice(11, 16) ?? '09:00')
+  const [endTime, setEndTime] = useState(existing?.endAt.slice(11, 16) ?? '10:00')
+  // The organizer is defaulted INTO the list — the record believes the list, not the role.
+  const [attendeeIds, setAttendeeIds] = useState<string[]>(
+    existing?.attendeeIds ?? (meId ? [meId] : []),
+  )
+  const [note, setNote] = useState(existing?.note ?? '')
+  const [suggestions, setSuggestions] = useState<ReturnType<typeof suggestDays> | null>(null)
+
+  const people = Object.values(state.model.people).sort((a, b) => a.name.localeCompare(b.name))
+  const durationHours =
+    Math.max(0, (Date.parse(`${date}T${endTime}:00Z`) - Date.parse(`${date}T${startTime}:00Z`)) / 3600000) || 1
+  const valid = Boolean(title.trim() && date && startTime && endTime && endTime > startTime && attendeeIds.length)
+
+  const toggle = (pid: string) =>
+    setAttendeeIds((cur) => (cur.includes(pid) ? cur.filter((x) => x !== pid) : [...cur, pid]))
+
+  const suggest = () => {
+    setSuggestions(
+      suggestDays({
+        attendeeIds,
+        durationHours,
+        from: date,
+        to: addDays(date, 13),
+        meetings: Object.values(state.meetings),
+        commitments: Object.values(state.commitments),
+        holidays: holidaySetOf(state.model),
+        profiles: state.model.resourceProfiles,
+        nameOf: Object.fromEntries(Object.values(state.model.people).map((p) => [p.id, p.name])),
+      }),
+    )
+  }
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal via the Cancel button
+    <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-label={existing ? 'Edit meeting' : 'Add meeting'}>
+        <div className="modal-head">
+          <b>{existing ? 'Edit meeting' : 'Add meeting'}</b>
+          <span className="grow" />
+          <button className="btn ghost" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          <label className="fld">
+            <span className="fld-label">Title</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Date</span>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <label className="fld">
+            <span className="fld-label">Start</span>
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </label>
+          <label className="fld">
+            <span className="fld-label">End</span>
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          </label>
+          <div className="fld">
+            <span className="fld-label">Attendees</span>
+            <div className="cfg-card" style={{ maxHeight: 140, overflowY: 'auto' }}>
+              {people.map((p) => (
+                <label key={p.id} className="cfg-check" style={{ display: 'block' }}>
+                  <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={() => toggle(p.id)} />{' '}
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="fld">
+            <span className="fld-label">Note</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+          </label>
+
+          <div className="time-row">
+            <button className="btn ghost" disabled={!attendeeIds.length} onClick={suggest}>
+              Suggest a day
+            </button>
+            <span className="prov">
+              checks the next two weeks for {durationHours}h everyone can clear
+            </span>
+          </div>
+          {suggestions && (
+            <div className="cfg-card">
+              {suggestions.filter((s) => s.ok).length === 0 && (
+                <p className="prov">
+                  No day in the next two weeks clears {durationHours}h for everyone — an honest
+                  answer, not a forced pick.
+                </p>
+              )}
+              {suggestions.slice(0, 10).map((s) => (
+                <div key={s.date} className="time-row">
+                  <button className="btn-link" disabled={!s.ok} onClick={() => { setDate(s.date); setSuggestions(null) }}>
+                    {s.date}
+                  </button>
+                  <span className="prov">
+                    {s.ok ? (s.caveats.length ? s.caveats.join('; ') : 'everyone clear') : s.blockers.join('; ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="time-row">
+            <button
+              className="btn primary"
+              disabled={!valid}
+              onClick={() =>
+                onSave({
+                  title,
+                  startAt: `${date}T${startTime}:00.000Z`,
+                  endAt: `${date}T${endTime}:00.000Z`,
+                  attendeeIds,
+                  note,
+                })
+              }
+            >
+              {existing ? 'Save' : 'Book'}
             </button>
             <button className="btn ghost" onClick={onClose}>
               Cancel

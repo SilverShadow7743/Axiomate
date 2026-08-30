@@ -1926,6 +1926,8 @@ export default function IssueWorkspace({
               setView('timesheet')
               return
             }
+            // A meeting lives on My calendar, whatever record it is about.
+            if (n.ruleId.startsWith('meeting-')) { setView('mycalendar'); return }
             // A discussion's aboutId is its scope — an issue OR a project node, and both are
             // tree rows, so revealIssue reaches either; the Discussion tab exists on both.
             if (n.ruleId === 'discussion-message') {
@@ -2160,7 +2162,9 @@ export default function IssueWorkspace({
           }}
           onOpen={(issueId, n) => {
             // Same routing as the toolbar bell above: approval traffic goes to its surface,
-            // a discussion click to its scope's Discussion tab (issue or project row alike).
+            // a discussion click to its scope's Discussion tab (issue or project row alike),
+            // a meeting to My calendar.
+            if (n.ruleId.startsWith('meeting-')) { setView('mycalendar'); return }
             if (n.ruleId === 'leave-decided') { setView('mycalendar'); return }
             if (n.ruleId === 'leave-requested' || n.ruleId === 'timesheet-submitted' || n.ruleId === 'timesheet-decided') {
               setView('timesheet')
@@ -2210,6 +2214,13 @@ export default function IssueWorkspace({
             })
           }
           onWithdrawLeave={(id) => dispatch({ t: 'removeCommitment', id, now: new Date().toISOString() })}
+          onUpsertMeeting={(id, input) =>
+            dispatch({
+              t: 'upsertMeeting', id, title: input.title, startAt: input.startAt, endAt: input.endAt,
+              attendeeIds: input.attendeeIds, note: input.note, now: new Date().toISOString(),
+            })
+          }
+          onCancelMeeting={(id) => dispatch({ t: 'cancelMeeting', id, now: new Date().toISOString() })}
         />
       ) : view === 'mail' ? (
         <MailLog state={state} />

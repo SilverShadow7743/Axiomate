@@ -20,6 +20,8 @@ export type MyCalendarEntry =
   | { kind: 'commitment'; id: string; label: string; date: string }
   | { kind: 'allocation'; id: string; label: string; date: string }
   | { kind: 'work'; id: string; issueId: string; title: string; date: string }
+  /** E4 — a meeting the person attends or organizes; times ride along for the chip. */
+  | { kind: 'meeting'; id: string; title: string; date: string; startAt: string; endAt: string }
 
 export interface MyCalendarDay {
   date: string
@@ -92,6 +94,16 @@ export function myCalendarMonth(
               : c.kind,
         date: d,
       })
+    }
+  }
+
+  // E4: meetings the person attends or organizes — visible to every attendee, unlike the
+  // private events above; the same id-first membership the engine's own attends() uses.
+  for (const m of Object.values(state.meetings)) {
+    if (m.deletedAt) continue
+    if (!(personId && (m.attendeeIds.includes(personId) || m.organizerId === personId))) continue
+    for (const d of daysOf(m.startAt.slice(0, 10), m.endAt.slice(0, 10))) {
+      push(d, { kind: 'meeting', id: m.id, title: `${m.startAt.slice(11, 16)} ${m.title}`, date: d, startAt: m.startAt, endAt: m.endAt })
     }
   }
 

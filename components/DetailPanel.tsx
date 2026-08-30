@@ -765,10 +765,30 @@ export default function DetailPanel({
                     allocations: Object.values(state.allocations),
                     today,
                     holidays: holidaySetOf(state.model),
+                    // E4: the owner's meetings now price into the same sentence.
+                    meetings: Object.values(state.meetings),
                   }),
                   issue.owner,
                 )}
               </dd>
+              {/* E4: meetings booked about this record, read-only — booking lives on My
+                  calendar. Rendered only when any exist, so the list is never dead space. */}
+              {Object.values(state.meetings).some((m) => !m.deletedAt && m.scopeId === issue.id) && (
+                <>
+                  <dt>Meetings</dt>
+                  <dd>
+                    {Object.values(state.meetings)
+                      .filter((m) => !m.deletedAt && m.scopeId === issue.id)
+                      .sort((x, y) => x.startAt.localeCompare(y.startAt))
+                      .map((m) => (
+                        <div key={m.id}>
+                          {formatIso(m.startAt.slice(0, 10))} {m.startAt.slice(11, 16)}–{m.endAt.slice(11, 16)} · {m.title} ·{' '}
+                          {m.attendeeIds.map((pid) => state.model.people[pid]?.name ?? pid).join(', ')}
+                        </div>
+                      ))}
+                  </dd>
+                </>
+              )}
             </dl>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <dl className="kv">
