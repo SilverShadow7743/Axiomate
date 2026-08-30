@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "mode": "para",
+  "configured_at": "2026-08-30T16:03:40Z",
+  "config": {
+    "lyt": {
+      "moc_folder": "wiki/mocs/",
+      "notes_folder": "wiki/notes/"
+    },
+    "para": {
+      "projects_folder": "wiki/projects/",
+      "areas_folder": "wiki/areas/",
+      "resources_folder": "wiki/resources/",
+      "archives_folder": "wiki/archives/"
+    },
+    "zettelkasten": {
+      "id_format": "YYYYMMDDHHMMSSffffff",
+      "no_folders": true,
+      "root_folder": "wiki/"
+    },
+    "generic": {
+      "sources_folder": "wiki/sources/",
+      "entities_folder": "wiki/entities/",
+      "concepts_folder": "wiki/concepts/",
+      "sessions_folder": "wiki/sessions/"
+    }
+  }
+}
