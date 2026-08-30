@@ -304,6 +304,7 @@ async function main() {
     { t: 'link', sourceIssueId: 'PROOF-2', targetIssueId: 'PROOF-1', relationshipType: 'Duplicate of', note: '', now: NOW },
     { t: 'buildLifecycle', issueId: 'PROOF-2', slaDays: 5, now: NOW },
     { t: 'config', op: { k: 'setSla', patch: { High: 3 } }, now: NOW },
+    { t: 'upsertSavedView', view: { name: 'Proof view', filters: { status: 'Open', client: 'OAPIL' }, view: 'board' }, now: NOW },
   ]
   const wrote = await persistActions(TENANT, A, batch)
   check('a batch across every table applies', wrote.ok, wrote.error ?? `${wrote.audited} audit rows`)
@@ -316,6 +317,13 @@ async function main() {
     'a note keeps its text exactly, quotes and newline included',
     (note ? richTextToPlainText(note.body) : null) === 'Note with “smart quotes”, an em—dash and a\nnewline.' && note.pinned === true,
     note ? `pinned=${note.pinned}` : 'no note',
+  )
+
+  const savedView = state.model.savedViews.find((v) => v.name === 'Proof view')
+  check(
+    'a saved view survives with its filters parsed and its creator stamped',
+    savedView != null && savedView.filters.status === 'Open' && savedView.view === 'board' && savedView.createdBy.length > 0,
+    savedView ? `${savedView.id} by ${savedView.createdBy}` : 'no saved view',
   )
 
   const entry = Object.values(state.timeEntries)[0]

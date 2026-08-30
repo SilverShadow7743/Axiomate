@@ -897,10 +897,12 @@ export async function persistSteps(
       return
     }
 
-    // The one non-config action that writes the model: a person's own preference lives
-    // in the operating-model document, and a pref that vanished on reload would be worse
-    // than none.
+    // The non-config actions that write the model: a person's own preference and the
+    // team's saved views live in the operating-model document, and either vanishing on
+    // reload would be worse than none.
     case 'setNotificationPref':
+    case 'upsertSavedView':
+    case 'deleteSavedView':
     case 'config':
       await tx.operatingModel.upsert({
         where: { tenantId },

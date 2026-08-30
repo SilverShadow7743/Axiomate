@@ -136,6 +136,7 @@ import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
 import type { ReportDeliveryConfig } from './reports/delivery'
+import { parseSavedFilters, parseWorkspaceView, type SavedView } from './savedViews'
 import {
   diffObservations,
   eventTypeFor,
@@ -1156,6 +1157,9 @@ export type Action =
     }
   | { t: 'markNotificationRead'; id: string; now: string }
   | { t: 'setNotificationPref'; personId: string; kind: NotificationKind; mode: NotificationMode; now: string }
+  /** Save or update a shared view — filters + tab under a name. See `lib/savedViews.ts`. */
+  | { t: 'upsertSavedView'; view: { id?: string | null; name: string; filters: unknown; view: unknown }; now: string }
+  | { t: 'deleteSavedView'; id: string; now: string }
   /** The drain stamping what actually happened to a queued message. Server-internal, like `notify`. */
   | { t: 'markNotificationDelivery'; id: string; delivery: Delivery; note: string; now: string }
   /**
@@ -5624,6 +5628,70 @@ Question: ${review.question}`),
             reason: a.ruleId,
           }),
         },
+      }
+    }
+
+    case 'upsertSavedView': {
+      const name = a.view.name?.trim()
+      if (!name) return { state, error: 'A view needs a name.' }
+      const existing = a.view.id ? state.model.savedViews.find((v) => v.id === a.view.id) : undefined
+      if (a.view.id && !existing) return { state, error: 'That view no longer exists.' }
+      /*
+       * Ownership in the arm, like note authorship and preferences: the view is shared, but
+       * rewriting somebody else's is a supervisor act.
+       */
+      if (existing && existing.createdBy !== by && !can(state.model, actor, 'config.manage').allowed) {
+        return { state, error: `“${existing.name}” was saved by ${existing.createdBy}. Changing it needs “Configure the platform”.` }
+      }
+      const filters = parseSavedFilters(a.view.filters)
+      const viewTab = parseWorkspaceView(a.view.view)
+      const seq = existing ? state.seq : state.seq + 1
+      const rec: SavedView = existing
+        ? { ...existing, name, filters, view: viewTab }
+        : { id: `view-${seq}`, name, filters, view: viewTab, createdBy: by, createdAt: a.now }
+      return {
+        state: {
+          ...state,
+          seq,
+          model: {
+            ...state.model,
+            savedViews: existing
+              ? state.model.savedViews.map((v) => (v.id === rec.id ? rec : v))
+              : [...state.model.savedViews, rec],
+          },
+          audit: log(actor, state, {
+            rowId: 'VIEWS',
+            field: 'savedView',
+            from: existing?.name ?? '',
+            to: name,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `View “${name}” saved for everyone.`,
+      }
+    }
+
+    case 'deleteSavedView': {
+      const view = state.model.savedViews.find((v) => v.id === a.id)
+      if (!view) return { state, error: 'That view no longer exists.' }
+      if (view.createdBy !== by && !can(state.model, actor, 'config.manage').allowed) {
+        return { state, error: `“${view.name}” was saved by ${view.createdBy}. Removing it needs “Configure the platform”.` }
+      }
+      return {
+        state: {
+          ...state,
+          model: { ...state.model, savedViews: state.model.savedViews.filter((v) => v.id !== a.id) },
+          audit: log(actor, state, {
+            rowId: 'VIEWS',
+            field: 'savedView',
+            from: view.name,
+            to: '',
+            at: a.now,
+            by,
+          }),
+        },
+        message: `View “${view.name}” removed.`,
       }
     }
 

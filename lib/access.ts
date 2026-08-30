@@ -602,6 +602,9 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   markNotificationRead: null,
   // Self-or-admin, decided in the arm — only it knows whose preferences these are.
   setNotificationPref: null,
+  // Any delivery seat may save a shared view; the ARM enforces creator-or-admin on rewrites.
+  upsertSavedView: 'work.edit',
+  deleteSavedView: 'work.edit',
   // Self-or-admin, decided in the arm — the same shape as setNotificationPref, for grade/track/
   // developingToward instead of a notification preference.
   updateCareerProfile: null,

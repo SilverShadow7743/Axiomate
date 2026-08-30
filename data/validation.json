@@ -433,6 +433,16 @@
       "impact": "Search reaches everything the reader may see and structurally nothing else — the property the design exists for, now executable."
     },
     {
+      "id": "SV1",
+      "title": "A saved view is the team's, survives a filter-shape change, and honours its creator",
+      "expected": "The saved-views arms driven end to end: a delivery seat saves a named view (stored with creator + audit line); an empty name refuses; junk filters in the payload parse fail-closed to defaults; another actor's rewrite and delete refuse without config.manage and succeed with it; delete removes. Apply is pure client state and has nothing to drive.",
+      "verdict": "PASS",
+      "actual": "Priya's view stores trimmed, creator-stamped and audited, with the junk key dropped and the mistyped boolean defaulted; a blank name refuses; Sam's rewrite and delete both bounce naming the grant while the admin's rewrite lands; Priya's own delete empties the list.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Views are team records with ownership, not browser state — the level above Hive the design named."
+    },
+    {
       "id": "AU1",
       "title": "Every meaningful change answers who, what, when, before, after and why",
       "expected": "The trail is complete enough to defend a decision months later.",

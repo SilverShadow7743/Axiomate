@@ -2243,6 +2243,59 @@ scenario(
   },
 )
 
+scenario(
+  'SV1',
+  "A saved view is the team's, survives a filter-shape change, and honours its creator",
+  "The saved-views arms driven end to end: a delivery seat saves a named view (stored with creator + audit line); an empty name refuses; junk filters in the payload parse fail-closed to defaults; another actor's rewrite and delete refuse without config.manage and succeed with it; delete removes. Apply is pure client state and has nothing to drive.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? 'P?'
+    const samId0 = Object.values(BASE.model.people).find((p) => p.name === 'Sam')?.id ?? 'S?'
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    /* Real roles, or the roleless-actor ADMIN fallback grants everything and the ownership
+     * rule is never exercised — the E4B lesson, applied here from the start. */
+    let staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    staffed = ok(staffed, { t: 'config', op: { k: 'upsertPerson', id: samId0, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+
+    const saved = apply(staffed, {
+      t: 'upsertSavedView',
+      view: { name: '  My open OAPIL  ', filters: { status: 'Open', client: 'OAPIL', bogusKey: 'x', showCompleted: 'not-a-bool' }, view: 'board' },
+      now: NOW,
+    } as Action, priya)
+    const rec = saved.state.model.savedViews[0]
+    const stored =
+      !saved.error && rec != null && rec.name === 'My open OAPIL' && rec.view === 'board' &&
+      rec.createdBy === 'Priya' && rec.filters.status === 'Open' && rec.filters.client === 'OAPIL'
+    /* Fail-closed: the unknown key vanished, the mistyped boolean fell back to the default. */
+    const failClosed = rec != null && !('bogusKey' in rec.filters) && rec.filters.showCompleted === false
+    const audited = saved.state.audit.some((e) => e.field === 'savedView' && e.to === 'My open OAPIL')
+
+    const unnamed = apply(staffed, { t: 'upsertSavedView', view: { name: '   ', filters: {}, view: 'tree' }, now: NOW } as Action, priya)
+    const nameRequired = Boolean(unnamed.error)
+
+    /* Sam holds delivery roles in scenarios via the validator actor A; drive ownership with a
+     * distinct named actor whose rewrite must bounce. */
+    const sam: Actor = { id: samId0, name: 'Sam' }
+    const rewrite = apply(saved.state, {
+      t: 'upsertSavedView', view: { id: rec?.id, name: 'Hijacked', filters: {}, view: 'tree' }, now: NOW,
+    } as Action, sam)
+    const rewriteBounces = Boolean(rewrite.error) && /Configure the platform/.test(rewrite.error ?? '')
+    const adminRewrite = apply(saved.state, {
+      t: 'upsertSavedView', view: { id: rec?.id, name: 'Renamed by admin', filters: {}, view: 'tree' }, now: NOW,
+    } as Action, A)
+    const adminMay = !adminRewrite.error && adminRewrite.state.model.savedViews[0]?.name === 'Renamed by admin'
+
+    const samDelete = apply(saved.state, { t: 'deleteSavedView', id: rec?.id ?? '', now: NOW } as Action, sam)
+    const deleteBounces = Boolean(samDelete.error)
+    const ownDelete = apply(saved.state, { t: 'deleteSavedView', id: rec?.id ?? '', now: NOW } as Action, priya)
+    const deleted = !ownDelete.error && ownDelete.state.model.savedViews.length === 0
+
+    const good = stored && failClosed && audited && nameRequired && rewriteBounces && adminMay && deleteBounces && deleted
+    return good
+      ? { verdict: 'PASS', actual: "Priya's view stores trimmed, creator-stamped and audited, with the junk key dropped and the mistyped boolean defaulted; a blank name refuses; Sam's rewrite and delete both bounce naming the grant while the admin's rewrite lands; Priya's own delete empties the list.", stops: '—', severity: '—', impact: 'Views are team records with ownership, not browser state — the level above Hive the design named.' } as const
+      : { verdict: 'FAIL', actual: `stored=${stored} failClosed=${failClosed} audited=${audited} nameRequired=${nameRequired} rewriteBounces=${rewriteBounces} (${(rewrite.error ?? '').slice(0, 60)}) adminMay=${adminMay} deleteBounces=${deleteBounces} deleted=${deleted}`, stops: 'at the arm — storage, parsing, ownership or the audit line is wrong', severity: 'P2', impact: 'shared views either rot, hijack, or vanish without a trace' } as const
+  },
+)
+
 /* ================================================================== *
  * 10 — Audit, AI, failure
  * ================================================================== */

@@ -36,6 +36,7 @@ import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
+import { parseSavedView, type SavedView } from './savedViews'
 import type { NotificationPrefs } from './notifications'
 import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
@@ -877,6 +878,8 @@ export interface OperatingModel {
   watch: WatchPolicy
   /** Which reports the pass emails, to whom. OFF by default — see `./reports/delivery`. */
   reportDelivery: ReportDeliveryConfig
+  /** The team's saved views — named filter+tab combinations, shared and audited. See `./savedViews`. */
+  savedViews: SavedView[]
   /**
    * How long a time entry may lag the work before it must explain itself.
    *
@@ -1266,6 +1269,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     resourceProfiles: {},
     watch: defaultWatchPolicy(),
     reportDelivery: { ...DEFAULT_REPORT_DELIVERY },
+    savedViews: [],
     timePolicy: { ...DEFAULT_TIME_POLICY },
     allocationPolicy: { ...DEFAULT_ALLOCATION_POLICY },
     notificationPrefs: {},
@@ -1627,6 +1631,11 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // existed has no `reportDelivery`, and the parse turns missing or junk into disabled —
     // never `undefined` (a crash in the pass) and never a guess that starts emailing.
     reportDelivery: parseReportDelivery(stored.reportDelivery),
+    // Explicit and re-validated per entry: a stored view from before a FilterState change
+    // loads with its filters parsed fail-closed; a malformed entry is dropped, not guessed.
+    savedViews: Array.isArray(stored.savedViews)
+      ? stored.savedViews.map(parseSavedView).filter((v): v is SavedView => v !== null)
+      : [],
     // Explicit like `sla`: a model stored before this key existed has no `timePolicy`, and
     // the spread above would leave it undefined — a crash the first time the addTime arm
     // reads the allowance, in production, on the workspace that has data.

@@ -602,6 +602,14 @@ const SHAPES = {
   decideApproval: { id: req(id), decision: req(oneOf(DECISIONS)), note: req(text), now },
   /* ---- NOTIFICATION ---- */
   markNotificationRead: { id: req(id), now },
+  upsertSavedView: {
+    view: req(plainObject),
+    now,
+  },
+  deleteSavedView: {
+    id: req(id),
+    now,
+  },
   setNotificationPref: {
     personId: req(id),
     kind: req(oneOf(new Set(NOTIFICATION_KINDS))),
