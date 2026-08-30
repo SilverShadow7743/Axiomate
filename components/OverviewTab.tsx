@@ -763,10 +763,14 @@ export default function OverviewTab({
               </dd>
             </>
           )}
-          <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
+          {/* Client only, since the classification became its own editable field below (E0
+              step 8a). This line used to show both with "not editable here" — true of the
+              client, which really does follow where the record sits, but a contradiction the
+              moment the classification grew its own control two rows down. */}
+          <dt>{labels.TIER_ORGANIZATION}</dt>
           <dd>
-            {issue.client} · {issue.module}
-            <span className="prov"> · not editable here; Move changes where the record sits</span>
+            {issue.client}
+            <span className="prov"> · follows where the record sits; Move changes it</span>
           </dd>
           <dt>Type</dt>
           <dd>
