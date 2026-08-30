@@ -209,6 +209,8 @@ export default function IssueWorkspace({
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
+  const [viewsMenu, setViewsMenu] = useState(false)
+  const [viewName, setViewName] = useState('')
   const [slaOpen, setSlaOpen] = useState(false)
   /** Which client pack is open for print, if any. */
   const [clientPack, setClientPack] = useState<{ kind: 'weekly' | 'monthly'; pack: WeeklyClientPack | MonthlyGovernancePack } | null>(null)
@@ -2025,6 +2027,80 @@ export default function IssueWorkspace({
             Assistant
           </button>
         )}
+        <div style={{ position: 'relative' }}>
+          <button className="btn" onClick={() => setViewsMenu((v) => !v)} aria-expanded={viewsMenu}>
+            Views ▾
+          </button>
+          {viewsMenu && (
+            <div className="menu" style={{ top: 30, right: 0, left: 'auto', minWidth: 280 }}>
+              <div className="menu-title">Saved views — shared with the team</div>
+              {state.model.savedViews.length === 0 && (
+                <p className="menu-sub" style={{ padding: '4px 12px' }}>
+                  None yet. Set your filters, then save what you see under a name.
+                </p>
+              )}
+              {state.model.savedViews.map((v) => (
+                <div key={v.id} className="menu-item" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    className="menu-item"
+                    style={{ flex: 1, padding: 0, border: 'none', background: 'none', textAlign: 'left' }}
+                    onClick={() => {
+                      setFilters(v.filters)
+                      setView(v.view)
+                      setViewsMenu(false)
+                    }}
+                  >
+                    {v.name}
+                    <span className="menu-sub">by {v.createdBy}</span>
+                  </button>
+                  {/* The reducer is the gate — this button is a courtesy, and a refused
+                      delete comes back as the teaching message. */}
+                  <button
+                    className="btn"
+                    aria-label={`Remove view ${v.name}`}
+                    onClick={() =>
+                      dispatch({ t: 'deleteSavedView', id: v.id, now: new Date().toISOString() })
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 6, padding: '6px 12px', borderTop: '1px solid var(--border)' }}>
+                <input
+                  value={viewName}
+                  placeholder="Save current view as…"
+                  onChange={(e) => setViewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && viewName.trim()) {
+                      dispatch({
+                        t: 'upsertSavedView',
+                        view: { name: viewName, filters, view },
+                        now: new Date().toISOString(),
+                      })
+                      setViewName('')
+                    }
+                  }}
+                  aria-label="Name for the saved view"
+                />
+                <button
+                  className="btn"
+                  disabled={!viewName.trim()}
+                  onClick={() => {
+                    dispatch({
+                      t: 'upsertSavedView',
+                      view: { name: viewName, filters, view },
+                      now: new Date().toISOString(),
+                    })
+                    setViewName('')
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <div ref={exportWrap} style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setExportMenu((v) => !v)} aria-expanded={exportMenu}>
             Export ▾
