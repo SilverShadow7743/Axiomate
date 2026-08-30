@@ -403,6 +403,16 @@
       "impact": "Anything sent to a client is assembled by hand, and internal notes are one copy-paste from the client."
     },
     {
+      "id": "RF1",
+      "title": "A finance timesheet report gathers approved hours and names what is missing",
+      "expected": "The finance report's four rules, driven: hours are included per person-WEEK only when that week's timesheet is Approved; an approved week straddling the period edge contributes only its in-range days; every non-approved person-week with in-range hours is a named exception (three wordings — not submitted, awaiting decision, rejected); and nothing money-, leave- or note-shaped survives serialization, pinned with planted sentinels rather than field-name checks.",
+      "verdict": "PASS",
+      "actual": "Only Priya's approved week reaches the summary — 3 billable + 2 non-billable, the Monday before the period clipped out of both summary and daily detail. The three non-approved person-weeks land as exceptions with their own wordings and hour counts. The serialized report carries none of the three planted sentinels (a rate amount, a leave reason, a note body), and an empty period says empty rather than producing rows.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Finance receives exactly the approved hours and an honest list of what is missing — never rates, reasons or notes."
+    },
+    {
       "id": "AU1",
       "title": "Every meaningful change answers who, what, when, before, after and why",
       "expected": "The trail is complete enough to defend a decision months later.",
@@ -418,7 +428,7 @@
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
       "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (16 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
+      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (18 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
       "stops": "at the autonomy fields — declared, unread",
       "severity": "P1",
       "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."

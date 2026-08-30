@@ -119,6 +119,7 @@ import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
+import { buildFinanceReport } from '../lib/reports/finance'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
 import {
   summarise,
@@ -1996,6 +1997,73 @@ scenario(
     severity: 'P1',
     impact: 'Anything sent to a client is assembled by hand, and internal notes are one copy-paste from the client.',
   }),
+)
+
+scenario(
+  'RF1',
+  'A finance timesheet report gathers approved hours and names what is missing',
+  "The finance report's four rules, driven: hours are included per person-WEEK only when that week's timesheet is Approved; an approved week straddling the period edge contributes only its in-range days; every non-approved person-week with in-range hours is a named exception (three wordings — not submitted, awaiting decision, rejected); and nothing money-, leave- or note-shaped survives serialization, pinned with planted sentinels rather than field-name checks.",
+  () => {
+    const RATE_SENTINEL = '77123.45'
+    const REASON_SENTINEL = 'SENTINEL-REASON-FIN'
+    const NOTE_SENTINEL = 'SENTINEL-NOTE-FIN'
+
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? null
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')?.id ?? null
+    const entry = (id: string, person: string, personId: string | null, date: string, hours: number, billable: boolean) =>
+      ({ id, issueId: 'OAPIL-1', person, personId, date, hours, activity: 'Resolution', billable, note: '', justification: null, createdBy: 'x', createdAt: 'x', updatedBy: null, updatedAt: null, deletedAt: null }) as never
+
+    /*
+     * Two weeks against a period of 2026-08-12..2026-08-23. Priya's first week is Approved but
+     * starts before the period — its Monday entry must be clipped out. Her second is Submitted,
+     * Sam's first has no sheet at all, and his second was Rejected: three exception wordings,
+     * one per non-approved state.
+     */
+    const st: WorkspaceState = {
+      ...BASE,
+      timeEntries: {
+        f1: entry('f1', 'Priya', priyaId, '2026-08-10', 4, true), // approved week, outside the period — must clip
+        f2: entry('f2', 'Priya', priyaId, '2026-08-12', 3, true),
+        f3: entry('f3', 'Priya', priyaId, '2026-08-14', 2, false),
+        f4: entry('f4', 'Priya', priyaId, '2026-08-18', 6, true), // submitted, not decided
+        f5: entry('f5', 'Sam', samId, '2026-08-13', 2.5, true), // never submitted
+        f6: entry('f6', 'Sam', samId, '2026-08-19', 4, true), // rejected, not re-submitted
+      },
+      timesheets: {
+        t1: { id: 't1', person: 'Priya', personId: priyaId, weekStarting: '2026-08-10', status: 'Approved', submittedAt: 'x', submittedBy: 'Priya', decidedAt: 'x', decidedBy: 'Lead', reason: null },
+        t2: { id: 't2', person: 'Priya', personId: priyaId, weekStarting: '2026-08-17', status: 'Submitted', submittedAt: 'x', submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null },
+        t3: { id: 't3', person: 'Sam', personId: samId, weekStarting: '2026-08-17', status: 'Rejected', submittedAt: 'x', submittedBy: 'Sam', decidedAt: 'x', decidedBy: 'Lead', reason: 'Wrong issue.' },
+      },
+      rates: { r1: { id: 'r1', amount: 77123.45, person: 'Priya' } as never },
+      commitments: {
+        c1: { id: 'c1', person: 'Priya', personId: priyaId, kind: 'Leave', status: 'Approved', reason: REASON_SENTINEL, startDate: '2026-08-20', endDate: '2026-08-20', hoursPerDay: 7.5, note: '', createdBy: 'x', createdAt: 'x', deletedAt: null },
+      },
+      notes: { n1: { id: 'n1', issueId: 'OAPIL-1', body: NOTE_SENTINEL, clientVisible: false } as never },
+    }
+
+    const report = buildFinanceReport(st, '2026-08-12', '2026-08-23')
+    const text = JSON.stringify(report)
+
+    const priyaRow = report.summary.find((r) => r.person === 'Priya')
+    const approvedOnly = report.summary.length === 1 && priyaRow != null
+    const clipped = priyaRow?.billable === 3 && priyaRow?.nonBillable === 2 && priyaRow?.total === 5
+    const grouped = priyaRow?.client === 'OAPIL' && priyaRow?.engagement === 'OAPIL Engagement'
+    const detailClipped = report.dailyDetail.length === 2 && report.dailyDetail.every((d) => d.date >= '2026-08-12')
+    const exceptionOf = (person: string, week: string) => report.exceptions.find((x) => x.person === person && x.weekStarting === week)
+    const threeWordings =
+      exceptionOf('Priya', '2026-08-17')?.status === 'Submitted — awaiting decision' &&
+      exceptionOf('Sam', '2026-08-10')?.status === 'not submitted' &&
+      exceptionOf('Sam', '2026-08-17')?.status === 'Rejected — returned, not re-submitted' &&
+      report.exceptions.length === 3
+    const clean = !text.includes(RATE_SENTINEL) && !text.includes(REASON_SENTINEL) && !text.includes(NOTE_SENTINEL)
+    const emptyReport = buildFinanceReport(st, '2026-01-05', '2026-01-11')
+    const emptySaysSo = emptyReport.empty && emptyReport.summary.length === 0 && emptyReport.exceptions.length === 0
+
+    const good = approvedOnly && clipped && grouped && detailClipped && threeWordings && clean && emptySaysSo
+    return good
+      ? { verdict: 'PASS', actual: "Only Priya's approved week reaches the summary — 3 billable + 2 non-billable, the Monday before the period clipped out of both summary and daily detail. The three non-approved person-weeks land as exceptions with their own wordings and hour counts. The serialized report carries none of the three planted sentinels (a rate amount, a leave reason, a note body), and an empty period says empty rather than producing rows.", stops: '—', severity: '—', impact: 'Finance receives exactly the approved hours and an honest list of what is missing — never rates, reasons or notes.' } as const
+      : { verdict: 'FAIL', actual: `approvedOnly=${approvedOnly} clipped=${clipped} (billable=${priyaRow?.billable} nonBillable=${priyaRow?.nonBillable}) grouped=${grouped} detailClipped=${detailClipped} threeWordings=${threeWordings} (${report.exceptions.map((x) => `${x.person}/${x.weekStarting}:${x.status}`).join('; ')}) clean=${clean} emptySaysSo=${emptySaysSo}`, stops: 'at the inclusion rule — unapproved hours leak in, approved edge days leak out, or a sentinel survives serialization', severity: 'P1', impact: 'finance receives hours nobody approved, misses approved ones, or sees a rate/reason/note that never leaves the system' } as const
+  },
 )
 
 /* ================================================================== *
