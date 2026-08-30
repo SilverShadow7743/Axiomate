@@ -3010,12 +3010,29 @@ scenario(
       hours: 3, activity: 'Investigation', billable: true, note: '', now: NOW,
     } as Action, A)
 
+    /*
+     * The two-step TW1 used to record as making the control decorative: add on a legal date,
+     * then EDIT onto an illegal one. `updateTime` now consults the same window against the
+     * destination, so the edit refuses exactly as the add would have.
+     */
+    const legal = ok(BASE, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05',
+      hours: 2, activity: 'Investigation', billable: true, note: '',
+      justification: 'Backfilled for the two-step check.', now: NOW,
+    } as Action)
+    const legalId = Object.values(legal.timeEntries)[0].id
+    const twoStep = apply(legal, {
+      t: 'updateTime', id: legalId, patch: { date: '2026-08-01' }, now: NOW,
+    } as Action, A)
+
     const good =
       /* the wiring, driven through the reducer */
       !onOpeningDay.error &&
       Boolean(beforeOpening.error) &&
       /before/.test(beforeOpening.error ?? '') &&
       Boolean(afterClose.error) &&
+      Boolean(twoStep.error) &&
+      /before/.test(twoStep.error ?? '') &&
       /extension/.test(afterClose.error ?? '') &&
       fellBack.source === 'default' &&
       fellBack.date === '2026-08-03' &&
@@ -3042,8 +3059,8 @@ scenario(
 
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. **And \`addTime\` now consults all of it**: an entry on the opening day is accepted, one the day before is refused ("${(beforeOpening.error ?? '').slice(0, 60)}…"), and one against a closed issue is refused with the route out ("${(afterClose.error ?? '').slice(-58)}"). The authority rule stays where it was, deliberately — this module asks whether the person owns the ISSUE, and the reducer asks whether the actor may record for the PERSON, which would have started refusing a consultant logging their own hours on a colleague's work.`,
-      stops: 'at the screen. The refusals are enforced and the extension route they name — logging against a closed issue with a reason and an approval — has no UI, so today the answer is to reopen the issue. `updateTime` also does not consult the window: an entry can still be edited onto a date the window would have refused.',
+      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. **And \`addTime\` now consults all of it**: an entry on the opening day is accepted, one the day before is refused ("${(beforeOpening.error ?? '').slice(0, 60)}…"), and one against a closed issue is refused with the route out ("${(afterClose.error ?? '').slice(-58)}"). The authority rule stays where it was, deliberately — this module asks whether the person owns the ISSUE, and the reducer asks whether the actor may record for the PERSON, which would have started refusing a consultant logging their own hours on a colleague's work. And the two-step is shut: an entry added on a legal date refuses to be EDITED onto a date before the window ("${(twoStep.error ?? '').slice(0, 60)}…") — \`updateTime\` consults the same window against the destination.`,
+      stops: 'at the screen. The refusals are enforced end to end — including the edit two-step — and the extension route they name (logging against a closed issue with a reason and an approval) has no UI, so today the answer is to reopen the issue.',
       severity: '—',
       impact:
         'Time could be logged against closed work and against dates before the work existed. Both are now refused, and an overrunning issue still warns rather than refusing — which is what keeps the refusal meaningful.',

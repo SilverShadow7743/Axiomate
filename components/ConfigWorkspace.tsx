@@ -617,7 +617,6 @@ function RolesAndPeople({
             {org.logoDataUri ? (
               <>
                 {/* The op guarantees this is a data:image/ URI, so rendering it is safe. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={org.logoDataUri}
                   alt={`${org.name} logo`}

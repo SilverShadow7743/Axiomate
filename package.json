@@ -1,7 +1,7 @@
 {
   "name": "axiomate-tms",
   "version": "1.0.0",
-  "description": "Axiomate TMS — Issue Tree & Resolution Schedule",
+  "description": "Axiomate TMS \u2014 Issue Tree & Resolution Schedule",
   "private": true,
   "type": "module",
   "scripts": {
@@ -61,5 +61,10 @@
     "tailwindcss": "^4.3.2",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   }
 }

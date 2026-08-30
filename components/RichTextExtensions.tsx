@@ -102,10 +102,12 @@ function SuggestionList({
   }
 
   return (
-    <ul className="rte-suggest-list">
+    <ul className="rte-suggest-list" role="listbox">
       {items.map((item, i) => (
         <li
           key={item.id}
+          role="option"
+          aria-selected={i === selected}
           className={i === selected ? 'on' : ''}
           onMouseDown={(e) => {
             e.preventDefault()
@@ -341,8 +343,8 @@ function ImageView({ node }: NodeViewProps) {
   const alt = node.attrs.alt as string | null
   return (
     <NodeViewWrapper as="span" className="rte-image-wrap">
-      {/* eslint-disable-next-line @next/next/no-img-element -- served through the authenticated
-          /api/documents route, not a static asset next/image can optimise. */}
+      {/* Served through the authenticated /api/documents route, not a static asset
+          next/image can optimise — a plain img is the right element here. */}
       <img src={`/api/documents/${documentId}`} alt={alt ?? 'attachment'} className="rte-image" />
     </NodeViewWrapper>
   )

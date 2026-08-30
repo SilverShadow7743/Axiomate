@@ -27,7 +27,6 @@ export default function ReportHeader({
     <header className="report-header">
       <div className="report-header-brand">
         {showLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             className="report-header-logo"
             src={org.logoDataUri}
