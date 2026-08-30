@@ -24,14 +24,26 @@ client-redaction boundary, estimation discipline, the audit trail, and executabl
 for all of it. Most of what Hive sells as $5/user add-ons (timesheets, resourcing, proofing,
 external users, SSO, finance) is Axiomate core.
 
+Expanded 2026-08-30 with four characteristic sections beyond feature surface: under-counted
+modules (RAID, skills matrix, SLA engine, meetings, search, dedupe), extensibility &
+portability (no public API/webhooks — but zero lock-in, DB is ours), personal-productivity UX
+(dark mode ✓, no undo by design — soft-delete+restore, no onboarding), and vendor/trust
+(no SOC2 but data never leaves our tenant; restore PROVEN vs vendor promise; bus-factor 1).
+
 ## Steal-list, value order
 
-1. **Client portal activation** — the boundary is built and proven; pending action A7 (guest
-   invite) turns the engine into a feature. Hive charges for this.
+1. **Client portal activation** — boundary built and proven; A7 turns engine into feature.
 2. **Savable views/tabs** — cheap, daily-felt.
 3. **Mobile timesheet entry** — a narrow responsive "my week" page covers 80%.
-4. Real-time co-edited notes — hard (presence/CRDT); only if meeting notes move in-tool.
-5. Visual proofing markup — only if document-review volume grows.
+4. **Global full-text search** — notes/mail/documents; toolbar covers rows only.
+5. **Consultant onboarding UX** — guided first-run before the team arrives.
+6. **Public API + webhooks** — the extensibility gap.
+7. Real-time co-edited notes — hard; only if meeting notes move in-tool.
+8. Visual proofing markup — only if review volume grows.
+
+Where Hive is simply ahead regardless of philosophy: uptime redundancy, support org,
+integration ecosystem, mobile, localization, shipped API. None block the single-firm
+deployment; all gate any multi-firm future.
 
 ## Related
 
