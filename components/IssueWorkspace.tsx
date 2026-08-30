@@ -2327,6 +2327,29 @@ export default function IssueWorkspace({
           than the organisation's. Nested provider, nearest wins — same rule as the resolver. */}
       <LabelProvider value={scopedLabels}>
       <DetailPanel
+        assistSuggest={
+          assistantOffered !== 'off' && (assistantAutonomy === 'propose' || assistantAutonomy === 'act')
+            ? {
+                index: chatIndex,
+                config: {
+                  terms: {
+                    owner: scopedLabels.ISSUE_OWNER,
+                    accountable: scopedLabels.ISSUE_ACCOUNTABLE,
+                    raisedBy: scopedLabels.ISSUE_RAISED_BY,
+                    issue: scopedLabels.RECORD_ISSUE,
+                    module: scopedLabels.TIER_MODULE,
+                    organization: scopedLabels.TIER_ORGANIZATION,
+                  },
+                  parties: state.model.parties,
+                  workTypes: liveWorkTypes(state.model).map((t) => t.label),
+                  autonomy: assistantAutonomy,
+                  modelId: state.model.agents['AGENT_WORKSPACE_ASSISTANT']?.modelId,
+                },
+                modelId: state.model.agents['AGENT_WORKSPACE_ASSISTANT']?.modelId,
+                onApply: applyProposal,
+              }
+            : undefined
+        }
           row={selected}
           allRows={sortedRows}
           relationships={state.relationships}

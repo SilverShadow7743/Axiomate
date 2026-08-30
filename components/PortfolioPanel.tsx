@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
+import { narrationFigures } from '@/lib/assist'
 import { describePortfolio, portfolio, type PortfolioLine } from '@/lib/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
 
@@ -39,6 +40,33 @@ export default function PortfolioPanel({
 
   const lines = useMemo(() => portfolio(state, today), [state, today])
 
+  /* E5: the figures as a story, on demand. The payload is built HERE, from the state this
+   * reader already holds — redacted before it arrived — and E5A pins that it carries no
+   * rates, no leave reasons, nothing clientView withholds. Zero tokens until asked. */
+  const [narrating, setNarrating] = useState(false)
+  const [narration, setNarration] = useState<string | null>(null)
+  const narrate = async () => {
+    setNarrating(true)
+    setNarration(null)
+    try {
+      const res = await fetch('/api/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'narrate',
+          figures: narrationFigures(state, today),
+          modelId: state.model.agents['AGENT_WORKSPACE_ASSISTANT']?.modelId,
+        }),
+      })
+      const data = (await res.json()) as { ok?: boolean; prose?: string; error?: string }
+      setNarration(data.ok && data.prose ? data.prose : (data.error ?? 'The narration did not arrive.'))
+    } catch {
+      setNarration('The narration could not be fetched — the figures above are the same story, unnarrated.')
+    } finally {
+      setNarrating(false)
+    }
+  }
+
   const panel = (
     <>
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
@@ -60,7 +88,21 @@ export default function PortfolioPanel({
             )}
           </div>
           <div className="evi-sub sentence">{describePortfolio(lines)}</div>
+          {lines.length > 0 && (
+            <button className="btn ghost" onClick={() => void narrate()} disabled={narrating}>
+              {narrating ? 'Narrating…' : 'Narrate this'}
+            </button>
+          )}
         </header>
+
+        {narration && (
+          <div className="panel-note" style={{ whiteSpace: 'pre-wrap' }}>
+            {narration}
+            <div className="prov" style={{ marginTop: 6 }}>
+              AI-written; the figures below are the source.
+            </div>
+          </div>
+        )}
 
         <div className="evi-list">
           {!lines.length && (

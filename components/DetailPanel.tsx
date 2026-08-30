@@ -20,7 +20,7 @@ import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
-import DiscussionTab from './DiscussionTab'
+import DiscussionTab, { type SuggestWiring } from './DiscussionTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
 import type { CommitmentKind } from '@/lib/capacity'
@@ -76,6 +76,8 @@ export type Tab =
   | 'Data Source'
 
 interface Props {
+  /** E5: present only when the assistant may propose — threads to the Discussion tab. */
+  assistSuggest?: SuggestWiring
   row: ScheduleRow | null
   allRows: ScheduleRow[]
   relationships: IssueRelationship[]
@@ -216,6 +218,7 @@ interface Props {
 }
 
 export default function DetailPanel({
+  assistSuggest,
   row,
   allRows,
   relationships,
@@ -609,7 +612,14 @@ export default function DetailPanel({
             onRemove={onRemoveMember}
           />
         ) : !issue && row.kind === 'project' && tab === 'Discussion' ? (
-          <DiscussionTab state={state} actor={actor} scopeKind="project" scopeId={row.id} />
+          <DiscussionTab
+            state={state}
+            actor={actor}
+            scopeKind="project"
+            scopeId={row.id}
+            scopeName={row.name}
+            suggest={assistSuggest}
+          />
         ) : !issue && row.kind === 'project' && tab !== 'Overview' ? (
           <CapacityPanel
             row={row}
@@ -678,6 +688,8 @@ export default function DetailPanel({
             scopeKind="issue"
             scopeId={issue.id}
             ownerName={issue.owner}
+            scopeName={issue.subject}
+            suggest={assistSuggest}
           />
         ) : tab === 'Notes' ? (
           <NotesTab

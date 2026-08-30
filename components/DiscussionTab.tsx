@@ -3,11 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
+import { suggestRequest } from '@/lib/assist'
+import { validateCreate, type ChatConfig, type CreateProposal, type IssueIndexEntry } from '@/lib/chat'
 import { issueMailTimeline, type DiscussionMessage, type DiscussionScopeKind } from '@/lib/discussion'
 import { mentionSegments } from '@/lib/mentions'
 import { richTextToPlainText } from '@/lib/richText'
 import { formatIso } from '@/lib/dates'
 import type { WorkspaceState } from '@/lib/workspace'
+
+/** What the suggest-work affordance needs — absent entirely below `propose` autonomy, the
+ *  same withholding philosophy as the tool loop. */
+export interface SuggestWiring {
+  index: IssueIndexEntry[]
+  config: ChatConfig
+  modelId?: string
+  onApply: (p: CreateProposal) => { ok: boolean; message: string }
+}
 
 /**
  * One scope's discussion — E3's server-queried surface. Everything here is fetched, never
@@ -36,6 +47,8 @@ export default function DiscussionTab({
   scopeKind,
   scopeId,
   ownerName,
+  scopeName,
+  suggest,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -43,6 +56,10 @@ export default function DiscussionTab({
   scopeId: string
   /** The record owner's name on issue scope — the birth auto-follow needs it server-side. */
   ownerName?: string | null
+  /** The record's or project's display name — context for the suggest-work request. */
+  scopeName?: string
+  /** E5: present only when autonomy allows proposals. */
+  suggest?: SuggestWiring
 }) {
   const meId = directoryPersonFor(state.model, actor)?.id ?? null
   const [view, setView] = useState<View | null>(null)
@@ -50,6 +67,11 @@ export default function DiscussionTab({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  /* E5 suggest-work: the card is a DRAFT the person reviews and applies — the model
+   * described a mutation; only Apply makes it, through the same path as the chat panel. */
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestion, setSuggestion] = useState<CreateProposal | null>(null)
+  const [suggestNote, setSuggestNote] = useState<string | null>(null)
   const alive = useRef(true)
 
   const refresh = useCallback(async () => {
@@ -130,6 +152,56 @@ export default function DiscussionTab({
     else setProblem(data.error ?? 'The message could not be removed.')
   }
 
+  const askSuggestion = async () => {
+    if (!suggest || !view?.messages.length) return
+    setSuggesting(true)
+    setSuggestion(null)
+    setSuggestNote(null)
+    try {
+      const res = await fetch('/api/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'suggest-work',
+          request: suggestRequest(view.messages, { kind: scopeKind, id: scopeId, name: scopeName ?? scopeId }),
+          index: suggest.index,
+          config: suggest.config,
+          modelId: suggest.modelId,
+        }),
+      })
+      const data = (await res.json()) as { ok?: boolean; proposal?: CreateProposal; error?: string }
+      if (!data.ok || !data.proposal) {
+        setSuggestNote(data.error ?? 'No suggestion arrived.')
+        return
+      }
+      /* The client's OWN pass through the same gate — model output checked twice by one
+       * rule, against the index and vocabulary this reader holds. */
+      const p = data.proposal
+      const checked = validateCreate(
+        {
+          subject: p.draft.name,
+          client: p.client,
+          module: p.module,
+          description: p.draft.description,
+          fields: { severity: p.draft.severity, type: p.draft.type },
+          rationale: p.rationale,
+        },
+        suggest.index,
+        suggest.config,
+      )
+      if (!checked.value) {
+        setSuggestNote(checked.rejected.join(' ') || 'The draft did not survive validation here.')
+        return
+      }
+      setSuggestion(checked.value)
+      if (checked.rejected.length) setSuggestNote(checked.rejected.join(' '))
+    } catch {
+      setSuggestNote('The suggestion could not be fetched.')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   const people = Object.values(state.model.people).map((p) => ({ id: p.id, name: p.name }))
   const mine = (m: DiscussionMessage) =>
     m.authorId ? m.authorId === meId : m.author.trim().toLowerCase() === actor.name.trim().toLowerCase()
@@ -159,12 +231,51 @@ export default function DiscussionTab({
         </span>
         <span className="grow" />
         {stale && <span className="prov">refresh failed — showing what was loaded</span>}
+        {suggest && view && view.messages.some((m) => !m.deletedAt) && (
+          <button className="btn ghost" onClick={() => void askSuggestion()} disabled={suggesting}>
+            {suggesting ? 'Drafting…' : 'Suggest a work item'}
+          </button>
+        )}
         {view && view.thread && meId && (
           <button className="btn ghost" onClick={() => setFollowing(!view.following)}>
             {view.following ? 'Unfollow' : 'Follow'}
           </button>
         )}
       </div>
+
+      {suggestNote && !suggestion && <p className="panel-note">{suggestNote}</p>}
+      {suggestion && (
+        <div className="cfg-card">
+          <b>{suggestion.draft.name}</b>
+          <div className="prov">
+            {suggestion.client}
+            {suggestion.module ? ` · ${suggestion.module}` : ''}
+            {suggestion.draft.type ? ` · ${suggestion.draft.type}` : ''}
+            {suggestion.draft.severity ? ` · ${suggestion.draft.severity}` : ''}
+          </div>
+          {suggestion.draft.description && (
+            <p style={{ whiteSpace: 'pre-wrap' }}>{suggestion.draft.description}</p>
+          )}
+          {suggestion.rationale && <p className="prov">{suggestion.rationale}</p>}
+          {suggestNote && <p className="prov">{suggestNote}</p>}
+          <div className="time-row">
+            <button
+              className="btn primary"
+              onClick={() => {
+                const r = suggest!.onApply(suggestion)
+                setSuggestNote(r.message)
+                if (r.ok) setSuggestion(null)
+              }}
+            >
+              Apply
+            </button>
+            <button className="btn ghost" onClick={() => { setSuggestion(null); setSuggestNote(null) }}>
+              Dismiss
+            </button>
+            <span className="prov">AI-drafted from this thread — applying files it as your change.</span>
+          </div>
+        </div>
+      )}
 
       {problem && <p className="panel-note warn">{problem}</p>}
 
