@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-29T17:48:39.728Z",
+  "at": "2026-08-30T02:04:52.894Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 64,
   "failed": 0,
@@ -217,7 +217,7 @@
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-08-29T09:00:00.000Z"
+      "detail": "deletedAt 2026-08-30T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",
