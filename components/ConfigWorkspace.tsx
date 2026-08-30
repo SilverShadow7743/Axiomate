@@ -1860,6 +1860,65 @@ function Watch({
         </div>
       </div>
 
+      <h4 className="cfg-sub">Report delivery</h4>
+      <p className="cfg-note">
+        The pass can also post the mail: the daily IMS to internal recipients on weekdays, and
+        each client&apos;s weekly (Mondays) and monthly (the 1st) pack <b>to you</b> as branded
+        PDFs — eyeball, then forward. Off by default; nothing is emailed until switched on
+        here. The finance report never sends itself.
+      </p>
+      <div className="cfg-card">
+        <label className="cfg-check">
+          <input
+            type="checkbox"
+            checked={state.model.reportDelivery.imsEnabled}
+            onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { imsEnabled: e.target.checked } })}
+          />
+          <span>
+            <b>Email the daily IMS</b> every weekday, as a PDF, to the recipients below.
+          </span>
+        </label>
+        <label className="cfg-fld" style={{ marginTop: '8px' }}>
+          <span>IMS recipients (comma-separated)</span>
+          <input
+            defaultValue={state.model.reportDelivery.imsRecipients.join(', ')}
+            placeholder="ops@yourfirm.com, delivery@yourfirm.com"
+            onBlur={(e) => {
+              const list = e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+              if (list.join(',') === state.model.reportDelivery.imsRecipients.join(',')) return
+              if (!onConfig({ k: 'setReportDelivery', patch: { imsRecipients: list } })) {
+                e.target.value = state.model.reportDelivery.imsRecipients.join(', ')
+              }
+            }}
+          />
+        </label>
+        <label className="cfg-check" style={{ marginTop: '10px' }}>
+          <input
+            type="checkbox"
+            checked={state.model.reportDelivery.packsEnabled}
+            onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { packsEnabled: e.target.checked } })}
+          />
+          <span>
+            <b>Email the client packs</b> — weekly each Monday for the prior week, monthly on
+            the 1st for the prior month, one PDF per client with client-visible records.
+          </span>
+        </label>
+        <label className="cfg-fld" style={{ marginTop: '8px' }}>
+          <span>Packs go to (blank = the operator&apos;s directory email)</span>
+          <input
+            defaultValue={state.model.reportDelivery.packDestination}
+            placeholder="you@yourfirm.com"
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v === state.model.reportDelivery.packDestination) return
+              if (!onConfig({ k: 'setReportDelivery', patch: { packDestination: v } })) {
+                e.target.value = state.model.reportDelivery.packDestination
+              }
+            }}
+          />
+        </label>
+      </div>
+
       <h4 className="cfg-sub">What it looks for</h4>
       <table className="cfg-table">
         <thead>

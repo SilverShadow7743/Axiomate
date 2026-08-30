@@ -135,6 +135,7 @@ import {
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
+import type { ReportDeliveryConfig } from './reports/delivery'
 import {
   diffObservations,
   eventTypeFor,
@@ -1381,6 +1382,7 @@ export type ConfigOp =
       confirmed?: boolean
     }
   | { k: 'setWatch'; patch: Partial<WatchPolicy> }
+  | { k: 'setReportDelivery'; patch: Partial<ReportDeliveryConfig> }
   | {
       k: 'upsertPerson'
       id: string | null
@@ -7177,6 +7179,37 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           by,
         },
         next.enabled ? 'Scheduled pass updated.' : 'The scheduled pass will not run.',
+      )
+    }
+
+    case 'setReportDelivery': {
+      const next = { ...m.reportDelivery, ...op.patch }
+      /*
+       * Loose email shape only — Graph is the real validator — but checked HERE rather than in
+       * the card, because the op is not only reachable from one screen. Addresses are trimmed;
+       * an empty pack destination is legal (it means "resolve the operator at send time").
+       */
+      const bad = [...next.imsRecipients, ...(next.packDestination ? [next.packDestination] : [])].find(
+        (a) => !a.trim().includes('@'),
+      )
+      if (bad !== undefined) {
+        return { state, error: `“${bad.trim()}” is not an email address.` }
+      }
+      next.imsRecipients = next.imsRecipients.map((a) => a.trim()).filter(Boolean)
+      next.packDestination = next.packDestination.trim()
+      return done(
+        { ...m, reportDelivery: next },
+        {
+          rowId: 'WATCH',
+          field: 'reportDelivery',
+          from: `IMS ${m.reportDelivery.imsEnabled ? 'on' : 'off'}, packs ${m.reportDelivery.packsEnabled ? 'on' : 'off'}`,
+          to: `IMS ${next.imsEnabled ? 'on' : 'off'}, packs ${next.packsEnabled ? 'on' : 'off'}`,
+          at: now,
+          by,
+        },
+        next.imsEnabled || next.packsEnabled
+          ? 'Report delivery updated. The next scheduled pass will send what is due.'
+          : 'Report delivery is off — nothing will be emailed.',
       )
     }
 

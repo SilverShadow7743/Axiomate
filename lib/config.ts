@@ -35,6 +35,7 @@ import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
+import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import type { NotificationPrefs } from './notifications'
 import type { Goal } from './goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
@@ -874,6 +875,8 @@ export interface OperatingModel {
   resourceProfiles: Record<string, ResourceProfile>
   /** What the scheduled pass looks for, and how sensitive it is. See `./watch`. */
   watch: WatchPolicy
+  /** Which reports the pass emails, to whom. OFF by default — see `./reports/delivery`. */
+  reportDelivery: ReportDeliveryConfig
   /**
    * How long a time entry may lag the work before it must explain itself.
    *
@@ -1262,6 +1265,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     automationRules: defaultAutomationRules(),
     resourceProfiles: {},
     watch: defaultWatchPolicy(),
+    reportDelivery: { ...DEFAULT_REPORT_DELIVERY },
     timePolicy: { ...DEFAULT_TIME_POLICY },
     allocationPolicy: { ...DEFAULT_ALLOCATION_POLICY },
     notificationPrefs: {},
@@ -1619,6 +1623,10 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
       ...(stored.watch ?? {}),
       conditions: stored.watch?.conditions ?? seed.watch.conditions,
     },
+    // Explicit like `documentFiling`, and fail-CLOSED: every model stored before this key
+    // existed has no `reportDelivery`, and the parse turns missing or junk into disabled —
+    // never `undefined` (a crash in the pass) and never a guess that starts emailing.
+    reportDelivery: parseReportDelivery(stored.reportDelivery),
     // Explicit like `sla`: a model stored before this key existed has no `timePolicy`, and
     // the spread above would leave it undefined — a crash the first time the addTime arm
     // reads the allowance, in production, on the workspace that has data.

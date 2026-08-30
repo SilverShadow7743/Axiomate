@@ -145,6 +145,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'setAutomationRules',
   'setResourceProfile',
   'setWatch',
+  'setReportDelivery',
   'upsertPerson',
   'deletePerson',
   'upsertResponsibility',
