@@ -327,6 +327,12 @@ export function validateCreate(
   const rejected: string[] = []
   const subject = str(raw.subject)
   if (!subject) return { value: null, rejected: ['A new issue needs a subject.'] }
+  // Refused rather than truncated — the module's rule is that rejecting beats coercing, and
+  // a silently cut subject is a coercion. Found by E5B, which feeds this gate model output
+  // shaped to slip past it (the top-level fields used to bypass cleanFields' length cap).
+  if (subject.length > 300) {
+    return { value: null, rejected: ['A subject longer than 300 characters is a description, not a subject — say it shorter and put the rest in the description.'] }
+  }
 
   const clients = [...new Set(index.map((e) => e.client))]
   const wanted = str(raw.client)
@@ -360,7 +366,11 @@ export function validateCreate(
   // Only carry a description when there is one — an empty key would render as a blank row on
   // the card, which reads as "this field is being cleared".
   const description = str(raw.description) || draft.description || ''
-  if (description) draft.description = description
+  if (description.length > 2000) {
+    // The same cap cleanFields applies — the top-level field must not be the way around it.
+    rejected.push('New issue: the description was too long and was dropped.')
+    delete draft.description
+  } else if (description) draft.description = description
   else delete draft.description
   if (dates.value) {
     draft.plannedStart = dates.value.start

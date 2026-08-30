@@ -448,7 +448,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "68 of 68 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "71 of 71 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-08-30. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -1819,6 +1819,46 @@
       "expected": "E4's intelligence, day-granular: a candidate day is one where EVERY attendee clears the asked duration after their meetings, with approved leave zeroing a day outright and weekends/holidays skipped rather than blamed. Requested leave follows the engine's posture — never a block, always a named caveat. An empty range is an honest answer.",
       "verdict": "PASS",
       "actual": "The range lists exactly the three working days; Sam's approved leave blocks Thursday by name; Priya's 6.5h of meetings fail Monday with the arithmetic stated; Tuesday clears for everyone while naming Priya's undecided request as a caveat; and an 8h ask returns no candidate rather than a forced one.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "E4B",
+      "title": "A meeting is booked, warned about, moved, and cancelled — and the right people hear each",
+      "expected": "E4 arms: booking invites every attendee but the actor, with the counter starting from the arm's own seq (the E2 rule, asserted); conflicts — an attendee's approved leave, an overlapping meeting — ride the success message and never refuse; only the organizer or a platform configurer edits; moving the TIME tells current attendees while a note edit is not news; somebody newly added gets an invite instead of a move, one record each; cancelling mints once and a second cancel refuses; a muted attendee is silent with the audit line; and the organizer cannot arrive over the wire.",
+      "verdict": "PASS",
+      "actual": "Booking invites Sam alone and the counter lands at seq+2; the clashing booking succeeds while naming Sam's approved leave AND the overlap; a non-organizer's edit bounces in the organizer's name; a note edit mints nothing; the move tells Sam while newly-added Lena gets an invite — one record each; the cancel reaches both and a second cancel refuses; a muted Sam hears nothing with the audit line written; and a smuggled organizer bounces off the boundary.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E5A",
+      "title": "The narration payload carries the figures and cannot carry what the reader may not see",
+      "expected": "E5's redaction net, tested with planted sentinels rather than field-name checks — a value smuggled under another key slips a name check but not a scan of the serialized payload. A fixture state holds a rate amount, a private leave reason and an internal note text; narrationFigures built from it must contain none of them while still carrying the portfolio concerns, a forecast sentence and an availability headline it exists to tell.",
+      "verdict": "PASS",
+      "actual": "The serialized payload contains none of the three sentinels; it does carry OAPIL-1's forecast sentence, Priya's availability headline (undecided leave counted, reason absent), and the workspace totals — the story without the secrets.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E5B",
+      "title": "Hostile model output bounces off the one gate, extended where E5 found it thin",
+      "expected": "Model output is untrusted input and validateCreate is the gate the chat loop and /api/assist both stand behind. The hostile set: an unknown client refuses outright; an unknown severity is rejected by name and kept out of the draft; a forged field never reaches the draft; and the two top-level fields that used to bypass cleanFields' length cap — subject and description — are now refused (subject) and dropped (description), the extension this scenario exists to pin.",
+      "verdict": "PASS",
+      "actual": "Unknown client refused with the known list; 'Catastrophic' rejected by name and absent from the draft; the forged 'hacked' field named and dropped; a 5,000-character subject refused rather than truncated; a 5,000-character description dropped with its note — the top-level bypass is closed.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E5C",
+      "title": "The thread-to-work request is bounded, stub-free, and says when it was cut",
+      "expected": "E5's suggest-work payload: removed messages leave stubs in the thread but must not travel; the message count and per-message length are capped in MAX_INDEX_ROWS's spirit — bounded and STATED, so the model's answer can say it saw a truncated thread rather than pretending completeness.",
+      "verdict": "PASS",
+      "actual": "46 live messages arrive as the newest 40, the removed message travels nowhere, the 3,000-character body is cut to 800 with an ellipsis, truncation is stated, and the scope context rides along.",
       "stops": "",
       "severity": "P2",
       "impact": "none"

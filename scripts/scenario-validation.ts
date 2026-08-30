@@ -63,6 +63,9 @@ import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, t
 import { meetingHours } from '../lib/availability'
 import { suggestDays } from '../lib/scheduling'
 import type { Meeting } from '../lib/meetings'
+import { narrationFigures, suggestRequest } from '../lib/assist'
+import { validateCreate, type IssueIndexEntry } from '../lib/chat'
+import type { DiscussionMessage } from '../lib/discussion'
 import {
   backdated,
   dailyCap,
@@ -8100,6 +8103,115 @@ scenario(
     return good
       ? { verdict: "PASS", actual: "Booking invites Sam alone and the counter lands at seq+2; the clashing booking succeeds while naming Sam's approved leave AND the overlap; a non-organizer's edit bounces in the organizer's name; a note edit mints nothing; the move tells Sam while newly-added Lena gets an invite — one record each; the cancel reaches both and a second cancel refuses; a muted Sam hears nothing with the audit line written; and a smuggled organizer bounces off the boundary.", stops: "", severity: "P1", impact: "none" } as const
       : { verdict: "FAIL", actual: `booked=${booked} (seq ${seqBefore}->${st.seq}) warnsNotRefuses=${warnsNotRefuses} (${(warned.message ?? warned.error ?? "").slice(0, 90)}) organizerRule=${organizerRule} quietNote=${quietNote} moveSplits=${moveSplits} cancelOnce=${cancelOnce} muteHolds=${muteHolds} wireRefused=${wireRefused}`, stops: "at the arm — the wrong people hear, a conflict refuses what should warn, or the seq bookkeeping reuses an id", severity: "P1", impact: "meetings either spam, silence, or silently corrupt the notification store" } as const
+  },
+)
+
+scenario(
+  "E5A",
+  "The narration payload carries the figures and cannot carry what the reader may not see",
+  "E5's redaction net, tested with planted sentinels rather than field-name checks — a value smuggled under another key slips a name check but not a scan of the serialized payload. A fixture state holds a rate amount, a private leave reason and an internal note text; narrationFigures built from it must contain none of them while still carrying the portfolio concerns, a forecast sentence and an availability headline it exists to tell.",
+  () => {
+    const RATE_SENTINEL = "77123.45"
+    const REASON_SENTINEL = "SENTINEL-REASON-X"
+    const NOTE_SENTINEL = "SENTINEL-NOTE-Y"
+
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === "Priya")!.id
+    let st = ok(BASE, { t: "updateIssue", id: "OAPIL-1", patch: {}, now: NOW } as Action)
+    st = ok(st, { t: "setDates", id: "OAPIL-1", start: "2026-08-20", end: "2026-09-30", now: NOW } as Action)
+    st = {
+      ...st,
+      estimates: {
+        "OAPIL-1": { ...emptyEstimate("2026-01-01"), issueId: "OAPIL-1", baselinedAt: null, baselinedBy: null, updatedAt: null, updatedBy: null, scores: { business: 3, technical: 3, integration: 2, testing: 2, data: 1 } } as never,
+      },
+      allocations: {
+        a1: { id: "a1", person: "Priya", personId: priyaId, projectId: "proj-x", percentage: 50, startDate: "2026-08-01", endDate: "2026-10-30", note: "", createdBy: "x", createdAt: "x", deletedAt: null } as never,
+      },
+      commitments: {
+        c9: { id: "c9", person: "Priya", personId: priyaId, kind: "Leave", status: "Approved", reason: REASON_SENTINEL, startDate: "2026-09-01", endDate: "2026-09-02", hoursPerDay: 7.5, note: "", createdBy: "x", createdAt: "x", deletedAt: null },
+        c10: { id: "c10", person: "Priya", personId: priyaId, kind: "Leave", status: "Requested", reason: REASON_SENTINEL, startDate: "2026-09-10", endDate: "2026-09-10", hoursPerDay: 7.5, note: "", createdBy: "x", createdAt: "x", deletedAt: null },
+      },
+      rates: { r1: { id: "r1", amount: 77123.45, person: "Priya" } as never },
+      notes: { n9: { id: "n9", issueId: "OAPIL-1", body: NOTE_SENTINEL, clientVisible: false } as never },
+    }
+
+    const payload = narrationFigures(st, TODAY)
+    const text = JSON.stringify(payload)
+
+    const clean = !text.includes(RATE_SENTINEL) && !text.includes(REASON_SENTINEL) && !text.includes(NOTE_SENTINEL)
+    const carriesForecast = payload.forecasts.some((f) => f.startsWith("OAPIL-1") && /Needs \d/.test(f))
+    const carriesAvailability = payload.availability.some((a) => a.startsWith("Priya:") && /leave request\(s\) undecided/.test(a))
+    const carriesTotals = payload.totals.open > 0 && Array.isArray(payload.lines)
+
+    const good = clean && carriesForecast && carriesAvailability && carriesTotals
+    return good
+      ? { verdict: "PASS", actual: "The serialized payload contains none of the three sentinels; it does carry OAPIL-1's forecast sentence, Priya's availability headline (undecided leave counted, reason absent), and the workspace totals — the story without the secrets.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `clean=${clean} carriesForecast=${carriesForecast} carriesAvailability=${carriesAvailability} carriesTotals=${carriesTotals}`, stops: "at the projection — either a private value would reach the model, or the narrative lost the figures it exists to tell", severity: "P1", impact: "a rate, a leave reason or an internal note ships to an external model on the next Narrate click" } as const
+  },
+)
+
+scenario(
+  "E5B",
+  "Hostile model output bounces off the one gate, extended where E5 found it thin",
+  "Model output is untrusted input and validateCreate is the gate the chat loop and /api/assist both stand behind. The hostile set: an unknown client refuses outright; an unknown severity is rejected by name and kept out of the draft; a forged field never reaches the draft; and the two top-level fields that used to bypass cleanFields' length cap — subject and description — are now refused (subject) and dropped (description), the extension this scenario exists to pin.",
+  () => {
+    const index: IssueIndexEntry[] = [
+      { id: "OAPIL-1", subject: "S", client: "OAPIL", module: "Inventory", status: "Open", severity: "High", owner: "Priya", accountable: "OAPIL", health: "On Track", plannedStart: null, plannedEnd: null, nextAction: "" },
+    ]
+
+    // 1. An unknown client refuses outright, naming the known ones.
+    const badClient = validateCreate({ subject: "X", client: "Evil Corp" }, index)
+    const clientRefused = badClient.value === null && badClient.rejected.some((r) => /not a client/.test(r))
+
+    // 2. An unknown severity is rejected by name and never reaches the draft.
+    const badEnum = validateCreate({ subject: "X", client: "OAPIL", fields: { severity: "Catastrophic" } }, index)
+    const enumHeld = badEnum.value !== null && badEnum.rejected.some((r) => /not a valid severity/.test(r)) && !("severity" in badEnum.value.draft)
+
+    // 3. A forged field is named and dropped.
+    const forged = validateCreate({ subject: "X", client: "OAPIL", fields: { hacked: "yes" } }, index)
+    const forgeHeld = forged.value !== null && forged.rejected.some((r) => /not a field the assistant may set/.test(r)) && !("hacked" in forged.value.draft)
+
+    // 4. An oversized subject is refused, not truncated — rejecting beats coercing.
+    const longSubject = validateCreate({ subject: "s".repeat(5000), client: "OAPIL" }, index)
+    const subjectRefused = longSubject.value === null && longSubject.rejected.some((r) => /longer than 300/.test(r))
+
+    // 5. An oversized top-level description is dropped with a note — the same cap cleanFields
+    //    applies, no longer bypassable from above.
+    const longDesc = validateCreate({ subject: "X", client: "OAPIL", description: "d".repeat(5000) }, index)
+    const descDropped = longDesc.value !== null && !("description" in longDesc.value.draft) && longDesc.rejected.some((r) => /description was too long/.test(r))
+
+    const good = clientRefused && enumHeld && forgeHeld && subjectRefused && descDropped
+    return good
+      ? { verdict: "PASS", actual: "Unknown client refused with the known list; 'Catastrophic' rejected by name and absent from the draft; the forged 'hacked' field named and dropped; a 5,000-character subject refused rather than truncated; a 5,000-character description dropped with its note — the top-level bypass is closed.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `clientRefused=${clientRefused} enumHeld=${enumHeld} forgeHeld=${forgeHeld} subjectRefused=${subjectRefused} descDropped=${descDropped}`, stops: "at the gate — model output would reach the reducer wearing values nobody may set", severity: "P1", impact: "a hostile or confused model writes fields into records through the one path meant to stop exactly that" } as const
+  },
+)
+
+scenario(
+  "E5C",
+  "The thread-to-work request is bounded, stub-free, and says when it was cut",
+  "E5's suggest-work payload: removed messages leave stubs in the thread but must not travel; the message count and per-message length are capped in MAX_INDEX_ROWS's spirit — bounded and STATED, so the model's answer can say it saw a truncated thread rather than pretending completeness.",
+  () => {
+    const msg = (i: number, over: Partial<DiscussionMessage> = {}): DiscussionMessage => ({
+      id: `m${i}`, threadId: "t1", author: `Person ${i % 3}`, authorId: null,
+      body: `message ${i}`, createdAt: `2026-08-${String((i % 28) + 1).padStart(2, "0")}T09:00:00Z`, deletedAt: null, ...over,
+    })
+    const messages = [
+      ...Array.from({ length: 45 }, (_, i) => msg(i)),
+      msg(45, { deletedAt: "2026-08-29T00:00:00Z", body: "removed secret" }),
+      msg(46, { body: "x".repeat(3000) }),
+    ]
+
+    const req = suggestRequest(messages, { kind: "issue", id: "OAPIL-1", name: "Item master fails" })
+
+    const stubFree = !req.messages.some((m) => m.text.includes("removed secret"))
+    const capped = req.messages.length === 40 && req.truncated === true
+    const longCut = req.messages.some((m) => m.text.length === 800 && m.text.endsWith("…"))
+    const context = req.scopeKind === "issue" && req.scopeId === "OAPIL-1" && req.scopeName === "Item master fails"
+
+    const good = stubFree && capped && longCut && context
+    return good
+      ? { verdict: "PASS", actual: "46 live messages arrive as the newest 40, the removed message travels nowhere, the 3,000-character body is cut to 800 with an ellipsis, truncation is stated, and the scope context rides along.", stops: "", severity: "P2", impact: "none" } as const
+      : { verdict: "FAIL", actual: `stubFree=${stubFree} capped=${capped} (${req.messages.length}/${req.truncated}) longCut=${longCut} context=${context}`, stops: "at the payload — a removed message travels, or an unbounded thread becomes an unbounded bill", severity: "P2", impact: "either deleted words reach the model or a long thread costs whatever it costs" } as const
   },
 )
 
