@@ -15,6 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
+import { classificationsOf } from '@/lib/tree'
 import { isExternalPartyKind, isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
 
@@ -258,6 +259,20 @@ function AddForm({
                   <option key={t}>{t}</option>
                 ))}
               </select>
+            </Field>
+            <Field label={labels.TIER_MODULE} hint="Where it's filed supplies this if left blank.">
+              {/* Datalist, not select: the vocabulary is what work carries, not a registry,
+                  and blank legitimately means "derive from the parent chain". */}
+              <input
+                list="add-classifications"
+                value={f.module ?? ''}
+                onChange={(e) => set('module', e.target.value)}
+              />
+              <datalist id="add-classifications">
+                {classificationsOf(state).map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </Field>
             <Field label="Discipline">
               {/* Blank first, and it is the default — unlike Type, which falls back to the first

@@ -7369,6 +7369,31 @@ scenario(
   },
 )
 
+scenario(
+  'TD3',
+  'Classification is an editable label: explicit on create, derived when absent, patchable after',
+  'Pre-8b groundwork (the E0 plan\'s step 8a amendment): Issue.module already stores the classification, maintained by the ancestor walks. For the Process Area containers to convert to labels, the label must be settable in its own right — an explicit draft.module on create wins over the walk, an absent one still derives from where the record is filed, and updateIssue can change it later.',
+  () => {
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+
+    let s = ok(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Derived', severity: 'Low', status: 'Open' }, now: NOW } as Action)
+    const derived = Object.values(s.issues).find((i) => i.subject === 'Derived')
+    const derives = derived?.module === 'Inventory'
+
+    s = ok(s, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Explicit', module: 'Payroll', severity: 'Low', status: 'Open' }, now: NOW } as Action)
+    const explicit = Object.values(s.issues).find((i) => i.subject === 'Explicit')
+    const overrides = explicit?.module === 'Payroll'
+
+    s = ok(s, { t: 'updateIssue', id: explicit!.id, patch: { module: 'Warehouse' }, now: NOW } as Action)
+    const patched = s.issues[explicit!.id].module === 'Warehouse'
+
+    const good = derives && overrides && patched
+    return good
+      ? { verdict: 'PASS', actual: 'A record filed under the Inventory container derives Inventory; one created with an explicit Payroll label keeps it despite where it was filed; and the label is patched to Warehouse afterwards through updateIssue like any other field.', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `derives=${derives} (${derived?.module}) overrides=${overrides} (${explicit?.module}) patched=${patched}`, stops: 'at the label — either the walk stopped supplying the default or the explicit value cannot be set, and 8b would strand new records as Unclassified', severity: 'P2', impact: 'once containers convert to labels, records created after the conversion have no way to carry a classification' } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

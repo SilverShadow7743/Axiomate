@@ -1856,7 +1856,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           id,
           parentId: a.parentId,
           client: client || 'Unassigned',
-          module: mod || 'Unclassified',
+          // An explicit classification on the draft wins; the ancestor walk is the default.
+          // Free text like the walk's own value — the vocabulary is what work carries, not a
+          // registry (see the E0 plan's step 8 amendment).
+          module: a.draft.module?.trim() || mod || 'Unclassified',
           subject: name,
           description: wrapPlainText(a.draft.description || ''),
           // Falls back to the first configured type rather than a literal. `'Defect'` was

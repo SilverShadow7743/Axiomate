@@ -1692,6 +1692,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "TD3",
+      "title": "Classification is an editable label: explicit on create, derived when absent, patchable after",
+      "expected": "Pre-8b groundwork (the E0 plan's step 8a amendment): Issue.module already stores the classification, maintained by the ancestor walks. For the Process Area containers to convert to labels, the label must be settable in its own right — an explicit draft.module on create wins over the walk, an absent one still derives from where the record is filed, and updateIssue can change it later.",
+      "verdict": "PASS",
+      "actual": "A record filed under the Inventory container derives Inventory; one created with an explicit Payroll label keeps it despite where it was filed; and the label is patched to Warehouse afterwards through updateIssue like any other field.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

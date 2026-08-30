@@ -353,6 +353,22 @@ export function facetsOf(state: WorkspaceState) {
   }
 }
 
+/**
+ * The classification vocabulary as it stands: every value live work carries, plus the names
+ * of any Process Area containers that still exist — their names ARE the labels during the
+ * container-to-label transition (E0 plan, step 8). 'Unclassified' is the absence default,
+ * not a choice, so it is not offered.
+ */
+export function classificationsOf(state: WorkspaceState): string[] {
+  const fromIssues = Object.values(state.issues)
+    .filter((i) => !i.deletedAt)
+    .map((i) => i.module)
+  const fromNodes = Object.values(state.nodes)
+    .filter((n) => n.kind === 'module' && !n.deletedAt)
+    .map((n) => n.name)
+  return [...new Set([...fromIssues, ...fromNodes].filter((m) => m && m !== 'Unclassified'))].sort()
+}
+
 export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   const i = row.issue
   if (!i) return false

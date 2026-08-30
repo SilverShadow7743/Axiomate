@@ -12,6 +12,7 @@ import { blockingRule } from '@/lib/approval'
 import type { ApprovalDecision } from '@/lib/approval'
 import ApprovalsBlock from './ApprovalsBlock'
 import { liveWorkTypes } from '@/lib/config'
+import { classificationsOf } from '@/lib/tree'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { exposure, raidKindOf, RAID_SCALE_MAX } from '@/lib/raid'
 import { formatIso } from '@/lib/dates'
@@ -47,6 +48,8 @@ import {
 
 export interface IssueDraft {
   subject: string
+  /** The classification label — Process Area during the container-to-label transition. */
+  module: string
   description: RichDoc
   type: string
   status: IssueStatus
@@ -65,6 +68,7 @@ export interface IssueDraft {
 function draftOf(i: IssueRecord): IssueDraft {
   return {
     subject: i.subject,
+    module: i.module,
     description: i.description,
     type: i.type,
     status: i.status,
@@ -125,6 +129,7 @@ export default function OverviewTab({
   const record = state.issues[issue.id]
   const may = canEditIssue(state.model, actor)
   const workTypes = useMemo(() => liveWorkTypes(state.model).map((t) => t.label), [state.model])
+  const classifications = useMemo(() => classificationsOf(state), [state])
   const rtePeople = useMemo(
     () => Object.values(state.model.people).map((p) => ({ id: p.id, name: p.name })),
     [state.model.people],
@@ -912,6 +917,25 @@ export default function OverviewTab({
                 <option key={p}>{p}</option>
               ))}
             </select>
+          </dd>
+          <dt>{labels.TIER_MODULE}</dt>
+          <dd>
+            {/* The classification is a label on the work, editable in its own right — once the
+                Process Area containers convert to labels (E0 step 8b), this control is where a
+                record's classification comes from; until then the ancestor walk supplies the
+                default and this overrides it. Datalist rather than select: the vocabulary is
+                what work carries, not a registry, and a new label is legitimately typed. */}
+            <input
+              list="overview-classifications"
+              value={draft.module}
+              onChange={(e) => set('module', e.target.value)}
+              aria-label={labels.TIER_MODULE}
+            />
+            <datalist id="overview-classifications">
+              {classifications.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
           </dd>
           <dt>{labels.FIELD_NEXT_ACTION}</dt>
           <dd>
