@@ -51,6 +51,9 @@ export async function sendAsMailbox(
   to: string,
   subject: string,
   text: string,
+  /** Optional and TRAILING: when absent the wire body is byte-identical to every send this
+   *  function has ever made. `contentBytes` is base64. Used by report delivery for its PDFs. */
+  attachments?: { name: string; contentType: string; contentBytes: string }[],
 ): Promise<{ ok: true } | { ok: false; status: number; detail: string }> {
   const token = await graphToken()
   const res = await fetch(
@@ -63,6 +66,16 @@ export async function sendAsMailbox(
           subject,
           body: { contentType: 'Text', content: text },
           toRecipients: [{ emailAddress: { address: to } }],
+          ...(attachments?.length
+            ? {
+                attachments: attachments.map((a) => ({
+                  '@odata.type': '#microsoft.graph.fileAttachment',
+                  name: a.name,
+                  contentType: a.contentType,
+                  contentBytes: a.contentBytes,
+                })),
+              }
+            : {}),
         },
         saveToSentItems: true,
       }),
