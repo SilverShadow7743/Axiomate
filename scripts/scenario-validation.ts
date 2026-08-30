@@ -120,6 +120,11 @@ import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
+import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
+import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
+import type { DailyIms } from '../lib/reports/dailyIms'
+import type { OrganizationIdentity } from '../lib/config'
+import type { WeeklyClientPack, MonthlyGovernancePack } from '../lib/reports/clientPack'
 import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
 import {
   summarise,
@@ -2104,6 +2109,48 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: "Only Priya's approved week reaches the summary — 3 billable + 2 non-billable, the Monday before the period clipped out of both summary and daily detail. The three non-approved person-weeks land as exceptions with their own wordings and hour counts. The serialized report carries none of the three planted sentinels (a rate amount, a leave reason, a note body), and an empty period says empty rather than producing rows.", stops: '—', severity: '—', impact: 'Finance receives exactly the approved hours and an honest list of what is missing — never rates, reasons or notes.' } as const
       : { verdict: 'FAIL', actual: `approvedOnly=${approvedOnly} clipped=${clipped} (billable=${priyaRow?.billable} nonBillable=${priyaRow?.nonBillable}) grouped=${grouped} detailClipped=${detailClipped} threeWordings=${threeWordings} (${report.exceptions.map((x) => `${x.person}/${x.weekStarting}:${x.status}`).join('; ')}) clean=${clean} emptySaysSo=${emptySaysSo}`, stops: 'at the inclusion rule — unapproved hours leak in, approved edge days leak out, or a sentinel survives serialization', severity: 'P1', impact: 'finance receives hours nobody approved, misses approved ones, or sees a rate/reason/note that never leaves the system' } as const
+  },
+)
+
+scenario(
+  'DL1',
+  'Scheduled report delivery knows what is due and stamps what it sent',
+  "The delivery phase's pure halves, driven before the live pass may call them: due-logic (weekday IMS, Monday sends the PRIOR week, the 1st sends the PRIOR month, stamps dedupe, off-by-default, empty recipients silence) and the PDF renderers (checked by the async block at the end of this suite: report objects in, %PDF buffers out, a bad logo skipped rather than thrown).",
+  () => {
+    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com' }
+
+    const wednesday = deliveryDue(on, {}, '2026-08-26')
+    const midweek = wednesday.ims === true && wednesday.weeklyFor === null && wednesday.monthlyFor === null
+
+    /* Monday must send the week that FINISHED — the off-by-one that mails a period still in
+     * flight is the bug this scenario exists to catch. */
+    const monday = deliveryDue(on, {}, '2026-08-24')
+    const priorWeek = monday.weeklyFor === '2026-08-17'
+    const first = deliveryDue(on, {}, '2026-09-01')
+    const priorMonth = first.monthlyFor === '2026-08'
+    const janFirst = deliveryDue(on, {}, '2026-01-01')
+    const yearRollover = janFirst.monthlyFor === '2025-12'
+
+    const saturday = deliveryDue(on, {}, '2026-08-29')
+    const weekendQuiet = saturday.ims === false
+
+    const stamped = deliveryDue(on, { imsSentOn: '2026-08-26', weeklySentFor: '2026-08-17', monthlySentFor: '2026-08' }, '2026-08-26')
+    const stampHolds = stamped.ims === false
+    const mondayStamped = deliveryDue(on, { weeklySentFor: '2026-08-17' }, '2026-08-24')
+    const weekStampHolds = mondayStamped.weeklyFor === null
+    const firstStamped = deliveryDue(on, { monthlySentFor: '2026-08' }, '2026-09-01')
+    const monthStampHolds = firstStamped.monthlyFor === null
+
+    const off = deliveryDue(DEFAULT_REPORT_DELIVERY, {}, '2026-08-24')
+    const offByDefault = off.ims === false && off.weeklyFor === null && off.monthlyFor === null
+    const noRecipients = deliveryDue({ ...on, imsRecipients: [] }, {}, '2026-08-26').ims === false
+    const parsed = parseReportDelivery({ imsEnabled: 'yes', imsRecipients: 'ops@x.com', junk: 1 })
+    const failsClosed = parsed.imsEnabled === false && parsed.imsRecipients.length === 0 && parsed.packsEnabled === false
+
+    const good = midweek && priorWeek && priorMonth && yearRollover && weekendQuiet && stampHolds && weekStampHolds && monthStampHolds && offByDefault && noRecipients && failsClosed
+    return good
+      ? { verdict: 'PASS', actual: 'A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. PDF smoke is appended by the async block below.', stops: '—', severity: '—', impact: 'The pass can only ever send a complete period, once.' } as const
+      : { verdict: 'FAIL', actual: `midweek=${midweek} priorWeek=${priorWeek} (${monday.weeklyFor}) priorMonth=${priorMonth} (${first.monthlyFor}) yearRollover=${yearRollover} weekendQuiet=${weekendQuiet} stampHolds=${stampHolds} weekStampHolds=${weekStampHolds} monthStampHolds=${monthStampHolds} offByDefault=${offByDefault} noRecipients=${noRecipients} failsClosed=${failsClosed}`, stops: 'at the due-logic — a period still in flight would be mailed, a send repeated, or a disabled workspace would email', severity: 'P1', impact: 'unattended automation that spams, goes silent, or mails an incomplete week to be forwarded to a client' } as const
   },
 )
 
@@ -8323,6 +8370,83 @@ scenario(
       : { verdict: "FAIL", actual: `stubFree=${stubFree} capped=${capped} (${req.messages.length}/${req.truncated}) longCut=${longCut} context=${context}`, stops: "at the payload — a removed message travels, or an unbounded thread becomes an unbounded bill", severity: "P2", impact: "either deleted words reach the model or a long thread costs whatever it costs" } as const
   },
 )
+
+/* ================================================================== *
+ * RD1's async half — the PDF renderers.
+ *
+ * The scenario runner is deliberately synchronous; pdfkit is a stream and cannot be. Rather
+ * than fork the runner, the renderers are driven here at top level (this file is ESM) and the
+ * result is folded into RD1's already-recorded finding before the report below prints it —
+ * one scenario, one verdict, one gate.
+ * ================================================================== */
+
+{
+  const PDF_ORG: OrganizationIdentity = {
+    name: 'Axiocloud Solutions',
+    shortName: 'Axiocloud',
+    partyCode: 'Axiocloud',
+    description: '',
+    logoDataUri:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  }
+  const PDF_LINE = { id: 'OAPIL-1', subject: 'Subject', owner: 'Priya', status: 'Open', severity: 'High', due: '2026-09-10', lastActivity: '2026-08-12' }
+  const PDF_WEEKLY: WeeklyClientPack = {
+    client: 'OAPIL', asOf: '2026-08-15',
+    disclosure: { shown: 2, total: 3 },
+    position: { total: 2, open: 1, closed: 1, high: 1, medium: 0, low: 0 },
+    window: { from: '2026-08-08', to: '2026-08-15' },
+    lines: [PDF_LINE],
+    progress: { periodDeltas: { closed: 1, raised: 1 }, schedule: { pctComplete: 70, onTrack: 1, overdue: 0, projectedFinish: '2026-09-10' } },
+  }
+  const PDF_MONTHLY: MonthlyGovernancePack = {
+    client: 'OAPIL', asOf: '2026-08-15',
+    disclosure: { shown: 2, total: 3 },
+    position: { total: 2, open: 1, closed: 1, high: 1, medium: 0, low: 0 },
+    window: { from: '2026-07-16', to: '2026-08-15' },
+    movement: { trailAvailable: false, raised: 0, resolved: 0 },
+    progress: { periodDeltas: { closed: 1, raised: 2 }, schedule: { pctComplete: 70, onTrack: 1, overdue: 0, projectedFinish: '2026-09-10' } },
+  }
+  const PDF_IMS: DailyIms = {
+    scope: 'All clients', asAt: '2026-08-15',
+    position: { total: 3, open: 2, closed: 1, high: 1, medium: 1, low: 0, overdue: 1, atRisk: 0, blocked: 0, unscheduled: 1 },
+    movement: { trailAvailable: true, raised: ['OAPIL-1'], closed: [], statusChanges: [], notesAdded: [], otherEdits: 0 },
+    sections: [{ title: 'Overdue', note: 'A committed date has passed.', lines: [{ ...PDF_LINE, health: 'Overdue', nextAction: '' }] }],
+    open: [],
+  }
+
+  const rd1 = findings.find((f) => f.id === 'DL1')
+  try {
+    const isPdf = (b: Buffer) => b.length > 1000 && b.subarray(0, 4).toString('latin1') === '%PDF'
+    const [ims, weekly, monthly, badLogo] = await Promise.all([
+      renderImsPdf(PDF_IMS, PDF_ORG),
+      renderWeeklyPackPdf(PDF_WEEKLY, PDF_ORG),
+      renderMonthlyPackPdf(PDF_MONTHLY, PDF_ORG),
+      // An unembeddable logo (SVG) must be SKIPPED — the document renders, the image does not.
+      renderWeeklyPackPdf(PDF_WEEKLY, { ...PDF_ORG, logoDataUri: 'data:image/svg+xml;base64,PHN2Zy8+' }),
+    ])
+    const pdfGood = isPdf(ims) && isPdf(weekly) && isPdf(monthly) && isPdf(badLogo)
+    if (rd1 && rd1.verdict === 'PASS' && pdfGood) {
+      rd1.actual = rd1.actual.replace(
+        'PDF smoke is appended by the async block below.',
+        `All three renderers produced %PDF buffers (${ims.length}/${weekly.length}/${monthly.length} bytes) from pure report objects — with the logo embedded, and with an unembeddable SVG logo skipped rather than thrown.`,
+      )
+    } else if (rd1 && !pdfGood) {
+      rd1.verdict = 'FAIL'
+      rd1.actual += ` PDF smoke FAILED: ims=${isPdf(ims)} weekly=${isPdf(weekly)} monthly=${isPdf(monthly)} badLogoSkip=${isPdf(badLogo)}.`
+      rd1.stops = 'at the renderer — a report object did not become a well-formed PDF'
+      rd1.severity = 'P1'
+      rd1.impact = 'the pass would attach broken files to the mail it sends unattended'
+    }
+  } catch (err) {
+    if (rd1) {
+      rd1.verdict = 'FAIL'
+      rd1.actual += ` PDF smoke threw: ${err instanceof Error ? err.message : String(err)}.`
+      rd1.stops = 'at the renderer — it could not be driven to completion'
+      rd1.severity = 'P1'
+      rd1.impact = 'the pass would fail or attach nothing when delivery is enabled'
+    }
+  }
+}
 
 /* ================================================================== *
  * Report

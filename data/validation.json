@@ -413,6 +413,16 @@
       "impact": "Finance receives exactly the approved hours and an honest list of what is missing — never rates, reasons or notes."
     },
     {
+      "id": "DL1",
+      "title": "Scheduled report delivery knows what is due and stamps what it sent",
+      "expected": "The delivery phase's pure halves, driven before the live pass may call them: due-logic (weekday IMS, Monday sends the PRIOR week, the 1st sends the PRIOR month, stamps dedupe, off-by-default, empty recipients silence) and the PDF renderers (checked by the async block at the end of this suite: report objects in, %PDF buffers out, a bad logo skipped rather than thrown).",
+      "verdict": "PASS",
+      "actual": "A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. All three renderers produced %PDF buffers (2629/2684/2626 bytes) from pure report objects — with the logo embedded, and with an unembeddable SVG logo skipped rather than thrown.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The pass can only ever send a complete period, once."
+    },
+    {
       "id": "AU1",
       "title": "Every meaningful change answers who, what, when, before, after and why",
       "expected": "The trail is complete enough to defend a decision months later.",
