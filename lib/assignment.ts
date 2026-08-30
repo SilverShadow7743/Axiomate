@@ -180,7 +180,12 @@ export function availabilityOf(
     }
   }
 
-  const position = capacityFor(name, profile, commitments, allocations, window.from, window.to, pid)
+  // E4: the meetings term rides along — an owner buried in meetings has less room than their
+  // leave alone suggests. Holidays are not threaded here (pre-existing; out of scope).
+  const position = capacityFor(
+    name, profile, commitments, allocations, window.from, window.to, pid,
+    undefined, Object.values(state.meetings),
+  )
 
   if (position.availableHours === 0) {
     return {

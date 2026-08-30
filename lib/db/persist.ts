@@ -26,6 +26,7 @@ import {
   personalEventToRow,
   inboundMailToRow,
   commitmentToRow,
+  meetingToRow,
   versionToRow,
   timesheetToRow,
   rateToRow,
@@ -517,6 +518,22 @@ export async function persistSteps(
           update: row,
         })
       }
+      return
+    }
+
+    case 'upsertMeeting':
+    case 'cancelMeeting': {
+      // The arms mint, so the diff rides along — the E2 lesson, applied at birth.
+      for (const [id, m] of Object.entries(after.meetings)) {
+        if (before.meetings[id] === m) continue
+        const row = meetingToRow(tenantId, m)
+        await tx.meeting.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      await persistNotificationDiff(tx, tenantId, before, after)
       return
     }
 

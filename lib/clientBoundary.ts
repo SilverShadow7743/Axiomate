@@ -114,6 +114,8 @@ export function clientView(
     sows: {},
     allocations: {},
     commitments: {},
+    // E4: who meets whom, when, is internal machinery like the commitments above.
+    meetings: {},
     versions: {},
     // Who is staffed on a project is internal machinery, the same class as rates and
     // allocations above — withheld wholesale from every client view regardless of flags.

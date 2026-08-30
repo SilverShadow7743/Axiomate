@@ -200,6 +200,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       sows: parsed.sows ?? {},
       allocations: parsed.allocations ?? {},
       commitments: parsed.commitments ?? {},
+      // `?? {}` because a mirror written before meetings existed has no such key.
+      meetings: parsed.meetings ?? {},
       // `?? {}` because a mirror written before versions existed has no such key.
       versions: parsed.versions ?? {},
       // `?? {}` because a mirror written before timesheets existed has no such key.

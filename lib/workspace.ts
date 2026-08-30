@@ -166,7 +166,9 @@ import {
   type SizeBand,
 } from './estimation'
 import { blankEngagement, type EngagementDetail } from './engagement'
-import { addWorkingDays, daysBetween, workingDaysBetween } from './dates'
+import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
+import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
+import { commitmentCounts } from './availability'
 import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,
@@ -438,6 +440,8 @@ export interface WorkspaceState {
    * `./intake`'s `InboundMail`; `internal.view`-gated only, not narrowed further.
    */
   inboundMail: Record<string, InboundMail>
+  /** E4 — boot-shipped like commitments; every availability-engine consumer is client-side. */
+  meetings: Record<string, Meeting>
   /** The operating model: terminology, roles, responsibilities, agents, routing, intake. */
   model: OperatingModel
   audit: AuditEntry[]
@@ -734,6 +738,7 @@ export function initWorkspace(
     personalEvents: {},
     // A fresh workspace has received no mail yet — the seed predates this record existing.
     inboundMail: {},
+    meetings: {},
     model: initModel(owners, seedIssues.map((i) => i.type)),
     audit: [],
     seq: 1,
@@ -1252,6 +1257,26 @@ export type Action =
    */
   | { t: 'decideLeave'; id: string; decision: 'approved' | 'returned'; note?: string; now: string }
   | { t: 'removeCommitment'; id: string; now: string }
+  /* ---- MEETINGS (E4) ---- */
+  /**
+   * The organizer is whoever dispatches the creation — computed, never a field, the same
+   * no-forgery rule attribution follows everywhere. Editing is the organizer's or a
+   * platform-configurer's; conflicts (an attendee's approved leave, an overlapping meeting)
+   * ride the success message and never refuse — the leave precedent verbatim.
+   */
+  | {
+      t: 'upsertMeeting'
+      id: string | null
+      title: string
+      startAt: string
+      endAt: string
+      attendeeIds: string[]
+      scopeKind?: MeetingScopeKind | null
+      scopeId?: string | null
+      note: string
+      now: string
+    }
+  | { t: 'cancelMeeting'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
   | { t: 'clearLifecycle'; issueId: string; now: string }
@@ -1695,12 +1720,14 @@ function mintApproval(
   aboutId: string,
   ruleId: string,
   now: string,
+  /** The preference consulted — 'approval' by default (the E2 loops); 'meeting' for E4's. */
+  kind: NotificationKind = 'approval',
 ): { notifications: Record<string, Notification>; seq: number; muted: { id: string | null; name: string }[] } {
   let out = notifications
   let seqAfter = seq
   const muted: { id: string | null; name: string }[] = []
   for (const r of recipients) {
-    const mode = modeFor(state.model.notificationPrefs, r.id, 'approval')
+    const mode = modeFor(state.model.notificationPrefs, r.id, kind)
     if (mode === 'mute') {
       muted.push(r)
       continue
@@ -6410,6 +6437,186 @@ Question: ${review.question}`),
           }),
         },
         message: 'Removed.',
+      }
+    }
+
+    /* ---------------- MEETINGS (E4) ---------------- */
+
+    case 'upsertMeeting': {
+      const may = can(state.model, actor, 'internal.view')
+      if (!may.allowed) return { state, error: may.reason ?? 'Booking a meeting is internal — this sign-in cannot.' }
+      const existing = a.id ? state.meetings[a.id] : null
+      if (a.id && (!existing || existing.deletedAt)) return { state, error: 'That meeting no longer exists.' }
+
+      const attendeeIds = [...new Set(a.attendeeIds)]
+      const unknown = attendeeIds.filter((pid) => !state.model.people[pid])
+      if (unknown.length) {
+        return { state, error: `Attendees are directory people, and ${unknown.length === 1 ? 'one id resolves' : `${unknown.length} ids resolve`} to nobody.` }
+      }
+      const problem = meetingProblem({ title: a.title, startAt: a.startAt, endAt: a.endAt, attendeeIds })
+      if (problem) return { state, error: problem.message }
+
+      const meId = directoryPersonFor(state.model, actor)?.id ?? null
+      if (existing) {
+        const own = existing.organizerId ? existing.organizerId === meId : existing.organizer.trim().toLowerCase() === by.trim().toLowerCase()
+        if (!own && !can(state.model, actor, 'config.manage').allowed) {
+          return { state, error: `Only ${existing.organizer} — the organizer — or a platform configurer can change this meeting.` }
+        }
+      }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `meet-${seq}`
+      const next: Meeting = {
+        id,
+        title: a.title.trim(),
+        startAt: a.startAt,
+        endAt: a.endAt,
+        organizer: existing?.organizer ?? by,
+        organizerId: existing?.organizerId ?? meId,
+        attendeeIds,
+        scopeKind: a.scopeKind ?? existing?.scopeKind ?? null,
+        scopeId: a.scopeId ?? existing?.scopeId ?? null,
+        note: a.note.trim(),
+        createdAt: existing?.createdAt ?? a.now,
+        createdBy: existing?.createdBy ?? by,
+        deletedAt: null,
+      }
+
+      /*
+       * Conflicts ride the success message and never refuse — the leave precedent verbatim:
+       * the meeting is not the problem, the plan around it is. Named per attendee: approved
+       * leave covering the meeting's day(s), and other live meetings whose times overlap.
+       */
+      const startDay = a.startAt.slice(0, 10)
+      const endDay = a.endAt.slice(0, 10)
+      const conflicts: string[] = []
+      for (const pid of attendeeIds) {
+        const person = state.model.people[pid]
+        const onLeave = Object.values(state.commitments).some(
+          (c) => !c.deletedAt && c.kind === 'Leave' && commitmentCounts(c) && c.personId === pid && c.startDate <= endDay && startDay <= c.endDate,
+        )
+        if (onLeave) conflicts.push(`${person.name} is on approved leave that day`)
+        const clash = Object.values(state.meetings).find(
+          (m) => m.id !== id && !m.deletedAt && m.attendeeIds.includes(pid) && m.startAt < a.endAt && a.startAt < m.endAt,
+        )
+        if (clash) conflicts.push(`${person.name} is already in “${clash.title}” then`)
+      }
+
+      /*
+       * The mints, discriminated by what actually happened: a new meeting invites every
+       * attendee but the actor; an edit tells current attendees only when the TIME moved
+       * (a note edit is not news), except that somebody newly ADDED gets an invite instead —
+       * one record per person. Somebody removed hears nothing. The counter starts from this
+       * arm's own seq (a new row already spent state.seq + 1 on its id) and the returned
+       * state carries the final counter — the E2 rule, asserted in E4B.
+       */
+      const timesChanged = !!existing && (existing.startAt !== a.startAt || existing.endAt !== a.endAt)
+      const when = `${formatIso(startDay)} ${a.startAt.slice(11, 16)}–${a.endAt.slice(11, 16)}`
+      const rec = (pid: string) => ({ id: pid, name: state.model.people[pid].name })
+      const invitees = (existing ? attendeeIds.filter((pid) => !existing.attendeeIds.includes(pid)) : attendeeIds)
+        .filter((pid) => pid !== meId)
+        .map(rec)
+      const moved = timesChanged
+        ? attendeeIds.filter((pid) => existing!.attendeeIds.includes(pid) && pid !== meId).map(rec)
+        : []
+
+      let notifications = state.notifications
+      let seqAfter = seq
+      let muted: { id: string | null; name: string }[] = []
+      if (invitees.length) {
+        const minted = mintApproval(
+          state, notifications, seqAfter, invitees,
+          `Meeting: ${next.title}`,
+          `${by} booked you into “${next.title}” — ${when}.`,
+          id, 'meeting-invite', a.now, 'meeting',
+        )
+        notifications = minted.notifications
+        seqAfter = minted.seq
+        muted = minted.muted
+      }
+      if (moved.length) {
+        const minted = mintApproval(
+          state, notifications, seqAfter, moved,
+          `Meeting moved: ${next.title}`,
+          `${by} moved “${next.title}” to ${when}.`,
+          id, 'meeting-changed', a.now, 'meeting',
+        )
+        notifications = minted.notifications
+        seqAfter = minted.seq
+        muted = [...muted, ...minted.muted]
+      }
+
+      let audit = log(actor, state, {
+        rowId: next.scopeId ?? 'CALENDAR',
+        field: 'meeting',
+        from: existing ? `${existing.title} ${existing.startAt}` : '',
+        to: `${next.title} ${a.startAt}→${a.endAt} · ${attendeeIds.length} attendee(s)`,
+        at: a.now,
+        by,
+      })
+      for (const m of muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: id,
+          field: 'notification',
+          from: '',
+          to: `in-app → ${m.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'meeting',
+        })
+      }
+
+      return {
+        state: { ...state, meetings: { ...state.meetings, [id]: next }, seq: seqAfter, notifications, audit },
+        message:
+          (existing ? 'Meeting updated. ' : 'Meeting booked. ') +
+          (conflicts.length ? `Worth knowing: ${conflicts.join('; ')}.` : ''),
+      }
+    }
+
+    case 'cancelMeeting': {
+      const m = state.meetings[a.id]
+      if (!m || m.deletedAt) return { state, error: 'That meeting no longer exists.' }
+      const meId = directoryPersonFor(state.model, actor)?.id ?? null
+      const own = m.organizerId ? m.organizerId === meId : m.organizer.trim().toLowerCase() === by.trim().toLowerCase()
+      if (!own && !can(state.model, actor, 'config.manage').allowed) {
+        return { state, error: `Only ${m.organizer} — the organizer — or a platform configurer can cancel this meeting.` }
+      }
+      const minted = mintApproval(
+        state, state.notifications, state.seq,
+        m.attendeeIds.filter((pid) => pid !== meId).map((pid) => ({ id: pid, name: state.model.people[pid]?.name ?? pid })),
+        `Cancelled: ${m.title}`,
+        `${by} cancelled “${m.title}” (${formatIso(m.startAt.slice(0, 10))}).`,
+        m.id, 'meeting-cancelled', a.now, 'meeting',
+      )
+      let audit = log(actor, state, {
+        rowId: m.scopeId ?? 'CALENDAR',
+        field: 'meeting',
+        from: `${m.title} ${m.startAt}`,
+        to: '(cancelled)',
+        at: a.now,
+        by,
+      })
+      for (const mu of minted.muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: m.id,
+          field: 'notification',
+          from: '',
+          to: `in-app → ${mu.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'meeting',
+        })
+      }
+      return {
+        state: {
+          ...state,
+          meetings: { ...state.meetings, [a.id]: { ...m, deletedAt: a.now } },
+          seq: minted.seq,
+          notifications: minted.notifications,
+          audit,
+        },
+        message: `“${m.title}” cancelled — its hours stop counting immediately.`,
       }
     }
 

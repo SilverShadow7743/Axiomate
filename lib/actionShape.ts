@@ -651,6 +651,21 @@ const SHAPES = {
   // and the unknown-key refusal is what keeps a caller from smuggling an approval in.
   decideLeave: { id: req(id), decision: req(oneOf(new Set(['approved', 'returned']))), note: opt(text), now },
   removeCommitment: { id: req(id), now },
+  /* ---- MEETINGS (E4) ---- */
+  // No organizer field, deliberately: the organizer is whoever dispatches, computed in the
+  // arm — the same no-forgery rule attribution follows everywhere.
+  upsertMeeting: {
+    id: req(idOrNull),
+    title: req(text),
+    startAt: req(text),
+    endAt: req(text),
+    attendeeIds: req(strings),
+    scopeKind: opt(oneOf(new Set(['issue', 'project']))),
+    scopeId: opt(text),
+    note: req(text),
+    now,
+  },
+  cancelMeeting: { id: req(id), now },
   /* ---- LIFECYCLE ---- */
   buildLifecycle: { issueId: req(id), slaDays: req(num), now },
   clearLifecycle: { issueId: req(id), now },

@@ -77,7 +77,7 @@ export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNot
  * finer name (leave-requested, leave-decided, timesheet-submitted, timesheet-decided) for
  * routing, but a person opts in or out of "decisions traffic" whole.
  */
-export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation', 'mention', 'approval', 'chat'] as const
+export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation', 'mention', 'approval', 'chat', 'meeting'] as const
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
 /**

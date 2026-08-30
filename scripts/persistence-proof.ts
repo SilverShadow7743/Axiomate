@@ -436,6 +436,38 @@ async function main() {
       !/Proof reason/.test(decidedNote.subject + decidedNote.body),
     decidedNote ? `${decidedNote.ruleId} to ${decidedNote.to}: ${decidedNote.body.slice(0, 70)}` : 'no notification row survived',
   )
+
+  /* E4: a meeting round-trips whole — the attendee id LIST is the field a careless mapper
+     drops — and its arms mint, so the invite and the cancellation must land beside the rows
+     (the persistSteps cases call persistNotificationDiff; this is the check that keeps them). */
+  const priyaId2 = Object.values(state.model.people).find((p) => p.name === 'Priya')?.id ?? ''
+  const meetWrote = await persistActions(TENANT, A, [
+    { t: 'upsertMeeting', id: null, title: 'Proof sync', startAt: '2026-09-10T09:00:00.000Z', endAt: '2026-09-10T10:30:00.000Z', attendeeIds: [priyaId2], scopeKind: 'issue', scopeId: 'PROOF-1', note: 'ninety minutes', now: NOW } as Action,
+  ])
+  const meetState = (await loadWorkspace(TENANT)).state
+  const meeting = Object.values(meetState.meetings).find((m) => m.title === 'Proof sync')
+  const invite = Object.values(meetState.notifications).find((n) => n.ruleId === 'meeting-invite')
+  check(
+    'a meeting survives Postgres with its attendee list and scope intact',
+    meetWrote.ok && meeting != null && meeting.attendeeIds.length === 1 && meeting.attendeeIds[0] === priyaId2 && meeting.scopeId === 'PROOF-1' && meeting.organizer === A.name,
+    meeting ? `attendees=${JSON.stringify(meeting.attendeeIds)} scope=${meeting.scopeKind}:${meeting.scopeId}` : (meetWrote.error ?? 'missing'),
+  )
+  check(
+    "and the attendee's invite landed beside it",
+    invite != null && invite.toId === priyaId2 && /Proof sync/.test(invite.body),
+    invite ? `${invite.to}: ${invite.subject}` : 'no invite row',
+  )
+  const cancelWrote = meeting
+    ? await persistActions(TENANT, A, [{ t: 'cancelMeeting', id: meeting.id, now: NOW } as Action])
+    : { ok: false, error: 'no meeting to cancel' }
+  const cancelState = (await loadWorkspace(TENANT)).state
+  const cancelled = meeting ? cancelState.meetings[meeting.id] : undefined
+  const cancelNote = Object.values(cancelState.notifications).find((n) => n.ruleId === 'meeting-cancelled')
+  check(
+    'a cancellation survives reload and its mint lands with it',
+    cancelWrote.ok && cancelled?.deletedAt != null && cancelNote != null && cancelNote.toId === priyaId2,
+    cancelled ? `deletedAt=${cancelled.deletedAt} note=${cancelNote?.subject ?? 'none'}` : ((cancelWrote as { error?: string }).error ?? 'missing'),
+  )
   check(
     'an allocation and a commitment keep their dates',
     allocation?.startDate === '2026-09-01' && commitment?.startDate === '2026-09-07' && commitment.hoursPerDay === 7.5,

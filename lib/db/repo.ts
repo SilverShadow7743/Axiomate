@@ -16,6 +16,7 @@ import {
   personSkillFromRow,
   documentFromRow,
   reviewFromRow,
+  meetingFromRow,
   milestoneFromRow,
   scopeItemFromRow,
   auditToRow,
@@ -147,6 +148,7 @@ type Reader = Pick<
   | 'document'
   | 'milestone'
   | 'scopeItem'
+  | 'meeting'
 >
 
 /**
@@ -161,7 +163,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -231,6 +233,8 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
       db.milestone.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
       db.scopeItem.findMany({ where: { tenantId }, orderBy: { sequence: 'asc' } }),
       db.documentReview.findMany({ where: { tenantId } }),
+      // Appended at the END, per this destructure's own warning above.
+      db.meeting.findMany({ where: { tenantId }, orderBy: { startAt: 'asc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -280,6 +284,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
     inboundMail: Object.fromEntries(inboundMail.map((m) => [m.id, inboundMailFromRow(m)])),
+    meetings: Object.fromEntries(meetings.map((m) => [m.id, meetingFromRow(m)])),
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),

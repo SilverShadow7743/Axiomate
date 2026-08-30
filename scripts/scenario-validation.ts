@@ -8013,6 +8013,96 @@ scenario(
   },
 )
 
+scenario(
+  "E4B",
+  "A meeting is booked, warned about, moved, and cancelled — and the right people hear each",
+  "E4 arms: booking invites every attendee but the actor, with the counter starting from the arm's own seq (the E2 rule, asserted); conflicts — an attendee's approved leave, an overlapping meeting — ride the success message and never refuse; only the organizer or a platform configurer edits; moving the TIME tells current attendees while a note edit is not news; somebody newly added gets an invite instead of a move, one record each; cancelling mints once and a second cancel refuses; a muted attendee is silent with the audit line; and the organizer cannot arrive over the wire.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === "Priya")!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === "Sam")!.id
+    const P: Actor = { id: "e4-priya", name: "Priya" }
+    const S: Actor = { id: "e4-sam", name: "Sam" }
+    const notifsOf = (st: WorkspaceState, rule: string) =>
+      Object.values(st.notifications).filter((n) => n.ruleId === rule)
+
+    // Sam carries a real delivery role, so the organizer check below tests a person who is
+    // NOT an admin — an unroled scenario actor falls back to Administrator, whose configurer
+    // branch may legitimately edit anything.
+    const setup = ok(BASE, { t: "config", op: { k: "upsertPerson", id: samId, name: "Sam", roleIds: ["ROLE_FUNCTIONAL"] }, now: NOW } as Action)
+
+    // 1. Booked: the invite reaches Sam and not the booking Priya; one seq for the row, one
+    //    per record, and the state carries the final counter.
+    const seqBefore = setup.seq
+    let r = apply(setup, { t: "upsertMeeting", id: null, title: "Sprint sync", startAt: "2026-09-10T09:00:00.000Z", endAt: "2026-09-10T10:00:00.000Z", attendeeIds: [priyaId, samId], note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`book refused: ${r.error}`)
+    let st = r.state
+    const meeting = Object.values(st.meetings)[0]
+    const invites = notifsOf(st, "meeting-invite")
+    const booked =
+      meeting?.organizer === "Priya" &&
+      invites.length === 1 && invites[0].toId === samId &&
+      st.seq === seqBefore + 2
+
+    // 2. Conflicts warn and never refuse: Sam now has approved leave over the slot; a second
+    //    meeting that day names both the leave and the clash, and still books.
+    let c = apply(st, { t: "upsertCommitment", id: null, person: "Sam", kind: "Leave", startDate: "2026-09-10", endDate: "2026-09-10", hoursPerDay: 7.5, note: "", now: NOW } as Action, { id: "e4-admin", name: "Booker Admin" })
+    if (c.error) throw new Error(`leave refused: ${c.error}`)
+    const warned = apply(c.state, { t: "upsertMeeting", id: null, title: "Clashing sync", startAt: "2026-09-10T09:30:00.000Z", endAt: "2026-09-10T10:30:00.000Z", attendeeIds: [samId], note: "", now: NOW } as Action, P)
+    const warnsNotRefuses =
+      !warned.error &&
+      /approved leave/.test(warned.message ?? "") &&
+      /already in/.test(warned.message ?? "")
+
+    // 3. Only the organizer (or a configurer) edits; a non-organizer directory person bounces.
+    const stranger = apply(st, { t: "upsertMeeting", id: meeting.id, title: "Sprint sync", startAt: "2026-09-10T09:00:00.000Z", endAt: "2026-09-10T10:00:00.000Z", attendeeIds: [priyaId, samId], note: "hijack", now: NOW } as Action, S)
+    const organizerRule = Boolean(stranger.error) && /organizer/.test(stranger.error ?? "")
+
+    // 4. A note-only edit is not news; moving the time tells Sam; an attendee added in the
+    //    same edit gets an INVITE instead — one record per person.
+    r = apply(st, { t: "upsertMeeting", id: meeting.id, title: "Sprint sync", startAt: "2026-09-10T09:00:00.000Z", endAt: "2026-09-10T10:00:00.000Z", attendeeIds: [priyaId, samId], note: "agenda attached", now: NOW } as Action, P)
+    if (r.error) throw new Error(`note edit refused: ${r.error}`)
+    const quietNote = notifsOf(r.state, "meeting-changed").length === 0 && notifsOf(r.state, "meeting-invite").length === 1
+    let withLena = apply(st, { t: "config", op: { k: "upsertPerson", id: null, name: "Lead Lena", roleIds: ["ROLE_ENGAGEMENT_LEAD"] }, now: NOW } as Action, { id: "e4-admin", name: "Booker Admin" })
+    const lenaId = Object.values(withLena.state.model.people).find((p) => p.name === "Lead Lena")!.id
+    r = apply(withLena.state, { t: "upsertMeeting", id: meeting.id, title: "Sprint sync", startAt: "2026-09-10T11:00:00.000Z", endAt: "2026-09-10T12:00:00.000Z", attendeeIds: [priyaId, samId, lenaId], note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`move refused: ${r.error}`)
+    st = r.state
+    const movedTo = notifsOf(st, "meeting-changed")
+    const invitedNow = notifsOf(st, "meeting-invite")
+    const moveSplits =
+      movedTo.length === 1 && movedTo[0].toId === samId &&
+      invitedNow.length === 2 && invitedNow.some((n) => n.toId === lenaId)
+
+    // 5. Cancel mints once to attendees-minus-actor; a second cancel refuses.
+    r = apply(st, { t: "cancelMeeting", id: meeting.id, now: NOW } as Action, P)
+    if (r.error) throw new Error(`cancel refused: ${r.error}`)
+    st = r.state
+    const cancels = notifsOf(st, "meeting-cancelled")
+    const again = apply(st, { t: "cancelMeeting", id: meeting.id, now: NOW } as Action, P)
+    const cancelOnce =
+      st.meetings[meeting.id].deletedAt !== null &&
+      cancels.length === 2 && !cancels.some((n) => n.toId === priyaId) &&
+      Boolean(again.error)
+
+    // 6. A muted attendee hears nothing, and the audit answers why.
+    let muted = apply(BASE, { t: "setNotificationPref", personId: samId, kind: "meeting", mode: "mute", now: NOW } as Action, { id: "e4-admin", name: "Booker Admin" })
+    const q = apply(muted.state, { t: "upsertMeeting", id: null, title: "Quiet sync", startAt: "2026-09-11T09:00:00.000Z", endAt: "2026-09-11T09:30:00.000Z", attendeeIds: [samId], note: "", now: NOW } as Action, P)
+    const muteHolds =
+      !q.error &&
+      notifsOf(q.state, "meeting-invite").length === 0 &&
+      q.state.audit.some((e) => e.field === "notification" && /muted by their preference/.test(e.to ?? ""))
+
+    // 7. The organizer cannot arrive over the wire: the boundary refuses the unknown key.
+    const smuggled = actionProblem({ t: "upsertMeeting", id: null, title: "X", startAt: "2026-09-10T09:00:00.000Z", endAt: "2026-09-10T10:00:00.000Z", attendeeIds: [priyaId], organizer: "Forged", note: "", now: NOW })
+    const wireRefused = smuggled !== null
+
+    const good = booked && warnsNotRefuses && organizerRule && quietNote && moveSplits && cancelOnce && muteHolds && wireRefused
+    return good
+      ? { verdict: "PASS", actual: "Booking invites Sam alone and the counter lands at seq+2; the clashing booking succeeds while naming Sam's approved leave AND the overlap; a non-organizer's edit bounces in the organizer's name; a note edit mints nothing; the move tells Sam while newly-added Lena gets an invite — one record each; the cancel reaches both and a second cancel refuses; a muted Sam hears nothing with the audit line written; and a smuggled organizer bounces off the boundary.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `booked=${booked} (seq ${seqBefore}->${st.seq}) warnsNotRefuses=${warnsNotRefuses} (${(warned.message ?? warned.error ?? "").slice(0, 90)}) organizerRule=${organizerRule} quietNote=${quietNote} moveSplits=${moveSplits} cancelOnce=${cancelOnce} muteHolds=${muteHolds} wireRefused=${wireRefused}`, stops: "at the arm — the wrong people hear, a conflict refuses what should warn, or the seq bookkeeping reuses an id", severity: "P1", impact: "meetings either spam, silence, or silently corrupt the notification store" } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

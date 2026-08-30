@@ -66,6 +66,8 @@ const KINDS = new Set([
   'upsertCommitment',
   'decideLeave',
   'removeCommitment',
+  'upsertMeeting',
+  'cancelMeeting',
   'recordVersion',
   'correctVersion',
   'removeVersion',

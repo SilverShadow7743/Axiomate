@@ -217,6 +217,7 @@ function PrefRows({
     // The per-thread-subscribe decision (E3): following a discussion is what turns this on
     // per thread; this row is the whole-kind say over that traffic. Mentions stay their own.
     { kind: 'chat', label: 'When a discussion I follow gets a message', show: true },
+    { kind: 'meeting', label: 'When a meeting I am in is booked, moved or cancelled', show: true },
   ]
   const MODES: { mode: NotificationMode; label: string }[] = [
     { mode: 'in-app', label: 'tell me here' },
