@@ -15,6 +15,7 @@ import {
   type TimeEntry,
 } from '@/lib/time'
 import { addDays, formatIso, formatShort } from '@/lib/dates'
+import { isTerminal } from '@/lib/schedule'
 import {
   weekStarting,
   weekLabel,
@@ -144,7 +145,13 @@ export default function TimeTab({
    * of the ordinary case is exactly what the allowance exists to avoid.
    */
   const lateness = backdated(date, today, state.model.timePolicy.backdatingAllowanceDays)
-  const needsReason = lateness.justificationRequired
+  /*
+   * Closed work reopens its window with a reason — the extension the refusal message always
+   * promised. The box appears BEFORE the refusal would, so the flow is one step, and the same
+   * field serves lateness when both apply: an entry carries one justification.
+   */
+  const onClosedWork = isTerminal(state.issues[issueId]?.status ?? null)
+  const needsReason = lateness.justificationRequired || onClosedWork
 
   /* ---------------- the week, and whether it is still theirs ---------------- */
 
@@ -518,6 +525,7 @@ export default function TimeTab({
                         person={person}
                         today={today}
                         allowanceDays={state.model.timePolicy.backdatingAllowanceDays}
+                        onClosedWork={onClosedWork}
                         draft={drafts[cell.date] ?? EMPTY_DRAFT}
                         onChange={(patch) =>
                           setDrafts((prev) => ({
@@ -628,12 +636,18 @@ export default function TimeTab({
           {needsReason && (
             <div className="time-row">
               <label className="fld time-fld-note">
-                <span className="fld-label">Why so late</span>
+                <span className="fld-label">
+                  {lateness.justificationRequired ? 'Why so late' : 'Why on closed work'}
+                </span>
                 <input
                   value={justification}
-                  placeholder={`${lateness.days} days after the work — the allowance is ${state.model.timePolicy.backdatingAllowanceDays}. The week's approver reads this.`}
+                  placeholder={
+                    lateness.justificationRequired
+                      ? `${lateness.days} days after the work — the allowance is ${state.model.timePolicy.backdatingAllowanceDays}. The week's approver reads this.`
+                      : 'This issue is closed — the reason reopens its window, and the week’s approver reads it.'
+                  }
                   onChange={(e) => setJustification(e.target.value)}
-                  aria-label="Reason for the late entry"
+                  aria-label="Reason for the entry"
                 />
               </label>
             </div>
@@ -844,6 +858,7 @@ function WeekDayCell({
   person,
   today,
   allowanceDays,
+  onClosedWork,
   draft,
   onChange,
 }: {
@@ -851,13 +866,15 @@ function WeekDayCell({
   person: string
   today: string
   allowanceDays: number
+  /** The issue is terminal — the extension applies, so the reason field shows for every day. */
+  onClosedWork: boolean
   draft: WeekDraft
   onChange: (patch: Partial<WeekDraft>) => void
 }) {
   const parsed = Number(draft.hours)
   const problem = draft.hours.trim() ? checkEntry({ hours: parsed, date, person }, today) : null
   const lateness = backdated(date, today, allowanceDays)
-  const needsReason = draft.hours.trim() && lateness.justificationRequired
+  const needsReason = draft.hours.trim() && (lateness.justificationRequired || onClosedWork)
 
   return (
     <div className="time-week-day-form">
@@ -895,9 +912,11 @@ function WeekDayCell({
         <input
           className="fld-input"
           value={draft.justification}
-          placeholder={`${lateness.days}d late — reason needed`}
+          placeholder={
+            lateness.justificationRequired ? `${lateness.days}d late — reason needed` : 'closed work — reason needed'
+          }
           onChange={(e) => onChange({ justification: e.target.value })}
-          aria-label={`Reason for the late entry on ${date}`}
+          aria-label={`Reason for the entry on ${date}`}
         />
       )}
       {problem && <span className="ov-gate">{problem.message}</span>}

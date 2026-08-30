@@ -3915,7 +3915,17 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         a.date,
         weekStateFor(state, a.person, a.date),
       )
-      if (refusesTimeEntry(verdict)) return { state, error: verdict.message }
+      const justification = (a.justification ?? '').trim()
+      /*
+       * The extension the refusal message has always promised: hours on CLOSED work record
+       * with a reason and an approval. The reason is this justification, stored like the
+       * grace gate's; the approval is the week's — the decider sees every justified entry at
+       * decision time, the same second person that rule already asks for. `issue-closed` is
+       * the ONLY extendable kind: a date before the window or somebody else's hours stay
+       * refusals whatever reason is offered.
+       */
+      const closedException = verdict.kind === 'issue-closed' && justification !== ''
+      if (refusesTimeEntry(verdict) && !closedException) return { state, error: verdict.message }
 
       /*
        * The grace gate. Lateness is judged by the SERVER's clock (`a.now`), never the
@@ -3925,7 +3935,6 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
        * sees that reason at approval time, which is the second person the rule asks for.
        */
       const lateness = backdated(a.date, today, state.model.timePolicy.backdatingAllowanceDays)
-      const justification = (a.justification ?? '').trim()
       if (lateness.justificationRequired && !justification) {
         return {
           state,
@@ -3946,7 +3955,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         activity: a.activity,
         billable: a.billable,
         note: a.note.trim(),
-        justification: lateness.justificationRequired ? justification : null,
+        justification: lateness.justificationRequired || closedException ? justification : null,
         createdBy: by,
         createdAt: a.now,
         updatedBy: null,
@@ -3964,7 +3973,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             rowId: a.issueId,
             field: 'time',
             from: '',
-            to: `${a.hours}h · ${a.activity} · ${a.person}${a.activityId ? ` · on ${state.activities[a.activityId]?.phase ?? a.activityId}` : ''}${a.billable ? '' : ' · non-billable'}${lateness.justificationRequired ? ` · ${lateness.days} days late` : ''}`,
+            to: `${a.hours}h · ${a.activity} · ${a.person}${a.activityId ? ` · on ${state.activities[a.activityId]?.phase ?? a.activityId}` : ''}${a.billable ? '' : ' · non-billable'}${lateness.justificationRequired ? ` · ${lateness.days} days late` : ''}${closedException ? ' · on closed work' : ''}`,
             at: a.now,
             by,
           }),
@@ -3975,7 +3984,14 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
          * seeing, and neither is a reason to refuse hours somebody actually worked. The design
          * is explicit that an overrun warns and never refuses.
          */
-        message: [`${a.hours}h recorded.`, ...verdict.warnings, dayWarning(state, a.person, a.date, a.hours)]
+        message: [
+          `${a.hours}h recorded.`,
+          ...verdict.warnings,
+          closedException
+            ? 'Recorded on closed work — the reason travels with the week to its approver.'
+            : '',
+          dayWarning(state, a.person, a.date, a.hours),
+        ]
           .filter(Boolean)
           .join(' '),
       }
@@ -4043,7 +4059,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             next.date,
             weekStateFor(state, next.person, next.date),
           )
-          if (refusesTimeEntry(windowVerdict)) return { state, error: windowVerdict.message }
+          /* The same closed-work exception `addTime` grants, judged on the entry as it will
+           * BE — the two-step stays shut for the unjustified. */
+          const closedOk =
+            windowVerdict.kind === 'issue-closed' && (next.justification ?? '').trim() !== ''
+          if (refusesTimeEntry(windowVerdict) && !closedOk) {
+            return { state, error: windowVerdict.message }
+          }
         }
       }
 

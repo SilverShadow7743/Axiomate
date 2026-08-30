@@ -3025,6 +3025,34 @@ scenario(
       t: 'updateTime', id: legalId, patch: { date: '2026-08-01' }, now: NOW,
     } as Action, A)
 
+    /*
+     * The extension itself, now that it exists: hours on CLOSED work record with a reason —
+     * stored like a grace-gate justification, marked in the audit, surfaced to the week's
+     * approver — and the edit path honours the same rule in both directions: a justified
+     * entry may move, one whose reason is removed may not.
+     */
+    const extended = apply(shut, {
+      t: 'addTime', issueId: 'OAPIL-9', person: 'Priya', date: '2026-08-05',
+      hours: 2, activity: 'Investigation', billable: true, note: '',
+      justification: 'Wrap-up call after closure.', now: NOW,
+    } as Action, A)
+    const extEntry = Object.values(extended.state.timeEntries)[0]
+    const extensionWorks =
+      !extended.error &&
+      extEntry?.justification === 'Wrap-up call after closure.' &&
+      /closed work/.test(extended.message ?? '') &&
+      extended.state.audit.some((e) => e.field === 'time' && /on closed work/.test(e.to ?? ''))
+    /* Moving a stale entry demands a FRESH reason in the patch — the grace gate's own
+     * standing rule — so the fair test offers one; the window's closed-work exception then
+     * reads the reason the entry carries. */
+    const extMoved = apply(extended.state, {
+      t: 'updateTime', id: extEntry?.id ?? '', patch: { date: '2026-08-06', justification: 'Moved a day — same wrap-up call.' }, now: NOW,
+    } as Action, A)
+    const extStripped = apply(extended.state, {
+      t: 'updateTime', id: extEntry?.id ?? '', patch: { date: '2026-08-06', justification: '' }, now: NOW,
+    } as Action, A)
+    const editHonours = !extMoved.error && Boolean(extStripped.error)
+
     const good =
       /* the wiring, driven through the reducer */
       !onOpeningDay.error &&
@@ -3033,6 +3061,8 @@ scenario(
       Boolean(afterClose.error) &&
       Boolean(twoStep.error) &&
       /before/.test(twoStep.error ?? '') &&
+      extensionWorks &&
+      editHonours &&
       /extension/.test(afterClose.error ?? '') &&
       fellBack.source === 'default' &&
       fellBack.date === '2026-08-03' &&
@@ -3058,9 +3088,9 @@ scenario(
       timeEntryNote(onOpening) === undefined
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. **And \`addTime\` now consults all of it**: an entry on the opening day is accepted, one the day before is refused ("${(beforeOpening.error ?? '').slice(0, 60)}…"), and one against a closed issue is refused with the route out ("${(afterClose.error ?? '').slice(-58)}"). The authority rule stays where it was, deliberately — this module asks whether the person owns the ISSUE, and the reducer asks whether the actor may record for the PERSON, which would have started refusing a consultant logging their own hours on a colleague's work. And the two-step is shut: an entry added on a legal date refuses to be EDITED onto a date before the window ("${(twoStep.error ?? '').slice(0, 60)}…") — \`updateTime\` consults the same window against the destination.`,
-      stops: 'at the screen. The refusals are enforced end to end — including the edit two-step — and the extension route they name (logging against a closed issue with a reason and an approval) has no UI, so today the answer is to reopen the issue.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Three days past the due date and still open, the entry is allowed and carries a warning — "${pastDue.warnings[0] ?? ''}" — rather than a refusal, because a control that fires on every overrunning issue stops being a control. The window shuts when the issue does: a closed record refuses and names the route, "${closed.message.split('. ').slice(-1)[0]}". The opening date is ${fellBack.date} with provenance \`${fellBack.source}\` and the words "${fellBack.because}", so a window derived from the raised date can never be read as a plan somebody set; a recorded start date reports \`${stated.source}\` instead. A day before the window is refused, the opening day itself is not. Somebody else's hours refuse without \`time.recordForOthers\` and are allowed with it — the design writes that permission \`time.logForOthers\`, which does not exist, so the real key is used. A submitted week is frozen and a returned one is editable again. **And \`addTime\` now consults all of it**: an entry on the opening day is accepted, one the day before is refused ("${(beforeOpening.error ?? '').slice(0, 60)}…"), and one against a closed issue is refused with the route out ("${(afterClose.error ?? '').slice(-58)}"). The authority rule stays where it was, deliberately — this module asks whether the person owns the ISSUE, and the reducer asks whether the actor may record for the PERSON, which would have started refusing a consultant logging their own hours on a colleague's work. And the two-step is shut: an entry added on a legal date refuses to be EDITED onto a date before the window ("${(twoStep.error ?? '').slice(0, 60)}…") — \`updateTime\` consults the same window against the destination. And the promised extension is REAL: hours on a closed issue record with a reason — stored, audited \"on closed work\", surfaced to the week's approver with every other justified entry — a justified entry may still be corrected, and stripping the reason while moving it refuses.`,
+      stops: '—',
       severity: '—',
       impact:
         'Time could be logged against closed work and against dates before the work existed. Both are now refused, and an overrunning issue still warns rather than refusing — which is what keeps the refusal meaningful.',
