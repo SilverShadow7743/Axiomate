@@ -31,6 +31,9 @@ import type {
   DocumentReview as DocumentReviewRow,
   Milestone as MilestoneRow,
   ScopeItem as ScopeItemRow,
+  DiscussionThread as DiscussionThreadRow,
+  DiscussionMessage as DiscussionMessageRow,
+  DiscussionFollow as DiscussionFollowRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
@@ -64,6 +67,7 @@ import type {
   MilestoneBasis,
 } from '../milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
+import type { DiscussionFollow, DiscussionMessage, DiscussionScopeKind, DiscussionThread } from '../discussion'
 import type { TenantId } from '../tenant'
 
 /**
@@ -1031,6 +1035,74 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Discussion (E3) — server-queried; these rows never ride the boot payload
+ * ================================================================== */
+
+export function discussionThreadToRow(tenantId: TenantId, t: DiscussionThread): Prisma.DiscussionThreadUncheckedCreateInput {
+  return {
+    tenantId,
+    id: t.id,
+    scopeKind: t.scopeKind,
+    scopeId: t.scopeId,
+    createdAt: new Date(t.createdAt),
+    createdBy: t.createdBy,
+  }
+}
+
+export function discussionThreadFromRow(r: DiscussionThreadRow): DiscussionThread {
+  return {
+    id: r.id,
+    scopeKind: r.scopeKind as DiscussionScopeKind,
+    scopeId: r.scopeId,
+    createdAt: r.createdAt.toISOString(),
+    createdBy: r.createdBy,
+  }
+}
+
+export function discussionMessageToRow(tenantId: TenantId, m: DiscussionMessage): Prisma.DiscussionMessageUncheckedCreateInput {
+  return {
+    tenantId,
+    id: m.id,
+    threadId: m.threadId,
+    author: m.author,
+    authorId: m.authorId ?? null,
+    body: m.body,
+    createdAt: new Date(m.createdAt),
+    deletedAt: m.deletedAt ? new Date(m.deletedAt) : null,
+  }
+}
+
+export function discussionMessageFromRow(r: DiscussionMessageRow): DiscussionMessage {
+  return {
+    id: r.id,
+    threadId: r.threadId,
+    author: r.author,
+    authorId: r.authorId ?? null,
+    body: r.body,
+    createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function discussionFollowToRow(tenantId: TenantId, f: DiscussionFollow & { id: string }): Prisma.DiscussionFollowUncheckedCreateInput {
+  return {
+    tenantId,
+    id: f.id,
+    threadId: f.threadId,
+    personId: f.personId,
+    createdAt: new Date(f.createdAt),
+  }
+}
+
+export function discussionFollowFromRow(r: DiscussionFollowRow): DiscussionFollow {
+  return {
+    threadId: r.threadId,
+    personId: r.personId,
+    createdAt: r.createdAt.toISOString(),
   }
 }
 

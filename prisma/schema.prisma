@@ -143,6 +143,9 @@ model Tenant {
   documentReviews DocumentReview[]
   milestones    Milestone[]
   scopeItems    ScopeItem[]
+  discussionThreads  DiscussionThread[]
+  discussionMessages DiscussionMessage[]
+  discussionFollows  DiscussionFollow[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -844,6 +847,59 @@ model Notification {
   /// "What is waiting for me" and "what never left the building" are the two queries.
   @@index([tenantId, to, readAt])
   @@index([tenantId, delivery])
+}
+
+/// One scope's discussion — a work record's or a project's. E3: server-queried, never in the
+/// boot payload; at most one live thread per scope, enforced HERE by the unique index rather
+/// than by check-then-insert, which races.
+model DiscussionThread {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String @default(cuid())
+  /// 'issue' | 'project' — the closed vocabulary lives in lib/discussion.ts.
+  scopeKind String
+  /// The issue id or the project node id. A reference, not a foreign key — the same posture
+  /// Notification.aboutId took in 20260830000002.
+  scopeId   String
+
+  createdAt DateTime
+  createdBy String
+
+  @@id([tenantId, id])
+  @@unique([tenantId, scopeKind, scopeId])
+}
+
+model DiscussionMessage {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id       String @default(cuid())
+  threadId String
+  /// Display name at write time; authorId is the durable join when the directory resolves.
+  author   String
+  authorId String?
+  body     String @db.Text
+
+  createdAt DateTime
+  /// Soft — a removed message leaves a "removed" stub, like notes.
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, threadId, createdAt])
+}
+
+model DiscussionFollow {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String @default(cuid())
+  threadId  String
+  personId  String
+  createdAt DateTime
+
+  @@id([tenantId, id])
+  @@unique([tenantId, threadId, personId])
 }
 
 /// A decision somebody with authority was asked for, and gave or refused.
