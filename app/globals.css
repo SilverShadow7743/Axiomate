@@ -350,6 +350,71 @@ button {
   top: 6px;
   color: var(--text-faint);
 }
+/* Global-search dropdown — additive beside the box; the row-filter path is untouched. */
+.gs-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 420px;
+  max-height: 440px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  z-index: 60;
+  padding: 4px 0;
+}
+.gs-group-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 6px 12px 2px;
+}
+.gs-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.gs-hit.on {
+  background: var(--row-hover, rgba(0, 0, 0, 0.05));
+}
+.gs-hit.inert {
+  cursor: default;
+  opacity: 0.75;
+}
+.gs-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gs-snippet {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gs-snippet b {
+  color: var(--accent);
+}
+.gs-empty,
+.gs-foot {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  margin: 0;
+}
+.gs-foot {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  font-style: italic;
+}
 
 .segmented {
   display: inline-flex;

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
@@ -66,6 +66,8 @@ import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyI
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './ClientPackView'
 import FinanceReportDialog from './FinanceReportDialog'
+import SearchResults from './SearchResults'
+import { searchWorkspace, type SearchHit } from '@/lib/search'
 import { planSlaDates, slaReason } from '@/lib/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
@@ -644,6 +646,22 @@ export default function IssueWorkspace({
    * *to* the newly selected row — the row menu's Log time opens the Time tab on it — does not
    * do it to the row the person chose to stay on.
    */
+  /* ---------------- global search (docs/plans/2026-08-30-global-search-design.md) ----------------
+   * The box's row-filtering path (`filters.search` → matchesFilters) is untouched: the
+   * dropdown is purely additive, computed over the SAME already-redacted boot state, so it
+   * can only ever show what this reader may see (GS1 pins the composition). The query is
+   * deferred so the grid keeps narrowing at full keystroke speed while the scan lags a paint
+   * behind at worst. */
+  const [searchFocus, setSearchFocus] = useState(false)
+  const [searchActive, setSearchActive] = useState(0)
+  const deferredSearch = useDeferredValue(filters.search)
+  const searchHits = useMemo(
+    () => (deferredSearch.trim().length >= 2 ? searchWorkspace(state, deferredSearch, today) : []),
+    [state, deferredSearch, today],
+  )
+  const searchOpen = searchFocus && filters.search.trim().length >= 2
+  useEffect(() => setSearchActive(0), [deferredSearch])
+
   const requestSelect = useCallback(
     (id: string | null): boolean => {
       if (dirty && id !== selectedId) {
@@ -657,6 +675,15 @@ export default function IssueWorkspace({
       return true
     },
     [dirty, selectedId],
+  )
+
+  /** Open a search hit's anchor through the SAME dirty-checking gate every row click uses. */
+  const openSearchHit = useCallback(
+    (hit: SearchHit) => {
+      if (!hit.anchorId) return
+      if (requestSelect(hit.anchorId)) setSearchFocus(false)
+    },
+    [requestSelect],
   )
 
   /**
@@ -1896,10 +1923,39 @@ export default function IssueWorkspace({
           </svg>
           <input
             type="search"
+            role="combobox"
+            aria-expanded={searchOpen}
+            aria-controls="gs-results"
+            aria-haspopup="listbox"
             placeholder="Search issue ID, subject, owner, next action…"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            onFocus={() => setSearchFocus(true)}
+            onBlur={() => setSearchFocus(false)}
+            onKeyDown={(e) => {
+              if (!searchOpen) return
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSearchActive((i) => Math.min(i + 1, searchHits.length - 1))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSearchActive((i) => Math.max(i - 1, 0))
+              } else if (e.key === 'Enter') {
+                const hit = searchHits[searchActive]
+                if (hit?.anchorId) openSearchHit(hit)
+              } else if (e.key === 'Escape') {
+                setSearchFocus(false)
+              }
+            }}
           />
+          {searchOpen && (
+            <SearchResults
+              hits={searchHits}
+              activeIndex={searchActive}
+              onOpen={openSearchHit}
+              onHover={setSearchActive}
+            />
+          )}
         </div>
 
         {/* Moved to the far right, beside the save state, where an account control is looked
