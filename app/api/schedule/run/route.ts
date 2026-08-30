@@ -155,6 +155,8 @@ export async function POST(req: Request) {
       // one that worked unless somebody says so.
       misses: run.misses,
       refusals: run.refusals,
+      // What report delivery emailed and what Microsoft refused — the pass's honesty pattern.
+      delivery: run.delivery,
     })
   } catch (err) {
     return NextResponse.json({ ok: false, error: describeDbError(err) }, { status: 500 })
