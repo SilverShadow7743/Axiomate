@@ -1,5 +1,6 @@
 import { workingDaysBetween } from './dates'
 import { availabilityFor, overlapWorkingDays } from './availability'
+import type { Meeting } from './meetings'
 import { valueAt, type Version } from './versioning'
 
 /**
@@ -308,8 +309,10 @@ export function capacityFor(
   /** The person's directory id when known — id-joined rows match through a rename. */
   personId?: string | null,
   holidays?: ReadonlySet<string>,
+  /** E4's term, passed straight through. Absent means zero — pre-E4 numbers untouched. */
+  meetings?: Meeting[],
 ): CapacityPosition {
-  const p = availabilityFor(person, profile, commitments, allocations, from, to, personId, holidays)
+  const p = availabilityFor(person, profile, commitments, allocations, from, to, personId, holidays, meetings)
   return {
     person,
     from,

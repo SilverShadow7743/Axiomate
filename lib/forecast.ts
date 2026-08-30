@@ -3,6 +3,7 @@ import { deriveEffort, type Estimate, type SizeBand } from './estimation'
 import { hoursOn, type TimeEntry } from './time'
 import { formatIso } from './dates'
 import type { Allocation, Commitment, ResourceProfile } from './capacity'
+import type { Meeting } from './meetings'
 
 /**
  * Forecast v1 — can this land by the target date, given who is actually available?
@@ -62,6 +63,8 @@ export function forecastFor(args: {
   allocations: Allocation[]
   today: string
   holidays?: ReadonlySet<string>
+  /** E4's term. Absent means zero — E1D's baselines hold untouched. */
+  meetings?: Meeting[]
 }): Forecast {
   const estimated = args.estimate ? deriveEffort(args.estimate, args.bands).effortHours : null
   if (estimated === null) return { kind: 'no-estimate' }
@@ -78,6 +81,7 @@ export function forecastFor(args: {
     args.plannedEnd,
     args.ownerId,
     args.holidays,
+    args.meetings,
   )
   const availableHours = Math.max(0, p.remainingHours)
   const short = remainingHours > availableHours

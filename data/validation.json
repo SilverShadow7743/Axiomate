@@ -1802,6 +1802,26 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "E4A",
+      "title": "The engine's fourth term: absent means byte-identical, present means attended hours clipped to the window",
+      "expected": "E4 pays the availability engine's IOU. The golden: E1A's exact fixture with the meetings param ABSENT reproduces every pre-E4 figure — captured from the running code before the signatures moved. Present: a 90-minute attended meeting subtracts 1.5h; a meeting straddling the window boundary counts only its inside hours (the stated interval-overlap rule); a non-attendee's numbers hold; a cancelled meeting subtracts nothing. Ids only — attends() never falls back to a name.",
+      "verdict": "PASS",
+      "actual": "The absent-param golden reproduces all eleven figures of the pre-E4 arithmetic with meetingHours pinned at zero; 1.5h attended plus 1h of a boundary-straddler make 2.5h; the engine takes exactly that off available while committed holds; a non-attendee and a cancelled meeting move nothing.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E4C",
+      "title": "Find-a-slot answers in days with named blockers, and never forces a pick",
+      "expected": "E4's intelligence, day-granular: a candidate day is one where EVERY attendee clears the asked duration after their meetings, with approved leave zeroing a day outright and weekends/holidays skipped rather than blamed. Requested leave follows the engine's posture — never a block, always a named caveat. An empty range is an honest answer.",
+      "verdict": "PASS",
+      "actual": "The range lists exactly the three working days; Sam's approved leave blocks Thursday by name; Priya's 6.5h of meetings fail Monday with the arithmetic stated; Tuesday clears for everyone while naming Priya's undecided request as a caveat; and an 8h ask returns no candidate rather than a forced one.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

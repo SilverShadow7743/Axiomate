@@ -1,5 +1,6 @@
 import { workingDaysBetween } from './dates'
 import type { Allocation, Commitment, ResourceProfile } from './capacity'
+import { attends, type Meeting } from './meetings'
 
 /**
  * The availability engine — the ONE place "who has time, when" is computed.
@@ -17,7 +18,9 @@ import type { Allocation, Commitment, ResourceProfile } from './capacity'
  *     available = pattern-derived gross
  *               − approved leave and other commitments
  *               − holidays            (via the working-day math's optional set)
- *               − meetings            (ZERO until E4 — no meetings exist yet; stated, not hidden)
+ *               − meetings            (E4 — attended live meetings' hours inside the window;
+ *                                      the optional param absent means zero, byte-identical
+ *                                      to the pre-E4 arithmetic, held by E4A's golden)
  *     remaining = available − allocations
  *
  * **Pending leave never subtracts.** A Requested absence is not a fact about the calendar yet;
@@ -44,6 +47,9 @@ export interface AvailabilityPosition {
   grossHours: number
   /** Approved leave, holidays-as-commitments, internal time. Pending leave is NOT here. */
   committedHours: number
+  /** Attended live meetings' hours inside the window — exactly 0 when no meetings were
+   *  handed in, so every pre-E4 caller's arithmetic is untouched (E4A's golden holds it). */
+  meetingHours: number
   availableHours: number
   allocatedHours: number
   remainingHours: number
@@ -68,6 +74,35 @@ export function overlapWorkingDays(
   const to = aTo < bTo ? aTo : bTo
   if (to < from) return 0
   return workingDaysBetween(from, to, holidays)
+}
+
+/**
+ * The engine's fourth term (E4): hours of attended, live meetings falling inside the window.
+ *
+ * The clipping rule, stated and pinned in E4A: the raw hour overlap of the meeting's
+ * [startAt, endAt] with [from 00:00:00Z, to 23:59:59.999Z] — a meeting straddling the
+ * boundary counts only its inside hours, and a multi-day one clips the same way. Everything
+ * parses through Date.parse so an ISO-with-Z start and a date-only window never compare as
+ * strings. Ids only: `attends` never falls back to a name — the one clean join, kept clean.
+ */
+export function meetingHours(
+  meetings: Meeting[] | undefined,
+  personId: string | null | undefined,
+  from: string,
+  to: string,
+): number {
+  if (!meetings?.length || !personId) return 0
+  const winFrom = Date.parse(`${from}T00:00:00.000Z`)
+  const winTo = Date.parse(`${to}T23:59:59.999Z`)
+  let ms = 0
+  for (const m of meetings) {
+    if (!attends(m, personId)) continue
+    const s = Date.parse(m.startAt)
+    const e = Date.parse(m.endAt)
+    if (Number.isNaN(s) || Number.isNaN(e)) continue
+    ms += Math.max(0, Math.min(e, winTo) - Math.max(s, winFrom))
+  }
+  return round(ms / 3600000)
 }
 
 /** Whether a leave-shaped commitment counts against the calendar. Absent status is Approved —
@@ -109,6 +144,8 @@ export function availabilityFor(
   /** The person's directory id when known — id-joined rows match through a rename. */
   personId?: string | null,
   holidays?: ReadonlySet<string>,
+  /** E4's term. Absent means zero — every pre-E4 caller's numbers are untouched. */
+  meetings?: Meeting[],
 ): AvailabilityPosition {
   // 7.5 over 5 mirrors `defaultProfile` in ./capacity, spelled here rather than imported
   // because that import would be a runtime cycle (capacity delegates to this module). The
@@ -141,7 +178,8 @@ export function availabilityFor(
     }))
     .filter((p) => p.days > 0)
 
-  const availableHours = round(Math.max(0, grossHours - committedHours))
+  const meetingHrs = meetingHours(meetings, personId ?? null, from, to)
+  const availableHours = round(Math.max(0, grossHours - committedHours - meetingHrs))
 
   const allocatedHours = round(
     allocations
@@ -157,6 +195,7 @@ export function availabilityFor(
     workingDays,
     grossHours,
     committedHours,
+    meetingHours: meetingHrs,
     availableHours,
     allocatedHours,
     remainingHours,

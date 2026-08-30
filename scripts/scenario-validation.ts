@@ -60,6 +60,9 @@ import { availabilityForAssignment } from '../lib/assignment'
 import { availabilityFor, redactLeaveReasons } from '../lib/availability'
 import { forecastFor, describeForecast } from '../lib/forecast'
 import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
+import { meetingHours } from '../lib/availability'
+import { suggestDays } from '../lib/scheduling'
+import type { Meeting } from '../lib/meetings'
 import {
   backdated,
   dailyCap,
@@ -7901,6 +7904,112 @@ scenario(
     return good
       ? { verdict: "PASS", actual: "OAPIL-1's timeline runs inbound, the recorded reply, the client's answer — in time order, with the hand-filed Client Communication note and the other record's rows excluded; the log groups conv-1's two rows in order, keeps both form rows as singletons, and reads newest-first.", stops: "", severity: "P2", impact: "none" } as const
       : { verdict: "FAIL", actual: `ordered=${ordered} (${line.map((e) => e.id).join(",")}) grouped=${grouped} (${groups.map((g) => `${g.conversationId}:${g.entries.length}`).join(" ")})`, stops: "at the grouping — a stranger threaded in, a reply lost, or commentary shown as a send", severity: "P2", impact: "the exchange view says the firm sent things it did not, or hides the reply it did send" } as const
+  },
+)
+
+scenario(
+  "E4A",
+  "The engine's fourth term: absent means byte-identical, present means attended hours clipped to the window",
+  "E4 pays the availability engine's IOU. The golden: E1A's exact fixture with the meetings param ABSENT reproduces every pre-E4 figure — captured from the running code before the signatures moved. Present: a 90-minute attended meeting subtracts 1.5h; a meeting straddling the window boundary counts only its inside hours (the stated interval-overlap rule); a non-attendee's numbers hold; a cancelled meeting subtracts nothing. Ids only — attends() never falls back to a name.",
+  () => {
+    const profile = { personId: "P1", hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: "stated" as const }
+    const cbase = { person: "Priya", personId: "P1", hoursPerDay: 7.5, note: "", createdBy: "x", createdAt: "x", deletedAt: null }
+    const commitments = [
+      { ...cbase, id: "c1", kind: "Leave" as const, startDate: "2026-09-01", endDate: "2026-09-01" },
+      { ...cbase, id: "c2", kind: "Leave" as const, status: "Approved" as const, startDate: "2026-09-03", endDate: "2026-09-03" },
+      { ...cbase, id: "c3", kind: "Leave" as const, status: "Requested" as const, startDate: "2026-09-07", endDate: "2026-09-08" },
+      { ...cbase, id: "c4", kind: "Leave" as const, status: "Returned" as const, startDate: "2026-09-09", endDate: "2026-09-09" },
+    ]
+    const holidays = new Set(["2026-09-02"])
+
+    // 1. The golden: meetings absent, every figure exactly as the running pre-E4 code answered
+    //    on 2026-08-30 (captured before the signature changed), plus the new field at zero.
+    const g = availabilityFor("Priya", profile, commitments, [], "2026-09-01", "2026-09-11", "P1", holidays)
+    const golden =
+      g.workingDays === 8 && g.grossHours === 60 && g.committedHours === 15 &&
+      g.availableHours === 45 && g.allocatedHours === 0 && g.remainingHours === 45 &&
+      g.overallocated === false && g.utilisationPct === 0 && g.basis === "stated" &&
+      g.pendingLeave.length === 1 && g.pendingLeave[0].id === "c3" && g.pendingLeave[0].days === 2 &&
+      g.meetingHours === 0
+
+    const mbase = { organizer: "Priya", organizerId: "P1", note: "", createdAt: "x", createdBy: "x", deletedAt: null }
+    const meetings: Meeting[] = [
+      // 90 minutes, attended: subtracts 1.5h.
+      { ...mbase, id: "m1", title: "Standup block", startAt: "2026-09-04T09:00:00.000Z", endAt: "2026-09-04T10:30:00.000Z", attendeeIds: ["P1"] },
+      // Straddles the window's start: 2h long, only the 1h inside 2026-09-01 counts.
+      { ...mbase, id: "m2", title: "Late call", startAt: "2026-08-31T23:00:00.000Z", endAt: "2026-09-01T01:00:00.000Z", attendeeIds: ["P1"] },
+      // Somebody else's meeting: invisible to P1.
+      { ...mbase, id: "m3", title: "Other team", startAt: "2026-09-04T11:00:00.000Z", endAt: "2026-09-04T15:00:00.000Z", attendeeIds: ["P2"] },
+      // Cancelled: subtracts nothing however long it was.
+      { ...mbase, id: "m4", title: "Cancelled", startAt: "2026-09-08T09:00:00.000Z", endAt: "2026-09-08T17:00:00.000Z", attendeeIds: ["P1"], deletedAt: "2026-09-01T00:00:00.000Z" },
+    ]
+
+    // 2. The hour math directly: 1.5 + 1 clipped = 2.5.
+    const hrs = meetingHours(meetings, "P1", "2026-09-01", "2026-09-11")
+    const clipped = hrs === 2.5
+
+    // 3. Through the engine: committed unchanged, available down by exactly the meeting hours.
+    const withM = availabilityFor("Priya", profile, commitments, [], "2026-09-01", "2026-09-11", "P1", holidays, meetings)
+    const subtracts =
+      withM.committedHours === 15 && withM.meetingHours === 2.5 &&
+      withM.availableHours === 42.5 && withM.remainingHours === 42.5
+
+    // 4. A non-attendee's window is untouched by every one of them.
+    const other = availabilityFor("Sam", { ...profile, personId: "P2" }, [], [], "2026-09-01", "2026-09-11", "P3", holidays, meetings)
+    const nonAttendee = other.meetingHours === 0 && other.availableHours === other.grossHours
+
+    const good = golden && clipped && subtracts && nonAttendee
+    return good
+      ? { verdict: "PASS", actual: "The absent-param golden reproduces all eleven figures of the pre-E4 arithmetic with meetingHours pinned at zero; 1.5h attended plus 1h of a boundary-straddler make 2.5h; the engine takes exactly that off available while committed holds; a non-attendee and a cancelled meeting move nothing.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `golden=${golden} clipped=${clipped} (${hrs}) subtracts=${subtracts} (mh=${withM.meetingHours} avail=${withM.availableHours}) nonAttendee=${nonAttendee}`, stops: "at the fourth term — either the absent default moved numbers planners already trust, or a meeting subtracts the wrong hours", severity: "P1", impact: "every capacity, forecast and assignment figure in the product flows through this arithmetic" } as const
+  },
+)
+
+scenario(
+  "E4C",
+  "Find-a-slot answers in days with named blockers, and never forces a pick",
+  "E4's intelligence, day-granular: a candidate day is one where EVERY attendee clears the asked duration after their meetings, with approved leave zeroing a day outright and weekends/holidays skipped rather than blamed. Requested leave follows the engine's posture — never a block, always a named caveat. An empty range is an honest answer.",
+  () => {
+    const nameOf = { P1: "Priya", P2: "Sam" }
+    const profiles = { P1: { personId: "P1", hoursPerDay: 7.5, daysPerWeek: 5, billableTargetPct: 80, source: "stated" as const } }
+    const cbase = { person: "", hoursPerDay: 7.5, note: "", createdBy: "x", createdAt: "x", deletedAt: null }
+    const commitments = [
+      { ...cbase, id: "c1", person: "Sam", personId: "P2", kind: "Leave" as const, status: "Approved" as const, startDate: "2026-09-03", endDate: "2026-09-03" },
+      { ...cbase, id: "c2", person: "Priya", personId: "P1", kind: "Leave" as const, status: "Requested" as const, startDate: "2026-09-08", endDate: "2026-09-08" },
+    ]
+    const meetings: Meeting[] = [
+      { id: "m1", title: "Back-to-backs", startAt: "2026-09-07T09:00:00.000Z", endAt: "2026-09-07T15:30:00.000Z", organizer: "Priya", organizerId: "P1", attendeeIds: ["P1"], note: "", createdAt: "x", createdBy: "x", deletedAt: null },
+    ]
+
+    const days = suggestDays({
+      attendeeIds: ["P1", "P2"], durationHours: 2,
+      from: "2026-09-03", to: "2026-09-08",
+      meetings, commitments, holidays: new Set(["2026-09-04"]), profiles, nameOf,
+    })
+
+    // Thu 3rd: Sam's approved leave blocks and is named. Fri 4th: holiday, skipped entirely.
+    // Sat/Sun: skipped. Mon 7th: Priya's 6.5h of meetings leave 1h of the 2h asked. Tue 8th:
+    // clear — with Priya's undecided request riding as a caveat, not a block.
+    const listed = days.map((d) => d.date).join(",")
+    const shape = listed === "2026-09-03,2026-09-07,2026-09-08"
+    const leaveBlocks = days[0] && !days[0].ok && days[0].blockers.some((b) => /Sam on leave/.test(b))
+    const crowdedFails = days[1] && !days[1].ok && days[1].blockers.some((b) => /Priya has 1h free of the 2h/.test(b))
+    const clearWithCaveat =
+      days[2] && days[2].ok && days[2].blockers.length === 0 &&
+      days[2].caveats.some((c) => /Priya has leave requested/.test(c))
+
+    // The honest empty answer: nobody clears 8h anywhere in the range.
+    const none = suggestDays({
+      attendeeIds: ["P1", "P2"], durationHours: 8,
+      from: "2026-09-03", to: "2026-09-08",
+      meetings, commitments, holidays: new Set(["2026-09-04"]), profiles, nameOf,
+    })
+    const honestEmpty = none.every((d) => !d.ok)
+
+    const good = shape && leaveBlocks && crowdedFails && clearWithCaveat && honestEmpty
+    return good
+      ? { verdict: "PASS", actual: "The range lists exactly the three working days; Sam's approved leave blocks Thursday by name; Priya's 6.5h of meetings fail Monday with the arithmetic stated; Tuesday clears for everyone while naming Priya's undecided request as a caveat; and an 8h ask returns no candidate rather than a forced one.", stops: "", severity: "P2", impact: "none" } as const
+      : { verdict: "FAIL", actual: `shape=${shape} (${listed}) leaveBlocks=${leaveBlocks} crowdedFails=${crowdedFails} clearWithCaveat=${clearWithCaveat} honestEmpty=${honestEmpty}`, stops: "at the suggestion — a blocked day offered, a clear day hidden, or an undecided absence silently deciding", severity: "P2", impact: "the slot suggester either books meetings over leave or refuses days that are actually free" } as const
   },
 )
 
