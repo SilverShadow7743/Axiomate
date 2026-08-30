@@ -37,6 +37,7 @@
     "@tiptap/starter-kit": "^3.30.5",
     "@tiptap/suggestion": "^3.30.5",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "jose": "^6.2.9",
     "next": "^16.2.9",
     "pg": "^8.22.0",

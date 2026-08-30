@@ -65,6 +65,7 @@ import { buildScale } from '@/lib/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './ClientPackView'
+import FinanceReportDialog from './FinanceReportDialog'
 import { planSlaDates, slaReason } from '@/lib/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
@@ -209,6 +210,7 @@ export default function IssueWorkspace({
   const [slaOpen, setSlaOpen] = useState(false)
   /** Which client pack is open for print, if any. */
   const [clientPack, setClientPack] = useState<{ kind: 'weekly' | 'monthly'; pack: WeeklyClientPack | MonthlyGovernancePack } | null>(null)
+  const [financeReportOpen, setFinanceReportOpen] = useState(false)
   /** The directory person whose profile panel is open, if any. */
   const [openProfileId, setOpenProfileId] = useState<string | null>(null)
   const exportWrap = useRef<HTMLDivElement>(null)
@@ -2008,6 +2010,16 @@ export default function IssueWorkspace({
                 className="menu-item"
                 onClick={() => {
                   setExportMenu(false)
+                  setFinanceReportOpen(true)
+                }}
+              >
+                Finance timesheet…
+                <span className="menu-sub">Approved hours for a period — .xlsx or PDF, no rates</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
                   exportCsv()
                 }}
               >
@@ -2650,6 +2662,9 @@ export default function IssueWorkspace({
           org={state.model.organization}
           onClose={() => setClientPack(null)}
         />
+      )}
+      {financeReportOpen && (
+        <FinanceReportDialog state={state} today={today} onClose={() => setFinanceReportOpen(false)} />
       )}
 
       {configOpen && (
