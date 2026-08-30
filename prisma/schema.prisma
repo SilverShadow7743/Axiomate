@@ -146,6 +146,7 @@ model Tenant {
   discussionThreads  DiscussionThread[]
   discussionMessages DiscussionMessage[]
   discussionFollows  DiscussionFollow[]
+  meetings      Meeting[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -847,6 +848,34 @@ model Notification {
   /// "What is waiting for me" and "what never left the building" are the two queries.
   @@index([tenantId, to, readAt])
   @@index([tenantId, delivery])
+}
+
+/// A meeting — E4: the shared sibling of the private PersonalEvent, boot-shipped like
+/// commitments because every availability-engine consumer runs client-side (the design doc
+/// records that stated deviation). Attendees are directory ids, never names.
+model Meeting {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id          String   @default(cuid())
+  title       String
+  startAt     DateTime
+  endAt       DateTime
+  organizer   String
+  organizerId String?
+  attendeeIds String[]
+  /// Optional Work Context — 'issue' | 'project'; a reference, not a foreign key.
+  scopeKind   String?
+  scopeId     String?
+  note        String   @db.Text
+
+  createdAt DateTime
+  createdBy String
+  /// Soft — a cancelled meeting stops subtracting immediately and keeps its trail.
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, startAt])
 }
 
 /// One scope's discussion — a work record's or a project's. E3: server-queried, never in the

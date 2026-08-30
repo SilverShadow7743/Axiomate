@@ -34,6 +34,7 @@ import type {
   DiscussionThread as DiscussionThreadRow,
   DiscussionMessage as DiscussionMessageRow,
   DiscussionFollow as DiscussionFollowRow,
+  Meeting as MeetingRow,
   Prisma,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
@@ -68,6 +69,7 @@ import type {
 } from '../milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { DiscussionFollow, DiscussionMessage, DiscussionScopeKind, DiscussionThread } from '../discussion'
+import type { Meeting, MeetingScopeKind } from '../meetings'
 import type { TenantId } from '../tenant'
 
 /**
@@ -1034,6 +1036,47 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     reason: r.reason ?? null,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Meetings (E4) — boot-shipped, like commitments
+ * ================================================================== */
+
+export function meetingToRow(tenantId: TenantId, m: Meeting): Prisma.MeetingUncheckedCreateInput {
+  return {
+    tenantId,
+    id: m.id,
+    title: m.title,
+    startAt: new Date(m.startAt),
+    endAt: new Date(m.endAt),
+    organizer: m.organizer,
+    organizerId: m.organizerId ?? null,
+    attendeeIds: m.attendeeIds,
+    scopeKind: m.scopeKind ?? null,
+    scopeId: m.scopeId ?? null,
+    note: m.note,
+    createdAt: new Date(m.createdAt),
+    createdBy: m.createdBy,
+    deletedAt: m.deletedAt ? new Date(m.deletedAt) : null,
+  }
+}
+
+export function meetingFromRow(r: MeetingRow): Meeting {
+  return {
+    id: r.id,
+    title: r.title,
+    startAt: r.startAt.toISOString(),
+    endAt: r.endAt.toISOString(),
+    organizer: r.organizer,
+    organizerId: r.organizerId ?? null,
+    attendeeIds: r.attendeeIds,
+    scopeKind: (r.scopeKind as MeetingScopeKind | null) ?? null,
+    scopeId: r.scopeId ?? null,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    createdBy: r.createdBy,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

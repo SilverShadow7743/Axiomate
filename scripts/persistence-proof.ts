@@ -140,6 +140,7 @@ async function scrub() {
   await tx.discussionFollow.deleteMany({ where })
   await tx.discussionMessage.deleteMany({ where })
   await tx.discussionThread.deleteMany({ where })
+  await tx.meeting.deleteMany({ where })
   await tx.estimateRevision.deleteMany({ where })
   await tx.issueEstimate.deleteMany({ where })
   await tx.timeEntry.deleteMany({ where })
