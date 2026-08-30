@@ -7879,6 +7879,19 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const org = { ...m.organization, ...op.patch }
       const name = org.name.trim()
       if (!name) return { state, error: 'The organisation needs a name.' }
+      /*
+       * The logo travels the model as a data URI, so the guard sits here rather than in the
+       * upload UI — the op is not only reachable from one screen. The cap is on the encoded
+       * string: ~200KB keeps the model blob a config, not a media store.
+       */
+      if (org.logoDataUri) {
+        if (!org.logoDataUri.startsWith('data:image/')) {
+          return { state, error: 'The logo must be an image data URI (data:image/…).' }
+        }
+        if (org.logoDataUri.length > 200_000) {
+          return { state, error: 'That logo is too large — use an image under about 150KB.' }
+        }
+      }
       /**
        * `partyCode` is a stored value on the imported issues, not a label. Changing it while
        * rows carry it would leave every one of them pointing at a party that does not exist.
@@ -7903,7 +7916,8 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         org.name === m.organization.name &&
         org.shortName === m.organization.shortName &&
         org.description === m.organization.description &&
-        org.partyCode === m.organization.partyCode
+        org.partyCode === m.organization.partyCode &&
+        (org.logoDataUri ?? '') === (m.organization.logoDataUri ?? '')
       if (unchanged) return { state }
 
       return done(

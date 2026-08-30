@@ -265,10 +265,17 @@ function triage(lines: ImsLine[]): ImsLine[] {
   )
 }
 
-export function renderImsText(r: DailyIms): string {
+export function renderImsText(
+  r: DailyIms,
+  /** The firm's name for the header line. Optional and TRAILING, so every existing call —
+   *  and its output — stays byte-identical when absent. The IMS has no rendered view (it is
+   *  text + CSV), so this line is the whole of its branding. */
+  firmName?: string,
+): string {
   const L: string[] = []
   const rule = '='.repeat(72)
 
+  if (firmName) L.push(firmName.toUpperCase())
   L.push(`DAILY IMS — ISSUE MANAGEMENT STATUS`)
   L.push(rule)
   L.push(`Scope    ${r.scope}`)

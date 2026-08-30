@@ -1753,7 +1753,7 @@ export default function IssueWorkspace({
       (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }),
     )
     const report = buildDailyIms(state, inScope, today, scopeLabel)
-    download(`daily-ims-${today}.txt`, renderImsText(report), 'text/plain')
+    download(`daily-ims-${today}.txt`, renderImsText(report, state.model.organization.name), 'text/plain')
     download(`daily-ims-${today}.csv`, renderImsCsv(report), 'text/csv')
     notify(
       `Daily IMS exported — ${report.position.open} open of ${report.position.total}, ${report.sections.length} section(s) needing attention.`,
@@ -2644,7 +2644,13 @@ export default function IssueWorkspace({
         />
       )}
 
-      {clientPack && <ClientPackView pack={clientPack.pack} onClose={() => setClientPack(null)} />}
+      {clientPack && (
+        <ClientPackView
+          pack={clientPack.pack}
+          org={state.model.organization}
+          onClose={() => setClientPack(null)}
+        />
+      )}
 
       {configOpen && (
         <ConfigWorkspace

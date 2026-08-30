@@ -1,4 +1,6 @@
 import type { WeeklyClientPack, MonthlyGovernancePack } from '@/lib/reports/clientPack'
+import type { OrganizationIdentity } from '@/lib/config'
+import ReportHeader from './reports/ReportHeader'
 
 /**
  * A print-ready screen for a weekly or monthly client pack — see
@@ -15,7 +17,15 @@ function isWeekly(p: Pack): p is WeeklyClientPack {
   return 'lines' in p
 }
 
-export default function ClientPackView({ pack, onClose }: { pack: Pack; onClose: () => void }) {
+export default function ClientPackView({
+  pack,
+  org,
+  onClose,
+}: {
+  pack: Pack
+  org: OrganizationIdentity
+  onClose: () => void
+}) {
   const weekly = isWeekly(pack)
   const title = weekly ? 'Weekly client pack' : 'Monthly governance pack'
 
@@ -32,6 +42,12 @@ export default function ClientPackView({ pack, onClose }: { pack: Pack; onClose:
         </button>
       </div>
       <div className="pack-page">
+        <ReportHeader
+          org={org}
+          title={title}
+          period={`${pack.window.from} – ${pack.window.to}`}
+          generated={pack.asOf}
+        />
         <h1>{title}</h1>
         <div className="pack-meta">
           <div>{pack.client}</div>

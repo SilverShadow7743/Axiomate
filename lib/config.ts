@@ -168,6 +168,13 @@ export interface OrganizationIdentity {
   partyCode: string
   /** One line describing what this workspace is for. Shown on the configuration screen. */
   description: string
+  /**
+   * A small logo as a `data:image/…` URI, rendered on report headers when present. Absent
+   * means clean wordmark styling — never a broken image. Validated at the `setOrganization`
+   * op (prefix and size), because the config travels the model like every identity field and
+   * the UI is not the only writer.
+   */
+  logoDataUri?: string
 }
 
 /**

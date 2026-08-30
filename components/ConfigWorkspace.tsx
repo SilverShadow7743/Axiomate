@@ -594,6 +594,49 @@ function RolesAndPeople({
             The party code is the value written onto issues this organisation is answerable
             for. It is stored data, not a label — it cannot be changed while issues carry it.
           </p>
+          <div className="cfg-fld-row">
+            <label className="cfg-fld">
+              <span>Logo (shown on report headers)</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (!f) return
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    if (typeof reader.result === 'string') {
+                      onConfig({ k: 'setOrganization', patch: { logoDataUri: reader.result } })
+                    }
+                  }
+                  reader.readAsDataURL(f)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            {org.logoDataUri ? (
+              <>
+                {/* The op guarantees this is a data:image/ URI, so rendering it is safe. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={org.logoDataUri}
+                  alt={`${org.name} logo`}
+                  style={{ maxHeight: 40, alignSelf: 'flex-end' }}
+                />
+                <button
+                  className="btn"
+                  style={{ alignSelf: 'flex-end' }}
+                  onClick={() => onConfig({ k: 'setOrganization', patch: { logoDataUri: '' } })}
+                >
+                  Remove logo
+                </button>
+              </>
+            ) : (
+              <p className="cfg-inherit" style={{ alignSelf: 'flex-end' }}>
+                No logo — reports use the firm name alone.
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
