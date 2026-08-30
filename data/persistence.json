@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-30T02:04:52.894Z",
+  "at": "2026-08-30T03:15:26.656Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 64,
+  "passed": 65,
   "failed": 0,
   "checks": [
     {
@@ -78,6 +78,11 @@
       "what": "money keeps its pennies",
       "ok": true,
       "detail": "GBP 12345.67"
+    },
+    {
+      "what": "a pre-approval commitment keeps its ABSENT status — null means Approved in code, not in storage",
+      "ok": true,
+      "detail": "status=null reason=null"
     },
     {
       "what": "an allocation and a commitment keep their dates",

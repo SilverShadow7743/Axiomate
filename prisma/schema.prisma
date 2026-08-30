@@ -742,6 +742,15 @@ model Commitment {
   hoursPerDay Decimal @db.Decimal(4, 2)
   note        String  @db.Text
 
+  /// Leave only (E1): Requested | Approved | Returned. NULL MEANS APPROVED — rows written
+  /// before approval existed are history recorded under the old rules, and
+  /// lib/availability.ts's commitmentCounts is the one place that rule is interpreted.
+  /// Always null on non-Leave kinds.
+  status String?
+  /// Leave only (E1): why, for the approver. Withheld server-side from every reader except
+  /// the person and leave.approve holders — see redactForReader. `note` stays visible.
+  reason String? @db.Text
+
   createdBy String
   createdAt DateTime
   deletedAt DateTime?

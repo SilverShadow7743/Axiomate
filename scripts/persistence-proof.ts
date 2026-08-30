@@ -380,6 +380,11 @@ async function main() {
   const allocation = Object.values(state.allocations)[0]
   const commitment = Object.values(state.commitments)[0]
   check(
+    'a pre-approval commitment keeps its ABSENT status — null means Approved in code, not in storage',
+    commitment != null && (commitment.status ?? null) === null && (commitment.reason ?? null) === null,
+    commitment ? `status=${JSON.stringify(commitment.status)} reason=${JSON.stringify(commitment.reason)}` : 'missing',
+  )
+  check(
     'an allocation and a commitment keep their dates',
     allocation?.startDate === '2026-09-01' && commitment?.startDate === '2026-09-07' && commitment.hoursPerDay === 7.5,
     allocation ? `${allocation.startDate}→${allocation.endDate}, leave ${commitment?.hoursPerDay}h/day` : 'missing',

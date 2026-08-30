@@ -1006,6 +1006,10 @@ export function commitmentToRow(tenantId: TenantId, c: Commitment): Prisma.Commi
     endDate: toDate(c.endDate) ?? new Date(0),
     hoursPerDay: c.hoursPerDay,
     note: c.note,
+    // Absent stays absent, both directions — NULL means Approved and only
+    // lib/availability.ts interprets that; the mapper must not resolve it early.
+    status: c.status ?? null,
+    reason: c.reason ?? null,
     createdBy: c.createdBy,
     createdAt: new Date(c.createdAt),
     deletedAt: c.deletedAt ? new Date(c.deletedAt) : null,
@@ -1022,6 +1026,8 @@ export function commitmentFromRow(r: CommitmentRow): Commitment {
     endDate: fromDate(r.endDate) ?? '',
     hoursPerDay: Number(r.hoursPerDay),
     note: r.note,
+    status: (r.status as Commitment['status']) ?? null,
+    reason: r.reason ?? null,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
