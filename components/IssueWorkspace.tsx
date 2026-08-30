@@ -2027,6 +2027,10 @@ export default function IssueWorkspace({
             Assistant
           </button>
         )}
+        {/* Phone widths only (CSS) — the attestation loop without the grid. */}
+        <a className="btn mw-link" href="/my-week">
+          My week
+        </a>
         <div style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setViewsMenu((v) => !v)} aria-expanded={viewsMenu}>
             Views ▾

@@ -6235,3 +6235,61 @@ select.cell-editor {
   .time-row { flex-wrap: wrap; }
   .est-summary, .est-blocks { flex-wrap: wrap; }
 }
+
+/* ================================================================== *
+ * My Week — the phone-first attestation page (/my-week).
+ * ================================================================== */
+.mw {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 14px 14px 60px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+}
+.mw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.mw-head h1 { font-size: 20px; margin: 6px 0; }
+.mw-desktop-link { font-size: 12.5px; color: var(--text-muted); }
+.mw-weekpick { display: flex; gap: 6px; margin: 8px 0 12px; }
+.mw-tab {
+  flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); font-size: 14px;
+}
+.mw-tab.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.mw-notice { font-size: 13px; padding: 8px 10px; border-radius: 6px; background: var(--row-hover, rgba(0,0,0,0.05)); }
+.mw-notice.bad { color: var(--accent); border: 1px solid var(--accent); background: transparent; }
+.mw-sheet { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--border); color: var(--text-muted); }
+.mw-sheet-approved { border-left-color: #2e7d32; }
+.mw-sheet-rejected { border-left-color: var(--accent); }
+.mw-day { border-top: 1px solid var(--border); padding: 8px 2px; }
+.mw-day.today { background: var(--row-hover, rgba(0,0,0,0.04)); }
+.mw-day-head { display: flex; justify-content: space-between; font-weight: 600; font-size: 13.5px; }
+.mw-day-total { font-variant-numeric: tabular-nums; }
+.mw-entry { display: flex; flex-direction: column; font-size: 13px; padding: 3px 0 3px 10px; color: var(--text-muted); }
+.mw-entry-issue { font-weight: 600; color: var(--text); }
+.mw-entry-reason { font-style: italic; font-size: 12.5px; }
+.mw-total { font-weight: 700; margin: 10px 0; font-variant-numeric: tabular-nums; }
+.mw-form { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.mw-form h2 { font-size: 15px; margin: 0; }
+.mw-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--text-muted); }
+.mw-form input, .mw-form select {
+  font-size: 16px; /* keeps iOS from zooming the page on focus */
+  padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); width: 100%;
+}
+.mw-row { display: flex; gap: 8px; }
+.mw-row > * { flex: 1; }
+.mw-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.mw-check input { width: auto; }
+.mw-btn {
+  padding: 11px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 15px;
+}
+.mw-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mw-btn:disabled { opacity: 0.5; }
+.mw-decide { border-top: 1px solid var(--border); padding: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.mw-decide-head { font-size: 13.5px; }
+.mw-note { font-size: 12.5px; color: var(--text-muted); }
+/* The toolbar link to this page shows only at phone widths — the grid's users never see it. */
+.mw-link { display: none; }
+@media (max-width: 700px) { .mw-link { display: inline-flex; } }
