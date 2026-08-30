@@ -166,7 +166,7 @@ import {
   type SizeBand,
 } from './estimation'
 import { blankEngagement, type EngagementDetail } from './engagement'
-import { addWorkingDays, daysBetween } from './dates'
+import { addWorkingDays, daysBetween, workingDaysBetween } from './dates'
 import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,
@@ -190,6 +190,7 @@ import { type IntakeForm,
   type OperatingModel,
   type TierDef,
   type Holiday,
+  holidaySetOf,
   DEFAULT_TIERS,
   tiersOf,
   isTierKind,
@@ -1638,6 +1639,110 @@ function attesterFor(state: WorkspaceState, actor: Actor): Attester {
     maySubmit: can(state.model, actor, 'time.submit').allowed,
     mayApprove: can(state.model, actor, 'time.approve').allowed,
   }
+}
+
+/**
+ * Everyone a decision-traffic notification should reach: live-role holders of one grant,
+ * minus the people the moment excludes (the subject of a request, the actor who wrote it).
+ * Sorted and capped exactly as the intake-arrival mint walks work.assign, and for the same
+ * reason — deterministic, so the server's replay mints the same records the browser's
+ * optimistic copy did. Each recipient's own preference is still consulted AT the mint;
+ * this only answers who is eligible to be told.
+ */
+function grantHolders(
+  state: WorkspaceState,
+  grant: PermissionKey,
+  exclude: ReadonlySet<string>,
+): { id: string; name: string }[] {
+  const grants = state.model.access.grants
+  return Object.values(state.model.people)
+    .filter(
+      (p) =>
+        !exclude.has(p.id) &&
+        p.roleIds.some((rid) => {
+          const role = state.model.roles?.[rid]
+          return role && !role.deletedAt && (grants[rid] ?? []).includes(grant)
+        }),
+    )
+    .sort((x, y) => x.name.localeCompare(y.name))
+    .slice(0, 8)
+    .map((p) => ({ id: p.id, name: p.name }))
+}
+
+/**
+ * Mint one `approval`-kind notification per recipient, per that recipient's own preference —
+ * the assignment mint's contract, factored because four arms now share it. The preference is
+ * consulted on the ONE `approval` kind; `ruleId` carries the finer rule name so the inbox can
+ * route a click without a second preference existing. `mute` mints nothing and lands in
+ * `muted` for the caller to audit — "why didn't I get this" must have a stored answer —
+ * and `in-app+email` adds a SECOND record with its own id for the scheduled pass's drain.
+ *
+ * The private leave reason is never an input here: bodies are composed by the callers from
+ * dates, hours and decision notes only. That absence is load-bearing (scenario E2C).
+ */
+function mintApproval(
+  state: WorkspaceState,
+  notifications: Record<string, Notification>,
+  seq: number,
+  recipients: { id: string | null; name: string }[],
+  subject: string,
+  body: string,
+  aboutId: string,
+  ruleId: string,
+  now: string,
+): { notifications: Record<string, Notification>; seq: number; muted: { id: string | null; name: string }[] } {
+  let out = notifications
+  let seqAfter = seq
+  const muted: { id: string | null; name: string }[] = []
+  for (const r of recipients) {
+    const mode = modeFor(state.model.notificationPrefs, r.id, 'approval')
+    if (mode === 'mute') {
+      muted.push(r)
+      continue
+    }
+    seqAfter += 1
+    const nid = `notif-${seqAfter}`
+    out = {
+      ...out,
+      [nid]: {
+        id: nid,
+        to: r.name,
+        toId: r.id,
+        channel: 'in-app',
+        subject,
+        body,
+        aboutId,
+        ruleId,
+        createdAt: now,
+        delivery: 'delivered',
+        deliveryNote: '',
+        readAt: null,
+      },
+    }
+    if (mode === 'in-app+email') {
+      seqAfter += 1
+      const eid = `notif-${seqAfter}`
+      const { delivery, deliveryNote } = deliveryFor('email')
+      out = {
+        ...out,
+        [eid]: {
+          id: eid,
+          to: r.name,
+          toId: r.id,
+          channel: 'email',
+          subject,
+          body,
+          aboutId,
+          ruleId,
+          createdAt: now,
+          delivery,
+          deliveryNote,
+          readAt: null,
+        },
+      }
+    }
+  }
+  return { notifications: out, seq: seqAfter, muted }
 }
 
 /**
@@ -4953,19 +5058,52 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         decidedBy: null,
         reason: null,
       }
+      /* The approvers hear a week is waiting — resubmissions included, since a returned week
+       * coming back is exactly what a decider is waiting on. Counter continues from THIS
+       * arm's seq: a new sheet already spent state.seq + 1 on its own id. */
+      const submitterExcl = new Set(
+        [sheet.personId, directoryPersonFor(state.model, actor)?.id].filter((x): x is string => Boolean(x)),
+      )
+      const deciders = grantHolders(state, 'time.approve', submitterExcl).filter(
+        (h) => h.name.trim().toLowerCase() !== sheet.person.trim().toLowerCase(),
+      )
+      const minted = mintApproval(
+        state,
+        state.notifications,
+        seq,
+        deciders,
+        `Timesheet to decide — ${sheet.person}`,
+        `${sheet.person} submitted ${weekLabel(a.weekStarting)} — ${total.hours}h. Decide it on the Timesheets view.`,
+        id,
+        'timesheet-submitted',
+        a.now,
+      )
+      let audit = log(actor, state, {
+        rowId: id,
+        field: 'timesheet',
+        from: existing ? existing.status : null,
+        to: `Submitted · ${total.hours}h`,
+        at: a.now,
+        by,
+      })
+      for (const m of minted.muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: id,
+          field: 'notification',
+          from: '',
+          to: `in-app → ${m.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'approval',
+        })
+      }
       return {
         state: {
           ...state,
-          seq,
+          seq: minted.seq,
           timesheets: { ...state.timesheets, [id]: sheet },
-          audit: log(actor, state, {
-            rowId: id,
-            field: 'timesheet',
-            from: existing ? existing.status : null,
-            to: `Submitted · ${total.hours}h`,
-            at: a.now,
-            by,
-          }),
+          notifications: minted.notifications,
+          audit,
         },
         message: `${weekLabel(a.weekStarting)} submitted — ${total.hours}h.`,
       }
@@ -4992,19 +5130,48 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         decidedBy: by,
         reason: a.decision === 'rejected' ? (a.reason ?? '').trim() : null,
       }
+      /* The submitter hears the answer, rejection reason included — a timesheet reason is a
+       * working instruction, not a private fact like a leave reason. */
+      const minted = mintApproval(
+        state,
+        state.notifications,
+        state.seq,
+        [{ id: next.personId ?? null, name: next.person }],
+        `Your ${weekLabel(next.weekStarting)}: ${a.decision}`,
+        a.decision === 'approved'
+          ? `${by} approved your ${weekLabel(next.weekStarting)}.`
+          : `${by} returned your ${weekLabel(next.weekStarting)}.${next.reason ? ` “${next.reason}”` : ''}`,
+        a.id,
+        'timesheet-decided',
+        a.now,
+      )
+      let audit = log(actor, state, {
+        rowId: a.id,
+        field: 'timesheet',
+        from: sheet!.status,
+        to: next.status,
+        at: a.now,
+        by,
+        reason: next.reason ?? undefined,
+      })
+      for (const m of minted.muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: a.id,
+          field: 'notification',
+          from: '',
+          to: `in-app → ${m.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'approval',
+        })
+      }
       return {
         state: {
           ...state,
           timesheets: { ...state.timesheets, [a.id]: next },
-          audit: log(actor, state, {
-            rowId: a.id,
-            field: 'timesheet',
-            from: sheet!.status,
-            to: next.status,
-            at: a.now,
-            by,
-            reason: next.reason ?? undefined,
-          }),
+          seq: minted.seq,
+          notifications: minted.notifications,
+          audit,
         },
         message:
           a.decision === 'approved'
@@ -6030,19 +6197,90 @@ Question: ${review.question}`),
         a.endDate,
       )
 
+      /*
+       * Decision traffic, discriminated by the status const above — never by restating the
+       * who-writes rule:
+       *   - lands Requested where it was not Requested before (a new request, or a decided
+       *     row re-opened by an edit) → the leave.approve holders are asked. Editing a
+       *     still-pending request re-mints nothing; the queue shows current dates anyway.
+       *   - lands Approved from not-Approved by somebody else's hand (the approver-records-
+       *     other flow, or an approver's edit settling a pending row) → the subject is told
+       *     their absence is on the calendar.
+       * Bodies carry dates and working days only; the private reason never travels (E2C).
+       * The mint counter starts from THIS arm's seq — a new row already spent state.seq + 1
+       * on its own id — and the returned state carries the final counter.
+       */
+      let notifications = state.notifications
+      let seqAfter = seq
+      let muted: { id: string | null; name: string }[] = []
+      const wasRequested = !!existing && (existing.status ?? 'Approved') === 'Requested'
+      const wasApproved = !!existing && (existing.status ?? 'Approved') === 'Approved'
+      if (isLeave && status === 'Requested' && !wasRequested) {
+        const days = workingDaysBetween(a.startDate, a.endDate, holidaySetOf(state.model))
+        const excl = new Set(
+          [next.personId, directoryPersonFor(state.model, actor)?.id].filter((x): x is string => Boolean(x)),
+        )
+        const holders = grantHolders(state, 'leave.approve', excl).filter(
+          (h) => h.name.trim().toLowerCase() !== next.person.trim().toLowerCase(),
+        )
+        const minted = mintApproval(
+          state,
+          notifications,
+          seqAfter,
+          holders,
+          `Leave to decide — ${next.person}`,
+          `${next.person} requests leave ${next.startDate}→${next.endDate} (${days} working day${days === 1 ? '' : 's'}). Decide it on the Timesheets view.`,
+          id,
+          'leave-requested',
+          a.now,
+        )
+        notifications = minted.notifications
+        seqAfter = minted.seq
+        muted = minted.muted
+      } else if (isLeave && status === 'Approved' && !selfWrite && !wasApproved) {
+        const minted = mintApproval(
+          state,
+          notifications,
+          seqAfter,
+          [{ id: next.personId ?? null, name: next.person }],
+          'Your leave is on the calendar',
+          `${by} recorded your leave ${next.startDate}→${next.endDate} — approved.`,
+          id,
+          'leave-decided',
+          a.now,
+        )
+        notifications = minted.notifications
+        seqAfter = minted.seq
+        muted = minted.muted
+      }
+
+      let audit = log(actor, state, {
+        rowId: 'CAPACITY',
+        field: 'commitment',
+        from: existing ? `${existing.kind} ${existing.startDate}→${existing.endDate}` : '',
+        to: `${next.person}: ${next.kind} ${next.startDate}→${next.endDate}`,
+        at: a.now,
+        by,
+      })
+      for (const m of muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: 'CAPACITY',
+          field: 'notification',
+          from: '',
+          to: `in-app → ${m.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'approval',
+        })
+      }
+
       return {
         state: {
           ...state,
           commitments: { ...state.commitments, [id]: next },
-          seq,
-          audit: log(actor, state, {
-            rowId: 'CAPACITY',
-            field: 'commitment',
-            from: existing ? `${existing.kind} ${existing.startDate}→${existing.endDate}` : '',
-            to: `${next.person}: ${next.kind} ${next.startDate}→${next.endDate}`,
-            at: a.now,
-            by,
-          }),
+          seq: seqAfter,
+          notifications,
+          audit,
         },
         message:
           (next.status === 'Requested' ? 'Requested — awaiting a decision. ' : 'Recorded. ') +
@@ -6074,19 +6312,49 @@ Question: ${review.question}`),
         ...c,
         status: a.decision === 'approved' ? 'Approved' : 'Returned',
       }
+      /* The subject hears the answer. The decision note travels (it is not private); the
+       * reason never does — it is already on the row for those allowed to read it. */
+      const note = (a.note ?? '').trim()
+      const minted = mintApproval(
+        state,
+        state.notifications,
+        state.seq,
+        [{ id: c.personId ?? null, name: c.person }],
+        `Your leave ${c.startDate}→${c.endDate}: ${a.decision}`,
+        a.decision === 'approved'
+          ? `${by} approved your leave ${c.startDate}→${c.endDate}.`
+          : `${by} returned your leave ${c.startDate}→${c.endDate}.${note ? ` “${note}”` : ''}`,
+        c.id,
+        'leave-decided',
+        a.now,
+      )
+      let audit = log(actor, state, {
+        rowId: 'CAPACITY',
+        field: 'leave',
+        from: `${c.person}: Requested ${c.startDate}→${c.endDate}`,
+        to: a.decision === 'approved' ? 'Approved' : 'Returned',
+        at: a.now,
+        by,
+        reason: note || undefined,
+      })
+      for (const m of minted.muted) {
+        audit = log(actor, { ...state, audit }, {
+          rowId: 'CAPACITY',
+          field: 'notification',
+          from: '',
+          to: `in-app → ${m.name} (muted by their preference)`,
+          at: a.now,
+          by,
+          reason: 'approval',
+        })
+      }
       return {
         state: {
           ...state,
           commitments: { ...state.commitments, [a.id]: next },
-          audit: log(actor, state, {
-            rowId: 'CAPACITY',
-            field: 'leave',
-            from: `${c.person}: Requested ${c.startDate}→${c.endDate}`,
-            to: a.decision === 'approved' ? 'Approved' : 'Returned',
-            at: a.now,
-            by,
-            reason: (a.note ?? '').trim() || undefined,
-          }),
+          seq: minted.seq,
+          notifications: minted.notifications,
+          audit,
         },
         message:
           a.decision === 'approved'

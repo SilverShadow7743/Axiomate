@@ -7575,6 +7575,191 @@ scenario(
   },
 )
 
+scenario(
+  "E2A",
+  "Decision traffic fans out to the holders, per each holder's own preference — and to nobody else",
+  "E2 minting (2026-08-30 design): a self-request mints leave-requested to the leave.approve holders and never to the subject; each recipient's own preference is consulted at the mint (mute silences one holder without silencing the rest, and the audit still answers why); in-app+email adds exactly one pending record for the scheduled pass's drain; the approver-records-other flow mints leave-decided to the subject and asks nobody; a non-Leave commitment mints nothing; and the arm's seq counter — which already spent state.seq+1 on the row's own id — advances once per record so no id is ever reused.",
+  () => {
+    const notifsOf = (st: WorkspaceState, rule: string) =>
+      Object.values(st.notifications).filter((n) => n.ruleId === rule)
+    const P: Actor = { id: "e2-priya", name: "Priya" }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === "Priya")!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === "Sam")!.id
+    let st = ok(BASE, { t: "config", op: { k: "upsertPerson", id: samId, name: "Sam", roleIds: ["ROLE_PROJECT_MANAGER"] }, now: NOW } as Action)
+    st = ok(st, { t: "config", op: { k: "upsertPerson", id: null, name: "Lead Lena", roleIds: ["ROLE_ENGAGEMENT_LEAD"] }, now: NOW } as Action)
+    const lenaId = Object.values(st.model.people).find((p) => p.name === "Lead Lena")!.id
+    const setup = st
+    const request: Action = { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "", reason: "medical appointment", now: NOW } as Action
+
+    // 1. The self-request asks both holders, in-app, delivered — and not the subject.
+    const r = apply(setup, request, P)
+    if (r.error) throw new Error(`request refused: ${r.error}`)
+    const asked = notifsOf(r.state, "leave-requested")
+    const fanOut =
+      asked.length === 2 &&
+      new Set(asked.map((n) => n.toId)).size === 2 &&
+      asked.every(
+        (n) =>
+          (n.toId === samId || n.toId === lenaId) &&
+          n.channel === "in-app" &&
+          n.delivery === "delivered" &&
+          /3 working days/.test(n.body),
+      ) &&
+      !asked.some((n) => n.toId === priyaId)
+    // One id for the row, one per record: the counter came back, not the arm's starting seq.
+    const counterAdvanced = r.state.seq === setup.seq + 3
+
+    // 2. Sam mutes decision traffic: Lena still hears; the audit answers for Sam.
+    const samMuted = ok(setup, { t: "setNotificationPref", personId: samId, kind: "approval", mode: "mute", now: NOW } as Action)
+    const r2 = apply(samMuted, request, P)
+    const asked2 = notifsOf(r2.state, "leave-requested")
+    const muteHolds =
+      !r2.error &&
+      asked2.length === 1 &&
+      asked2[0].toId === lenaId &&
+      r2.state.audit.some((e) => e.field === "notification" && /muted by their preference/.test(e.to ?? ""))
+
+    // 3. Lena asks for email too: exactly one extra pending record, queued for the drain.
+    const lenaMail = ok(setup, { t: "setNotificationPref", personId: lenaId, kind: "approval", mode: "in-app+email", now: NOW } as Action)
+    const r3 = apply(lenaMail, request, P)
+    const lenaRecs = notifsOf(r3.state, "leave-requested").filter((n) => n.toId === lenaId)
+    const emailRec = lenaRecs.find((n) => n.channel === "email")
+    const emailAdded =
+      !r3.error && lenaRecs.length === 2 && emailRec?.delivery === "pending" && /scheduled pass/.test(emailRec.deliveryNote)
+
+    // 4. An approver recording somebody else's absence tells the SUBJECT — and asks nobody.
+    const S: Actor = { id: "e2-sam", name: "Sam" }
+    const r4 = apply(setup, { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-14", endDate: "2026-09-14", hoursPerDay: 7.5, note: "", now: NOW } as Action, S)
+    const told = notifsOf(r4.state, "leave-decided")
+    const oneStepTellsSubject =
+      !r4.error &&
+      told.length === 1 &&
+      told[0].toId === priyaId &&
+      /approved/.test(told[0].body) &&
+      notifsOf(r4.state, "leave-requested").length === 0
+
+    // 5. A non-Leave commitment is a recorded fact, not a question: nothing mints.
+    const r5 = ok(setup, { t: "upsertCommitment", id: null, person: "Priya", kind: "Internal", startDate: "2026-09-21", endDate: "2026-09-21", hoursPerDay: 2, note: "practice", now: NOW } as Action)
+    const nonLeaveSilent = Object.values(r5.notifications).length === 0
+
+    const good = fanOut && counterAdvanced && muteHolds && emailAdded && oneStepTellsSubject && nonLeaveSilent
+    return good
+      ? { verdict: "PASS", actual: "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; and the seq counter advanced once per record past the row's own id.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `fanOut=${fanOut} counterAdvanced=${counterAdvanced} (seq ${setup.seq}->${r.state.seq}) muteHolds=${muteHolds} emailAdded=${emailAdded} oneStepTellsSubject=${oneStepTellsSubject} nonLeaveSilent=${nonLeaveSilent}`, stops: "at the mint — the fan-out reaches the wrong people, a preference silences the wrong holder, or the seq bookkeeping reuses an id", severity: "P1", impact: "either approvers never hear that a request is waiting, or every capacity write in the product mints noise or silently overwrites a notification" } as const
+  },
+)
+
+scenario(
+  "E2B",
+  "The loop closes in both directions: asked, answered, re-opened, re-asked — for leave and for the week",
+  "E2: decideLeave tells the subject the answer with the decision note riding along (a note is a working instruction, not a private fact); a decided row re-opened by an edit re-asks the holders, while editing a still-pending request re-asks nobody; and the timesheet loop mints symmetrically — submitted to the time.approve holders, decided to the submitter with the rejection reason.",
+  () => {
+    const notifsOf = (st: WorkspaceState, rule: string) =>
+      Object.values(st.notifications).filter((n) => n.ruleId === rule)
+    const P: Actor = { id: "e2b-priya", name: "Priya" }
+    const L: Actor = { id: "e2b-lena", name: "Lead Lena" }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === "Priya")!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === "Sam")!.id
+    let st = ok(BASE, { t: "config", op: { k: "upsertPerson", id: samId, name: "Sam", roleIds: ["ROLE_PROJECT_MANAGER"] }, now: NOW } as Action)
+    st = ok(st, { t: "config", op: { k: "upsertPerson", id: null, name: "Lead Lena", roleIds: ["ROLE_ENGAGEMENT_LEAD"] }, now: NOW } as Action)
+
+    // 1. Asked, then returned with a note: the subject hears the answer and the note.
+    let r = apply(st, { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`request refused: ${r.error}`)
+    st = r.state
+    const row = Object.values(st.commitments).find((c) => c.kind === "Leave")!
+    r = apply(st, { t: "decideLeave", id: row.id, decision: "returned", note: "Client workshop that week.", now: NOW } as Action, L)
+    if (r.error) throw new Error(`return refused: ${r.error}`)
+    st = r.state
+    const returnedNote = notifsOf(st, "leave-decided")
+    const answered =
+      returnedNote.length === 1 &&
+      returnedNote[0].toId === priyaId &&
+      /returned/.test(returnedNote[0].body) &&
+      /Client workshop that week/.test(returnedNote[0].body)
+
+    // 2. The subject edits the returned row's dates: it re-opens and re-asks the holders.
+    const askedBefore = notifsOf(st, "leave-requested").length
+    r = apply(st, { t: "upsertCommitment", id: row.id, person: "Priya", kind: "Leave", startDate: "2026-09-14", endDate: "2026-09-15", hoursPerDay: 7.5, note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`re-open refused: ${r.error}`)
+    st = r.state
+    const reAsked =
+      st.commitments[row.id].status === "Requested" && notifsOf(st, "leave-requested").length === askedBefore + 2
+
+    // 3. Editing a still-pending request re-asks nobody: the queue shows current dates anyway.
+    r = apply(st, { t: "upsertCommitment", id: row.id, person: "Priya", kind: "Leave", startDate: "2026-09-14", endDate: "2026-09-16", hoursPerDay: 7.5, note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`pending edit refused: ${r.error}`)
+    st = r.state
+    const pendingQuiet = notifsOf(st, "leave-requested").length === askedBefore + 2
+
+    // 4. The week, symmetrically: submitted reaches the deciders, decided reaches the submitter.
+    const week = weekStarting("2026-08-05")
+    let ts = apply(st, { t: "addTime", issueId: "OAPIL-1", person: "Priya", date: "2026-08-05", hours: 4, activity: "Investigation", billable: true, note: "", justification: "Catch-up after site week.", now: NOW } as Action, P)
+    if (ts.error) throw new Error(`addTime refused: ${ts.error}`)
+    ts = apply(ts.state, { t: "submitTimesheet", person: "Priya", weekStarting: week, now: NOW } as Action, P)
+    if (ts.error) throw new Error(`submit refused: ${ts.error}`)
+    const submittedTo = notifsOf(ts.state, "timesheet-submitted")
+    const submittedFans =
+      submittedTo.length === 2 &&
+      new Set(submittedTo.map((n) => n.toId)).size === 2 &&
+      !submittedTo.some((n) => n.toId === priyaId) &&
+      submittedTo.every((n) => /4h/.test(n.body))
+    const sheetId = Object.values(ts.state.timesheets)[0].id
+    const decided = apply(ts.state, { t: "decideTimesheet", id: sheetId, decision: "rejected", reason: "Thursday is on the wrong issue.", now: NOW } as Action, L)
+    if (decided.error) throw new Error(`decide refused: ${decided.error}`)
+    const decidedTo = notifsOf(decided.state, "timesheet-decided")
+    const decidedLands =
+      decidedTo.length === 1 &&
+      decidedTo[0].toId === priyaId &&
+      /returned/.test(decidedTo[0].body) &&
+      /Thursday is on the wrong issue/.test(decidedTo[0].body)
+
+    const good = answered && reAsked && pendingQuiet && submittedFans && decidedLands
+    return good
+      ? { verdict: "PASS", actual: "The return reaches Priya with the note in the body; editing the returned row's dates re-opens it and asks both holders again; editing the still-pending row asks nobody; the submitted week reaches both deciders with the hours and not the submitter; and the rejection reaches Priya carrying its reason.", stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `answered=${answered} reAsked=${reAsked} pendingQuiet=${pendingQuiet} submittedFans=${submittedFans} decidedLands=${decidedLands}`, stops: "at the loop — an answer nobody hears, a re-opened request nobody is re-asked about, or an edit that spams the queue", severity: "P1", impact: "people keep finding out by looking, which is the state E2 exists to end" } as const
+  },
+)
+
+scenario(
+  "E2C",
+  "The private leave reason never travels in a notification, to anyone, on any channel",
+  "E2's firmest line: notification bodies are composed from dates, hours and decision notes only — the private reason stays on the row, where redaction governs who reads it. Email lands in mailboxes outside the app's redaction, so this is enforced at the mint, not at the reader.",
+  () => {
+    const SECRET = "REASON-SECRET-XYZ"
+    const P: Actor = { id: "e2c-priya", name: "Priya" }
+    const samId = Object.values(BASE.model.people).find((p) => p.name === "Sam")!.id
+    let st = ok(BASE, { t: "config", op: { k: "upsertPerson", id: samId, name: "Sam", roleIds: ["ROLE_PROJECT_MANAGER"] }, now: NOW } as Action)
+    // Email mode ON for the holder, so the email records are covered too.
+    st = ok(st, { t: "setNotificationPref", personId: samId, kind: "approval", mode: "in-app+email", now: NOW } as Action)
+
+    // Request with the secret reason; another approver returns it; re-open; one-step record.
+    let r = apply(st, { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-07", endDate: "2026-09-09", hoursPerDay: 7.5, note: "", reason: SECRET, now: NOW } as Action, P)
+    if (r.error) throw new Error(`request refused: ${r.error}`)
+    st = r.state
+    const row = Object.values(st.commitments).find((c) => c.kind === "Leave")!
+    r = apply(st, { t: "decideLeave", id: row.id, decision: "returned", note: "Pick another week.", now: NOW } as Action, { id: "e2c-b", name: "Second Approver" })
+    if (r.error) throw new Error(`return refused: ${r.error}`)
+    st = r.state
+    r = apply(st, { t: "upsertCommitment", id: row.id, person: "Priya", kind: "Leave", startDate: "2026-09-21", endDate: "2026-09-22", hoursPerDay: 7.5, note: "", now: NOW } as Action, P)
+    if (r.error) throw new Error(`re-open refused: ${r.error}`)
+    st = r.state
+    r = apply(st, { t: "upsertCommitment", id: null, person: "Priya", kind: "Leave", startDate: "2026-09-28", endDate: "2026-09-28", hoursPerDay: 7.5, note: "", reason: SECRET, now: NOW } as Action, { id: "e2c-sam", name: "Sam" })
+    if (r.error) throw new Error(`one-step refused: ${r.error}`)
+    st = r.state
+
+    const all = Object.values(st.notifications)
+    const minted = all.length > 0
+    const reasonHeld = all.every((n) => !n.subject.includes(SECRET) && !n.body.includes(SECRET))
+    const rowKeeps = st.commitments[row.id].reason === SECRET
+
+    const good = minted && reasonHeld && rowKeeps
+    return good
+      ? { verdict: "PASS", actual: `${all.length} notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.`, stops: "", severity: "P1", impact: "none" } as const
+      : { verdict: "FAIL", actual: `minted=${minted} (${all.length}) reasonHeld=${reasonHeld} rowKeeps=${rowKeeps}`, stops: "at the mint — a private reason composed into a body would ride email into mailboxes no redaction reaches", severity: "P1", impact: "the one privacy promise leave carries is broken at the exact channel that cannot be un-sent" } as const
+  },
+)
+
 /* ================================================================== *
  * Report
  * ================================================================== */

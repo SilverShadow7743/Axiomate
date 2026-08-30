@@ -70,11 +70,14 @@ export function deliveryFor(channel: Channel): { delivery: Delivery; deliveryNot
  * ================================================================== */
 
 /**
- * The classes a person can have an opinion about. The two built-in mints carry their own
+ * The classes a person can have an opinion about. The built-in mints carry their own
  * kind; everything a rule raises is `automation` — per-rule granularity was considered and
- * rejected while nobody has asked for it.
+ * rejected while nobody has asked for it. `approval` covers both approval loops — leave and
+ * timesheets, asked and answered — as ONE preference; the notification's `ruleId` carries the
+ * finer name (leave-requested, leave-decided, timesheet-submitted, timesheet-decided) for
+ * routing, but a person opts in or out of "decisions traffic" whole.
  */
-export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation', 'mention'] as const
+export const NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation', 'mention', 'approval'] as const
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
 /**

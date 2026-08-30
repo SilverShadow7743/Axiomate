@@ -1742,6 +1742,36 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "E2A",
+      "title": "Decision traffic fans out to the holders, per each holder's own preference — and to nobody else",
+      "expected": "E2 minting (2026-08-30 design): a self-request mints leave-requested to the leave.approve holders and never to the subject; each recipient's own preference is consulted at the mint (mute silences one holder without silencing the rest, and the audit still answers why); in-app+email adds exactly one pending record for the scheduled pass's drain; the approver-records-other flow mints leave-decided to the subject and asks nobody; a non-Leave commitment mints nothing; and the arm's seq counter — which already spent state.seq+1 on the row's own id — advances once per record so no id is ever reused.",
+      "verdict": "PASS",
+      "actual": "Priya's request reaches Sam and Lena in-app with the working-day count and reaches Priya not at all; muting Sam silences only Sam and writes the audit line; Lena's email preference adds exactly one pending record naming the scheduled pass; Sam recording Priya's leave mints one leave-decided to Priya and zero requests; an Internal commitment mints nothing; and the seq counter advanced once per record past the row's own id.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E2B",
+      "title": "The loop closes in both directions: asked, answered, re-opened, re-asked — for leave and for the week",
+      "expected": "E2: decideLeave tells the subject the answer with the decision note riding along (a note is a working instruction, not a private fact); a decided row re-opened by an edit re-asks the holders, while editing a still-pending request re-asks nobody; and the timesheet loop mints symmetrically — submitted to the time.approve holders, decided to the submitter with the rejection reason.",
+      "verdict": "PASS",
+      "actual": "The return reaches Priya with the note in the body; editing the returned row's dates re-opens it and asks both holders again; editing the still-pending row asks nobody; the submitted week reaches both deciders with the hours and not the submitter; and the rejection reaches Priya carrying its reason.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "E2C",
+      "title": "The private leave reason never travels in a notification, to anyone, on any channel",
+      "expected": "E2's firmest line: notification bodies are composed from dates, hours and decision notes only — the private reason stays on the row, where redaction governs who reads it. Email lands in mailboxes outside the app's redaction, so this is enforced at the mint, not at the reader.",
+      "verdict": "PASS",
+      "actual": "6 notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
