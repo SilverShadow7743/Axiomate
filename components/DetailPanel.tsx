@@ -20,6 +20,7 @@ import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
+import DiscussionTab from './DiscussionTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
 import type { CommitmentKind } from '@/lib/capacity'
@@ -61,6 +62,7 @@ export type Tab =
   | 'Overview'
   | 'Capacity'
   | 'Members'
+  | 'Discussion'
   | 'Notes'
   | 'Estimation'
   | 'Time'
@@ -326,9 +328,9 @@ export default function DetailPanel({
    * state instead of costing every record a tab.
    */
   const TABS: Tab[] = issue
-    ? ['Overview', 'Notes', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
+    ? ['Overview', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
-      ? ['Capacity', 'Members', 'History']
+      ? ['Capacity', 'Members', 'Discussion', 'History']
       : ['Overview', 'History']
 
   /**
@@ -606,6 +608,8 @@ export default function DetailPanel({
             onUpdateRole={onUpdateMemberRole}
             onRemove={onRemoveMember}
           />
+        ) : !issue && row.kind === 'project' && tab === 'Discussion' ? (
+          <DiscussionTab state={state} actor={actor} scopeKind="project" scopeId={row.id} />
         ) : !issue && row.kind === 'project' && tab !== 'Overview' ? (
           <CapacityPanel
             row={row}
@@ -666,6 +670,14 @@ export default function DetailPanel({
             onSubmitWeek={onSubmitWeek}
             onDecideWeek={onDecideWeek}
             onUpdate={onUpdateTime}
+          />
+        ) : tab === 'Discussion' ? (
+          <DiscussionTab
+            state={state}
+            actor={actor}
+            scopeKind="issue"
+            scopeId={issue.id}
+            ownerName={issue.owner}
           />
         ) : tab === 'Notes' ? (
           <NotesTab

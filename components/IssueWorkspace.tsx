@@ -1926,6 +1926,13 @@ export default function IssueWorkspace({
               setView('timesheet')
               return
             }
+            // A discussion's aboutId is its scope — an issue OR a project node, and both are
+            // tree rows, so revealIssue reaches either; the Discussion tab exists on both.
+            if (n.ruleId === 'discussion-message') {
+              revealIssue(n.aboutId)
+              setRequestTab('Discussion' as DetailTab)
+              return
+            }
             revealIssue(issueId)
             // Land on the tab the notification is about, through the panel's own request
             // mechanism — an assignment reads on Overview, hours on Time, mail on Notes.
@@ -2152,10 +2159,16 @@ export default function IssueWorkspace({
             dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
           }}
           onOpen={(issueId, n) => {
-            // Same routing as the toolbar bell above: approval traffic goes to its surface.
+            // Same routing as the toolbar bell above: approval traffic goes to its surface,
+            // a discussion click to its scope's Discussion tab (issue or project row alike).
             if (n.ruleId === 'leave-decided') { setView('mycalendar'); return }
             if (n.ruleId === 'leave-requested' || n.ruleId === 'timesheet-submitted' || n.ruleId === 'timesheet-decided') {
               setView('timesheet')
+              return
+            }
+            if (n.ruleId === 'discussion-message') {
+              revealIssue(n.aboutId)
+              setRequestTab('Discussion' as DetailTab)
               return
             }
             revealIssue(issueId)
