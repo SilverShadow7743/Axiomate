@@ -63,12 +63,14 @@ but should not become the default — prefer a visible label per the checklist i
 | `.btn` | 26px | Default secondary action |
 | `.btn.primary` | 26px, accent fill | One per view/context — see the top bar's one-primary-action rule |
 | `.btn.ghost` | 26px, transparent border | Secondary/toggle actions; `.on` variant marks an active toggle |
-| `.menu-item.danger` | text-only, `color: var(--h-overdue)` | Destructive menu entries |
+| `.btn.danger-solid` | 26px, `--h-overdue` fill | Standalone destructive confirm button — already in use in `Dialogs.tsx` (Archive/Delete confirm), `ConfigWorkspace.tsx` (reset confirm), `NotesTab.tsx` (delete confirm) |
+| `.menu-item.danger` | text-only, `color: var(--h-overdue)` | Destructive entries inside a menu (a different context, not a substitute for `.btn.danger-solid`) |
 
-**Open decision, not yet resolved:** there is no dedicated danger *button* variant, only a
-danger *menu item*. If a future screen needs a standalone destructive button (not inside a
-menu), decide then whether to add `.btn.danger` or route the action through a confirmation menu
-instead — don't invent a one-off inline style.
+**Correction from this document's first pass:** it originally reported no standalone danger
+button existed. That was wrong — it missed `.btn.danger-solid`, already well-formed and used in
+three real places. Both classes are correct and should stay; the only loose end is the
+`.danger` vs. `.danger-solid` naming difference between the two, not worth a rename given both
+are already established and unambiguous in context.
 
 ## Tables
 
@@ -180,7 +182,12 @@ information.
 
 ## Priority fix list (from this extraction)
 
-1. **Severity color-not-only** — add a glyph/shape, matching schedule-health's existing model.
-2. **`.cfg-fld` required-marker + inline-error convention** — define once, apply everywhere.
-3. **Danger button variant** — decide `.btn.danger` vs. confirmation-menu-only, next time it's
-   needed; don't improvise a one-off.
+1. ~~**Severity color-not-only**~~ — fixed 2026-08-31: `lib/severity.ts`'s `severityGlyph()`
+   adds a shape (▲/●/–) alongside color everywhere severity renders (`TreeGrid.tsx`,
+   `OverviewTab.tsx`), matching schedule-health's discipline.
+2. ~~**`.cfg-fld` required-marker + inline-error convention**~~ — fixed 2026-08-31:
+   `.cfg-fld.required` (paired with the input's native `required` attribute) and
+   `.cfg-fld-error` are defined in `app/globals.css` and applied to the holidays "Add" form in
+   `ConfigWorkspace.tsx` as the first real usage.
+3. ~~**Danger button variant**~~ — not actually a gap. `.btn.danger-solid` already existed and
+   is in real use (see the button-hierarchy table above); this document's first pass missed it.

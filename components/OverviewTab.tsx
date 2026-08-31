@@ -7,6 +7,7 @@ import { canEditIssue } from '@/lib/permissions'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueNote } from '@/lib/notes'
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow, type Severity } from '@/lib/types'
+import { severityGlyph } from '@/lib/severity'
 import { allowedNext } from '@/lib/statusPolicy'
 import { blockingRule } from '@/lib/approval'
 import type { ApprovalDecision } from '@/lib/approval'
@@ -508,7 +509,10 @@ export default function OverviewTab({
               )}
             </dd>
             <dt>{labels.FIELD_SEVERITY}</dt>
-            <dd className={`sev-${issue.severity}`}>{issue.severity}</dd>
+            <dd className={`sev-${issue.severity}`}>
+              <span className="sev-glyph" aria-hidden="true">{severityGlyph(issue.severity)}</span>
+              {issue.severity}
+            </dd>
             <dt>{labels.FIELD_STATUS}</dt>
             <dd>{issue.status}</dd>
             {raidKind === 'risk' && record && (

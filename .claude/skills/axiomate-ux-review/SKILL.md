@@ -6,8 +6,9 @@ description: This skill should be used when reviewing Axiomate TMS UI code for u
 # Axiomate UX Review
 
 Review against what this specific app actually promises (`docs/design/ux-principles.md`'s ten
-principles), not a generic checklist. Two known real gaps are already tracked — check for
-regressions on those specifically, not just new ones.
+principles), not a generic checklist. Two real gaps were tracked from the first extraction and
+fixed 2026-08-31 (severity's color-not-only signal, `.cfg-fld`'s required/error convention) —
+check regressions on those specifically, not just new ones.
 
 ## Process
 
@@ -22,11 +23,15 @@ regressions on those specifically, not just new ones.
 5. Report findings ranked by real impact — a workflow-status color-only gap on the primary grid
    outranks a padding mismatch nobody will notice.
 
-## Known gaps (check these are not regressed, and flag if genuinely unresolved elsewhere)
+## Fixed gaps (check these are not regressed)
 
-- Severity color-only, no glyph (unlike schedule-health, which has one) — `docs/design/component-standards.md`
-- `.cfg-fld` forms have no required-marker or inline-error convention
-- No dedicated `.btn.danger` — destructive actions currently menu-only
+- Severity color-not-only — `lib/severity.ts`'s `severityGlyph()` now pairs a shape with color
+  everywhere severity renders. If a NEW severity render site skips it, that's a regression.
+- `.cfg-fld` required-marker/inline-error — `.cfg-fld.required` + `.cfg-fld-error` exist; a new
+  required config field that doesn't use them is a regression, not a fresh finding.
+- `.btn.danger-solid` was never actually missing — the first extraction pass mistakenly
+  reported it as a gap. Don't re-flag it; do flag a NEW destructive button that reinvents its
+  own inline styling instead of using the existing class.
 
 ## Full documents
 

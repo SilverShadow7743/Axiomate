@@ -7,6 +7,7 @@ import type { ColumnDef } from '@/lib/columns'
 import { formatIso } from '@/lib/dates'
 import { ROW_H } from '@/lib/layout'
 import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
+import { severityGlyph } from '@/lib/severity'
 import type { StatusPolicy } from '@/lib/statusPolicy'
 import RowMenu, { type RowActions } from './RowMenu'
 import StatusCellEditor from './StatusCellEditor'
@@ -874,7 +875,8 @@ function Cell({
     case 'severity':
       return row.severity ? (
         <span className={`chip sev-${row.severity}`}>
-          <span className="dot" style={{ background: 'currentColor' }} />
+          {/* A shape, not just the dot's color, carries the level — see lib/severity.ts. */}
+          <span className="sev-glyph" aria-hidden="true">{severityGlyph(row.severity)}</span>
           {row.severity}
         </span>
       ) : (

@@ -3447,13 +3447,13 @@ function ServiceLevels({
           </div>
         ))}
         <div className="cfg-fld-row">
-          <label className="cfg-fld">
+          <label className="cfg-fld required">
             <span>Date</span>
-            <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+            <input type="date" required value={newDate} onChange={(e) => setNewDate(e.target.value)} />
           </label>
-          <label className="cfg-fld">
+          <label className="cfg-fld required">
             <span>Name</span>
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="What the day is" />
+            <input required value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="What the day is" />
           </label>
           <button
             className="btn"

@@ -7,9 +7,11 @@ names and file references).
 
 - **Self-labelling select** (`.field select`) — for a control in a STABLE-position facet bar
   only. No `<label>`; the resting option carries the caption, `aria-label` backs it.
-- **Structured field** (`.cfg-fld`) — label-above-input, for everything else. Known gaps:
-  no required-marker, no inline-error convention yet — define one before adding validation to a
-  new form rather than improvising per-screen.
+- **Structured field** (`.cfg-fld`) — label-above-input, for everything else. Required fields
+  get `className="cfg-fld required"` (pairs with the input's native `required` attribute — the
+  visible `*` marker plus the accessible semantics the attribute already carries) and, on
+  validation failure, a `.cfg-fld-error` block directly under the control. First real usage:
+  the holidays "Add" form in `ConfigWorkspace.tsx`.
 - **Collapsible filter group** (`.fh-chip` / `FiltersHeader`) — for 3+ optional narrowing
   controls on any view. Starts expanded whenever something is active — never hide an active
   filter behind a collapsed chip by default.
@@ -17,8 +19,9 @@ names and file references).
   touch-primary surface (currently only `/my-week`). Prefer a visible `<label>` over
   `aria-label`-only where space allows.
 - **Buttons** — `.btn` (default) → `.btn.primary` (ONE per view) → `.btn.ghost` (secondary/
-  toggle, `.on` for active toggles) → `.menu-item.danger` (destructive, in a menu only — no
-  standalone danger button exists yet; decide deliberately if one is needed, don't improvise).
+  toggle, `.on` for active toggles) → `.btn.danger-solid` (standalone destructive confirm — see
+  `Dialogs.tsx`'s `Actions` component) → `.menu-item.danger` (destructive entries inside a
+  menu, a different context from a standalone button).
 
 ## Tables
 
@@ -35,8 +38,9 @@ names and file references).
 1. **Schedule health** — color + shape/glyph together (see the Gantt `Legend` in
    `FilterBar.tsx` for the exact spec: bar shape = record kind, color = health, glyph = extra
    emphasis on overdue/blocked/complete). This is the model — color is never the only signal.
-2. **Severity** — currently color-only. **Known gap:** give it a glyph/shape too, matching
-   schedule health, before shipping a new severity-driven screen.
+2. **Severity** — pairs `sev-High/-Medium/-Low` color with a shape glyph
+   (`lib/severity.ts`'s `severityGlyph()`: ▲/●/–), matching schedule health's discipline. Use
+   this helper for any new severity render site rather than a bare colored label.
 3. **Save/sync state** (`.persist-tag`) — reuses the health palette; not a new family.
 
 Related micro-systems that extend these (don't add a fourth family): `.mywork-tag` (My-work

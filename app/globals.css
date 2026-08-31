@@ -1025,6 +1025,17 @@ select.cell-editor {
 .sev-Low {
   color: var(--sev-low);
 }
+/* A shape per level, not just a color — the same discipline the Gantt's health glyphs (!, ⌧,
+   ✓) already apply, extended to severity, which previously carried color and text only. The
+   text label alongside it already gave screen readers everything they need; this glyph is
+   `aria-hidden` and purely the sighted, color-independent signal. */
+.sev-glyph {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  font-size: 0.9em;
+  line-height: 1;
+}
 
 .hl-ontrack {
   color: var(--h-ontrack);
@@ -4191,6 +4202,20 @@ select.cell-editor {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-faint);
+}
+/* The required-field and inline-error convention this file previously had none of — a config
+   form disclosed its fields but not which ones were load-bearing until the submit button
+   silently refused to enable. Pair `className="cfg-fld required"` with the input's own native
+   `required` attribute (screen readers get "required" from the attribute; this is the sighted
+   signal) and, when validation fails, render a `.cfg-fld-error` directly under the control. */
+.cfg-fld.required > span::after {
+  content: ' *';
+  color: var(--h-overdue);
+}
+.cfg-fld-error {
+  font-size: 11px;
+  color: var(--h-overdue);
+  margin-top: -2px;
 }
 .cfg-fld input,
 .cfg-fld select,
