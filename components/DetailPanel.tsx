@@ -58,6 +58,16 @@ import {
  * "Overview" rather than "Details" keeps that split unambiguous — otherwise "Details" here
  * and the "Edit Issue" form there look like two routes to the same thing.
  */
+/**
+ * The tab bar's own values — what `TABS` (below) actually ever assembles from, for any row
+ * kind. `Lifecycle`, `Resolution Path`, `Relationships`, `Evidence` and `Data Source` are NOT
+ * separate tabs and were removed from this union 2026-08-31: the consolidation itself ("seven,
+ * down from twelve", see `TABS`) already happened — Lifecycle and Resolution Path render as
+ * sections inside `Schedule`, Relationships and Evidence as sections inside `Links`, and Data
+ * Source moved to the empty-selection state (`<DataSource>` below `!row`). This union had kept
+ * all five as dead type members with zero references anywhere in the codebase, which is worse
+ * than harmless — it makes the tab bar look uncondensed to anyone reading the type alone.
+ */
 export type Tab =
   | 'Overview'
   | 'Capacity'
@@ -67,13 +77,8 @@ export type Tab =
   | 'Estimation'
   | 'Time'
   | 'Schedule'
-  | 'Lifecycle'
-  | 'Relationships'
-  | 'Resolution Path'
   | 'Links'
-  | 'Evidence'
   | 'History'
-  | 'Data Source'
 
 interface Props {
   /** E5: present only when the assistant may propose — threads to the Discussion tab. */
@@ -321,7 +326,8 @@ export default function DetailPanel({
    * for "this tab does nothing here"; the honest fix is not to offer it.
    *
    * Issues keep the full set. Structural rows get what they have: Capacity for a project,
-   * History everywhere (they are audited like everything else), and Data Source always.
+   * History everywhere (they are audited like everything else). Data Source is not one of
+   * these tabs at all — see the next comment.
    */
   /*
    * Seven, down from twelve. The scheduling story was split across four tabs that
