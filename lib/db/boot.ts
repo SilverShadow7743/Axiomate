@@ -226,7 +226,7 @@ export async function boot(): Promise<Boot> {
        * holds every rate, because it is the single mutation funnel and it needs the whole
        * timeline to refuse an overlapping period; what changes is what leaves the server.
        */
-      state: state && redactForReader(state, actor),
+      state: state && slimAuditForTransfer(redactForReader(state, actor)),
       tenantId,
       actor,
       signInRequired: identityEstablished() && !session.verified,
@@ -284,6 +284,34 @@ export async function boot(): Promise<Boot> {
  * The reducer still holds everything, on the server, because it is the single mutation funnel
  * and it needs the full set to refuse an overlapping rate period or a duplicate skill row.
  */
+/**
+ * The trail's text, truncated IN TRANSIT and never at rest — see
+ * `docs/plans/2026-08-31-boot-slimming-design.md`.
+ *
+ * An audit row's `from` is often the only surviving copy of what a field said before an
+ * edit, so Postgres keeps full fidelity forever and only this payload trims: measured live,
+ * `description` rows carrying imported email bodies were 1.6 MB of a 3 MB boot (one row was
+ * 143 KB). Every server-side reader uses `loadWorkspace` and never sees this; the packs and
+ * the IMS read fields and short values, not bodies; the one reader affected is the human
+ * History tab, which shows the marker on exactly the rows nobody scrolls a 143 KB diff of.
+ */
+const AUDIT_TEXT_CAP = 400
+const AUDIT_TRUNCATION_MARK = '… [shortened for transfer — the full text is kept in the record’s history]'
+
+function slimAuditForTransfer(state: WorkspaceState): WorkspaceState {
+  const trim = (s: string | null): string | null =>
+    s && s.length > AUDIT_TEXT_CAP ? s.slice(0, AUDIT_TEXT_CAP) + AUDIT_TRUNCATION_MARK : s
+  let touched = false
+  const audit = state.audit.map((a) => {
+    const from = trim(a.from)
+    const to = trim(a.to)
+    if (from === a.from && to === a.to) return a
+    touched = true
+    return { ...a, from, to }
+  })
+  return touched ? { ...state, audit } : state
+}
+
 function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
   const rates = can(state.model, actor, 'rate.view').allowed ? state.rates : {}
 
