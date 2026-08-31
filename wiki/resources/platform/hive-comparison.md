@@ -32,14 +32,32 @@ portability (no public API/webhooks — but zero lock-in, DB is ours), personal-
 
 ## Steal-list, value order
 
-1. **Client portal activation** — boundary built and proven; A7 turns engine into feature.
-2. **Savable views/tabs** — cheap, daily-felt.
-3. **Mobile timesheet entry** — a narrow responsive "my week" page covers 80%.
-4. **Global full-text search** — notes/mail/documents; toolbar covers rows only.
-5. **Consultant onboarding UX** — guided first-run before the team arrives.
-6. **Public API + webhooks** — the extensibility gap.
-7. Real-time co-edited notes — hard; only if meeting notes move in-tool.
-8. Visual proofing markup — only if review volume grows.
+> [!note] Re-scored 2026-08-31
+> Four of the five original steals shipped and deployed over 2026-08-30/31, plus a full
+> layout restructure the list didn't originally call for — the "above the Hive bar" phase
+> and the clean shell both closed. Only client portal activation remains genuinely open.
+
+1. ✅ **Client portal activation** — DONE (engine, staged 2026-08-31): the `clientView`
+   boundary was already built and sentinel-proven; a guest was invited via Entra B2B
+   (PendingAcceptance). **Still open:** the user hasn't walked the portal through yet —
+   this is the one item on the original list not yet closed end to end.
+2. ✅ **Savable views/tabs** — DONE (2026-08-31): team-shared `SavedView` records on the
+   operating model, not per-browser localStorage — audited like any other config change.
+3. ✅ **Mobile timesheet entry** — DONE (2026-08-31): `/my-week`, a phone-first attestation
+   page covering record → submit → approve.
+4. ✅ **Global full-text search** — DONE (2026-08-30 night): client-side scan over the
+   already-redacted boot state — leak-proof by construction, pinned by GS1.
+5. ✅ **Consultant onboarding UX** — DONE (2026-08-31): a first-run checklist that computes
+   itself from state and retires on the first submitted week.
+6. **Public API + webhooks** — the extensibility gap. Still open, deliberately deferred
+   (multi-firm gate, not a single-firm blocker).
+7. Real-time co-edited notes — hard; only if meeting notes move in-tool. Open.
+8. Visual proofing markup — only if review volume grows. Open.
+
+**Beyond the original list:** the clean-shell layout restructure (sidebar navigation, a
+right-overlay detail drawer replacing the bottom dock, per-view filters, calm visual tokens)
+shipped 2026-08-31, deployed and user-walkthrough-confirmed — closing the gap the comparison
+itself named ("Hive wins on polish") more directly than any single steal-list item did.
 
 Where Hive is simply ahead regardless of philosophy: uptime redundancy, support org,
 integration ecosystem, mobile, localization, shipped API. None block the single-firm
