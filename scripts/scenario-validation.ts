@@ -168,7 +168,7 @@ import {
 } from '../lib/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
-import { describeWork, myWork, todaysMeetings } from '../lib/mywork'
+import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
@@ -4464,6 +4464,61 @@ scenario(
       severity: '—',
       impact:
         'The home-screen redesign can show a person their own meetings today without a second join convention to get wrong — this pins the id-based match against myWork\'s own name-based one, so a future edit cannot quietly copy the wrong pattern from its neighbour.',
+    }
+  },
+)
+
+scenario(
+  'UI1',
+  "decisionItems, extracted from myWork's decide block, changes nothing",
+  "The unified inbox needs the same 'needs a decision' logic myWork already computes, without a second copy of it. decisionItems is that block pulled out standalone — this scenario proves the extraction is a no-op by comparing its output, item for item, against myWork's own decide group on the identical state.",
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const priya: Actor = { id: priyaRow.id, name: 'Priya' }
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaRow.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+    const withHours = ok(staffed, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-05',
+      hours: 4, activity: 'Investigation', billable: true, note: '',
+      justification: 'Backfilled for the test.', now: NOW,
+    } as Action)
+    const engId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withSow = ok(withHours, {
+      t: 'upsertSow', id: null, engagementId: engId,
+      patch: { reference: 'SOW-UI1', title: 'For the test', status: 'Active', effortHours: 100, value: 10000, currency: 'GBP' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(withSow.sows).find((x) => x.reference === 'SOW-UI1')!.id
+    // A change SOMEBODY ELSE raised (decidable by Priya) and a change SHE raised (not hers to
+    // decide) — the second only matters to the sibling waitingItems scenario, but building both
+    // here means this same state can be reused there without a second construction.
+    const withChange = ok(withSow, {
+      t: 'upsertChangeRequest', id: null, sowId,
+      patch: { title: 'More scope', effortHours: 40, value: 4000, currency: 'GBP', scope: '', reason: 'The client asked', effectiveFrom: null },
+      submit: true, now: NOW,
+    } as Action)
+
+    const fromExtraction = decisionItems(withChange, priya)
+    const fromMyWork = myWork(withChange, priya, TODAY).items.filter((i) => i.reason === 'decide')
+
+    const sameLength = fromExtraction.length === fromMyWork.length && fromExtraction.length > 0
+    const sameKeys = fromExtraction.every((item, i) => item.key === fromMyWork[i]?.key)
+    const sameWhy = fromExtraction.every((item, i) => item.why === fromMyWork[i]?.why)
+    const sameWhen = fromExtraction.every((item, i) => item.when === fromMyWork[i]?.when)
+
+    const good = sameLength && sameKeys && sameWhy && sameWhen
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: good
+        ? `decisionItems produced ${fromExtraction.length} item(s) — ${fromExtraction.map((i) => i.key).join(', ')} — identical in key, order, why and when to myWork's own decide group on the same state. The extraction changed nothing.`
+        : `sameLength=${sameLength} (${fromExtraction.length} vs ${fromMyWork.length}) sameKeys=${sameKeys} sameWhy=${sameWhy} sameWhen=${sameWhen}`,
+      stops: '',
+      severity: good ? '—' : 'P1',
+      impact: good
+        ? 'none'
+        : "decisionItems' extraction diverged from myWork's decide group — every screen reading either would now disagree about what needs a decision.",
     }
   },
 )

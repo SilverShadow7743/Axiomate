@@ -183,26 +183,28 @@ function daysBetween(from: string, to: string): number {
  * Takes the whole state because it reads six collections; taking six parameters would put the
  * question of which six into every caller.
  */
-export function myWork(state: WorkspaceState, actor: Actor, today: string): WorkList {
+/**
+ * Decisions somebody is waiting on — the same five sources `myWork` folds into its `decide`
+ * group, extracted for reuse by the unified inbox (`lib/inbox.ts`). No `today` parameter:
+ * every date here is `requestedAt`/`submittedAt`/`deliveredAt`, or `null` — none of the five
+ * sources compares against "now."
+ *
+ * Recomputes `person`/`isMe`/`isMine`/`holds`/`roles` rather than sharing `myWork`'s closure —
+ * this is a standalone exported function, not a nested one, so it cannot close over another
+ * function's locals. The duplication is small and deliberate; see the extraction's own commit
+ * message for why a shared third helper was not built instead.
+ */
+export function decisionItems(state: WorkspaceState, actor: Actor): WorkItem[] {
   const person = directoryPersonFor(state.model, actor)
   const name = (person?.name ?? actor.name ?? '').trim()
   const mine = name.toLowerCase()
-  const items: WorkItem[] = []
-
-  const holds = (key: Parameters<typeof can>[2]) => can(state.model, actor, key).allowed
   const isMe = (who: string | null | undefined) => (who ?? '').trim().toLowerCase() === mine
-  /*
-   * The id-aware join, for references that carry the id half. The id wins the moment both
-   * sides have one — a rename cannot empty this list — and the name fallback exists only
-   * for rows written before the migration. Audit-style fields (requestedBy, deliveredBy)
-   * keep the plain name compare: they record what was written, not who someone is.
-   */
   const isMine = (who: string | null | undefined, whoId?: string | null): boolean =>
     whoId ? person?.id === whoId : isMe(who)
-
-  /* ---------------- 1. decisions somebody is waiting on ---------------- */
-
+  const holds = (key: Parameters<typeof can>[2]) => can(state.model, actor, key).allowed
   const roles = new Set(rolesFor(state.model, actor))
+  const items: WorkItem[] = []
+
   for (const a of Object.values(state.approvals)) {
     if (a.decision) continue
     const rule = state.model.approvalRules.find((r) => r.id === a.ruleId)
@@ -287,6 +289,27 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
       })
     }
   }
+
+  return items
+}
+
+export function myWork(state: WorkspaceState, actor: Actor, today: string): WorkList {
+  const person = directoryPersonFor(state.model, actor)
+  const name = (person?.name ?? actor.name ?? '').trim()
+  const mine = name.toLowerCase()
+  const isMe = (who: string | null | undefined) => (who ?? '').trim().toLowerCase() === mine
+  /*
+   * The id-aware join, for references that carry the id half. The id wins the moment both
+   * sides have one — a rename cannot empty this list — and the name fallback exists only
+   * for rows written before the migration. Audit-style fields (requestedBy, deliveredBy)
+   * keep the plain name compare: they record what was written, not who someone is.
+   */
+  const isMine = (who: string | null | undefined, whoId?: string | null): boolean =>
+    whoId ? person?.id === whoId : isMe(who)
+
+  /* ---------------- 1. decisions somebody is waiting on ---------------- */
+
+  const items: WorkItem[] = [...decisionItems(state, actor)]
 
   /* ---------------- 2. your own work ---------------- */
 

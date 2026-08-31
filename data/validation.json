@@ -754,6 +754,16 @@
       "impact": "The home-screen redesign can show a person their own meetings today without a second join convention to get wrong — this pins the id-based match against myWork's own name-based one, so a future edit cannot quietly copy the wrong pattern from its neighbour."
     },
     {
+      "id": "UI1",
+      "title": "decisionItems, extracted from myWork's decide block, changes nothing",
+      "expected": "The unified inbox needs the same 'needs a decision' logic myWork already computes, without a second copy of it. decisionItems is that block pulled out standalone — this scenario proves the extraction is a no-op by comparing its output, item for item, against myWork's own decide group on the identical state.",
+      "verdict": "PASS",
+      "actual": "decisionItems produced 1 item(s) — cr:cr-4 — identical in key, order, why and when to myWork's own decide group on the same state. The extraction changed nothing.",
+      "stops": "",
+      "severity": "—",
+      "impact": "none"
+    },
+    {
       "id": "PF1",
       "title": "A partner asks which engagement is in trouble",
       "expected": "Every engagement on one screen, each stating what it has overdue, blocked, unowned or gone quiet — as counts that can be checked, with no score anywhere.",
