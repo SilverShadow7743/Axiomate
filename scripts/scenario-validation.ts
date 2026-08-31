@@ -4908,6 +4908,66 @@ scenario(
 )
 
 scenario(
+  'RR2',
+  "An allocation is edited in place, not replaced — the reducer's own untested path",
+  'upsertAllocation with a real id lowers the percentage and leaves person, project, dates, note, createdBy and createdAt exactly as they were — proven here because no UI in this codebase has ever called it this way before.',
+  () => {
+    /*
+     * Grepped every allocation-write call site in this codebase before writing this plan:
+     * IssueWorkspace.tsx's onAllocate always passes id: null. This scenario is the first thing,
+     * anywhere, to exercise upsertAllocation's edit-by-id branch (lib/workspace.ts:6167-6250) —
+     * proven here, standalone, before the Replanning drawer's Apply button becomes the first
+     * LIVE caller of it.
+     */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withProject = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Gamma' }, now: NOW,
+    } as Action)
+    const project = Object.values(withProject.nodes).find((n) => n.name === 'Gamma')!.id
+
+    const before = withProject
+    const created = ok(before, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: project,
+      startDate: '2026-09-01', endDate: '2026-09-30', percentage: 60, note: 'Original note.', now: NOW,
+    } as Action)
+    const allocId = Object.keys(created.allocations).find((id) => !before.allocations[id])!
+    const original = created.allocations[allocId]
+
+    const edited = ok(created, {
+      t: 'upsertAllocation', id: allocId, person: original.person, projectId: original.projectId,
+      startDate: original.startDate, endDate: original.endDate, percentage: 30, note: original.note, now: NOW,
+    } as Action)
+    const after = edited.allocations[allocId]
+
+    const editEntry = edited.audit.find(
+      (e) => e.field === 'allocation' && e.from?.includes('60%') && e.to?.includes('30%'),
+    )
+
+    const good =
+      after.percentage === 30 &&
+      after.person === original.person &&
+      after.projectId === original.projectId &&
+      after.startDate === original.startDate &&
+      after.endDate === original.endDate &&
+      after.note === original.note &&
+      /* the same row, not a new one alongside it */
+      Object.keys(edited.allocations).length === Object.keys(created.allocations).length &&
+      after.createdBy === original.createdBy &&
+      after.createdAt === original.createdAt &&
+      editEntry !== undefined
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The same allocation row (${allocId}) now reads ${after.percentage}%, down from ${original.percentage}% — person "${after.person}", project, dates and note all unchanged, and createdBy/createdAt still say ${after.createdBy} at ${after.createdAt}, not the edit's own actor or time. The audit trail carries a distinct entry: from "${editEntry?.from}" to "${editEntry?.to}". No second row was created alongside it.`,
+      stops: good ? '—' : 'at upsertAllocation — the edit-by-id branch did not preserve what it should have, or created a second row',
+      severity: good ? '—' : 'P0',
+      impact:
+        "A rebalancing suggestion can be applied as a real edit to an existing allocation, not a delete-and-recreate that would lose who first committed the person and when — proven before anything live depends on this branch, which no caller had ever exercised.",
+    }
+  },
+)
+
+scenario(
   'CP1',
   'Somebody asks what this workspace can do, and is told what it cannot',
   'Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.',

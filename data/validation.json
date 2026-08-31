@@ -814,6 +814,16 @@
       "impact": "A delivery lead who already knows someone is over-committed (from Project Pulse) can now see exactly where the hours sit, workspace-wide, without being told which one to change — the decision stays theirs, and the numbers stay honest."
     },
     {
+      "id": "RR2",
+      "title": "An allocation is edited in place, not replaced — the reducer's own untested path",
+      "expected": "upsertAllocation with a real id lowers the percentage and leaves person, project, dates, note, createdBy and createdAt exactly as they were — proven here because no UI in this codebase has ever called it this way before.",
+      "verdict": "PASS",
+      "actual": "The same allocation row (alloc-3) now reads 30%, down from 60% — person \"Priya\", project, dates and note all unchanged, and createdBy/createdAt still say Validator at 2026-08-15T09:00:00.000Z, not the edit's own actor or time. The audit trail carries a distinct entry: from \"Priya 60%\" to \"Priya 30% 2026-09-01 → 2026-09-30\". No second row was created alongside it.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A rebalancing suggestion can be applied as a real edit to an existing allocation, not a delete-and-recreate that would lose who first committed the person and when — proven before anything live depends on this branch, which no caller had ever exercised."
+    },
+    {
       "id": "CP1",
       "title": "Somebody asks what this workspace can do, and is told what it cannot",
       "expected": "Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.",
