@@ -63,6 +63,36 @@ Where Hive is simply ahead regardless of philosophy: uptime redundancy, support 
 integration ecosystem, mobile, localization, shipped API. None block the single-firm
 deployment; all gate any multi-firm future.
 
+## Six more, shipped 2026-08-31 (later the same day as the re-score above)
+
+None of these are in the 40-row analysis or Hive's own documented feature set — checked, not
+assumed. Layout-plan cross-reference: `docs/plans/2026-08-22-hive-layout-attention-plan.md`'s
+own "Status as of 2026-08-31" section has the line-cited detail; this is the competitive read.
+
+- **Today/My Work landing** — closes the original layout review's own theme #1
+  ("the layout grammar is inverted relative to how delivery staff work") exactly. Table stakes
+  against Hive, not a lead — Hive already lands people on "what needs me."
+- **Unified Work Inbox** — a decision/waiting split derived from real work-item state
+  (`decisionItems`/`waitingItems`), not a chat/notification-centric inbox. No Hive equivalent
+  found.
+- **Project Pulse** — Portfolio's sixth concern, `capacity`: names who is over-committed and by
+  how much, workspace-wide, as a count, not a chart or a score. **Workforce intelligence** —
+  add this to the under-counted-modules list in the full 40-row artifact next revision; Hive's
+  resourcing views exist but are visual, not a named counted concern in this idiom.
+- **Zero-Entry Timesheet** — meeting-derived, pre-filled-but-always-confirmed timesheet
+  suggestions. Neither Hive's manual entry nor its start/stop timers (this plan's own
+  "Deliberately skipped" list — a second source of hours, rejected on purpose) do this; a
+  genuinely different mechanism, not a catch-up move.
+- **Automatic Resource Replanning** — decision-support over an over-committed person's
+  allocations (the deficit, every overlapping allocation's hours, no number picked
+  automatically), extending Project Pulse. **Workforce intelligence**, same axis. No equivalent
+  in the 40-row analysis.
+- **Data integrity audit** (`npm run audit:integrity`) — not layout or a feature surface; belongs
+  in **vendor/trust**, beside the existing restore-proof entry: seven referential-integrity
+  checks (person/personId seam, dangling allocations, orphaned time entries, date/status
+  consistency, capacity overlaps), read-only, run against production 2026-08-31 with zero
+  findings.
+
 ## Related
 
 - [[release-readiness]]

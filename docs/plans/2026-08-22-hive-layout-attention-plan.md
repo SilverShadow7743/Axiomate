@@ -122,3 +122,43 @@ with `tsc`, the scenario suite, build, deploy, and a click-through of what chang
   the notification drain is independent.
 - The operator declining the My-Work-first landing → week 2 keeps the view promotion but
   drops the default change; nothing downstream depends on it.
+
+## Status as of 2026-08-31 (re-checked against real code, not assumed from this doc)
+
+Week 2's structural grammar is confirmed done — see `wiki/resources/platform/hive-comparison.md`
+for the citations. Everything below is a fresh, code-verified pass over the rest of this plan;
+"done" here means read in the actual file, not inferred from a task name.
+
+**Week 3 — notifications that reach people**
+
+| Item | Status | Evidence |
+|---|---|---|
+| Notification drain via Graph Mail.Send | **Done** | `lib/db/notifyDrain.ts:46-101`, `drainEmailNotifications()` — sends via `sendAsMailbox`, stamps `delivered`/`failed`/`pending`. A separate system from the report-pack delivery (`lib/delivery.ts`); both run from `app/api/schedule/run`. |
+| Assignment notifications on owner change | **Done** | `lib/automation.ts:150-164`, `AUTO_OWNER_CHANGED`, `on: 'issue.owner'`, enabled by default. |
+| Inbox mark-all-read / "N older" / `onOpen`→tab | **Done** | `components/Inbox.tsx:76,94,110`; routed via `setRequestTab` in `components/IssueWorkspace.tsx:2185-2209`. |
+| "Requests" surface / default `issue.created` rule | **Partial** | `AUTO_HIGH_RAISED` (`lib/automation.ts:100-113`) is default-on but High-severity only — a Medium/Low intake arrival still notifies nobody by default. Unified Work Inbox (shipped this session) covers decisions/waiting, not "what just arrived." |
+
+**Week 4 — the record, consolidated**
+
+| Item | Status | Evidence |
+|---|---|---|
+| DetailPanel tabs 12 → ~8 | **Open** | `components/DetailPanel.tsx:61-76` still lists all 15 original tab kinds, unmerged. |
+| "Write a reply" on Overview/Notes | **Done** | `components/OverviewTab.tsx`, `components/NotesTab.tsx`. |
+| Blueprints at the moment of need | **Done** (mechanism) | "Start from a blueprint"/"Save as blueprint" in `components/ConfigWorkspace.tsx`, `components/Dialogs.tsx`, `components/RowMenu.tsx`. 2-3 starter blueprints not verified as authored content. |
+| Board "Move to…" menu | **Done** | `components/BoardView.tsx:45,131-147`, reuses `dropOutcome`. |
+| — Escape closes it via `useOverlay` | **Open** | No `useOverlay` import in `BoardView.tsx`; the menu closes via local state only. |
+| — Detail tab-strip overflow handling | **Open** | No matching CSS found. |
+
+**Week 5 — the P1 debt the suite names**
+
+All three done: SLA clock suspension (scenario `C`, `data/validation.json`: PASS, `pausedDays=10`); `updateTime` now runs `timeEntryAllowed` against the destination (`lib/workspace.ts:4053-4073`, cites TW1 by name); the ~1100px small-viewport breakpoint (`app/globals.css:1728`).
+
+**Before phase 7 — prerequisites**
+
+Client-safe visibility boundary is **done** (scenario `RP2`: PASS — internal records, internal notes, and rate amounts all confirmed absent from client packs). The identity id migration itself is **still open** — reconfirmed independently this session by Zero-Entry Timesheet's own finding that `TimeTab.tsx` had zero personId resolution before that feature added one locally; the systemic, workspace-wide migration this item asks for hasn't happened.
+
+**Operator agenda**
+
+Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
+
+**Net**: the structural week (2) and the debt week (5) are both closed. The record-consolidation week (4) is the most concrete remaining item — tab merging specifically, since the rest of that week already landed. Week 3's gap is narrow (severity-gated default notification, not the drain mechanism itself, which works).
