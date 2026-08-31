@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { apply, type Action, type WorkspaceState } from '@/lib/workspace'
 import type { Actor } from '@/lib/actor'
@@ -9,6 +9,7 @@ import { isTerminal } from '@/lib/schedule'
 import { addDays, formatShort } from '@/lib/dates'
 import { TIME_ACTIVITIES, checkEntry, type TimeActivity } from '@/lib/time'
 import { backdated } from '@/lib/timeWindow'
+import { meetingSuggestions } from '@/lib/timesheetSuggestions'
 import {
   daysOfWeek,
   entriesInWeek,
@@ -72,6 +73,22 @@ export default function MyWeek({
   const mine = state ? entriesInWeek(entries, me, week, myId) : []
   const total = state ? weekTotal(entries, me, week, myId) : { hours: 0, billable: 0 }
   const sheet = state ? sheetFor(Object.values(state.timesheets), me, week, myId) : null
+
+  /* From a real, attended, issue-scoped meeting — never an invented plan. See
+     docs/plans/2026-08-31-zero-entry-timesheet-design.md. */
+  const meetings = useMemo(() => (state ? Object.values(state.meetings) : []), [state])
+  const suggestions = useMemo(
+    () => (state ? meetingSuggestions(meetings, entries, me, myId, week) : []),
+    [state, meetings, entries, me, myId, week],
+  )
+  const recordRef = useRef<HTMLElement>(null)
+  const acceptSuggestion = (s: (typeof suggestions)[number]) => {
+    setIssueId(s.issueId)
+    setDate(s.date)
+    setHours(String(s.hours))
+    setActivity('Meeting')
+    recordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const chosen = state && issueId ? state.issues[issueId] : undefined
   const lateness = backdated(date, today, state?.model.timePolicy.backdatingAllowanceDays ?? 3)
@@ -221,7 +238,24 @@ export default function MyWeek({
         {total.hours}h this week · {total.billable}h billable
       </p>
 
-      <section className="mw-form" aria-label="Record hours">
+      {suggestions.length > 0 && (
+        <section className="mw-form" aria-label="From your calendar">
+          <h2>From your calendar</h2>
+          {suggestions.map((s) => (
+            <button
+              key={`${s.issueId}-${s.date}`}
+              type="button"
+              className="mw-suggestion"
+              onClick={() => acceptSuggestion(s)}
+            >
+              <span className="mw-entry-issue">{s.issueId}</span>
+              <span>{formatShort(s.date)} · {s.hours}h — {s.titles.join(', ')}</span>
+            </button>
+          ))}
+        </section>
+      )}
+
+      <section className="mw-form" aria-label="Record hours" ref={recordRef}>
         <h2>Record hours</h2>
         <label>
           <span>Work item (yours, open)</span>
