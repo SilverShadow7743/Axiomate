@@ -1,10 +1,10 @@
 ---
 type: project
 title: "Report delivery"
-status: active
+status: completed
 created: "2026-08-30"
-deadline: "2026-08-31"
-outcome: "The daily pass emails the IMS and client packs unattended, and the first real Monday batch lands in the operator's inbox."
+completed: "2026-08-31"
+outcome: "ACHIEVED — the first unattended Monday batch (IMS + OAPIL weekly pack) landed 2026-08-31 01:30 UTC; stamps imsSentOn=2026-08-31, weeklySentFor=2026-08-24; a second same-day trigger sent nothing (dedupe proven live)."
 tags:
   - project
 related_areas: ["client-reporting"]
