@@ -82,6 +82,7 @@ import { can, directoryPersonFor, rolesFor } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
 import { weekStarting } from './timesheet'
 import type { Actor } from './actor'
+import type { Meeting } from './meetings'
 import type { Severity } from './types'
 import type { WorkspaceState } from './workspace'
 
@@ -412,6 +413,29 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
   for (const i of items) counts[i.reason] += 1
 
   return { items, counts, unrecognised: !person, matchedName: name }
+}
+
+/**
+ * This person's meetings today, chronologically.
+ *
+ * Pure, like `myWork` — `today` is a `YYYY-MM-DD` parameter, not read from a clock, and dates
+ * are compared as strings throughout this file rather than parsed, so this follows the same
+ * convention (`startAt.slice(0, 10)`) instead of introducing a `Date`-based comparison this
+ * codebase has deliberately avoided elsewhere.
+ *
+ * Matches on `person.id` against `attendeeIds` — the OPPOSITE join to `myWork`'s own name-based
+ * `isMine`, on purpose: `Meeting.attendeeIds` holds directory ids because a meeting is a real
+ * invitation, not a record written before an id existed to join on (see `lib/meetings.ts`).
+ * An actor that doesn't resolve to a directory person gets an empty list, silently — the same
+ * failure `myWork` already surfaces once, via `unrecognised`; a second banner here would be
+ * redundant.
+ */
+export function todaysMeetings(state: WorkspaceState, actor: Actor, today: string): Meeting[] {
+  const person = directoryPersonFor(state.model, actor)
+  if (!person) return []
+  return Object.values(state.meetings)
+    .filter((m) => !m.deletedAt && m.attendeeIds.includes(person.id) && m.startAt.slice(0, 10) === today)
+    .sort((a, b) => a.startAt.localeCompare(b.startAt))
 }
 
 /**

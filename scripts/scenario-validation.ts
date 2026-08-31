@@ -168,7 +168,7 @@ import {
 } from '../lib/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
-import { describeWork, myWork } from '../lib/mywork'
+import { describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
@@ -4420,6 +4420,50 @@ scenario(
       severity: '\u2014',
       impact:
         'A consultant deciding what to do next had to read a tree organised by client and project, which is the wrong axis for the question. Their work is now in one place, ordered by an argument they can see and disagree with.',
+    }
+  },
+)
+
+scenario(
+  'TD1',
+  "Today's meetings sit beside My work, matched on directory id, not name",
+  "todaysMeetings is myWork's sibling for the same home-screen redesign: chronological, filtered to today, and filtered to this person by attendeeIds — the OPPOSITE join to myWork's own name-based match, because a meeting is a real invitation written with the id from the start.",
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const priya: Actor = { id: priyaRow.id, name: 'Priya' }
+    const mbase = { organizer: 'Priya', organizerId: priyaRow.id, note: '', createdAt: NOW, createdBy: 'Priya', deletedAt: null as string | null }
+
+    const meetings: Record<string, Meeting> = {
+      // Later in the day — should sort second.
+      afternoon: { ...mbase, id: 'afternoon', title: 'Client review', attendeeIds: [priyaRow.id], startAt: `${TODAY}T14:00:00.000Z`, endAt: `${TODAY}T15:00:00.000Z` },
+      // Earlier — should sort first.
+      morning: { ...mbase, id: 'morning', title: 'Stand-up', attendeeIds: [priyaRow.id], startAt: `${TODAY}T09:00:00.000Z`, endAt: `${TODAY}T09:15:00.000Z` },
+      // Somebody else's meeting today: invisible to Priya.
+      othersOnly: { ...mbase, id: 'othersOnly', title: 'Other team sync', attendeeIds: ['some-other-person'], startAt: `${TODAY}T10:00:00.000Z`, endAt: `${TODAY}T10:30:00.000Z` },
+      // Hers, today, but cancelled: excluded however long it ran.
+      cancelled: { ...mbase, id: 'cancelled', title: 'Cancelled', attendeeIds: [priyaRow.id], startAt: `${TODAY}T11:00:00.000Z`, endAt: `${TODAY}T12:00:00.000Z`, deletedAt: NOW },
+      // Hers, but a different day: excluded by date, not by attendee.
+      tomorrow: { ...mbase, id: 'tomorrow', title: 'Not today', attendeeIds: [priyaRow.id], startAt: '2026-08-16T09:00:00.000Z', endAt: '2026-08-16T09:30:00.000Z' },
+    }
+    const withMeetings = { ...BASE, meetings }
+
+    const mine = todaysMeetings(withMeetings, priya, TODAY)
+    const ids = mine.map((m) => m.id)
+    const ordered = ids[0] === 'morning' && ids[1] === 'afternoon'
+    const onlyMine = ids.length === 2
+
+    /* Somebody the directory does not know gets an empty list, not a throw. */
+    const stranger = todaysMeetings(withMeetings, { id: 'nobody', name: 'Nobody At All' }, TODAY)
+
+    const good = ordered && onlyMine && stranger.length === 0
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Five meetings today-and-otherwise; Priya's list holds exactly the two that are hers, today, and live — "${ids.join('", "')}" — in start-time order, with the other team's meeting, her own cancelled one, and tomorrow's each excluded for a different reason (wrong attendee, soft-deleted, wrong date). An actor the directory does not recognise gets an empty list rather than a thrown error.`,
+      stops: '',
+      severity: '—',
+      impact:
+        'The home-screen redesign can show a person their own meetings today without a second join convention to get wrong — this pins the id-based match against myWork\'s own name-based one, so a future edit cannot quietly copy the wrong pattern from its neighbour.',
     }
   },
 )
