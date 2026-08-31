@@ -28,7 +28,7 @@ const VIEW_LABEL: Record<WorkspaceView, string> = {
   calendar: 'Calendar',
   portfolio: 'Portfolio',
   timesheet: 'Timesheets',
-  inbox: 'Notifications',
+  inbox: 'Inbox',
   mycalendar: 'My calendar',
   mail: 'Mail',
 }
@@ -39,7 +39,7 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   calendar: 'Due dates on a month, with the undated on a rail',
   portfolio: 'Every engagement at once — overdue, blocked, unowned, quiet',
   timesheet: 'Your week, gathered — and the approval queue, if you hold it',
-  inbox: 'What the rules have told you, and what never left the building',
+  inbox: 'What needs a decision, what you’re waiting on, and what the rules have told you',
   mycalendar: 'Your own month — events, leave, allocation and your due dates, private to you',
   mail: 'Your inbox, and what arrived at the project mailbox',
 }

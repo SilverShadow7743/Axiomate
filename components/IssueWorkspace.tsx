@@ -70,7 +70,7 @@ import { applyBlueprint } from '@/lib/blueprint'
 import type { RowActions } from './RowMenu'
 import GanttChart from './GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
-import Inbox from './Inbox'
+import UnifiedInbox from './UnifiedInbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
@@ -2155,9 +2155,10 @@ export default function IssueWorkspace({
           docked
         />
       ) : view === 'inbox' ? (
-        <Inbox
+        <UnifiedInbox
           state={state}
           actor={actor}
+          onSelect={revealIssue}
           onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
           onSetPref={(personId, kind, mode) =>
             dispatch({ t: 'setNotificationPref', personId, kind, mode, now: new Date().toISOString() })
@@ -2192,7 +2193,6 @@ export default function IssueWorkspace({
                     : null
             if (tab) setRequestTab(tab as DetailTab)
           }}
-          docked
         />
       ) : view === 'mycalendar' ? (
         <MyCalendarPanel
