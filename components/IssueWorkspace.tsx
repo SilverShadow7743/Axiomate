@@ -2115,7 +2115,22 @@ export default function IssueWorkspace({
           <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
         </>
       ) : view === 'portfolio' ? (
-        <PortfolioPanel state={state} today={today} onSelect={revealIssue} docked />
+        <PortfolioPanel
+          state={state}
+          today={today}
+          onSelect={revealIssue}
+          onApplyAllocation={(allocationId, percentage) => {
+            const a = state.allocations[allocationId]
+            if (!a) return false
+            return dispatch({
+              t: 'upsertAllocation', id: a.id, person: a.person, projectId: a.projectId,
+              startDate: a.startDate, endDate: a.endDate, percentage, note: a.note,
+              now: new Date().toISOString(),
+            } as Action)
+          }}
+          onReleaseAllocation={(id) => dispatch({ t: 'removeAllocation', id, now: new Date().toISOString() })}
+          docked
+        />
       ) : view === 'calendar' ? (
         <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
       ) : view === 'board' ? (

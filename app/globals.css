@@ -1411,6 +1411,16 @@ select.cell-editor {
 .drawer .detail-grip {
   display: none;
 }
+.rp-drawer {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rp-drawer table input {
+  width: 5em;
+}
 
 /* ---------- detail panel ---------- */
 .detail {

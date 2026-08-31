@@ -3,8 +3,10 @@
 import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
+import DetailDrawer from './DetailDrawer'
+import ReplanningDrawer from './ReplanningDrawer'
 import { narrationFigures } from '@/lib/assist'
-import { describePortfolio, portfolio, type PortfolioLine } from '@/lib/portfolio'
+import { describePortfolio, portfolio, type Concern, type PortfolioLine } from '@/lib/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -24,6 +26,8 @@ export default function PortfolioPanel({
   state,
   today,
   onSelect,
+  onApplyAllocation,
+  onReleaseAllocation,
   onClose,
   docked = false,
 }: {
@@ -31,6 +35,11 @@ export default function PortfolioPanel({
   today: string
   /** Select the engagement in the tree. The drawer stays open — one line is not the whole scan. */
   onSelect: (id: string) => void
+  /** Automatic Resource Replanning's Apply — a real upsertAllocation edit-by-id. Optional so
+   *  this panel still renders (without the capacity concern's drill-down) for a caller that
+   *  hasn't wired allocation writes through. */
+  onApplyAllocation?: (allocationId: string, percentage: number) => boolean
+  onReleaseAllocation?: (allocationId: string) => boolean
   onClose?: () => void
   /** A first-class view in the main pane: no scrim, no trap, no Close — see MyWorkPanel. */
   docked?: boolean
@@ -39,6 +48,9 @@ export default function PortfolioPanel({
   useOverlay(rootRef, !docked, onClose)
 
   const lines = useMemo(() => portfolio(state, today), [state, today])
+
+  /* Which person's capacity is open in the Replanning drawer — at most one at a time. */
+  const [replanning, setReplanning] = useState<{ person: string; personId: string | null } | null>(null)
 
   /* E5: the figures as a story, on demand. The payload is built HERE, from the state this
    * reader already holds — redacted before it arrived — and E5A pins that it carries no
@@ -113,7 +125,7 @@ export default function PortfolioPanel({
           )}
 
           {lines.map((line) => (
-            <Line key={line.nodeId} line={line} onSelect={onSelect} />
+            <Line key={line.nodeId} line={line} onSelect={onSelect} onOpenReplanning={setReplanning} />
           ))}
         </div>
 
@@ -130,6 +142,20 @@ export default function PortfolioPanel({
           </footer>
         )}
       </aside>
+
+      {replanning && onApplyAllocation && onReleaseAllocation && (
+        <DetailDrawer wide={false} onClose={() => setReplanning(null)}>
+          <ReplanningDrawer
+            state={state}
+            today={today}
+            person={replanning.person}
+            personId={replanning.personId}
+            onApplyAllocation={onApplyAllocation}
+            onReleaseAllocation={onReleaseAllocation}
+            onClose={() => setReplanning(null)}
+          />
+        </DetailDrawer>
+      )}
     </>
   )
 
@@ -137,7 +163,15 @@ export default function PortfolioPanel({
   return typeof document === 'undefined' ? null : createPortal(panel, document.body)
 }
 
-function Line({ line, onSelect }: { line: PortfolioLine; onSelect: (id: string) => void }) {
+function Line({
+  line,
+  onSelect,
+  onOpenReplanning,
+}: {
+  line: PortfolioLine
+  onSelect: (id: string) => void
+  onOpenReplanning: (subject: { person: string; personId: string | null }) => void
+}) {
   return (
     <div className="evi-item">
       <div className="evi-item-body">
@@ -169,7 +203,10 @@ function Line({ line, onSelect }: { line: PortfolioLine; onSelect: (id: string) 
 
         {line.concerns.length ? (
           <p className="zone-note needed">
-            {line.concerns.map((c) => c.phrase).join(', ')}.
+            {line.concerns.map((c, i) => (
+              <ConcernPhrase key={c.kind} concern={c} last={i === line.concerns.length - 1} onOpenReplanning={onOpenReplanning} />
+            ))}
+            .
           </p>
         ) : (
           <p className="evi-source-meta">
@@ -179,5 +216,41 @@ function Line({ line, onSelect }: { line: PortfolioLine; onSelect: (id: string) 
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * One concern's clause. Plain text for five of the six kinds; `capacity` becomes a link when
+ * it names a subject (`Concern.subjectPerson`), opening Automatic Resource Replanning for
+ * exactly the person the phrase already names — no second, disagreeing "who is worst"
+ * computation, and no drill-down offered for a concern that doesn't name anyone.
+ */
+function ConcernPhrase({
+  concern,
+  last,
+  onOpenReplanning,
+}: {
+  concern: Concern
+  last: boolean
+  onOpenReplanning: (subject: { person: string; personId: string | null }) => void
+}) {
+  const body =
+    concern.kind === 'capacity' && concern.subjectPerson ? (
+      <button
+        type="button"
+        className="btn-link"
+        onClick={() => onOpenReplanning({ person: concern.subjectPerson!, personId: concern.subjectPersonId ?? null })}
+        title={`See ${concern.subjectPerson}'s allocations and what could change`}
+      >
+        {concern.phrase}
+      </button>
+    ) : (
+      concern.phrase
+    )
+  return (
+    <>
+      {body}
+      {last ? '' : ', '}
+    </>
   )
 }
