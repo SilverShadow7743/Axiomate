@@ -824,6 +824,16 @@
       "impact": "A rebalancing suggestion can be applied as a real edit to an existing allocation, not a delete-and-recreate that would lose who first committed the person and when — proven before anything live depends on this branch, which no caller had ever exercised."
     },
     {
+      "id": "DI1",
+      "title": "A workspace is checked for records pointing at nothing, before anything downstream trusts them",
+      "expected": "Every one of the seven referential-integrity checks fires on a deliberately broken record and stays silent on the clean data around it — a dangling project, an orphaned time entry, a corrupted status, a three-way capacity overlap no pairwise check would catch, and more, each named with the record that carries it.",
+      "verdict": "PASS",
+      "actual": "Against a clean, reducer-produced workspace, six of the seven checks report nothing (the seventh, capacity overlap, is a review — not an error — kind and is checked separately). Against the same workspace with one broken record spliced in per risk area: Person/personId seam (error): 2; Hierarchy placement (error): 2; Dangling allocation project (error): 1; TimeEntry without a valid issue (error): 1; Date consistency (error): 1; Corrupted status value (error): 1; Capacity overlaps (review): 1. The three-way 120% overlap on Sam is named even though no single pair of the three 40% allocations exceeds 100% alone.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Every feature shipped this session reads WorkspaceState and trusts what it finds there. This is the first thing that actually checks whether that trust is earned — read-only, and it protects everything built before it rather than adding a new surface."
+    },
+    {
       "id": "CP1",
       "title": "Somebody asks what this workspace can do, and is told what it cannot",
       "expected": "Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.",

@@ -172,6 +172,7 @@ import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywo
 import { waitingItems } from '../lib/inbox'
 import { meetingSuggestions } from '../lib/timesheetSuggestions'
 import { replanningFor } from '../lib/replanning'
+import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
 import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
@@ -4969,6 +4970,144 @@ scenario(
       severity: good ? '—' : 'P0',
       impact:
         "A rebalancing suggestion can be applied as a real edit to an existing allocation, not a delete-and-recreate that would lose who first committed the person and when — proven before anything live depends on this branch, which no caller had ever exercised.",
+    }
+  },
+)
+
+scenario(
+  'DI1',
+  'A workspace is checked for records pointing at nothing, before anything downstream trusts them',
+  'Every one of the seven referential-integrity checks fires on a deliberately broken record and stays silent on the clean data around it — a dangling project, an orphaned time entry, a corrupted status, a three-way capacity overlap no pairwise check would catch, and more, each named with the record that carries it.',
+  () => {
+    /*
+     * axiomate-data-integrity's own seven risk areas, pinned directly against runIntegrityChecks
+     * — not a database, since the module is pure and reads only WorkspaceState. Broken records
+     * are spliced in directly (matching PP1/ZE1/RR1's own precedent for meeting/allocation
+     * fixtures) rather than forced through the reducer, which is specifically built to refuse
+     * every one of these states at write time — that refusal is proven elsewhere; this proves
+     * the audit that catches what got in anyway (a migration, a direct write, drift in config).
+     */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withProject = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'DI Test' }, now: NOW,
+    } as Action)
+    const projectId = Object.values(withProject.nodes).find((n) => n.name === 'DI Test')!.id
+    const priyaRow = Object.values(withProject.model.people).find((p) => p.name === 'Priya')!
+    const samRow = Object.values(withProject.model.people).find((p) => p.name === 'Sam')!
+
+    /* A clean allocation through the real reducer — the baseline every check must stay silent
+       on. */
+    const clean = ok(withProject, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId,
+      startDate: '2026-09-01', endDate: '2026-09-30', percentage: 30, note: '', now: NOW,
+    } as Action)
+    const cleanIssueId = Object.values(clean.issues).find((i) => !i.deletedAt)!.id
+
+    const cleanChecks = runIntegrityChecks(clean)
+    const cleanIsQuiet = cleanChecks
+      .filter((c) => c.key !== 'capacityOverlap')
+      .every((c) => c.findings.length === 0)
+
+    /* Now splice in one broken record per check. */
+    const brokenPersonName: Allocation = {
+      id: 'alloc-di-1', person: 'Ghost Person', personId: null, projectId,
+      startDate: '2026-09-01', endDate: '2026-09-30', percentage: 5, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const brokenPersonId: Allocation = {
+      id: 'alloc-di-2', person: 'Priya', personId: 'PERSON_NOPE', projectId,
+      startDate: '2026-09-01', endDate: '2026-09-30', percentage: 5, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const danglingProject: Allocation = {
+      id: 'alloc-di-3', person: 'Sam', personId: samRow.id, projectId: 'node-does-not-exist',
+      startDate: '2026-09-01', endDate: '2026-09-30', percentage: 5, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const badDates: Allocation = {
+      id: 'alloc-di-4', person: 'Sam', personId: samRow.id, projectId,
+      startDate: '2026-09-30', endDate: '2026-09-01', percentage: 5, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    /* Three allocations of 40% each, all overlapping — 120% together, and no PAIR of them
+       exceeds 100%, which is exactly what a pairwise check would miss and the sweep catches. */
+    const overlapA: Allocation = {
+      id: 'alloc-di-5a', person: 'Sam', personId: samRow.id, projectId,
+      startDate: '2026-10-01', endDate: '2026-10-31', percentage: 40, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const overlapB: Allocation = {
+      id: 'alloc-di-5b', person: 'Sam', personId: samRow.id, projectId,
+      startDate: '2026-10-01', endDate: '2026-10-31', percentage: 40, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const overlapC: Allocation = {
+      id: 'alloc-di-5c', person: 'Sam', personId: samRow.id, projectId,
+      startDate: '2026-10-01', endDate: '2026-10-31', percentage: 40, note: '',
+      createdBy: 'Test', createdAt: NOW, deletedAt: null,
+    }
+    const orphanEntry: TimeEntry = {
+      id: 'time-di-1', issueId: 'issue-does-not-exist', person: 'Priya', personId: priyaRow.id,
+      date: '2026-09-05', hours: 2, activity: 'Resolution', billable: true, note: '',
+      createdBy: 'Test', createdAt: NOW, updatedBy: null, updatedAt: null, deletedAt: null,
+    } as TimeEntry
+    const orphanNode = {
+      ...clean.nodes[projectId], id: 'node-di-orphan', name: 'Orphan node', parentId: 'no-such-parent',
+    }
+    const orphanIssue = {
+      ...clean.issues[cleanIssueId], id: 'issue-di-orphan', parentId: 'no-such-parent',
+    }
+    const corruptedStatusIssue = {
+      ...clean.issues[cleanIssueId], id: 'issue-di-status', status: 'Not A Real Status',
+    } as unknown as IssueRecord
+
+    const broken = {
+      ...clean,
+      allocations: {
+        ...clean.allocations,
+        [brokenPersonName.id]: brokenPersonName,
+        [brokenPersonId.id]: brokenPersonId,
+        [danglingProject.id]: danglingProject,
+        [badDates.id]: badDates,
+        [overlapA.id]: overlapA,
+        [overlapB.id]: overlapB,
+        [overlapC.id]: overlapC,
+      },
+      timeEntries: { ...clean.timeEntries, [orphanEntry.id]: orphanEntry },
+      nodes: { ...clean.nodes, [orphanNode.id]: orphanNode },
+      issues: {
+        ...clean.issues,
+        [orphanIssue.id]: orphanIssue,
+        [corruptedStatusIssue.id]: corruptedStatusIssue,
+      },
+    }
+
+    const results = runIntegrityChecks(broken)
+    const byKey = new Map(results.map((r) => [r.key, r]))
+    const has = (key: string, subjectIncludes: string) =>
+      byKey.get(key)?.findings.some((f) => f.subject.includes(subjectIncludes)) ?? false
+
+    const good =
+      cleanIsQuiet &&
+      has('personSeam', brokenPersonName.id) &&
+      has('personSeam', brokenPersonId.id) &&
+      has('hierarchyPlacement', orphanNode.id) &&
+      has('hierarchyPlacement', orphanIssue.id) &&
+      has('danglingAllocationProject', danglingProject.id) &&
+      has('orphanedTimeEntry', orphanEntry.id) &&
+      has('dateConsistency', badDates.id) &&
+      has('corruptedStatus', corruptedStatusIssue.id) &&
+      /* the review-only check names Sam's three-way overlap without calling it an error */
+      byKey.get('capacityOverlap')?.kind === 'review' &&
+      byKey.get('capacityOverlap')?.findings.some((f) => f.subject.startsWith('Sam'))
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Against a clean, reducer-produced workspace, six of the seven checks report nothing (the seventh, capacity overlap, is a review — not an error — kind and is checked separately). Against the same workspace with one broken record spliced in per risk area: ${results.map((r) => `${r.label} (${r.kind}): ${r.findings.length}`).join('; ')}. The three-way 120% overlap on Sam is named even though no single pair of the three 40% allocations exceeds 100% alone.`,
+      stops: good ? '—' : 'at runIntegrityChecks — a check either missed its broken record or fired on clean data',
+      severity: good ? '—' : 'P1',
+      impact:
+        'Every feature shipped this session reads WorkspaceState and trusts what it finds there. This is the first thing that actually checks whether that trust is earned — read-only, and it protects everything built before it rather than adding a new surface.',
     }
   },
 )

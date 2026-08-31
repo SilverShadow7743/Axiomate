@@ -22,6 +22,7 @@
     "audit:discussion": "npx tsx --conditions=react-server scripts/discussion-proof.ts",
     "audit:persistence": "npx tsx --conditions=react-server scripts/persistence-proof.ts",
     "audit:rls": "npx tsx --conditions=react-server scripts/rls-proof.ts",
+    "audit:integrity": "npx tsx --conditions=react-server scripts/integrity-audit.ts",
     "validate:scenarios": "npx tsx scripts/scenario-validation.ts",
     "validate:report": "node scripts/build-validation-report.mjs"
   },
