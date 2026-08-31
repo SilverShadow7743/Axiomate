@@ -1986,6 +1986,23 @@ select.cell-editor {
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
+/* UnifiedInbox mounts <Inbox docked> as its own FYI section, and Inbox's docked mode already
+   supplies a `.view-dock` of its own (the same flex:1/overflow:auto contract every docked
+   panel provides at its root) — nested two deep, the inner one has no ancestor flex context to
+   size flex:1 against and its own overflow:auto would fight the outer one for scroll. Same
+   idiom as `.view-dock .inbox-menu` just above: neutralise the inner container's claim to be
+   ITS OWN scrollable region, so the outer `.view-dock` (UnifiedInbox's) is the only one. */
+.view-dock .view-dock {
+  flex: none;
+  min-height: 0;
+  overflow: visible;
+  display: block;
+  background: none;
+}
+.unified-inbox-fyi {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
 /* My calendar, docked — `.cal`'s own `flex: 1` already fills the available width without
    needing a min-width override the way the fixed-width modal/dropdown above did. */
 .view-dock .cal.docked {
