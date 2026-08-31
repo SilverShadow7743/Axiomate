@@ -1,15 +1,20 @@
 ---
 name: axiomate-data-integrity
-description: This skill should be used when auditing Axiomate TMS for orphaned records, broken references, duplicate allocations, invalid dates/states, or capacity inconsistencies. This is a NEW quality gate this skill proposes — no existing script performs referential-integrity checking today (persistence-proof.ts checks round-trip mapper fidelity, a different concern). Load when the user asks for a data-integrity audit, or before a migration that touches person/personId, allocation, or timesheet data.
+description: This skill should be used when auditing Axiomate TMS for orphaned records, broken references, duplicate allocations, invalid dates/states, or capacity inconsistencies. Implemented as `npm run audit:integrity` (persistence-proof.ts checks round-trip mapper fidelity, a different concern). Load when the user asks for a data-integrity audit, or before a migration that touches person/personId, allocation, or timesheet data.
 ---
 
 # Axiomate Data Integrity
 
-**New process — say so plainly.** `npm run audit:persistence` (`scripts/persistence-proof.ts`)
-checks whether a written value survives a round trip through Postgres unchanged (a mapper
-fidelity question). Nothing in the current script set checks orphaned records, broken
-references, or cross-field consistency. This skill proposes what that gate should look like,
-grounded in the real schema's actual risk surface — not a generic data-quality checklist.
+**Implemented, 2026-08-31** — `npm run audit:integrity` (`scripts/integrity-audit.ts`, pure
+checks in `lib/dataIntegrity.ts`, pinned by scenario `DI1`) now runs all seven risk areas below,
+read-only, against the real tenant. `npm run audit:persistence` (`scripts/persistence-proof.ts`)
+is a different, older concern — whether a written value survives a round trip through Postgres
+unchanged (mapper fidelity), not whether a stored reference still points at something live. One
+correction from the original proposal: risk #6 (status reachable via the transition graph) is
+narrowed to "is this a status value the type recognises at all" — `lib/statusPolicy.ts`'s own
+header comment says the graph "governs changes, not the past," and imported history legitimately
+sits in combinations it would never produce; checking full reachability would false-positive on
+exactly that known-good data.
 
 ## The real risk surface, from the schema itself
 
@@ -30,13 +35,15 @@ grounded in the real schema's actual risk surface — not a generic data-quality
    deleted issue is effort recorded against nothing, which breaks utilisation calculations
    downstream (`axiomate-utilisation-analysis`).
 5. **Date consistency** — `Allocation.startDate <= endDate`, `Commitment.startDate <= endDate`,
-   `Issue.plannedStartDate <= plannedEndDate` where both are set — the same class of check
+   `Issue.plannedStart <= plannedEnd` where both are set — the same class of check
    `lib/schedule.ts`'s `validateChange` already runs at write-time for issue dates; an integrity
    audit checks whether anything bypassed it (a migration, a direct write) rather than
    re-implementing the rule.
-6. **Status consistency** — every `Issue.status` should be reachable per
-   `lib/statusPolicy.ts`'s configured transition graph from the tenant's actual history; a
-   status that couldn't have been reached via `allowedNext` suggests a bypass.
+6. **Corrupted status** — not "reachable per the transition graph from history" (`lib/
+   statusPolicy.ts`'s own comment: the graph "governs changes, not the past," and imported
+   history legitimately sits in combinations it would never produce) — narrower and honest: is
+   `Issue.status` a value `ISSUE_STATUSES` even recognises. `status` is a plain schema `String`,
+   so nothing but the reducer enforces this, and only the reducer writes through it.
 7. **Capacity inconsistencies** — the sum of a person's `Allocation.percentage` across
    concurrent, overlapping windows exceeding 100% is not necessarily invalid (over-allocation
    can be a real, deliberate business decision) but is always worth surfacing as a finding, not
@@ -44,13 +51,16 @@ grounded in the real schema's actual risk surface — not a generic data-quality
 
 ## Process
 
-1. Scope the audit to one risk area at a time (per the list above), not all seven at once — a
-   focused finding set is actionable; a combined dump is not.
-2. Query for the violation directly against the schema (read-only), citing the real relation
-   that's broken.
-3. Distinguish "this is definitely wrong" (a dangling foreign key, a date where end < start)
-   from "this is worth a human decision" (over-allocation, a status reached unusually) — report
-   the second category as a finding to review, not an error to silently fix.
+1. Run `npm run audit:integrity` — it groups findings by risk area already (each of the seven
+   checks reports separately, `error` or `review` kind), so "a combined dump" isn't a live
+   concern the way it would be for an ad-hoc manual query. For a ONE-OFF check outside the
+   script (e.g. investigating a specific report), still scope to one risk area at a time.
+2. For anything beyond the shipped script, query the violation directly against the schema
+   (read-only), citing the real relation that's broken — or add a case to
+   `lib/dataIntegrity.ts` if it's a genuinely new, recurring risk, pinned by its own scenario.
+3. Distinguish "this is definitely wrong" (a dangling foreign key, a date where end < start,
+   `kind: 'error'`) from "this is worth a human decision" (over-allocation, `kind: 'review'`) —
+   the shipped checks already carry this distinction; preserve it in anything new.
 4. Do not write a fix without explicit approval — this skill audits; a companion fix is a
    separate, deliberate action per `axiomate-code-review`'s standing discipline around
-   destructive/data-modifying changes.
+   destructive/data-modifying changes. `scripts/integrity-audit.ts` never writes.
