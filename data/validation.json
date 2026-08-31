@@ -764,6 +764,16 @@
       "impact": "none"
     },
     {
+      "id": "UI2",
+      "title": "waitingItems mirrors decisionItems from the requester's side, scope excluded",
+      "expected": "Four of decisionItems' five sources flip cleanly: 'not mine to decide' becomes 'mine, and still somebody else's to decide' by inverting the same isMe/isMine check the decide side already excludes on. The fifth, scope, has no requester field to flip — this scenario pins that exclusion as intended, not a gap.",
+      "verdict": "PASS",
+      "actual": "Priya's own change request appears in HER waiting list and is absent from her own decide list; the same request appears in Sam's decide list and is absent from his waiting list — the mirror holds in both directions. No actor's waiting list ever carries a scope: item, however many are pending, because scope has no requester to flip.",
+      "stops": "",
+      "severity": "—",
+      "impact": "none"
+    },
+    {
       "id": "PF1",
       "title": "A partner asks which engagement is in trouble",
       "expected": "Every engagement on one screen, each stating what it has overdue, blocked, unowned or gone quiet — as counts that can be checked, with no score anywhere.",

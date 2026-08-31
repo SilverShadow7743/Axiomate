@@ -169,6 +169,7 @@ import {
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
+import { waitingItems } from '../lib/inbox'
 import { describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
@@ -4519,6 +4520,82 @@ scenario(
       impact: good
         ? 'none'
         : "decisionItems' extraction diverged from myWork's decide group — every screen reading either would now disagree about what needs a decision.",
+    }
+  },
+)
+
+scenario(
+  'UI2',
+  "waitingItems mirrors decisionItems from the requester's side, scope excluded",
+  "Four of decisionItems' five sources flip cleanly: 'not mine to decide' becomes 'mine, and still somebody else's to decide' by inverting the same isMe/isMine check the decide side already excludes on. The fifth, scope, has no requester field to flip — this scenario pins that exclusion as intended, not a gap.",
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const priya: Actor = { id: priyaRow.id, name: 'Priya' }
+    // "Sam" is already a directory name in the seed — reuse the real row rather than minting
+    // a second one, which the config gate correctly refuses as a duplicate.
+    const samRow = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaRow.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+    const staffedSam = ok(staffed, {
+      t: 'config', op: { k: 'upsertPerson', id: samRow.id, name: 'Sam', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+    const engId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withSow = ok(staffedSam, {
+      t: 'upsertSow', id: null, engagementId: engId,
+      patch: { reference: 'SOW-UI2', title: 'For the test', status: 'Active', effortHours: 100, value: 10000, currency: 'GBP' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(withSow.sows).find((x) => x.reference === 'SOW-UI2')!.id
+    // Priya raises a change AS HERSELF — ok() always applies as the fixture Validator actor,
+    // which would attribute this to nobody the mirror can test, so this uses apply() directly
+    // with priya as the actor, the same escape hatch this file's own self-attestation
+    // scenarios already use (see e.g. the submitTimesheet/addPersonalEvent call sites).
+    const changeResult = apply(withSow, {
+      t: 'upsertChangeRequest', id: null, sowId,
+      patch: { title: 'Priya’s change', effortHours: 10, value: 1000, currency: 'GBP', scope: '', reason: 'Priya raised it', effectiveFrom: null },
+      submit: true, now: NOW,
+    } as Action, priya)
+    if (changeResult.error) throw new Error(`upsertChangeRequest refused: ${changeResult.error}`)
+    const withChange = changeResult.state
+    const crId = Object.values(withChange.changes).find((c) => c.title === 'Priya’s change')!.id
+    // A pending scope line too — so the "no scope: key in waiting" check below is real, not
+    // vacuously true because none exist.
+    const withScope = ok(withChange, {
+      t: 'upsertScopeItem', id: null, sowId,
+      patch: { kind: 'deliverable', text: 'A line nobody has agreed yet' }, now: NOW,
+    } as Action)
+
+    const sam: Actor = { id: samRow.id, name: 'Sam' }
+    const priyaWaiting = waitingItems(withScope, priya)
+    const samWaiting = waitingItems(withScope, sam)
+    const priyaDecide = decisionItems(withScope, priya)
+    const samDecide = decisionItems(withScope, sam)
+
+    const priyaSeesHerOwn = priyaWaiting.some((i) => i.key === `cr:${crId}`)
+    const priyaCannotDecideHerOwn = !priyaDecide.some((i) => i.key === `cr:${crId}`)
+    const samCanDecideIt = samDecide.some((i) => i.key === `cr:${crId}`)
+    const samNotWaitingOnIt = !samWaiting.some((i) => i.key === `cr:${crId}`)
+
+    // A pending scope line exists — minted above, not assumed from the seed — yet no actor's
+    // waiting list carries a `scope:` key for it. The honest exclusion, pinned against a real
+    // pending line rather than trivially true because none existed.
+    const noScopeInWaiting =
+      !priyaWaiting.some((i) => i.key.startsWith('scope:')) &&
+      !samWaiting.some((i) => i.key.startsWith('scope:'))
+
+    const good = priyaSeesHerOwn && priyaCannotDecideHerOwn && samCanDecideIt && samNotWaitingOnIt && noScopeInWaiting
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: good
+        ? "Priya's own change request appears in HER waiting list and is absent from her own decide list; the same request appears in Sam's decide list and is absent from his waiting list — the mirror holds in both directions. No actor's waiting list ever carries a scope: item, however many are pending, because scope has no requester to flip."
+        : `priyaSeesHerOwn=${priyaSeesHerOwn} priyaCannotDecideHerOwn=${priyaCannotDecideHerOwn} samCanDecideIt=${samCanDecideIt} samNotWaitingOnIt=${samNotWaitingOnIt} noScopeInWaiting=${noScopeInWaiting}`,
+      stops: '',
+      severity: good ? '—' : 'P1',
+      impact: good
+        ? 'none'
+        : 'The unified inbox would show a decision as either nobody’s or everybody’s business, or silently invent a requester for scope lines the record never named.',
     }
   },
 )
