@@ -74,6 +74,8 @@ import Inbox from './Inbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
+import AppSidebar from './AppSidebar'
+import { unreadCount } from '@/lib/notifications'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
 import type { ApplyOutcome } from './ChatPanel'
@@ -193,8 +195,8 @@ export default function IssueWorkspace({
   /** Whether the archive drawer is open. */
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
-  const [viewsMenu, setViewsMenu] = useState(false)
-  const [viewName, setViewName] = useState('')
+  /** Narrow-screen navigation overlay — a hamburger under 900px, a fixed rail above it. */
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [slaOpen, setSlaOpen] = useState(false)
   /** Which client pack is open for print, if any. */
   const [clientPack, setClientPack] = useState<{ kind: 'weekly' | 'monthly'; pack: WeeklyClientPack | MonthlyGovernancePack } | null>(null)
@@ -739,6 +741,11 @@ export default function IssueWorkspace({
    * queue nobody opens.
    */
   const myWorkCount = useMemo(() => myWork(state, actor, today).items.length, [state, actor, today])
+  /** The retired toolbar bell's number, now the sidebar Notifications badge. */
+  const notificationsUnread = useMemo(
+    () => unreadCount(state.notifications, actor.name, directoryPersonFor(state.model, actor)?.id ?? null),
+    [state.notifications, state.model, actor],
+  )
 
   const sortedRows = useMemo(
     () => (sort ? sortTree(allRows, COLUMNS.find((c) => c.key === sort.key), sort.dir) : allRows),
@@ -963,6 +970,10 @@ export default function IssueWorkspace({
       // a My-work row used to bypass it with a raw setSelectedId, silently discarding a
       // half-edited form or a typed client reply.
       if (!requestSelect(id)) return
+      // Revealing means SEEING: from a view that pairs with no record detail (Timesheets,
+      // Notifications, Mail — the main path since the toolbar bell retired into the
+      // Notifications view), hop to the tree, where the revealed row and its drawer live.
+      if (DETAIL_INCOMPATIBLE_VIEWS.has(view)) setView('tree')
       setCollapsed((prev) => {
         const next = new Set(prev)
         let cursor: string | null = row.parentId
@@ -978,7 +989,7 @@ export default function IssueWorkspace({
       }
       setRevealTarget(id)
     },
-    [allRows, filters, notify, requestSelect],
+    [allRows, filters, notify, requestSelect, view, setView],
   )
 
   useEffect(() => {
@@ -1848,6 +1859,15 @@ export default function IssueWorkspace({
     <LabelProvider value={orgLabels}>
     <div className="app" id="app-shell" ref={shellRef}>
       <div className="topbar">
+        {/* Narrow screens only (CSS): the rail collapses behind this. */}
+        <button
+          className="btn ghost nav-burger"
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-expanded={sidebarOpen}
+          aria-label="Open navigation"
+        >
+          ☰
+        </button>
         <span className="wordmark">
           axiomate<i>.</i>
         </span>
@@ -1899,55 +1919,9 @@ export default function IssueWorkspace({
           )}
         </div>
 
-        {/* Moved to the far right, beside the save state, where an account control is looked
-            for. `UserMenu` decides which of the three states to show; this no longer needs to
-            know whether a provider exists. */}
-
-        <Inbox
-          state={state}
-          actor={actor}
-          onRead={(id) => dispatch({ t: 'markNotificationRead', id, now: new Date().toISOString() })}
-          onSetPref={(personId, kind, mode) =>
-            dispatch({ t: 'setNotificationPref', personId, kind, mode, now: new Date().toISOString() })
-          }
-          onReadAll={(ids) => {
-            // One batch through dispatchMany: successive dispatch calls in one tick each
-            // read the pre-change state and the last setState wins — the documented trap.
-            const now = new Date().toISOString()
-            dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
-          }}
-          onOpen={(issueId, n) => {
-            // Approval traffic is about a commitment or a timesheet, not an issue — route to
-            // the surface that acts on it rather than hunting the tree for an id it cannot
-            // hold (revealIssue would answer "no longer in the workspace", which is wrong).
-            if (n.ruleId === 'leave-decided') { setView('mycalendar'); return }
-            if (n.ruleId === 'leave-requested' || n.ruleId === 'timesheet-submitted' || n.ruleId === 'timesheet-decided') {
-              setView('timesheet')
-              return
-            }
-            // A meeting lives on My calendar, whatever record it is about.
-            if (n.ruleId.startsWith('meeting-')) { setView('mycalendar'); return }
-            // A discussion's aboutId is its scope — an issue OR a project node, and both are
-            // tree rows, so revealIssue reaches either; the Discussion tab exists on both.
-            if (n.ruleId === 'discussion-message') {
-              revealIssue(n.aboutId)
-              setRequestTab('Discussion' as DetailTab)
-              return
-            }
-            revealIssue(issueId)
-            // Land on the tab the notification is about, through the panel's own request
-            // mechanism — an assignment reads on Overview, hours on Time, mail on Notes.
-            const tab =
-              n.ruleId === 'assignment'
-                ? 'Overview'
-                : /timesheet|hours|\btime\b/i.test(`${n.subject} ${n.ruleId}`)
-                  ? 'Time'
-                  : /note|mail|reply/i.test(`${n.subject} ${n.ruleId}`)
-                    ? 'Notes'
-                    : null
-            if (tab) setRequestTab(tab as DetailTab)
-          }}
-        />
+        {/* The bell retired with the clean shell: its unread count lives on the sidebar's
+            Notifications entry, and the full surface — the same routing included — is the
+            Notifications view itself. One place, not a dropdown twin of it. */}
 
         <span className="grow" />
         {/* The one global primary action. It lived on the dock's toolbar; the dock is gone,
@@ -1972,84 +1946,8 @@ export default function IssueWorkspace({
             Assistant
           </button>
         )}
-        {/* Phone widths only (CSS) — the attestation loop without the grid. */}
-        <a className="btn mw-link" href="/my-week">
-          My week
-        </a>
-        <div style={{ position: 'relative' }}>
-          <button className="btn" onClick={() => setViewsMenu((v) => !v)} aria-expanded={viewsMenu}>
-            Views ▾
-          </button>
-          {viewsMenu && (
-            <div className="menu" style={{ top: 30, right: 0, left: 'auto', minWidth: 280 }}>
-              <div className="menu-title">Saved views — shared with the team</div>
-              {state.model.savedViews.length === 0 && (
-                <p className="menu-sub" style={{ padding: '4px 12px' }}>
-                  None yet. Set your filters, then save what you see under a name.
-                </p>
-              )}
-              {state.model.savedViews.map((v) => (
-                <div key={v.id} className="menu-item" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button
-                    className="menu-item"
-                    style={{ flex: 1, padding: 0, border: 'none', background: 'none', textAlign: 'left' }}
-                    onClick={() => {
-                      setFilters(v.filters)
-                      setView(v.view)
-                      setViewsMenu(false)
-                    }}
-                  >
-                    {v.name}
-                    <span className="menu-sub">by {v.createdBy}</span>
-                  </button>
-                  {/* The reducer is the gate — this button is a courtesy, and a refused
-                      delete comes back as the teaching message. */}
-                  <button
-                    className="btn"
-                    aria-label={`Remove view ${v.name}`}
-                    onClick={() =>
-                      dispatch({ t: 'deleteSavedView', id: v.id, now: new Date().toISOString() })
-                    }
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: 6, padding: '6px 12px', borderTop: '1px solid var(--border)' }}>
-                <input
-                  value={viewName}
-                  placeholder="Save current view as…"
-                  onChange={(e) => setViewName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && viewName.trim()) {
-                      dispatch({
-                        t: 'upsertSavedView',
-                        view: { name: viewName, filters, view },
-                        now: new Date().toISOString(),
-                      })
-                      setViewName('')
-                    }
-                  }}
-                  aria-label="Name for the saved view"
-                />
-                <button
-                  className="btn"
-                  disabled={!viewName.trim()}
-                  onClick={() => {
-                    dispatch({
-                      t: 'upsertSavedView',
-                      view: { name: viewName, filters, view },
-                      now: new Date().toISOString(),
-                    })
-                    setViewName('')
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* My week and the saved views both moved into the sidebar — navigation lives on the
+            rail; this row keeps only actions. */}
         <div ref={exportWrap} style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setExportMenu((v) => !v)} aria-expanded={exportMenu}>
             Export ▾
@@ -2110,17 +2008,8 @@ export default function IssueWorkspace({
             </div>
           )}
         </div>
-        {/* Portfolio and My work used to repeat here as quick buttons — the exact same
-            destination the view-switch tab strip below already reaches via setView(), one
-            row apart. The tab strip is now the one place every view (including these two) is
-            reached from; My work's count moved onto its tab instead of disappearing. */}
-        <button
-          className={`btn${configOpen ? ' primary' : ''}`}
-          onClick={() => setConfigOpen(true)}
-          title="Terminology, roles, responsibilities, agents"
-        >
-          Configuration
-        </button>
+        {/* Configuration moved to the sidebar's foot — it is a place, and places live on
+            the rail. */}
         {/* Whether work is safe is not a detail to leave someone guessing about, so this
             reports the live state of the queue rather than a static capability. */}
         <span
@@ -2151,6 +2040,42 @@ export default function IssueWorkspace({
           bookmarked or forwarded address is enough to produce exactly that. */}
       {!verified && <AuthNotice code={authError} />}
 
+      {/* The clean shell's two regions under the one top bar: the navigation rail, then
+          everything the chosen view renders. */}
+      <div className="shell">
+      <AppSidebar
+        view={view}
+        setView={setView}
+        myWorkCount={myWorkCount}
+        timesheetQueue={
+          can(state.model, actor, 'time.approve').allowed
+            ? Object.values(state.timesheets).filter((t) => t.status === 'Submitted').length
+            : null
+        }
+        notificationsUnread={notificationsUnread}
+        savedViews={state.model.savedViews}
+        onApplySavedView={(v) => {
+          setFilters(v.filters)
+          setView(v.view)
+        }}
+        onDeleteSavedView={(id) =>
+          dispatch({ t: 'deleteSavedView', id, now: new Date().toISOString() })
+        }
+        onSaveCurrentView={(name) =>
+          dispatch({
+            t: 'upsertSavedView',
+            view: { name, filters, view },
+            now: new Date().toISOString(),
+          })
+        }
+        onOpenConfig={() => setConfigOpen(true)}
+        archivedCount={archivedCount}
+        onOpenArchive={() => setArchiveOpen(true)}
+        open={sidebarOpen}
+        onNavigate={() => setSidebarOpen(false)}
+      />
+      <div className="main">
+
       <FilterBar
         actor={actor}
         model={state.model}
@@ -2160,7 +2085,6 @@ export default function IssueWorkspace({
         zoom={zoom}
         setZoom={setZoom}
         view={view}
-        setView={setView}
         counts={counts}
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
@@ -2173,16 +2097,8 @@ export default function IssueWorkspace({
         showProposed={showProposed}
         setShowProposed={setShowProposed}
         sla={sla}
-        archivedCount={archivedCount}
-        timesheetQueue={
-          can(state.model, actor, 'time.approve').allowed
-            ? Object.values(state.timesheets).filter((t) => t.status === 'Submitted').length
-            : null
-        }
-        myWorkCount={myWorkCount}
         slaCandidates={slaPlan.rows.length}
         onPlanSla={() => setSlaOpen(true)}
-        onOpenArchive={() => setArchiveOpen(true)}
       />
 
       {view === 'mywork' ? (
@@ -2243,7 +2159,7 @@ export default function IssueWorkspace({
             dispatchMany(ids.map((nid) => ({ t: 'markNotificationRead', id: nid, now }) as Action))
           }}
           onOpen={(issueId, n) => {
-            // Same routing as the toolbar bell above: approval traffic goes to its surface,
+            // The bell's old routing, now the only mount of it: approval traffic goes to its surface,
             // a discussion click to its scope's Discussion tab (issue or project row alike),
             // a meeting to My calendar.
             if (n.ruleId.startsWith('meeting-')) { setView('mycalendar'); return }
@@ -2369,6 +2285,9 @@ export default function IssueWorkspace({
         </div>
       </div>
       )}
+
+      </div>
+      </div>
 
       {/* The record detail, in a right-hand overlay drawer. Open exactly when a record is
           selected on a view that pairs with one; closing goes through requestSelect(null),

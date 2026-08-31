@@ -14,36 +14,6 @@ import type { OperatingModel } from '@/lib/config'
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
 
 /**
- * The view switcher's order and words. My work leads — it is the landing surface for a person
- * with work waiting — and Portfolio closes as the widest lens. Labels are nouns for places,
- * not verbs: this control is navigation, which is why it sits first in the bar rather than
- * among the filters.
- */
-const VIEW_ORDER: readonly WorkspaceView[] = ['mywork', 'tree', 'board', 'calendar', 'portfolio', 'timesheet', 'inbox', 'mycalendar', 'mail']
-const VIEW_LABEL: Record<WorkspaceView, string> = {
-  mywork: 'My work',
-  tree: 'Tree',
-  board: 'Board',
-  calendar: 'Calendar',
-  portfolio: 'Portfolio',
-  timesheet: 'Timesheets',
-  inbox: 'Notifications',
-  mycalendar: 'My calendar',
-  mail: 'Mail log',
-}
-const VIEW_TITLE: Record<WorkspaceView, string> = {
-  mywork: 'Everything waiting on you, across every engagement',
-  tree: 'The full structure with the timeline beside it',
-  board: 'Status lanes — drag a card to move it',
-  calendar: 'Due dates on a month, with the undated on a rail',
-  portfolio: 'Every engagement at once — overdue, blocked, unowned, quiet',
-  timesheet: 'Your week, gathered — and the approval queue, if you hold it',
-  inbox: 'What the rules have told you, and what never left the building',
-  mycalendar: 'Your own month — events, leave, allocation and your due dates, private to you',
-  mail: 'What arrived at the project mailbox, filed or refused',
-}
-
-/**
  * Declared at module scope on purpose.
  *
  * A component defined inside a render body gets a fresh identity on every render, so React
@@ -128,8 +98,9 @@ interface Props {
   }
   zoom: ZoomLevel
   setZoom: (z: ZoomLevel) => void
+  /** Read-only: which controls apply depends on the view, but switching views is the
+      sidebar's job now — this bar is about what the chosen view shows. */
   view: WorkspaceView
-  setView: (v: WorkspaceView) => void
   counts: {
     total: number
     shown: number
@@ -150,18 +121,6 @@ interface Props {
   showProposed: boolean
   setShowProposed: (v: boolean) => void
   sla: SlaPolicy
-  /** How many records are archived. The control hides itself when there are none. */
-  archivedCount: number
-  onOpenArchive: () => void
-  /**
-   * Submitted weeks awaiting a decision — null for a viewer without time.approve, so the
-   * badge never leaks the queue's size to somebody who cannot act on it. The permission is
-   * decided in IssueWorkspace; this bar stays dumb. Shown on the Timesheets tab itself —
-   * there is no separate button to it any more, see the view-switch below.
-   */
-  timesheetQueue: number | null
-  /** Shown on the My work tab. Zero renders no badge, same as the queue count above. */
-  myWorkCount: number
   /** How many open records would get a due date. The action hides itself at zero. */
   slaCandidates: number
   onPlanSla: () => void
@@ -176,7 +135,6 @@ export default function FilterBar({
   zoom,
   setZoom,
   view,
-  setView,
   counts,
   onExpandAll,
   onCollapseAll,
@@ -189,10 +147,6 @@ export default function FilterBar({
   showProposed,
   setShowProposed,
   sla,
-  archivedCount,
-  onOpenArchive,
-  timesheetQueue,
-  myWorkCount,
   slaCandidates,
   onPlanSla,
 }: Props) {
@@ -258,40 +212,11 @@ export default function FilterBar({
   return (
     <div className="filterbar">
       {/* Four inline, four behind the button.
-          Eight facets, the view controls and the counts need about 2150px on one row; a wide
-          desktop offers 1900. Something had to leave the line, and the alternative — letting
-          it wrap — put the split in a different place at every window size and buried
-          Schedule Health under the zoom buttons.
           The four kept inline are the small, stable, headline dimensions. The four moved are
           the long ones (23 process areas, 37 owners) and the two least reached for. None are
           hidden: the button counts how many of them are set, so a filter can never be active
-          somewhere the user cannot see. */}
-      {/* Navigation first, filters after. Mid-row, this control was the 12th thing on the
-          line and two whole program phases went unnoticed behind it. */}
-      <div className="segmented view-switch" role="group" aria-label="Workspace view">
-        {VIEW_ORDER.map((v) => {
-          // The only counts a view carries in its own label: My work's personal queue and,
-          // for an approver, the Timesheets approval queue — the same two numbers a pair of
-          // now-removed quick buttons used to show beside a second, redundant way to reach
-          // these exact two destinations.
-          const count = v === 'mywork' ? myWorkCount : v === 'timesheet' ? timesheetQueue : null
-          return (
-            <button
-              key={v}
-              className={view === v ? 'active' : ''}
-              onClick={() => setView(v)}
-              title={VIEW_TITLE[v]}
-              aria-pressed={view === v}
-            >
-              {VIEW_LABEL[v]}
-              {count ? <span className="mywork-count">{count}</span> : null}
-            </button>
-          )
-        })}
-      </div>
-
-      <span className="sep" />
-
+          somewhere the user cannot see. (The view switcher that used to lead this row is the
+          sidebar now — navigation left the bar with the clean shell.) */}
       {filtersApply && (
       <>
       <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
@@ -373,18 +298,6 @@ export default function FilterBar({
             Today
           </button>
         </>
-      )}
-
-      {/* Only when there is something to go back to. A permanent control over an empty
-          archive is a button that does nothing; this one appears the moment it can help. */}
-      {archivedCount > 0 && (
-        <button
-          className="btn ghost"
-          onClick={onOpenArchive}
-          title="Archived records, and the way to restore them"
-        >
-          Archive · {archivedCount}
-        </button>
       )}
 
       {view === 'tree' && (
