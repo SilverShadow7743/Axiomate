@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { completeSignIn, entraConfig } from '@/lib/auth/entra'
+import { storeMailTokens } from '@/lib/db/mailTokens'
 import { SESSION_COOKIE, SESSION_SECONDS, cookieAttributes, publicOrigin, sign } from '@/lib/auth/cookie'
 
 /**
@@ -66,7 +67,19 @@ export async function GET(req: Request) {
   if (!verifier || !nonce) return back(req, 'The sign-in took too long. Try again.', 'expired')
 
   try {
-    const { identity } = await completeSignIn(config, code, verifier, nonce)
+    const { identity, tokens } = await completeSignIn(config, code, verifier, nonce)
+    /*
+     * The mail-token cache is a bonus on top of identity, never a dependency of it: a
+     * failure to store must not fail the sign-in. RAM-only by design — see
+     * docs/plans/2026-08-31-in-mail-design.md.
+     */
+    if (tokens) {
+      try {
+        storeMailTokens(identity.oid, tokens)
+      } catch {
+        /* the Mail panel will simply say "reconnect" */
+      }
+    }
     /*
      * Both of these read the PUBLIC origin rather than `req.url`, and each was wrong in its own
      * way behind App Service.

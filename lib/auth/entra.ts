@@ -91,9 +91,11 @@ export async function beginSignIn(config: EntraConfig): Promise<PendingAuth> {
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('redirect_uri', config.redirectUri)
   url.searchParams.set('response_mode', 'query')
-  // openid and profile identify the person; email gives the address the directory is joined on.
-  // Nothing else is requested — a scope asked for is a permission somebody has to justify.
-  url.searchParams.set('scope', 'openid profile email')
+  // openid and profile identify the person; email gives the address the directory is joined
+  // on. Mail.Read + offline_access power the in-mail panel — DELEGATED, so each token reads
+  // only its own person's mailbox, and admin consent covers the tenant so no user sees an
+  // extra consent screen. See docs/plans/2026-08-31-in-mail-design.md.
+  url.searchParams.set('scope', 'openid profile email offline_access Mail.Read')
   url.searchParams.set('state', state)
   url.searchParams.set('nonce', nonce)
   url.searchParams.set('code_challenge', challenge)
@@ -108,6 +110,9 @@ export async function beginSignIn(config: EntraConfig): Promise<PendingAuth> {
 
 export interface ExchangeResult {
   identity: EntraIdentity
+  /** Present when the token response carried them (offline_access granted). Handed to the
+   *  RAM-only mail-token cache; identity never depends on them. */
+  tokens?: { access: string; refresh: string; expiresAt: number }
 }
 
 export async function completeSignIn(
@@ -123,7 +128,7 @@ export async function completeSignIn(
     grant_type: 'authorization_code',
     redirect_uri: config.redirectUri,
     code_verifier: codeVerifier,
-    scope: 'openid profile email',
+    scope: 'openid profile email offline_access Mail.Read',
   })
 
   const res = await fetch(`https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`, {
@@ -138,7 +143,12 @@ export async function completeSignIn(
     throw new Error(`Entra refused the code exchange (${res.status}). ${firstLine(detail)}`)
   }
 
-  const token = (await res.json()) as { id_token?: string }
+  const token = (await res.json()) as {
+    id_token?: string
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+  }
   if (!token.id_token) throw new Error('Entra returned no id token.')
 
   const jwks = keysFor(config.tenantId)
@@ -152,7 +162,17 @@ export async function completeSignIn(
     throw new Error('The sign-in could not be matched to this browser. Try again.')
   }
 
-  return { identity: readIdentity(payload) }
+  return {
+    identity: readIdentity(payload),
+    tokens:
+      token.access_token && token.refresh_token
+        ? {
+            access: token.access_token,
+            refresh: token.refresh_token,
+            expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
+          }
+        : undefined,
+  }
 }
 
 /** Cached per tenant: fetching the key set on every callback would be a request per sign-in. */
