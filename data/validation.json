@@ -804,6 +804,16 @@
       "impact": "A person over-committed across two projects under the same engagement was previously invisible to Portfolio — visible per-project only if someone opened both and did the arithmetic themselves. Now it is a named, checkable count, in the same idiom as the other five concerns, with no score anywhere."
     },
     {
+      "id": "RR1",
+      "title": "A delivery lead asks how to fix an over-committed week, not just who it is",
+      "expected": "replanningFor names the deficit and shows every one of the person's overlapping allocations, workspace-wide, with none of them picked as the one to change — and its deficit is provably the same figure Project Pulse's own capacity concern already computed, not a second reading of the same fact.",
+      "verdict": "PASS",
+      "actual": "Priya is 45h over across 2026-08-15 -> 2026-09-12 — the identical figure availabilityFor itself reports for her (45h), not a second computation of the same fact. Both allocations are listed by project name, not id: \"Alpha 70% (105h), Beta 60% (90h)\" — neither picked as the one to change. Sam, within capacity on the same project, gets nothing — no fabricated deficit.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A delivery lead who already knows someone is over-committed (from Project Pulse) can now see exactly where the hours sit, workspace-wide, without being told which one to change — the decision stays theirs, and the numbers stay honest."
+    },
+    {
       "id": "CP1",
       "title": "Somebody asks what this workspace can do, and is told what it cannot",
       "expected": "Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.",

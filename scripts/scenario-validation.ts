@@ -39,7 +39,7 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
-  wouldCreateManagerCycle, directReportsOf, type Person,
+  wouldCreateManagerCycle, directReportsOf, holidaySetOf, type Person,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -171,6 +171,8 @@ import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { waitingItems } from '../lib/inbox'
 import { meetingSuggestions } from '../lib/timesheetSuggestions'
+import { replanningFor } from '../lib/replanning'
+import { addDays } from '../lib/dates'
 import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
@@ -4818,6 +4820,89 @@ scenario(
       severity: capacity ? '—' : 'P1',
       impact:
         'A person over-committed across two projects under the same engagement was previously invisible to Portfolio — visible per-project only if someone opened both and did the arithmetic themselves. Now it is a named, checkable count, in the same idiom as the other five concerns, with no score anywhere.',
+    }
+  },
+)
+
+scenario(
+  'RR1',
+  'A delivery lead asks how to fix an over-committed week, not just who it is',
+  "replanningFor names the deficit and shows every one of the person's overlapping allocations, workspace-wide, with none of them picked as the one to change — and its deficit is provably the same figure Project Pulse's own capacity concern already computed, not a second reading of the same fact.",
+  () => {
+    /* Automatic Resource Replanning: decision-support over an over-committed person, reusing
+       PP1's own fixture — the same Priya-over-two-projects, Sam-within-capacity shape, since
+       replanningFor reads state.allocations directly and doesn't care which engagement a
+       project sits under. */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const withProjects = (() => {
+      let cur = BASE
+      for (const name of ['Alpha', 'Beta']) {
+        cur = ok(cur, { t: 'create', parentId: engagementId, kind: 'project', draft: { name }, now: NOW } as Action)
+      }
+      return cur
+    })()
+    const alpha = Object.values(withProjects.nodes).find((n) => n.name === 'Alpha')!.id
+    const beta = Object.values(withProjects.nodes).find((n) => n.name === 'Beta')!.id
+
+    const advisory = ok(withProjects, {
+      t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'advisory' } }, now: NOW,
+    } as Action)
+    const priyaOnAlpha = ok(advisory, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: alpha,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 70, note: '', now: NOW,
+    } as Action)
+    const priyaOnBeta = ok(priyaOnAlpha, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: beta,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 60, note: 'Short-term, agreed with Priya.',
+      acceptOverallocation: true, now: NOW,
+    } as Action)
+    const state = ok(priyaOnBeta, {
+      t: 'upsertAllocation', id: null, person: 'Sam', projectId: alpha,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 30, note: '', now: NOW,
+    } as Action)
+
+    const priyaRow = Object.values(state.model.people).find((p) => p.name === 'Priya')!
+    const samRow = Object.values(state.model.people).find((p) => p.name === 'Sam')!
+
+    const view = replanningFor(state, 'Priya', priyaRow.id, TODAY)
+
+    /* Cross-checked against the identical inputs the capacity block itself uses, not trusted
+       to agree by construction — this is the design's own first-named "what would send this
+       back" risk. */
+    const windowEnd = addDays(TODAY, 28)
+    const holidays = holidaySetOf(state.model)
+    const commitments = Object.values(state.commitments)
+    const allocations = Object.values(state.allocations)
+    const versions = Object.values(state.versions)
+    const profile = profileAt(versions, state.model.resourceProfiles, priyaRow.id, TODAY)
+    const directPos = availabilityFor('Priya', profile, commitments, allocations, TODAY, windowEnd, priyaRow.id, holidays)
+
+    const alphaRow = view?.allocations.find((a) => a.projectName === 'Alpha')
+    const betaRow = view?.allocations.find((a) => a.projectName === 'Beta')
+
+    const withinCapacity = replanningFor(state, 'Sam', samRow.id, TODAY)
+
+    const good =
+      view !== null &&
+      view.deficitHours === -directPos.remainingHours &&
+      view.allocations.length === 2 &&
+      alphaRow !== undefined &&
+      alphaRow.hoursInWindow > 0 &&
+      alphaRow.percentage === 70 &&
+      betaRow !== undefined &&
+      betaRow.hoursInWindow > 0 &&
+      betaRow.percentage === 60 &&
+      withinCapacity === null
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: view
+        ? `Priya is ${view.deficitHours}h over across ${view.windowFrom} -> ${view.windowTo} — the identical figure availabilityFor itself reports for her (${-directPos.remainingHours}h), not a second computation of the same fact. Both allocations are listed by project name, not id: "${view.allocations.map((a) => `${a.projectName} ${a.percentage}% (${a.hoursInWindow}h)`).join(', ')}" — neither picked as the one to change. Sam, within capacity on the same project, gets ${withinCapacity === null ? 'nothing — no fabricated deficit' : 'a view, which is wrong'}.`
+        : 'replanningFor returned null for a person the capacity block itself reports as overallocated.',
+      stops: good ? '—' : 'at replanningFor — the deficit or the allocation rows did not match what was expected',
+      severity: good ? '—' : 'P1',
+      impact:
+        'A delivery lead who already knows someone is over-committed (from Project Pulse) can now see exactly where the hours sit, workspace-wide, without being told which one to change — the decision stays theirs, and the numbers stay honest.',
     }
   },
 )
