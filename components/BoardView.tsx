@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { boardLanes, describeBoard, dropOutcome } from '@/lib/board'
 import { allowedNext, type StatusPolicy } from '@/lib/statusPolicy'
 import type { IssueStatus, ScheduleRow } from '@/lib/types'
+import { useOverlay } from './useOverlay'
 
 /**
  * The register as lanes, and a drag that is the grid’s own lever held sideways.
@@ -144,24 +145,14 @@ export default function BoardView({
                       Move ▾
                     </button>
                     {menuFor === row.id && (
-                      <div className="menu" role="menu" style={{ top: 22, right: 0, left: 'auto' }}>
-                        {allowedNext(policy, row.status)
-                          .filter((s) => s !== row.status)
-                          .map((s) => (
-                            <button
-                              key={s}
-                              role="menuitem"
-                              className="menu-item"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setMenuFor(null)
-                                begin(row, s)
-                              }}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                      </div>
+                      <MoveMenu
+                        options={allowedNext(policy, row.status).filter((s) => s !== row.status)}
+                        onPick={(s) => {
+                          setMenuFor(null)
+                          begin(row, s)
+                        }}
+                        onClose={() => setMenuFor(null)}
+                      />
                     )}
                   </span>
                   <span className="board-card-name">{row.name}</span>
@@ -204,5 +195,62 @@ export default function BoardView({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * The Move-to popover — its own component, not inlined into the card loop, because
+ * `useOverlay` is a hook and cannot be called a variable number of times per render.
+ *
+ * Same shape `RowMenu.tsx` already establishes for a per-record popover: `useOverlay` for
+ * background inert + Tab wrap, a scrim for outside-click dismissal, Escape handled locally
+ * (`useOverlay`'s own `onEscape` is deliberately unused, matching `RowMenu`'s own comment on
+ * why). Before this, the menu had no way to close except picking an item — Escape, an outside
+ * click, and even the row's own drag no longer masked a menu silently left open.
+ */
+function MoveMenu({
+  options,
+  onPick,
+  onClose,
+}: {
+  options: IssueStatus[]
+  onPick: (s: IssueStatus) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useOverlay(ref, true)
+
+  return (
+    <>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape below */}
+      <div className="row-menu-scrim" onMouseDown={onClose} />
+      <div
+        className="menu"
+        role="menu"
+        ref={ref}
+        tabIndex={-1}
+        style={{ top: 22, right: 0, left: 'auto' }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            onClose()
+          }
+        }}
+      >
+        {options.map((s) => (
+          <button
+            key={s}
+            role="menuitem"
+            className="menu-item"
+            onClick={(e) => {
+              e.stopPropagation()
+              onPick(s)
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
