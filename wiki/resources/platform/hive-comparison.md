@@ -95,5 +95,6 @@ own "Status as of 2026-08-31" section has the line-cited detail; this is the com
 
 ## Related
 
+- [[hive-screen-comparison]] — screen-by-screen, action-by-action, 2026-08-31
 - [[release-readiness]]
 - [[application-improvement-index]]
