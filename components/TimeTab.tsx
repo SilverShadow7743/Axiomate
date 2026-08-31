@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
-import { can } from '@/lib/access'
+import { can, directoryIdByName } from '@/lib/access'
 import type { WorkspaceState } from '@/lib/workspace'
 import {
   MAX_HOURS_PER_ENTRY,
@@ -27,6 +27,7 @@ import {
   decideProblem,
 } from '@/lib/timesheet'
 import { backdated, gridSaveProblem } from '@/lib/timeWindow'
+import { meetingSuggestions } from '@/lib/timesheetSuggestions'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -197,11 +198,31 @@ export default function TimeTab({
   const [mode, setMode] = useState<'quick' | 'week'>('quick')
   const [gridWeek, setGridWeek] = useState(() => weekStarting(date))
   const [drafts, setDrafts] = useState<Record<string, WeekDraft>>({})
+
+  /* Meeting-derived starting points — real, attended, issue-scoped meetings, never an invented
+   * plan. See docs/plans/2026-08-31-zero-entry-timesheet-design.md. `person` is editable
+   * (the "Who" field, when time.recordForOthers is held), so the id is resolved from it here
+   * rather than from the signed-in actor — directoryPersonFor would silently resolve the wrong
+   * person the moment somebody records on somebody else's behalf. */
+  const meId = directoryIdByName(state.model, person)
+  const meetings = useMemo(() => Object.values(state.meetings), [state.meetings])
+  const suggestions = useMemo(
+    () => meetingSuggestions(meetings, Object.values(state.timeEntries), person, meId, gridWeek, issueId),
+    [meetings, state.timeEntries, person, meId, gridWeek, issueId],
+  )
+
   /* A draft typed for one week, or for somebody else's hours, is not an entry meant for the
-   * week or the person now on screen. */
+   * week or the person now on screen — reset to empty, then seed what the calendar suggests.
+   * One effect, one write to `drafts`, deliberately: a second effect racing this one to seed
+   * suggestions after the reset would read `drafts` as it was at render time, not as this
+   * effect just set it, and could clobber or lose a suggestion depending on ordering. */
   useEffect(() => {
-    setDrafts({})
-  }, [gridWeek, person, issueId])
+    const seeded: Record<string, WeekDraft> = {}
+    for (const s of suggestions) {
+      seeded[s.date] = { ...EMPTY_DRAFT, hours: String(s.hours), activity: s.activity }
+    }
+    setDrafts(seeded)
+  }, [gridWeek, person, issueId, suggestions])
 
   const gridCells = useMemo(
     () => issueWeekCells(Object.values(state.timeEntries), issueId, person, gridWeek),
@@ -527,6 +548,7 @@ export default function TimeTab({
                         allowanceDays={state.model.timePolicy.backdatingAllowanceDays}
                         onClosedWork={onClosedWork}
                         draft={drafts[cell.date] ?? EMPTY_DRAFT}
+                        sourceTitles={suggestions.find((s) => s.date === cell.date)?.titles}
                         onChange={(patch) =>
                           setDrafts((prev) => ({
                             ...prev,
@@ -860,6 +882,7 @@ function WeekDayCell({
   allowanceDays,
   onClosedWork,
   draft,
+  sourceTitles,
   onChange,
 }: {
   date: string
@@ -869,6 +892,9 @@ function WeekDayCell({
   /** The issue is terminal — the extension applies, so the reason field shows for every day. */
   onClosedWork: boolean
   draft: WeekDraft
+  /** The meeting(s) this cell's hours were suggested from, when it was seeded rather than
+   *  typed. Absent for an ordinary blank cell — never an empty array standing in for nothing. */
+  sourceTitles?: string[]
   onChange: (patch: Partial<WeekDraft>) => void
 }) {
   const parsed = Number(draft.hours)
@@ -878,6 +904,9 @@ function WeekDayCell({
 
   return (
     <div className="time-week-day-form">
+      {sourceTitles && sourceTitles.length > 0 && (
+        <span className="time-week-suggested">from {sourceTitles.join(', ')}</span>
+      )}
       <input
         type="number"
         step={0.25}

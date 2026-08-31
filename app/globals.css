@@ -5290,6 +5290,11 @@ select.cell-editor {
 .time-week-day-form select {
   width: 100%;
 }
+.time-week-suggested {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-muted);
+}
 .time-week-billable {
   display: flex;
   align-items: center;
