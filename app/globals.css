@@ -57,6 +57,10 @@
      validation message painted underneath the focus editor is a message nobody sees. */
   /* The assistant is a dock, not an overlay: it sits above the workspace but must stay
      UNDER every dialog, or a confirmation opened from a chat action lands behind it. */
+  /* The record drawer sits under everything that can open FROM it — Dialogs and the focus
+     editor at --z-modal/--z-overlay — and under the assistant dock too, so the chat panel
+     stays usable beside an open record: its panel rides above the drawer's scrim. */
+  --z-drawer: 140;
   --z-dock: 150;
   --z-modal: 200;
   --z-overlay: 300;
@@ -1156,6 +1160,50 @@ select.cell-editor {
   color: var(--h-unsched);
   font-style: italic;
   white-space: nowrap;
+}
+
+/* ---------- record detail drawer ----------
+   The detail pane's home since the clean shell: a right-hand overlay, so the Tree and Gantt
+   keep their full width underneath. The scrim is deliberately light — this is a workspace
+   surface visited dozens of times a day, not a modal moment. */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: rgba(10, 14, 18, 0.22);
+}
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 92vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.drawer.wide {
+  width: 92vw;
+}
+/* The dock rows, restyled by their new container rather than rewritten: the context bar's
+   top rule separated it from the grid above; in the drawer there is nothing above it. */
+.drawer .context-bar {
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+/* Fill the drawer under the toolbar. The inline height (viewport-sized) is the flex basis;
+   shrink brings it to exactly the space the drawer has. */
+.drawer .detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-top: none;
+}
+/* Height is the drawer's own now — there is nothing to drag against. */
+.drawer .detail-grip {
+  display: none;
 }
 
 /* ---------- detail panel ---------- */

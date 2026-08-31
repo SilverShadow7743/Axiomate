@@ -51,16 +51,7 @@ import UserMenu from './UserMenu'
 import { addDays, maxIso, minIso } from '@/lib/dates'
 import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'
 import { DOMAIN_PAD_DAYS, ROW_H } from '@/lib/layout'
-import {
-  autoStateFor,
-  CONTENT_HEAVY_TABS,
-  defaultFraction,
-  loadPrefs,
-  panelHeight,
-  savePrefs,
-  type PanelPref,
-  type PanelState,
-} from '@/lib/panel'
+import type { PanelState } from '@/lib/panel'
 import { buildScale } from '@/lib/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
@@ -82,6 +73,7 @@ import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
 import Inbox from './Inbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
+import DetailDrawer from './DetailDrawer'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
 import type { ApplyOutcome } from './ChatPanel'
@@ -114,24 +106,15 @@ import {
 } from '@/lib/autosave'
 import type { ConfigOp } from '@/lib/workspace'
 
-/** Keep a dragged pane between a usable minimum and leaving room for the workspace above. */
-function clampFraction(f: number): number {
-  return Math.max(0.1, Math.min(0.7, f))
-}
-
 /**
- * Views whose own content is the point, not a row list meant to be read alongside the detail
- * pane below it — opening a record here (`onOpen`) navigates away rather than pairing with a
- * persistently visible detail, unlike Tree/Board/Calendar/My work/Portfolio/My calendar, which
- * pass `onSelect`/`onSelectWork` and are documented (see `.view-dock` in globals.css) as
- * deliberately docked peers of the detail pane.
+ * Views whose own content is the point, not a row list meant to be read alongside a record's
+ * detail — opening a record here (`onOpen`) navigates away rather than pairing with a
+ * selection, unlike Tree/Board/Calendar/My work/Portfolio/My calendar, which pass
+ * `onSelect`/`onSelectWork`.
  *
- * The pane's explicit-preference height (`panelPref` 'standard'/'expanded') is not re-checked
- * against the real viewport the way the 'auto' default is (`autoStateFor`'s `viewportH < 700`
- * floor) — so on a short window an explicit preference can leave nothing for `.view-dock`,
- * which has no minimum height of its own and collapses to 0: an empty tab until the pane is
- * collapsed by hand. Forcing compact here, independent of `panelPref`, is what actually stops
- * that — narrowing the ceiling in `panelHeight()` would not, since it protects Tree/Gantt only.
+ * Under the dock these views forced the pane compact; under the drawer they simply do not
+ * show it. The selection itself is kept, exactly as it was then — switching to Timesheets and
+ * back to the Tree reopens the record that was open, rather than silently forgetting it.
  */
 const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
 
@@ -745,12 +728,8 @@ export default function IssueWorkspace({
     setTreeWidth((w) => Math.min(w, Math.max(320, Math.floor(window.innerWidth * 0.55))))
   }, [])
 
-  /* ---------------- adaptive detail pane ---------------- */
-  const [panelPref, setPanelPref] = useState<PanelPref>('auto')
-  const [panelFraction, setPanelFraction] = useState<number | null>(null)
+  /* ---------------- detail drawer ---------------- */
   const [viewportH, setViewportH] = useState(900)
-  /** Height of the header bands above the split view, measured rather than assumed. */
-  const [chromeH, setChromeH] = useState(150)
 
   /* ---------------- derived tree ---------------- */
   const allRows = useMemo(() => buildTree(state, today), [state, today])
@@ -1604,93 +1583,52 @@ export default function IssueWorkspace({
     return (secondTier && live.find((n) => n.kind === secondTier)?.id) ?? null
   }, [state.nodes, state.model])
 
-  /* ---------------- adaptive detail pane sizing ---------------- */
+  /* ---------------- detail drawer sizing ---------------- */
 
-  // Restore the stored preference and track the viewport, so the pane scales with the
-  // window instead of holding a pixel height that is wrong on a different screen.
   const shellRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const p = loadPrefs()
-    setPanelPref(p.pref)
-    setPanelFraction(p.fraction)
-    const measure = () => {
-      setViewportH(window.innerHeight)
-      const top = shellRef.current?.querySelector('.split') as HTMLElement | null
-      if (top) setChromeH(top.getBoundingClientRect().top)
-    }
+    const measure = () => setViewportH(window.innerHeight)
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [])
 
-  const availableH = Math.max(320, viewportH - chromeH)
-  const naturalPanelState: PanelState =
-    panelPref === 'auto' ? autoStateFor(!!selectedId, viewportH) : panelPref
+  /** Whether the current view pairs with the detail drawer at all. */
+  const drawerOffered = !DETAIL_INCOMPATIBLE_VIEWS.has(view)
+  const [drawerWide, setDrawerWide] = useState(false)
 
   /**
-   * Note: the pane is NOT collapsed while the focus editor is open. Focus mode covers the
-   * page entirely, so collapsing would change nothing the user can see — but it would resize
-   * the split above, which clamps the tree and Gantt scroll positions and loses the very
-   * context focus mode is meant to preserve.
+   * DetailPanel's dock-era size verbs, mapped onto the drawer. Collapse means close — routed
+   * through the same dirty-checking gate every deselection passes, so DetailPanel's own
+   * Escape listener and its ▼ button both reach the unsaved-changes confirm. Expand widens
+   * the drawer instead of growing a dock that no longer exists.
    */
-  const forceCompactPanel = DETAIL_INCOMPATIBLE_VIEWS.has(view)
-  const panelState: PanelState = forceCompactPanel ? 'compact' : naturalPanelState
-
-  const detailHeight = panelHeight(
-    panelState,
-    panelFraction ?? defaultFraction(viewportH),
-    availableH,
-  )
-
-  /**
-   * Guarded centrally rather than at each caller (the toolbar toggle, DetailPanel's own
-   * collapse/expand buttons, `onTabChange`) — a forced-compact view has nothing to show for a
-   * changed preference, so persisting one anyway would silently change what a later Tree visit
-   * looks like for a click that appeared to do nothing here.
-   */
-  const setPanel = useCallback(
+  const drawerSetPanel = useCallback(
     (next: PanelState) => {
-      if (forceCompactPanel) return
-      setPanelPref(next)
-      savePrefs({ pref: next, fraction: panelFraction })
+      if (next === 'compact') requestSelect(null)
+      else setDrawerWide(next === 'expanded')
     },
-    [panelFraction, forceCompactPanel],
+    [requestSelect],
   )
 
-  // Selecting a row is the signal that the detail pane is wanted. Only overrides an
-  // *automatic* compact state — an explicit collapse is left alone.
-  const prevSelection = useRef<string | null>(null)
-  useEffect(() => {
-    const had = prevSelection.current
-    prevSelection.current = selectedId
-    if (!selectedId || had === selectedId) return
-    if (panelPref === 'compact') setPanel('standard')
-  }, [selectedId, panelPref, setPanel])
-
-  /** Opening a table-shaped tab from a collapsed pane must actually reveal something. */
-  const onTabChange = useCallback(
-    (tab: string) => {
-      // Compare against the user's own state rather than any transient override, so
-      // opening a tab never persists a preference the user did not choose.
-      if (naturalPanelState === 'compact' && CONTENT_HEAVY_TABS.has(tab)) setPanel('standard')
-    },
-    [naturalPanelState, setPanel],
-  )
-
-  /** Drag stores a fraction of the available height, not a pixel value. */
-  const onPanelResize = useCallback(
-    (px: number) => {
-      // Same reasoning as `setPanel` above — dragging a grip that can't visibly move must not
-      // persist a preference for it.
-      if (forceCompactPanel) return
-      const f = clampFraction(px / availableH)
-      setPanelFraction(f)
-      const next: PanelState = panelState === 'compact' ? 'standard' : panelState
-      setPanelPref(next)
-      savePrefs({ pref: next, fraction: f })
-    },
-    [availableH, panelState, forceCompactPanel],
-  )
+  /**
+   * Create an issue from wherever the person is. Selection-independent: the parent is
+   * pre-filled from the selected scope, the selected issue's own scope, or the first client —
+   * and stays changeable in the form. Lives on the top bar (the one global primary action)
+   * AND on the drawer's toolbar via SelectionToolbar, both through this single handler.
+   */
+  const newIssue = useCallback(() => {
+    const sel = selected
+    const fromSelection =
+      sel && state.nodes[sel.id] && canParent('issue', state.nodes[sel.id].kind)
+        ? sel.id
+        : sel && state.issues[sel.id]
+          ? state.issues[sel.id].parentId
+          : null
+    const parent = fromSelection ?? defaultParentId
+    if (parent) setDialog({ t: 'add', parentId: parent, kind: 'issue' })
+    else notify('Create a client first.', true)
+  }, [selected, state.nodes, state.issues, defaultParentId, notify])
 
   /* ---------------- splitter ---------------- */
   const [dragSplit, setDragSplit] = useState(false)
@@ -2012,6 +1950,12 @@ export default function IssueWorkspace({
         />
 
         <span className="grow" />
+        {/* The one global primary action. It lived on the dock's toolbar; the dock is gone,
+            and creating an issue was never about the selection anyway — the handler pre-fills
+            the parent from wherever the person is and the form lets them change it. */}
+        <button className="btn primary" onClick={newIssue}>
+          + New Issue
+        </button>
         {/* The assistant button follows the agent registry: an agent configured off is not a
             button that explains why it is disabled, it is a button that is not there. */}
         {assistantOffered !== 'off' && (
@@ -2191,20 +2135,6 @@ export default function IssueWorkspace({
           <span className="persist-dot" aria-hidden="true" />
           {describeSave(saveStatus)}
         </span>
-        <button
-          className="btn"
-          onClick={() => setPanel(panelState === 'compact' ? 'standard' : 'compact')}
-          disabled={forceCompactPanel}
-          title={
-            forceCompactPanel
-              ? 'The detail pane is not shown on this tab'
-              : panelState === 'compact'
-                ? 'Show the detail pane'
-                : 'Collapse the detail pane'
-          }
-        >
-          {panelState === 'compact' ? 'Show details' : 'Hide details'}
-        </button>
         <UserMenu
           actor={actor}
           verified={Boolean(verified)}
@@ -2440,9 +2370,12 @@ export default function IssueWorkspace({
       </div>
       )}
 
-      {/* The selected row's verbs, beside the record they act on. In the top bar they sat a
-          screen away from the row and pushed the global controls around with every selection;
-          here the toolbar and the panel below are about the same record. */}
+      {/* The record detail, in a right-hand overlay drawer. Open exactly when a record is
+          selected on a view that pairs with one; closing goes through requestSelect(null),
+          the same dirty-checking gate as every row switch. The selected row's verbs ride
+          along at the top — beside the record they act on. */}
+      {selectedId !== null && drawerOffered && (
+      <DetailDrawer wide={drawerWide} onClose={() => requestSelect(null)}>
       <div className="context-bar">
         <SelectionToolbar
           row={selected}
@@ -2455,23 +2388,7 @@ export default function IssueWorkspace({
           onMarkComplete={markComplete}
           onDelete={() => selected && rowActions.archive(selected)}
           onBuildLifecycle={() => selected && toggleLifecycle(selected.id)}
-          onNewIssue={() => {
-            /*
-             * Selection-independent: issues arrive mid-call from any view. The parent is
-             * pre-filled from wherever the person is — the selected scope, the selected
-             * issue's own scope, or the first client — and stays changeable in the form.
-             */
-            const sel = selected
-            const fromSelection =
-              sel && state.nodes[sel.id] && canParent('issue', state.nodes[sel.id].kind)
-                ? sel.id
-                : sel && state.issues[sel.id]
-                  ? state.issues[sel.id].parentId
-                  : null
-            const parent = fromSelection ?? defaultParentId
-            if (parent) setDialog({ t: 'add', parentId: parent, kind: 'issue' })
-            else notify('Create a client first.', true)
-          }}
+          onNewIssue={newIssue}
         />
       </div>
 
@@ -2508,12 +2425,12 @@ export default function IssueWorkspace({
           dependencies={state.dependencies}
           crp={crp}
           audit={state.audit}
-          height={detailHeight}
-          panelState={panelState}
-          panelLocked={forceCompactPanel}
-          onResize={onPanelResize}
-          onSetPanel={setPanel}
-          onTabChange={onTabChange}
+          height={viewportH}
+          panelState={drawerWide ? 'expanded' : 'standard'}
+          panelLocked={false}
+          onResize={() => {}}
+          onSetPanel={drawerSetPanel}
+          onTabChange={() => {}}
           requestTab={requestTab}
           onTabRequestHandled={() => setRequestTab(null)}
           requestEdit={requestEdit}
@@ -2689,17 +2606,25 @@ export default function IssueWorkspace({
             dispatch({ t: 'setAssignment', issueId, responsibilityId, values, now: new Date().toISOString() })
           }
         />
+      </LabelProvider>
+      </DetailDrawer>
+      )}
 
       {/* Issue edits now open the canonical detail panel (above), straight into edit mode via
           requestEdit. Dialogs handles everything else: hierarchy-node edits, and issue/node
-          creation alike — "+ New Issue" lands here too, now that nothing intercepts it first. */}
-      <Dialogs
-        dialog={dialog}
-        state={state}
-        rows={sortedRows}
-        onClose={() => setDialog(null)}
-        onSubmit={submitDialog}
-      />
+          creation alike — "+ New Issue" lands here too, now that nothing intercepts it first.
+          OUTSIDE the drawer on purpose: the top bar's + New Issue must open this with nothing
+          selected, when no drawer is mounted at all. Still under the record-scoped labels —
+          with no selection they resolve to the organisation's own. Its modal layer stacks
+          above the drawer, so a dialog opened from inside one reads as on top of it. */}
+      <LabelProvider value={scopedLabels}>
+        <Dialogs
+          dialog={dialog}
+          state={state}
+          rows={sortedRows}
+          onClose={() => setDialog(null)}
+          onSubmit={submitDialog}
+        />
       </LabelProvider>
 
       {evidenceFor && state.issues[evidenceFor] && (
