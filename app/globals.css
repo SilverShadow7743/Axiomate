@@ -442,6 +442,31 @@ button {
   max-width: 90ch;
 }
 
+/* ---------- filters header ----------
+   The chip row that collapses the filter bar on the views that filter. Same band styling
+   as the bar it reveals, so expanding reads as the row growing, not a new surface. */
+.fh {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+.fh-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.fh-chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.fh-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* ---------- filter bar ---------- */
 .filterbar {
   display: flex;

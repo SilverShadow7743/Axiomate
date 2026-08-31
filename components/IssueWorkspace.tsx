@@ -75,6 +75,7 @@ import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
 import AppSidebar from './AppSidebar'
+import FiltersHeader from './FiltersHeader'
 import { unreadCount } from '@/lib/notifications'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
@@ -2076,6 +2077,11 @@ export default function IssueWorkspace({
       />
       <div className="main">
 
+      {/* Only where filtering means something: Tree, Board and Calendar all receive the
+          filtered rows. My work, Portfolio and the record views compute their own lists —
+          a filter row above them was eleven controls that did nothing. */}
+      {(view === 'tree' || view === 'board' || view === 'calendar') && (
+      <FiltersHeader filters={filters} shown={counts.shown} total={counts.total}>
       <FilterBar
         actor={actor}
         model={state.model}
@@ -2100,6 +2106,8 @@ export default function IssueWorkspace({
         slaCandidates={slaPlan.rows.length}
         onPlanSla={() => setSlaOpen(true)}
       />
+      </FiltersHeader>
+      )}
 
       {view === 'mywork' ? (
         <>
