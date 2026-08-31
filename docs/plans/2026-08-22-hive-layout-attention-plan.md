@@ -142,7 +142,7 @@ for the citations. Everything below is a fresh, code-verified pass over the rest
 
 | Item | Status | Evidence |
 |---|---|---|
-| DetailPanel tabs 12 → ~8 | **Open** | `components/DetailPanel.tsx:61-76` still lists all 15 original tab kinds, unmerged. |
+| DetailPanel tabs 12 → ~8 | **Done — was already done, and now correctly reflected** (`fb2a1c7`) | Corrects the "Open" verdict two entries up in this doc's own history: the actual runtime merge happened before this session (`TABS` for an issue is `['Overview', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']` — 8, not 15). What was genuinely open was the `Tab` type union still carrying 5 dead members nobody deleted — type-level debris, not an unfinished refactor. Verified zero references anywhere before removing them. |
 | "Write a reply" on Overview/Notes | **Done** | `components/OverviewTab.tsx`, `components/NotesTab.tsx`. |
 | Blueprints at the moment of need | **Done** (mechanism) | "Start from a blueprint"/"Save as blueprint" in `components/ConfigWorkspace.tsx`, `components/Dialogs.tsx`, `components/RowMenu.tsx`. 2-3 starter blueprints not verified as authored content. |
 | Board "Move to…" menu | **Done** | `components/BoardView.tsx:45,131-147`, reuses `dropOutcome`. |
@@ -161,10 +161,9 @@ Client-safe visibility boundary is **done** (scenario `RP2`: PASS — internal r
 
 Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
 
-**Net**: the structural week (2) and the debt week (5) are both closed. Week 4 is **not** fully
-closed — four of six items are done (reply-compose, blueprints, the Board menu itself, and now
-its Escape/outside-click dismissal), but the two structural pieces remain open: the DetailPanel
-tab consolidation (15 tabs, unmerged) and detail tab-strip overflow handling. Tab consolidation
-specifically is a real refactor across a 1,531-line component, not a quick item — it's the
-largest genuinely open piece of this whole plan. Week 3's gap is narrow (severity-gated default
+**Net**: the structural week (2) and the debt week (5) are both closed. Week 4 is five of six
+items done — reply-compose, blueprints, the Board menu itself, its Escape/outside-click
+dismissal, and the tab consolidation (which turned out to already be done at runtime; what was
+open was a stale type union, fixed in `fb2a1c7`). Only detail tab-strip overflow handling
+remains open in Week 4. Week 3's gap is narrow (severity-gated default
 notification, not the drain mechanism itself, which works).
