@@ -4798,6 +4798,7 @@ scenario(
     const lines = portfolio(withSam, TODAY)
     const line = lines.find((l) => l.nodeId === engagementId)
     const capacity = line?.concerns.find((c) => c.kind === 'capacity')
+    const priyaRow = Object.values(withSam.model.people).find((p) => p.name === 'Priya')!
 
     const good =
       /* the two project-tier lines stay unlisted, same as PF1 — only the engagement reports */
@@ -4807,6 +4808,11 @@ scenario(
       capacity.count === 1 &&
       capacity.phrase.includes('Priya') &&
       !capacity.phrase.includes('Sam') &&
+      /* the concern names who it's about, structured — not just inside the phrase's prose,
+         so a drill-down (Automatic Resource Replanning) can open for exactly this person
+         without a second, disagreeing "who is worst" computation */
+      capacity.subjectPerson === 'Priya' &&
+      capacity.subjectPersonId === priyaRow.id &&
       /* the concern ranks between forecast and blocked, per the design's own ordering */
       CONCERN_ORDER.indexOf('capacity') > CONCERN_ORDER.indexOf('forecast') &&
       CONCERN_ORDER.indexOf('capacity') < CONCERN_ORDER.indexOf('blocked')

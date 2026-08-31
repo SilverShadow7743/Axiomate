@@ -66,6 +66,14 @@ export interface Concern {
   count: number
   /** One clause, written to sit in a comma-separated sentence. */
   phrase: string
+  /**
+   * The one record or person this concern's phrase already names, when there is one — set only
+   * by `capacity` today (its "worst" person), undefined for the other five kinds. Exists so a
+   * drill-down (Automatic Resource Replanning) can open for exactly who the phrase already
+   * names, without a second, possibly-disagreeing "who is worst" computation.
+   */
+  subjectPerson?: string
+  subjectPersonId?: string | null
 }
 
 export interface PortfolioLine {
@@ -261,7 +269,7 @@ function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: s
     if (!peopleHere.has(key)) peopleHere.set(key, { person: a.person, personId: a.personId ?? null })
   }
   let overCount = 0
-  let worstCapacity: { name: string; by: number } | null = null
+  let worstCapacity: { name: string; personId: string | null; by: number } | null = null
   const windowEnd = addDays(today, 28)
   for (const { person, personId } of peopleHere.values()) {
     const profile = personId ? profileAt(versions, state.model.resourceProfiles, personId, today) : undefined
@@ -269,13 +277,15 @@ function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: s
     if (!pos.overallocated) continue
     overCount++
     const by = -pos.remainingHours
-    if (!worstCapacity || by > worstCapacity.by) worstCapacity = { name: person, by }
+    if (!worstCapacity || by > worstCapacity.by) worstCapacity = { name: person, personId, by }
   }
   if (overCount && worstCapacity) {
     out.push({
       kind: 'capacity',
       count: overCount,
       phrase: `${overCount} over-committed (worst ${worstCapacity.name}, by ${worstCapacity.by}h)`,
+      subjectPerson: worstCapacity.name,
+      subjectPersonId: worstCapacity.personId,
     })
   }
 
