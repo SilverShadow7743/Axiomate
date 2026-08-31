@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { groupByConversation, type MailEntry } from '@/lib/discussion'
 import type { WorkspaceState } from '@/lib/workspace'
+import InboxPanel from './InboxPanel'
 
 /**
  * What actually arrived — read-only. See the mail-log design: no triage, no reclassify, no reply
@@ -39,6 +40,7 @@ export default function MailLog({ state }: { state: WorkspaceState }) {
 
   return (
     <div className="view-dock">
+      <InboxPanel state={state} />
       <section className="cfg-section">
         <h3 className="cfg-h">Mail log</h3>
         <p className="cfg-note">
