@@ -333,6 +333,7 @@ export default function MyWeek({
                     Approve
                   </button>
                   <input
+                    className="mw-reject-input"
                     placeholder="Reason to return it"
                     value={rejectReason[t.id] ?? ''}
                     onChange={(e) => setRejectReason((p) => ({ ...p, [t.id]: e.target.value }))}

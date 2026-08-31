@@ -2151,6 +2151,15 @@ select.cell-editor {
   flex-direction: column;
   animation: focus-in 0.14s ease-out;
 }
+/* .focus and .cfg both play this on mount; unlike .drawer (which gates the whole
+   animation declaration behind prefers-reduced-motion), the override style already used
+   twice in this file — sidebar's transition, persist-tag's spinner — turns it off. */
+@media (prefers-reduced-motion: reduce) {
+  .focus,
+  .cfg {
+    animation: none;
+  }
+}
 @keyframes focus-in {
   from {
     opacity: 0;
@@ -6478,8 +6487,11 @@ select.cell-editor {
 .mw-head h1 { font-size: 20px; margin: 6px 0; }
 .mw-desktop-link { font-size: 12.5px; color: var(--text-muted); }
 .mw-weekpick { display: flex; gap: 6px; margin: 8px 0 12px; }
+/* My week is the app's one true touch surface (phone-first), so its controls hold the
+   44px minimum tap target the desktop grid is deliberately denser than. */
 .mw-tab {
-  flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  flex: 1; min-height: 44px; display: flex; align-items: center; justify-content: center;
+  padding: 8px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--bg); color: var(--text); font-size: 14px;
 }
 .mw-tab.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
@@ -6501,6 +6513,15 @@ select.cell-editor {
 .mw-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--text-muted); }
 .mw-form input, .mw-form select {
   font-size: 16px; /* keeps iOS from zooming the page on focus */
+  min-height: 44px;
+  padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); width: 100%;
+}
+/* The reject-reason input sits in .mw-decide's own .mw-row, not .mw-form, but is typed
+   into on the same phone-first page — same sizing floor. */
+.mw-reject-input {
+  font-size: 16px;
+  min-height: 44px;
   padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--bg); color: var(--text); width: 100%;
 }
@@ -6509,6 +6530,7 @@ select.cell-editor {
 .mw-check { flex-direction: row !important; align-items: center; gap: 8px !important; }
 .mw-check input { width: auto; }
 .mw-btn {
+  min-height: 44px; display: flex; align-items: center; justify-content: center;
   padding: 11px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text); font-size: 15px;
 }
