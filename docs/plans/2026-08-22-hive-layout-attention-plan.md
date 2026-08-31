@@ -147,7 +147,7 @@ for the citations. Everything below is a fresh, code-verified pass over the rest
 | Blueprints at the moment of need | **Done** (mechanism) | "Start from a blueprint"/"Save as blueprint" in `components/ConfigWorkspace.tsx`, `components/Dialogs.tsx`, `components/RowMenu.tsx`. 2-3 starter blueprints not verified as authored content. |
 | Board "Move to…" menu | **Done** | `components/BoardView.tsx:45,131-147`, reuses `dropOutcome`. |
 | — Escape/outside-click closes it | **Done, 2026-08-31** (`4d2a378`) | Extracted into `MoveMenu` (`components/BoardView.tsx`), matching `RowMenu.tsx`'s own shape: `useOverlay` for background inert + Tab wrap, the reused `.row-menu-scrim` for outside-click, Escape handled locally. Previously the menu had no dismiss path at all except picking an item. |
-| — Detail tab-strip overflow handling | **Open** | No matching CSS found. |
+| — Detail tab-strip overflow handling | **Done — was already done, mis-flagged twice** | `.tabs` (`app/globals.css:1520-1530`) already has `overflow-x: auto` with a hidden scrollbar; its own comment states the exact goal: "Narrow windows scroll the strip instead of silently clipping whole tabs off the edge." Both earlier checks searched for a specific class name instead of tracing `DetailPanel.tsx`'s actual `TABS.map()` rendering (`className="tabs"`, line ~482). No code change needed. |
 
 **Week 5 — the P1 debt the suite names**
 
@@ -161,9 +161,10 @@ Client-safe visibility boundary is **done** (scenario `RP2`: PASS — internal r
 
 Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
 
-**Net**: the structural week (2) and the debt week (5) are both closed. Week 4 is five of six
-items done — reply-compose, blueprints, the Board menu itself, its Escape/outside-click
-dismissal, and the tab consolidation (which turned out to already be done at runtime; what was
-open was a stale type union, fixed in `fb2a1c7`). Only detail tab-strip overflow handling
-remains open in Week 4. Week 3's gap is narrow (severity-gated default
-notification, not the drain mechanism itself, which works).
+**Net**: weeks 2, 4, and 5 are all closed. The two items Week 4 still carried "Open" — the tab
+consolidation and the tab-strip overflow handling — were both already done and both mis-checked
+the same way twice: searching for a specific class or type name instead of tracing what the
+actual code renders. Fixed the real gap in the first (`fb2a1c7`, dead type members); the second
+needed no code change at all, only the record corrected. Week 3's gap is narrow (severity-gated
+default notification, not the drain mechanism itself, which works). What's left of this whole
+plan is Week 3's gate, the identity id migration, and four of five operator-agenda items.
