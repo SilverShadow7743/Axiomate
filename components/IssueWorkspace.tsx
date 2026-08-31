@@ -699,10 +699,10 @@ export default function IssueWorkspace({
       setViewState(stored)
       return
     }
-    // No stored choice: land on what needs you, if anything does. The tree stays the
-    // default for an empty queue — structure beats an empty list. Deliberately once, on
-    // mount — a landing rule that kept re-firing would yank the view away mid-session.
-    if (myWork(state, actor, today).items.length > 0) setViewState('mywork')
+    // No stored choice: land here always now — My Work is the home screen, not a
+    // queue-triggered exception (docs/plans/2026-08-31-today-my-work-design.md). Deliberately
+    // once, on mount — a landing rule that kept re-firing would yank the view away mid-session.
+    setViewState('mywork')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const setView = useCallback((v: WorkspaceView) => { setViewState(v); saveView(v) }, [])
