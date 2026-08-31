@@ -1,5 +1,7 @@
 import { forecastFor } from './forecast'
+import { availabilityFor } from './availability'
 import { profileAt } from './capacity'
+import { addDays } from './dates'
 import { holidaySetOf } from './config'
 import { directoryIdByName } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
@@ -55,7 +57,7 @@ const STALE_DAYS = 14
  * itself. `stale` is last of the four because quiet is weaker evidence than any of the others —
  * a fortnight of silence on a small engagement may be correct.
  */
-export const CONCERN_ORDER = ['overdue', 'forecast', 'blocked', 'unowned', 'stale'] as const
+export const CONCERN_ORDER = ['overdue', 'forecast', 'capacity', 'blocked', 'unowned', 'stale'] as const
 export type ConcernKind = (typeof CONCERN_ORDER)[number]
 
 export interface Concern {
@@ -132,7 +134,7 @@ export function portfolio(state: WorkspaceState, today: string): PortfolioLine[]
       open: open.length,
       projects: projectsUnder(state, node.id),
       high: open.filter((i) => i.severity === ('High' satisfies Severity)).length,
-      concerns: concernsFor(state, open, lastActivity, today),
+      concerns: concernsFor(state, open, lastActivity, today, node.id),
       lastActivity,
     })
   }
@@ -173,13 +175,28 @@ function hasAncestor(state: WorkspaceState, from: string | null, target: string)
 }
 
 /**
+ * Every project-tier id an allocation could legally target under this line — descendants,
+ * the same subtree `projectsUnder` counts, PLUS the node itself when the line's own node is
+ * a project (the outermost-project case, no engagement layer above it). `upsertAllocation`
+ * (lib/workspace.ts) refuses any `projectId` whose node isn't `kind === 'project'`, so an
+ * engagement's own id is never a valid target and is correctly never added here.
+ */
+function projectIdsUnder(state: WorkspaceState, nodeId: string): string[] {
+  const self = state.nodes[nodeId]
+  const ids = Object.values(state.nodes)
+    .filter((n) => !n.deletedAt && n.kind === 'project' && hasAncestor(state, n.parentId, nodeId))
+    .map((n) => n.id)
+  return self?.kind === 'project' ? [nodeId, ...ids] : ids
+}
+
+/**
  * What is wrong here, as claims rather than a rating.
  *
  * Each is computed from the open issues only. A closed issue that was once late is history, and
  * a portfolio that counted it would never improve no matter what anybody did — which is the
  * fastest way to make a screen ignored.
  */
-function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: string | null, today: string): Concern[] {
+function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: string | null, today: string, nodeId: string): Concern[] {
   const out: Concern[] = []
 
   const overdue = open.filter((i) => i.plannedEnd && i.plannedEnd < today).length
@@ -226,6 +243,39 @@ function concernsFor(state: WorkspaceState, open: IssueRecord[], lastActivity: s
       kind: 'forecast',
       count: shortCount,
       phrase: `${shortCount} forecast short (worst ${worst.name}, by ${worst.by}h)`,
+    })
+  }
+
+  /*
+   * People, not records — the same forward-looking risk as `forecast`, read from the other
+   * side. Checked against a person's TOTAL allocation (the full `allocations` array below,
+   * never filtered to this engagement's projects) — someone over-committed here and
+   * elsewhere is over-committed regardless of which line asks, per the design's own decision.
+   * Only WHO to check is scoped to this engagement; the check itself is not.
+   */
+  const projectIds = new Set(projectIdsUnder(state, nodeId))
+  const peopleHere = new Map<string, { person: string; personId: string | null }>()
+  for (const a of allocations) {
+    if (a.deletedAt || !projectIds.has(a.projectId)) continue
+    const key = a.personId ?? a.person
+    if (!peopleHere.has(key)) peopleHere.set(key, { person: a.person, personId: a.personId ?? null })
+  }
+  let overCount = 0
+  let worstCapacity: { name: string; by: number } | null = null
+  const windowEnd = addDays(today, 28)
+  for (const { person, personId } of peopleHere.values()) {
+    const profile = personId ? profileAt(versions, state.model.resourceProfiles, personId, today) : undefined
+    const pos = availabilityFor(person, profile, commitments, allocations, today, windowEnd, personId, holidays)
+    if (!pos.overallocated) continue
+    overCount++
+    const by = -pos.remainingHours
+    if (!worstCapacity || by > worstCapacity.by) worstCapacity = { name: person, by }
+  }
+  if (overCount && worstCapacity) {
+    out.push({
+      kind: 'capacity',
+      count: overCount,
+      phrase: `${overCount} over-committed (worst ${worstCapacity.name}, by ${worstCapacity.by}h)`,
     })
   }
 

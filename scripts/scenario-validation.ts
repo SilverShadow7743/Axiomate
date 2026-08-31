@@ -170,7 +170,7 @@ import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { waitingItems } from '../lib/inbox'
-import { describePortfolio, portfolio } from '../lib/portfolio'
+import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
 import {
@@ -4670,6 +4670,87 @@ scenario(
       severity: 'P2',
       impact:
         'A partner running three engagements had no screen that showed more than one at a time, so "which of these needs me" meant opening each and holding the comparison in their head.',
+    }
+  },
+)
+
+scenario(
+  'PP1',
+  'A partner asks whether an engagement is heading for a people problem, not just a work problem',
+  'Someone committed past their capacity across the engagement’s own projects is named once, not once per project — and someone comfortably within capacity is not named at all.',
+  () => {
+    /*
+     * Project Pulse: the sixth Portfolio concern, `capacity`, read from the people side rather
+     * than the issues. This scenario pins the real `portfolio()`/`concernsFor()` path — not
+     * `projectIdsUnder` or the capacity block in isolation — per this project's own scenario
+     * discipline of driving the public function, not an internal helper.
+     */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    const withProjects = (() => {
+      let cur = BASE
+      for (const name of ['Alpha', 'Beta']) {
+        cur = ok(cur, { t: 'create', parentId: engagementId, kind: 'project', draft: { name }, now: NOW } as Action)
+      }
+      return cur
+    })()
+    const alpha = Object.values(withProjects.nodes).find((n) => n.name === 'Alpha')!.id
+    const beta = Object.values(withProjects.nodes).find((n) => n.name === 'Beta')!.id
+
+    /* The allocation cap ships HARD and refuses outright — AC1's own finding. Recording a
+       real over-commitment at all needs the firm's advisory choice made first, through the
+       real op, exactly as AC1 does it. This scenario is about what Portfolio does with an
+       over-commitment that exists, not about the cap itself — AC1 already proves the cap. */
+    const advisory = ok(withProjects, {
+      t: 'config', op: { k: 'setAllocationPolicy', patch: { cap: 'advisory' } }, now: NOW,
+    } as Action)
+
+    /* Priya, split 70/60 across the engagement's two projects — comfortably over capacity
+       combined, invisible from either project alone. Both allocations span the whole
+       today->today+28d window the capacity concern checks. */
+    const priyaOnAlpha = ok(advisory, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: alpha,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 70, note: '', now: NOW,
+    } as Action)
+    /* The second allocation alone still fits; combined with the first it does not — the
+       advisory two-step forces it through as a recorded decision, same as AC1's `forced`. */
+    const priyaOnBeta = ok(priyaOnAlpha, {
+      t: 'upsertAllocation', id: null, person: 'Priya', projectId: beta,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 60, note: 'Short-term, agreed with Priya.',
+      acceptOverallocation: true, now: NOW,
+    } as Action)
+
+    /* Sam, 30% on one of the same projects — within capacity, must not appear. */
+    const withSam = ok(priyaOnBeta, {
+      t: 'upsertAllocation', id: null, person: 'Sam', projectId: alpha,
+      startDate: '2026-08-01', endDate: '2026-12-31', percentage: 30, note: '', now: NOW,
+    } as Action)
+
+    const lines = portfolio(withSam, TODAY)
+    const line = lines.find((l) => l.nodeId === engagementId)
+    const capacity = line?.concerns.find((c) => c.kind === 'capacity')
+
+    const good =
+      /* the two project-tier lines stay unlisted, same as PF1 — only the engagement reports */
+      !lines.some((l) => l.name === 'Alpha' || l.name === 'Beta') &&
+      capacity !== undefined &&
+      /* Priya's two allocations collapse to one person, not two */
+      capacity.count === 1 &&
+      capacity.phrase.includes('Priya') &&
+      !capacity.phrase.includes('Sam') &&
+      /* the concern ranks between forecast and blocked, per the design's own ordering */
+      CONCERN_ORDER.indexOf('capacity') > CONCERN_ORDER.indexOf('forecast') &&
+      CONCERN_ORDER.indexOf('capacity') < CONCERN_ORDER.indexOf('blocked')
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: capacity
+        ? `The engagement reports "${capacity.phrase}" — Priya's 70% and 60% across its two projects are read as one person's total commitment and counted once, not twice, while Sam's 30% on the same project stays comfortably under and is not named. Neither project gets its own line; the figure lands on the engagement, the same nesting rule PF1 proves for issues.`
+        : `No capacity concern was found on the engagement's line. Concerns present: ${line ? line.concerns.map((c) => c.kind).join(', ') || 'none' : 'no line found'}.`,
+      stops: capacity ? '—' : 'at concernsFor — the capacity block did not fire for a combined-over-capacity allocation',
+      severity: capacity ? '—' : 'P1',
+      impact:
+        'A person over-committed across two projects under the same engagement was previously invisible to Portfolio — visible per-project only if someone opened both and did the arithmetic themselves. Now it is a named, checkable count, in the same idiom as the other five concerns, with no score anywhere.',
     }
   },
 )

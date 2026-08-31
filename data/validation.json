@@ -784,6 +784,16 @@
       "impact": "A partner running three engagements had no screen that showed more than one at a time, so \"which of these needs me\" meant opening each and holding the comparison in their head."
     },
     {
+      "id": "PP1",
+      "title": "A partner asks whether an engagement is heading for a people problem, not just a work problem",
+      "expected": "Someone committed past their capacity across the engagement’s own projects is named once, not once per project — and someone comfortably within capacity is not named at all.",
+      "verdict": "PASS",
+      "actual": "The engagement reports \"1 over-committed (worst Priya, by 45h)\" — Priya's 70% and 60% across its two projects are read as one person's total commitment and counted once, not twice, while Sam's 30% on the same project stays comfortably under and is not named. Neither project gets its own line; the figure lands on the engagement, the same nesting rule PF1 proves for issues.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A person over-committed across two projects under the same engagement was previously invisible to Portfolio — visible per-project only if someone opened both and did the arithmetic themselves. Now it is a named, checkable count, in the same idiom as the other five concerns, with no score anywhere."
+    },
+    {
       "id": "CP1",
       "title": "Somebody asks what this workspace can do, and is told what it cannot",
       "expected": "Every capability is listed with whether it is reachable, and a permission no role holds is reported as a gap rather than shown as off.",
