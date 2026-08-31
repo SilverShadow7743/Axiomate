@@ -122,6 +122,7 @@ import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } f
 import { buildFinanceReport } from '../lib/reports/finance'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible } from '../lib/firstRun'
+import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
 import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
@@ -2329,6 +2330,52 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A roled, entry-less Priya sees the card; her first entry marks the step and keeps the card until the week goes in; the submitted week retires it; the admin and an unmatched sign-in never see it at all.', stops: '—', severity: '—', impact: 'Onboarding that computes itself from evidence, shown only to the seats that need it.' } as const
       : { verdict: 'FAIL', actual: `eligible=${eligible} stepOne=${stepOne} retired=${retired} adminNever=${adminNever} strangerNever=${strangerNever}`, stops: 'at the helper — the card would nag the wrong seat or vanish before the loop is learned', severity: 'P3', impact: 'onboarding noise for operators, or silence for the consultant it exists for' } as const
+  },
+)
+
+scenario(
+  'IM1',
+  'A mail filed from an inbox becomes a draft the reducer accepts, with honest provenance',
+  "The in-mail mapper pure-driven before any auth or network exists: stacked Re:/Fw: prefixes strip to the real subject; a runaway subject caps at 300 and a runaway body at 2000; Graph HTML becomes readable text (tags gone, entities decoded, structure kept as line breaks); an empty subject falls back rather than refusing; provenance names the FILER's own mailbox and carries the messageId verbatim — and the resulting draft is accepted by the real create arm, because a mapper pinned only against its own output proves nothing.",
+  () => {
+    const filer = { name: 'Nishant Sekhar', email: 'sekharn@axiocloudsolutions.com' }
+    const msg = {
+      subject: 'Re: Fw: RE: PM item quality order',
+      from: { emailAddress: { name: 'Nestor De Vera Santos', address: 'nestor@oapil.com' } },
+      body: { contentType: 'html', content: '<div><p>Dear&nbsp;Dharmendra</p><br><p>Please &amp; check why PM000061 received QO.</p><style>p{color:red}</style></div>' },
+      bodyPreview: 'Dear Dharmendra',
+      receivedDateTime: '2026-08-31T04:00:24.000Z',
+      internetMessageId: '<verbatim-id@example.com>',
+      conversationId: 'conv-1',
+    }
+    const mapped = mapGraphMessage(msg, filer, { module: 'Inventory' })
+
+    const prefixes = mapped.createDraft.name === 'PM item quality order'
+    const htmlText =
+      mapped.inboundMailFields.body.includes('Dear Dharmendra') &&
+      mapped.inboundMailFields.body.includes('Please & check why PM000061 received QO.') &&
+      !mapped.inboundMailFields.body.includes('<') &&
+      !mapped.inboundMailFields.body.includes('color:red')
+    const provenance =
+      mapped.inboundMailFields.mailbox === filer.email &&
+      mapped.inboundMailFields.messageId === '<verbatim-id@example.com>' &&
+      mapped.createDraft.raisedBy === 'Nestor De Vera Santos' &&
+      mapped.createDraft.description.includes("Filed from Nishant Sekhar's inbox")
+
+    const longSubject = cleanSubject('x'.repeat(400))
+    const subjectCaps = longSubject.length <= 300 && longSubject.endsWith('…')
+    const noSubject = cleanSubject('  ') === '(no subject)'
+    const longBody = mapGraphMessage({ ...msg, body: { contentType: 'text', content: 'y'.repeat(5000) } }, filer, { module: 'Inventory' })
+    const bodyCaps = longBody.inboundMailFields.body.length <= 2000
+
+    const parent = Object.values(BASE.nodes).find((n) => n.kind === 'module')
+    const made = apply(BASE, { t: 'create', parentId: parent?.id ?? '', kind: 'issue', draft: mapped.createDraft, now: NOW } as Action, A)
+    const accepted = !made.error && Boolean(made.createdId) && made.state.issues[made.createdId ?? '']?.subject === 'PM item quality order'
+
+    const good = prefixes && htmlText && provenance && subjectCaps && noSubject && bodyCaps && accepted
+    return good
+      ? { verdict: 'PASS', actual: "Stacked prefixes strip to the real subject; the HTML body reads as text with tags, styles and entities handled; provenance names the filer's own mailbox with the messageId verbatim and the sender as raisedBy; a 400-char subject caps at 300 and a 5000-char body at 2000; an empty subject falls back to '(no subject)'; and the real create arm accepts the mapped draft and mints the record.", stops: '—', severity: '—', impact: 'A mail filed from an inbox lands as a well-formed, honestly-attributed record on the first click.' } as const
+      : { verdict: 'FAIL', actual: `prefixes=${prefixes} htmlText=${htmlText} provenance=${provenance} subjectCaps=${subjectCaps} noSubject=${noSubject} bodyCaps=${bodyCaps} accepted=${accepted} (${(made.error ?? '').slice(0, 80)})`, stops: 'at the mapper — the draft the route would build is one the reducer refuses or misattributes', severity: 'P2', impact: 'filing a mail either fails at the click or records dishonest provenance' } as const
   },
 )
 

@@ -443,6 +443,26 @@
       "impact": "Views are team records with ownership, not browser state — the level above Hive the design named."
     },
     {
+      "id": "FR1",
+      "title": "First-run shows itself to exactly the seats that need it, and retires on evidence",
+      "expected": "The first-run helper pure-driven: a roled consultant with no recorded hours is eligible; recording one entry marks the step done (and keeps the card up until the week is submitted); a timesheet marks submission done and retires the card; a config.manage holder never sees it; an actor matching nobody — including a would-be client-seat guest — never sees internal onboarding.",
+      "verdict": "PASS",
+      "actual": "A roled, entry-less Priya sees the card; her first entry marks the step and keeps the card until the week goes in; the submitted week retires it; the admin and an unmatched sign-in never see it at all.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Onboarding that computes itself from evidence, shown only to the seats that need it."
+    },
+    {
+      "id": "IM1",
+      "title": "A mail filed from an inbox becomes a draft the reducer accepts, with honest provenance",
+      "expected": "The in-mail mapper pure-driven before any auth or network exists: stacked Re:/Fw: prefixes strip to the real subject; a runaway subject caps at 300 and a runaway body at 2000; Graph HTML becomes readable text (tags gone, entities decoded, structure kept as line breaks); an empty subject falls back rather than refusing; provenance names the FILER's own mailbox and carries the messageId verbatim — and the resulting draft is accepted by the real create arm, because a mapper pinned only against its own output proves nothing.",
+      "verdict": "PASS",
+      "actual": "Stacked prefixes strip to the real subject; the HTML body reads as text with tags, styles and entities handled; provenance names the filer's own mailbox with the messageId verbatim and the sender as raisedBy; a 400-char subject caps at 300 and a 5000-char body at 2000; an empty subject falls back to '(no subject)'; and the real create arm accepts the mapped draft and mints the record.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A mail filed from an inbox lands as a well-formed, honestly-attributed record on the first click."
+    },
+    {
       "id": "AU1",
       "title": "Every meaningful change answers who, what, when, before, after and why",
       "expected": "The trail is complete enough to defend a decision months later.",
