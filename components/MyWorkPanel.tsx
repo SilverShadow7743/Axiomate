@@ -9,6 +9,7 @@ import {
   REASON_WHY,
   describeWork,
   myWork,
+  todaysMeetings,
   type WorkReason,
 } from '@/lib/mywork'
 import type { Actor } from '@/lib/actor'
@@ -53,6 +54,7 @@ export default function MyWorkPanel({
 
   const list = useMemo(() => myWork(state, actor, today), [state, actor, today])
   const groups = REASON_ORDER.filter((r) => list.counts[r] > 0)
+  const meetings = useMemo(() => todaysMeetings(state, actor, today), [state, actor, today])
 
   const panel = (
     <>
@@ -82,6 +84,45 @@ export default function MyWorkPanel({
             Work is found by name, and “{list.matchedName}” is not in the directory. This is an
             empty list because the join failed, not because there is nothing to do.
           </p>
+        )}
+
+        {/* Calendar, not a ranked reason — meetings sit above the reason-grouped list rather
+            than inside it. Due-today work is not duplicated here; it already has its own
+            group below (`due`), so this section is meetings only. */}
+        {!list.unrecognised && (
+          <section className="mywork-group mywork-today">
+            <div className="mywork-head">
+              <span className="mywork-tag r-today">Today</span>
+              <span className="mono">{meetings.length}</span>
+            </div>
+            {meetings.length === 0 ? (
+              <p className="evi-source-meta">No meetings today.</p>
+            ) : (
+              meetings.map((m) => (
+                <div key={m.id} className="evi-item">
+                  <div className="evi-item-body">
+                    {m.scopeId ? (
+                      <button
+                        className="btn-link mywork-title"
+                        onClick={() => onSelect(m.scopeId!)}
+                        title="Open this in the tree"
+                      >
+                        {m.title}
+                      </button>
+                    ) : (
+                      <div className="evi-item-name">{m.title}</div>
+                    )}
+                    <div className="evi-item-meta">
+                      {/* startAt is stored as entered, single-timezone firm (lib/meetings.ts) —
+                          sliced as a string, matching todaysMeetings' own date comparison,
+                          never parsed through a Date. */}
+                      <span className="mono">{m.startAt.slice(11, 16)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </section>
         )}
 
         <div className="evi-list">

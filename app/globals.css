@@ -3681,6 +3681,9 @@ select.cell-editor {
 .mywork-tag.r-attest { color: var(--warn, #b26a00); }
 .mywork-tag.r-due { color: var(--text-muted); }
 .mywork-tag.r-open { color: var(--text-faint); }
+/* Not a WorkReason — calendar information sitting above the ranked list, styled with the same
+   label idiom so it reads as one family of section headers, not a new one. */
+.mywork-tag.r-today { color: var(--text-muted); }
 
 /* Stated once at the top of Configuration rather than by disabling twenty forms. Full width and
    above the rail, so it is read before anything is typed rather than after it is refused. */
