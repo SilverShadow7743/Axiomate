@@ -170,6 +170,7 @@ import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { waitingItems } from '../lib/inbox'
+import { meetingSuggestions } from '../lib/timesheetSuggestions'
 import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
@@ -202,7 +203,7 @@ import {
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
-  issueWeekCells,
+  issueWeekCells, daysOfWeek,
   type Timesheet, type Attester,
 } from '../lib/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
@@ -4465,6 +4466,72 @@ scenario(
       severity: '—',
       impact:
         'The home-screen redesign can show a person their own meetings today without a second join convention to get wrong — this pins the id-based match against myWork\'s own name-based one, so a future edit cannot quietly copy the wrong pattern from its neighbour.',
+    }
+  },
+)
+
+scenario(
+  'ZE1',
+  'A consultant opens their week and a meeting has already named some of it',
+  "meetingSuggestions never invents an hour — it only reads a real, attended, issue-scoped meeting and offers to start the entry it implies, leaving the person to confirm. Two meetings on the same issue and day collapse to one suggestion; a project-scoped meeting, a day already recorded, and a meeting the person wasn't in each produce nothing, for three different reasons.",
+  () => {
+    const priyaRow = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const samRow = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    const week = weekStarting(TODAY)
+    const day = daysOfWeek(week)[1] // Tuesday — inside the week, away from either boundary
+    const mbase = {
+      organizer: 'Priya', organizerId: priyaRow.id, note: '', createdAt: NOW, createdBy: 'Priya',
+      deletedAt: null as string | null, scopeKind: 'issue' as const, scopeId: 'OAPIL-1',
+    }
+
+    const meetings: Record<string, Meeting> = {
+      /* Two issue-scoped meetings, same issue, same day, both attended: 45m + 30m sums to
+         1.25h, the nearest quarter hour, in one suggestion rather than two. */
+      standup: { ...mbase, id: 'standup', title: 'OAPIL-1 stand-up', attendeeIds: [priyaRow.id], startAt: `${day}T09:00:00.000Z`, endAt: `${day}T09:45:00.000Z` },
+      followUp: { ...mbase, id: 'followUp', title: 'OAPIL-1 follow-up', attendeeIds: [priyaRow.id], startAt: `${day}T14:00:00.000Z`, endAt: `${day}T14:30:00.000Z` },
+      /* Scoped to a project, not an issue — no issue to suggest against. */
+      projectSync: { ...mbase, id: 'projectSync', title: 'Project sync', attendeeIds: [priyaRow.id], scopeKind: 'project', scopeId: 'OAPIL', startAt: `${day}T10:00:00.000Z`, endAt: `${day}T10:30:00.000Z` },
+      /* Issue-scoped, but on a day that already has a recorded entry for that issue. */
+      alreadyLogged: { ...mbase, id: 'alreadyLogged', title: 'OAPIL-1 review', attendeeIds: [priyaRow.id], scopeId: 'OAPIL-2', startAt: `${daysOfWeek(week)[2]}T09:00:00.000Z`, endAt: `${daysOfWeek(week)[2]}T10:00:00.000Z` },
+      /* Issue-scoped, same day, but Priya is not in it — Sam's alone. */
+      samOnly: { ...mbase, id: 'samOnly', title: 'Somebody else\'s sync', attendeeIds: [samRow.id], scopeId: 'OAPIL-3', startAt: `${day}T11:00:00.000Z`, endAt: `${day}T12:00:00.000Z` },
+    }
+    const existing: TimeEntry = {
+      id: 'time-existing', issueId: 'OAPIL-2', person: 'Priya', personId: priyaRow.id,
+      date: daysOfWeek(week)[2], hours: 2, activity: 'Resolution', billable: true, note: '',
+      justification: null, createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null,
+      deletedAt: null,
+    } as TimeEntry
+    const state = { ...BASE, meetings, timeEntries: { [existing.id]: existing } }
+
+    const mine = meetingSuggestions(Object.values(state.meetings), Object.values(state.timeEntries), 'Priya', priyaRow.id, week)
+    const combined = mine.find((s) => s.issueId === 'OAPIL-1')
+    const noneForLogged = !mine.some((s) => s.issueId === 'OAPIL-2')
+    const noneForProject = !mine.some((s) => s.meetingIds.includes('projectSync'))
+    const noneForSam = !mine.some((s) => s.issueId === 'OAPIL-3')
+
+    /* Narrowed to one issue — the Time tab's own call shape — returns just that issue's cell. */
+    const scoped = meetingSuggestions(Object.values(state.meetings), Object.values(state.timeEntries), 'Priya', priyaRow.id, week, 'OAPIL-1')
+
+    const good =
+      combined !== undefined &&
+      combined.hours === 1.25 &&
+      combined.meetingIds.sort().join(',') === 'followUp,standup' &&
+      noneForLogged &&
+      noneForProject &&
+      noneForSam &&
+      scoped.length === 1 &&
+      scoped[0].issueId === 'OAPIL-1'
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: combined
+        ? `Two meetings on OAPIL-1 the same day collapse to one suggestion: ${combined.hours}h from "${combined.titles.join('", "')}" — not two separate 0.75h and 0.5h rows. Nothing is suggested for OAPIL-2 (a day already holding a real entry), for the project-scoped sync (no issue to name), or for OAPIL-3 (Priya was never invited). Narrowed to one issue, as the Time tab asks for its own cell, the same single suggestion comes back alone.`
+        : `No suggestion found for OAPIL-1. All suggestions: ${JSON.stringify(mine)}`,
+      stops: good ? '—' : 'at meetingSuggestions — the expected suggestion did not appear as computed',
+      severity: good ? '—' : 'P1',
+      impact:
+        'A consultant opening My Week or a ticket\'s Time tab sees a real meeting already named as a starting point for an entry — never written until they confirm it, and never invented from a plan nobody attested to.',
     }
   },
 )
