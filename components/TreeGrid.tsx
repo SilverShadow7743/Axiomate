@@ -8,6 +8,7 @@ import { formatIso } from '@/lib/dates'
 import { ROW_H } from '@/lib/layout'
 import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
 import { severityGlyph } from '@/lib/severity'
+import { exposure } from '@/lib/raid'
 import type { StatusPolicy } from '@/lib/statusPolicy'
 import RowMenu, { type RowActions } from './RowMenu'
 import StatusCellEditor from './StatusCellEditor'
@@ -879,6 +880,39 @@ function Cell({
           <span className="sev-glyph" aria-hidden="true">{severityGlyph(row.severity)}</span>
           {row.severity}
         </span>
+      ) : (
+        <span style={{ color: 'var(--text-faint)' }}>—</span>
+      )
+
+    case 'exposure': {
+      // Three states, not two: a Risk judged (the band, colored like schedule health), a Risk
+      // not yet judged (an honest sentence, never a fabricated band), and a row that isn't a
+      // Risk at all (an em dash, the same "nothing to say here" convention `discipline` and
+      // `owner` already use).
+      const judged = exposure(row.riskLikelihood, row.riskImpact)
+      if (judged) {
+        const slug = judged.band.toLowerCase()
+        return (
+          <span className={`chip hl-${slug}`}>
+            <span className={`dot bg-${slug}`} />
+            {judged.band}
+          </span>
+        )
+      }
+      return row.raidKind === 'risk' ? (
+        <span style={{ color: 'var(--text-faint)' }}>not yet judged</span>
+      ) : (
+        <span style={{ color: 'var(--text-faint)' }}>—</span>
+      )
+    }
+
+    case 'decisionOutcome':
+      return row.raidKind === 'decision' ? (
+        row.decisionOutcome ? (
+          <span>{row.decisionOutcome}</span>
+        ) : (
+          <span style={{ color: 'var(--text-faint)' }}>not yet decided</span>
+        )
       ) : (
         <span style={{ color: 'var(--text-faint)' }}>—</span>
       )
