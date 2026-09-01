@@ -197,11 +197,11 @@ export default function FilterBar({
    * Whether anything deviates from the resting view.
    *
    * Each key needs its own test now: the facets rest at 'All', search rests at empty, and
-   * `showCompleted` rests at false. Comparing a boolean against 'All' would have made Clear
-   * look permanently armed.
+   * `showCompleted`/`raidOnly` rest at false. Comparing a boolean against 'All' would have made
+   * Clear look permanently armed.
    */
   const active = Object.entries(filters).some(([k, v]) =>
-    k === 'search' ? v !== '' : k === 'showCompleted' ? v === true : v !== 'All',
+    k === 'search' ? v !== '' : k === 'showCompleted' || k === 'raidOnly' ? v === true : v !== 'All',
   )
 
   // My work and Portfolio compute their own lists; the record filters do nothing to them,
@@ -271,6 +271,15 @@ export default function FilterBar({
             state; a button captioned with its own condition leaves the reader working out
             whether it describes what is happening or what will happen. */}
         {filters.showCompleted ? 'Hide completed' : 'Show completed'}
+      </button>
+
+      <button
+        className={`btn ghost${filters.raidOnly ? ' on' : ''}`}
+        onClick={() => setFilters({ ...filters, raidOnly: !filters.raidOnly })}
+        aria-pressed={filters.raidOnly}
+        title={filters.raidOnly ? 'Show every record again' : 'Show only Risks and Decisions'}
+      >
+        {filters.raidOnly ? 'All records' : 'RAID only'}
       </button>
 
       {active && (
