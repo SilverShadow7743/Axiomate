@@ -1334,6 +1334,16 @@ export type Action =
       conversationId: string | null
       now: string
     }
+  /**
+   * ---- ASSISTANT ----
+   * A proposal a person declined, kept as one audit entry rather than discarded whole — the
+   * rationale the assistant gave and what it proposed, preserved beside every accepted proposal
+   * already in the trail (an acceptance dispatches the ordinary action, so it is audited
+   * identically to a human edit; a decline had nowhere to go until now). `rowId` is synthetic
+   * ('ASSISTANT'), the same convention `setReportDelivery` uses for a change that is not about
+   * one record.
+   */
+  | { t: 'dismissProposal'; summary: string; rationale: string; now: string }
 
 /**
  * Operations on the operating model.
@@ -7035,6 +7045,23 @@ Question: ${review.question}`),
       return {
         state: { ...state, inboundMail: { ...state.inboundMail, [id]: entry }, seq },
         message: 'Logged.',
+      }
+    }
+
+    case 'dismissProposal': {
+      return {
+        state: {
+          ...state,
+          audit: log(actor, state, {
+            rowId: 'ASSISTANT',
+            field: 'proposalDismissed',
+            from: a.rationale,
+            to: a.summary,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Recorded.',
       }
     }
 

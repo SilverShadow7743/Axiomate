@@ -3061,15 +3061,43 @@ scenario(
 scenario(
   'Y',
   'The assistant recommends something wrong',
-  'A person rejects it, the rejection is recorded, and the original recommendation is preserved.',
+  "A person declines it, the decline is recorded — what was proposed and why — without touching any record, and stands apart from an accepted proposal's own audit trail.",
   () => {
-    const cards = mentions(/accept|reject/i).filter((f) => /Chat|chat/.test(f))
+    const update = ok(BASE, {
+      t: 'dismissProposal',
+      summary: 'Declined a change to OAPIL-1.',
+      rationale: 'The severity should stay High — nothing has changed.',
+      now: NOW,
+    } as Action)
+    const entry = update.audit.find((e) => e.field === 'proposalDismissed')
+
+    const create = ok(BASE, {
+      t: 'dismissProposal',
+      summary: 'Declined logging a new issue for OAPIL — "Duplicate of an existing ticket".',
+      rationale: 'Already tracked as OAPIL-2.',
+      now: NOW,
+    } as Action)
+    const createEntry = create.audit.find((e) => e.field === 'proposalDismissed')
+
+    const recorded =
+      entry?.rowId === 'ASSISTANT' &&
+      entry.to === 'Declined a change to OAPIL-1.' &&
+      entry.from === 'The severity should stay High — nothing has changed.' &&
+      createEntry?.to === 'Declined logging a new issue for OAPIL — "Duplicate of an existing ticket".'
+    // Reference equality, not a deep comparison — the reducer arm never spreads `issues` at
+    // all, so a decline that touched a record would be a different bug than one that failed
+    // to log, and this catches it more precisely than a JSON diff would.
+    const untouched = update.issues === BASE.issues
+
+    const good = Boolean(recorded) && untouched
     return {
-      verdict: 'PARTIAL',
-      actual: `Proposals are rendered as cards a person accepts or rejects (${cards.length} chat module(s) implement it), and an accepted proposal goes through the same reducer as a human edit, so it is audited identically. A rejection changes nothing and is recorded nowhere — ${absent(/rejectedProposal|proposalOutcome|recommendationLog/) ? 'no rejection log exists in source' : 'a rejection log exists'} — so the system cannot learn which recommendations were wrong.`,
-      stops: 'at the rejection — it disappears',
-      severity: 'P2',
-      impact: 'Agent quality cannot be measured, because only the accepted half of its output is kept.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Declining a proposal writes one audit entry — rowId "ASSISTANT", the rationale the assistant gave as "from", what was proposed as "to" — for both an update ("${entry?.to}") and a create ("${createEntry?.to}"). No issue record is touched.`,
+      stops: good ? '—' : 'at dismissProposal — the decline was not recorded as expected, or something else moved',
+      severity: good ? '—' : 'P2',
+      impact: good
+        ? 'A declined recommendation is preserved beside every accepted one, findable in the same History a partner already reads.'
+        : 'a decline either goes unrecorded or silently changes a record it should never touch',
     }
   },
 )

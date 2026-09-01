@@ -1055,6 +1055,22 @@ export default function IssueWorkspace({
     [dispatchMany, revealIssue, state.nodes, today],
   )
 
+  /**
+   * A proposal a person declined — recorded as one audit entry rather than discarded, the same
+   * "kept, not lost" reasoning `applyProposal` already gives for an accepted one.
+   */
+  const dismissProposal = useCallback(
+    (p: Proposal) => {
+      const now = new Date().toISOString()
+      const summary =
+        p.kind === 'update'
+          ? `Declined a change to ${p.id}.`
+          : `Declined logging a new issue for ${p.client}${p.module ? ` / ${p.module}` : ''} — “${p.draft.name}”.`
+      dispatchMany([{ t: 'dismissProposal', summary, rationale: p.rationale, now }])
+    },
+    [dispatchMany],
+  )
+
   const expandAll = useCallback(() => setCollapsed(new Set()), [])
   const collapseAll = useCallback(() => {
     setCollapsed(
@@ -2642,6 +2658,7 @@ export default function IssueWorkspace({
           }}
           onReveal={revealIssue}
           onApply={applyProposal}
+          onDismiss={dismissProposal}
           onClose={() => setChatOpen(false)}
         />
       )}

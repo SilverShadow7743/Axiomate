@@ -105,6 +105,7 @@ const KINDS = new Set([
   'addPersonalEvent',
   'updatePersonalEvent',
   'removePersonalEvent',
+  'dismissProposal',
 ])
 
 export async function POST(req: Request) {

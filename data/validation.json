@@ -566,12 +566,12 @@
     {
       "id": "Y",
       "title": "The assistant recommends something wrong",
-      "expected": "A person rejects it, the rejection is recorded, and the original recommendation is preserved.",
-      "verdict": "PARTIAL",
-      "actual": "Proposals are rendered as cards a person accepts or rejects (3 chat module(s) implement it), and an accepted proposal goes through the same reducer as a human edit, so it is audited identically. A rejection changes nothing and is recorded nowhere — no rejection log exists in source — so the system cannot learn which recommendations were wrong.",
-      "stops": "at the rejection — it disappears",
-      "severity": "P2",
-      "impact": "Agent quality cannot be measured, because only the accepted half of its output is kept."
+      "expected": "A person declines it, the decline is recorded — what was proposed and why — without touching any record, and stands apart from an accepted proposal's own audit trail.",
+      "verdict": "PASS",
+      "actual": "Declining a proposal writes one audit entry — rowId \"ASSISTANT\", the rationale the assistant gave as \"from\", what was proposed as \"to\" — for both an update (\"Declined a change to OAPIL-1.\") and a create (\"Declined logging a new issue for OAPIL — \"Duplicate of an existing ticket\".\"). No issue record is touched.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A declined recommendation is preserved beside every accepted one, findable in the same History a partner already reads."
     },
     {
       "id": "Z",

@@ -904,6 +904,8 @@ const SHAPES = {
     issueId: req(id), responsibilityId: req(id), values: req(strings), now,
     acceptUnavailable: opt(bool),
   },
+  /* ---- ASSISTANT ---- */
+  dismissProposal: { summary: req(text), rationale: req(text), now },
 } satisfies Record<Exclude<Action['t'], 'notify'>, Shape>
 
 /**

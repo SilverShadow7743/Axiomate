@@ -33,6 +33,8 @@ interface Props {
   /** Select a row and make sure it is actually visible (expanded, not filtered away). */
   onReveal: (id: string) => void
   onApply: (proposal: Proposal) => ApplyOutcome
+  /** A person declined the proposal — recorded to the audit trail, never blocking. */
+  onDismiss: (proposal: Proposal) => void
   onClose: () => void
 }
 
@@ -101,7 +103,7 @@ function diffLines(p: Proposal, index: IssueIndexEntry[]): { label: string; from
     .map(([k, v]) => ({ label: label(k), from: '—', to: v }))
 }
 
-export default function ChatPanel({ index, today, engine, config, onReveal, onApply, onClose }: Props) {
+export default function ChatPanel({ index, today, engine, config, onReveal, onApply, onDismiss, onClose }: Props) {
   const [turns, setTurns] = useState<Turn[]>(() => [greeting(config)])
   const [draft, setDraft] = useState('')
   /**
@@ -359,7 +361,10 @@ export default function ChatPanel({ index, today, engine, config, onReveal, onAp
                       </button>
                       <button
                         className="btn"
-                        onClick={() => setCards((c) => ({ ...c, [key]: 'dismissed' }))}
+                        onClick={() => {
+                          setCards((c) => ({ ...c, [key]: 'dismissed' }))
+                          onDismiss(p)
+                        }}
                       >
                         Dismiss
                       </button>
