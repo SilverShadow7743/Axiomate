@@ -27,9 +27,9 @@
       "expected": "The reply is recorded against the issue, the issue stops looking stale, and the trail shows who said what and when.",
       "verdict": "PARTIAL",
       "actual": "Note recorded, authored by \"Validator\", and the issue's last activity moved to 2026-08-15.",
-      "stops": "before the reply arrives on its own — the note is typed by a consultant, not received",
-      "severity": "P2",
-      "impact": "The record is right once someone transcribes it. Nothing guarantees they do."
+      "stops": "at the live inbound route — this scenario exercises the note landing correctly, which is what it can drive. A reply DOES already arrive on its own: app/api/intake/route.ts matches the thread (matchingIssue, proven end to end by IT1) and calls this same addNote automatically, before any consultant sees it (docs/plans/2026-08-25-intake-reply-threading-design.md). What is left is the live Exchange round-trip itself, which needs a real mailbox this harness cannot drive — the same limit A2 hits.",
+      "severity": "P3",
+      "impact": "A client reply already lands on the issue as a note without anyone transcribing it. What is not provable here is the live send/receive path, not the recording logic."
     },
     {
       "id": "C",
