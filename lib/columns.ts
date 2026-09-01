@@ -1,5 +1,6 @@
 import type { ScheduleRow } from './types'
 import type { LabelKey } from './config'
+import { exposure } from './raid'
 
 export interface ColumnDef {
   key: string
@@ -143,6 +144,25 @@ export const COLUMNS: ColumnDef[] = [
     sortable: false,
   },
   { key: 'dependency', label: 'Dependency', width: 140, minWidth: 80, sortable: false },
+  {
+    key: 'exposure',
+    label: 'Exposure',
+    width: 110,
+    minWidth: 80,
+    sortable: true,
+    // Unjudged Risks and every non-Risk row sort to one end, matching `duration`'s own
+    // convention for the identical shape of absence (`?? -1`) — not a new one invented here.
+    sortValue: (r) => exposure(r.riskLikelihood, r.riskImpact)?.score ?? -1,
+  },
+  {
+    key: 'decisionOutcome',
+    label: 'Decision Outcome',
+    width: 220,
+    minWidth: 120,
+    // Free text with no ordering that means anything — the same reason `next` (Next Action)
+    // is already not sortable.
+    sortable: false,
+  },
 ]
 
 /** Columns shown before the user customises anything. */
