@@ -141,6 +141,7 @@ async function scrub() {
   await tx.discussionMessage.deleteMany({ where })
   await tx.discussionThread.deleteMany({ where })
   await tx.meeting.deleteMany({ where })
+  await tx.snapshot.deleteMany({ where })
   await tx.estimateRevision.deleteMany({ where })
   await tx.issueEstimate.deleteMany({ where })
   await tx.timeEntry.deleteMany({ where })
@@ -480,6 +481,39 @@ async function main() {
     'an allocation and a commitment keep their dates',
     allocation?.startDate === '2026-09-01' && commitment?.startDate === '2026-09-07' && commitment.hoursPerDay === 7.5,
     allocation ? `${allocation.startDate}→${allocation.endDate}, leave ${commitment?.hoursPerDay}h/day` : 'missing',
+  )
+
+  /*
+   * A snapshot round-trips its embedded JSON whole — `entries` (an array of objects, the shape
+   * a careless mapper drops a field from) and `cost` (nullable, the column this codebase's
+   * first nullable Json field, where `null` written wrong lands as `{}` or the string "null"
+   * rather than absent). A fresh issue under `projectId` — PROOF-1 lives elsewhere in the tree
+   * (seeded, not created here), so it is not under this scratch project's subtree.
+   */
+  const snapIssue = await persistActions(TENANT, A, [
+    { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Snapshot proof issue' }, now: NOW },
+  ])
+  const snapIssueId = snapIssue.createdId!
+  const snapDated = await persistActions(TENANT, A, [
+    { t: 'setDates', id: snapIssueId, start: '2026-08-01', end: '2026-08-10', now: NOW },
+  ])
+  const snapWrote = await persistActions(TENANT, A, [
+    { t: 'takeSnapshot', nodeId: projectId, now: NOW } as Action,
+  ])
+  const snapState = (await loadWorkspace(TENANT)).state
+  const snap = Object.values(snapState.snapshots).find((s) => s.nodeId === projectId)
+  const proofEntry = snap?.entries.find((e) => e.issueId === snapIssueId)
+  check(
+    "a snapshot's entries round-trip with the issue's real subject and dates intact",
+    snapIssue.ok && snapDated.ok && snapWrote.ok && proofEntry != null &&
+      proofEntry.subject === 'Snapshot proof issue' &&
+      proofEntry.plannedStart === '2026-08-01' && proofEntry.plannedEnd === '2026-08-10',
+    proofEntry ? `${proofEntry.issueId}: "${proofEntry.subject}" ${proofEntry.plannedStart}→${proofEntry.plannedEnd}` : (snapWrote.error ?? snapDated.error ?? snapIssue.error ?? 'missing'),
+  )
+  check(
+    'and a null cost survives as null, not an empty object or the wrong JSON shape',
+    snap != null && snap.cost === null,
+    snap ? `cost=${JSON.stringify(snap.cost)}` : 'missing',
   )
 
   const member = Object.values(state.projectMembers)[0]
@@ -1320,13 +1354,15 @@ async function main() {
    * exists to confirm. What is left here is the part that was always the real assertion — the
    * proof tenant's own count is exactly what this run created, not more and not fewer.
    *
-   * 4, not 2, since the intake-threading checks above add two of their own: the new thread's
-   * issue and the unrelated message's issue. The reply in between deliberately adds none.
+   * 5, not 2, since the intake-threading checks above add two of their own (the new thread's
+   * issue and the unrelated message's issue; the reply in between deliberately adds none), and
+   * the snapshot check adds one more (a fresh issue under the scratch project, since PROOF-1
+   * lives elsewhere in the tree and is not under that project's subtree).
    */
   const ownRows = await withTenant(TENANT, (tx) => tx.issue.count({ where: { tenantId: TENANT } }))
   check(
     'the proof tenant owns exactly the rows it created',
-    ownRows === 4,
+    ownRows === 5,
     `${ownRows} issue row(s)`,
   )
 }

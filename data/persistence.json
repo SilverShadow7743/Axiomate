@@ -1,7 +1,7 @@
 {
-  "at": "2026-08-30T07:21:49.230Z",
+  "at": "2026-09-01T16:41:31.429Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
-  "passed": 71,
+  "passed": 74,
   "failed": 0,
   "checks": [
     {
@@ -32,12 +32,17 @@
     {
       "what": "a batch across every table applies",
       "ok": true,
-      "detail": "16 audit rows"
+      "detail": "17 audit rows"
     },
     {
       "what": "a note keeps its text exactly, quotes and newline included",
       "ok": true,
       "detail": "pinned=true"
+    },
+    {
+      "what": "a saved view survives with its filters parsed and its creator stamped",
+      "ok": true,
+      "detail": "view-18 by Persistence Proof"
     },
     {
       "what": "quarter hours survive as a decimal, not a float",
@@ -112,12 +117,22 @@
     {
       "what": "a cancellation survives reload and its mint lands with it",
       "ok": true,
-      "detail": "deletedAt=2026-08-30T09:00:00.000Z note=Cancelled: Proof sync"
+      "detail": "deletedAt=2026-09-01T09:00:00.000Z note=Cancelled: Proof sync"
     },
     {
       "what": "an allocation and a commitment keep their dates",
       "ok": true,
       "detail": "2026-09-01→2026-09-05, leave 7.5h/day"
+    },
+    {
+      "what": "a snapshot's entries round-trip with the issue's real subject and dates intact",
+      "ok": true,
+      "detail": "PROOF-003: \"Snapshot proof issue\" 2026-08-01→2026-08-10"
+    },
+    {
+      "what": "and a null cost survives as null, not an empty object or the wrong JSON shape",
+      "ok": true,
+      "detail": "cost=null"
     },
     {
       "what": "a project member comes back out of Postgres with the project, the person and the role intact",
@@ -177,7 +192,7 @@
     {
       "what": "a submitted week comes back out of Postgres",
       "ok": true,
-      "detail": "ts-26 · Priya · 2026-08-03 · Submitted · by Priya"
+      "detail": "ts-29 · Priya · 2026-08-03 · Submitted · by Priya"
     },
     {
       "what": "and the freeze survives the reload — a guard that holds only in memory is not a guard",
@@ -212,12 +227,12 @@
     {
       "what": "and a redacted row is refused by the mapper rather than saved as an erased level",
       "ok": true,
-      "detail": "Refusing to persist a redacted person-skill (pskill-28). Levels are stripped for reading only."
+      "detail": "Refusing to persist a redacted person-skill (pskill-31). Levels are stripped for reading only."
     },
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 37143 chars · 1 visible issues · 11 audit rows"
+      "detail": "payload 37951 chars · 1 visible issues · 11 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -247,12 +262,12 @@
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
       "ok": true,
-      "detail": "Refusing to persist document doc-37 with no locator. The locator is stripped for reading only."
+      "detail": "Refusing to persist document doc-40 with no locator. The locator is stripped for reading only."
     },
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-08-30T09:00:00.000Z"
+      "detail": "deletedAt 2026-09-01T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",
@@ -272,32 +287,32 @@
     {
       "what": "a timeline comes back out of Postgres with its boundaries and reasons intact",
       "ok": true,
-      "detail": "ver-39 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-40 2026-07-01→open \"Moved to a four-day week\" by proof"
+      "detail": "ver-42 2026-01-01→2026-07-01 \"Original contract\" by proof | ver-43 2026-07-01→open \"Moved to a four-day week\" by proof"
     },
     {
       "what": "and the exclusive boundary survives it — 30 June is the old week, 1 July the new",
       "ok": true,
-      "detail": "30 Jun → ver-39, 1 Jul → ver-40, before any period → null"
+      "detail": "30 Jun → ver-42, 1 Jul → ver-43, before any period → null"
     },
     {
       "what": "a correction moves the timeline and does not move a stamp",
       "ok": true,
-      "detail": "the period now starts 2025-12-01 and December resolves to ver-39; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-39. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
+      "detail": "the period now starts 2025-12-01 and December resolves to ver-42; the stamp still holds {\"daysPerWeek\":5,\"hoursPerDay\":7.5} from ver-42. Trail: null -> from 2026-01-01 | null -> from 2026-07-01 | from 2026-01-01 -> from 2025-12-01"
     },
     {
       "what": "the id counter is stored, so a restart cannot re-mint an id",
       "ok": true,
-      "detail": "stored seq 40, state seq 17"
+      "detail": "stored seq 43, state seq 18"
     },
     {
       "what": "the scheduled pass raises on the first run and not the second",
       "ok": true,
-      "detail": "2 new · 0 continuing · 0 cleared · 2 messages raised | then | 0 new · 2 continuing · 0 cleared · 0 messages raised"
+      "detail": "3 new · 0 continuing · 0 cleared · 3 messages raised | then | 0 new · 3 continuing · 0 cleared · 0 messages raised"
     },
     {
       "what": "and its memory is stored, not held in the process",
       "ok": true,
-      "detail": "0 new · 2 continuing · 0 cleared · 0 messages raised"
+      "detail": "0 new · 3 continuing · 0 cleared · 0 messages raised"
     },
     {
       "what": "a batch that fails part-way keeps the valid prefix and stops there",
@@ -332,17 +347,17 @@
     {
       "what": "the new thread creates exactly one issue",
       "ok": true,
-      "detail": "PROOF-003"
+      "detail": "PROOF-004"
     },
     {
       "what": "a reply on the same conversationId matches the issue the first message created — no classify() call needed to know this, the design's own point",
       "ok": true,
-      "detail": "matched=PROOF-003, expected=PROOF-003"
+      "detail": "matched=PROOF-004, expected=PROOF-004"
     },
     {
       "what": "the reply did not create a second issue — the thread still resolves to one issue across two messages",
       "ok": true,
-      "detail": "2 mail row(s) on this thread, issue ids: PROOF-003, PROOF-003"
+      "detail": "2 mail row(s) on this thread, issue ids: PROOF-004, PROOF-004"
     },
     {
       "what": "a message with no conversationId matches nothing, today's behaviour unchanged",
@@ -352,12 +367,12 @@
     {
       "what": "the unrelated message creates its own, separate issue",
       "ok": true,
-      "detail": "PROOF-004, thread issue was PROOF-003"
+      "detail": "PROOF-005, thread issue was PROOF-004"
     },
     {
       "what": "the proof tenant owns exactly the rows it created",
       "ok": true,
-      "detail": "4 issue row(s)"
+      "detail": "5 issue row(s)"
     }
   ]
 }

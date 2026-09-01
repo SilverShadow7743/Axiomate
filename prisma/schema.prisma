@@ -147,6 +147,7 @@ model Tenant {
   discussionMessages DiscussionMessage[]
   discussionFollows  DiscussionFollow[]
   meetings      Meeting[]
+  snapshots     Snapshot[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -876,6 +877,29 @@ model Meeting {
 
   @@id([tenantId, id])
   @@index([tenantId, startAt])
+}
+
+/// A point-in-time copy of a project or engagement's planned dates and cost — taken
+/// deliberately, never changed once taken. See docs/plans/2026-09-01-project-snapshot-design.md.
+model Snapshot {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String   @default(cuid())
+  nodeId    String
+  nodeKind  String
+  nodeName  String
+  takenAt   DateTime
+  takenBy   String
+  /// `SnapshotEntry[]` — embedded, not a normalized table; nothing ever queries one entry
+  /// across snapshots, only a whole snapshot at a time.
+  entries   Json
+  /// `CostOfWork | null` — null whenever there is nothing to show, frozen at capture time.
+  cost      Json?
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, nodeId])
 }
 
 /// One scope's discussion — a work record's or a project's. E3: server-queried, never in the

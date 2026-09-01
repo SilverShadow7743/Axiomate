@@ -367,7 +367,22 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
     mine,
   )
 
-  const base = { ...state, rates, personSkills, documents, personalEvents, commitments }
+  /*
+   * The rates posture again — every internal reader keeps the planned DATES (`entries`), the
+   * point of a snapshot even to someone who may not see money; `cost` survives only for
+   * `rate.view` holders. Redacting here rather than trusting the frozen-at-capture null alone:
+   * a snapshot taken by someone who held `rate.view` at the time still carries a real `cost`
+   * in storage, and a later reader without that grant must not see it just because an earlier
+   * one did.
+   */
+  const mayViewCost = can(state.model, actor, 'rate.view').allowed
+  const snapshots = mayViewCost
+    ? state.snapshots
+    : Object.fromEntries(
+        Object.entries(state.snapshots).map(([id, s]) => [id, { ...s, cost: null }]),
+      )
+
+  const base = { ...state, rates, personSkills, documents, personalEvents, commitments, snapshots }
 
   /*
    * The client boundary — the same posture as the rate redaction above, applied to content.

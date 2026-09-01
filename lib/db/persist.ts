@@ -28,6 +28,7 @@ import {
   inboundMailToRow,
   commitmentToRow,
   meetingToRow,
+  snapshotToRow,
   versionToRow,
   timesheetToRow,
   rateToRow,
@@ -545,6 +546,21 @@ export async function persistSteps(
         })
       }
       await persistNotificationDiff(tx, tenantId, before, after)
+      return
+    }
+
+    case 'takeSnapshot': {
+      // Only ever mints, never updates — simpler than upsertMeeting's case above, which shares
+      // an arm with a second action.
+      for (const [id, s] of Object.entries(after.snapshots)) {
+        if (before.snapshots[id] === s) continue
+        const row = snapshotToRow(tenantId, s)
+        await tx.snapshot.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
       return
     }
 

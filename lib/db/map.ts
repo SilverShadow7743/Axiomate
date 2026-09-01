@@ -1,4 +1,6 @@
 import 'server-only'
+// A value import, not `import type` — `Prisma.DbNull` is a runtime sentinel, not a type.
+import { Prisma } from '@prisma/client'
 import type {
   Engagement as EngagementRow,
   Evidence as EvidenceRow,
@@ -35,12 +37,16 @@ import type {
   DiscussionMessage as DiscussionMessageRow,
   DiscussionFollow as DiscussionFollowRow,
   Meeting as MeetingRow,
-  Prisma,
+  // Aliased because `Snapshot` is also the domain type from `../snapshot`, and unrelated to
+  // `SnapshotPurpose` (evidence attachment kind) imported two lines below.
+  Snapshot as SnapshotRow,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
 import type { DocumentReview, DocumentReviewAnswer } from '../proofing'
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
+import type { Snapshot, SnapshotEntry } from '../snapshot'
+import type { CostOfWork } from '../rates'
 import type { IssueNote, NoteType } from '../notes'
 import type { EngagementDetail } from '../engagement'
 import type { EstimateRevision, IssueEstimate } from '../estimation'
@@ -1077,6 +1083,41 @@ export function meetingFromRow(r: MeetingRow): Meeting {
     note: r.note,
     createdAt: r.createdAt.toISOString(),
     createdBy: r.createdBy,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+/* ================================================================== *
+ * Snapshots — a point-in-time copy of a project or engagement
+ * ================================================================== */
+
+export function snapshotToRow(tenantId: TenantId, s: Snapshot): Prisma.SnapshotUncheckedCreateInput {
+  return {
+    tenantId,
+    id: s.id,
+    nodeId: s.nodeId,
+    nodeKind: s.nodeKind,
+    nodeName: s.nodeName,
+    takenAt: new Date(s.takenAt),
+    takenBy: s.takenBy,
+    entries: s.entries as unknown as Prisma.InputJsonValue,
+    // A nullable Json column needs Prisma's own null sentinel — a bare `null` writes nothing
+    // rather than SQL NULL, on a column Prisma otherwise treats as "leave unset."
+    cost: s.cost === null ? Prisma.DbNull : (s.cost as unknown as Prisma.InputJsonValue),
+    deletedAt: s.deletedAt ? new Date(s.deletedAt) : null,
+  }
+}
+
+export function snapshotFromRow(r: SnapshotRow): Snapshot {
+  return {
+    id: r.id,
+    nodeId: r.nodeId,
+    nodeKind: r.nodeKind === 'engagement' ? 'engagement' : 'project',
+    nodeName: r.nodeName,
+    takenAt: r.takenAt.toISOString(),
+    takenBy: r.takenBy,
+    entries: (r.entries as unknown as SnapshotEntry[]) ?? [],
+    cost: (r.cost as unknown as CostOfWork | null) ?? null,
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

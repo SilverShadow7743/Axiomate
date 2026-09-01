@@ -17,6 +17,7 @@ import {
   documentFromRow,
   reviewFromRow,
   meetingFromRow,
+  snapshotFromRow,
   milestoneFromRow,
   scopeItemFromRow,
   auditToRow,
@@ -149,6 +150,7 @@ type Reader = Pick<
   | 'milestone'
   | 'scopeItem'
   | 'meeting'
+  | 'snapshot'
 >
 
 /**
@@ -163,7 +165,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings, snapshots] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -235,6 +237,8 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
       db.documentReview.findMany({ where: { tenantId } }),
       // Appended at the END, per this destructure's own warning above.
       db.meeting.findMany({ where: { tenantId }, orderBy: { startAt: 'asc' } }),
+      // Newest-first at the query, so the "View snapshots…" dropdown never has to re-sort.
+      db.snapshot.findMany({ where: { tenantId }, orderBy: { takenAt: 'desc' } }),
     ])
 
   const state: WorkspaceState = {
@@ -285,9 +289,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
     inboundMail: Object.fromEntries(inboundMail.map((m) => [m.id, inboundMailFromRow(m)])),
     meetings: Object.fromEntries(meetings.map((m) => [m.id, meetingFromRow(m)])),
-    // TODO(snapshot persistence): placeholder until the Snapshot table/mapper/query land —
-    // reducer-provable independently of persistence, per this feature's own implementation plan.
-    snapshots: {},
+    snapshots: Object.fromEntries(snapshots.map((s) => [s.id, snapshotFromRow(s)])),
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),
