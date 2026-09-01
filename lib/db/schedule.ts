@@ -12,11 +12,11 @@ import { buildDailyIms } from '../reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack } from '../reports/clientPack'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../reports/pdf'
 import { deliveryDue, parseReportDelivery, type DeliveryStamps } from '../reports/delivery'
+import { resolveOperatorAddress } from '../reports/notifyBundle'
 import { externalPartyKinds, tiersOf } from '../config'
 import { sendAsMailbox } from '../mail'
 import { addDays } from '../dates'
 import { weekLabel } from '../timesheet'
-import { currentActor } from '../identity'
 
 /**
  * One run of the scheduled pass, from reading the clock to writing what it decided.
@@ -222,11 +222,7 @@ async function runDelivery(
   }
 
   if (due.weeklyFor || due.monthlyFor) {
-    const dest =
-      config.packDestination ||
-      Object.values(state.model.people).find(
-        (p) => p.name.trim().toLowerCase() === currentActor().name.trim().toLowerCase() && p.email,
-      )?.email
+    const dest = resolveOperatorAddress(state, config)
     if (!dest) {
       refused.push({ what: 'packs', status: 0, detail: 'No pack destination configured and the operator has no directory email.' })
     } else {

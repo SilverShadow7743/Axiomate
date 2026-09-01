@@ -7,6 +7,7 @@ import { loadWorkspace } from './repo'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
 import { KEY_RETENTION_DAYS, keysIn, split, type SubmittedAction } from '../idempotency'
+import { notifyBundle, type NotifyBundle } from '../reports/notifyBundle'
 import {
   activityToRow,
   auditToRow,
@@ -72,6 +73,8 @@ export interface PersistResult {
    * re-sending work it has already had acknowledged, and that is worth being able to see.
    */
   skipped: number
+  /** Everything needed to send a resolution notice this call raised, or null. See `route.ts`. */
+  notify: NotifyBundle | null
 }
 
 /**
@@ -273,9 +276,17 @@ async function runBatch(
            * whether to reload.
            */
           committedKeys: toRecord,
+          notify: null,
         }
       }
-      return { ok: true, message, createdId, audited: newAudit.length, skipped: skipped.length }
+      return {
+        ok: true,
+        message,
+        createdId,
+        audited: newAudit.length,
+        skipped: skipped.length,
+        notify: notifyBundle(current, newAudit),
+      }
     },
     {
       isolationLevel: 'Serializable',
