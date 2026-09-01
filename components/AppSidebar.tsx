@@ -16,7 +16,7 @@ import type { SavedView } from '@/lib/savedViews'
  */
 
 const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
-  { title: 'Your work', items: ['mywork', 'mycalendar', 'inbox'] },
+  { title: 'My work', items: ['mywork', 'mycalendar', 'inbox'] },
   { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio'] },
   { title: 'Records', items: ['timesheet', 'mail'] },
 ]
@@ -62,6 +62,10 @@ interface Props {
   setView: (v: WorkspaceView) => void
   /** Whether this viewer holds `internal.view`. Without it, the rail shows only what a client's own scoped data makes relevant. */
   mayInternal: boolean
+  /** Whether this viewer holds `config.manage` — held by ROLE_ADMIN and ROLE_ENGAGEMENT_LEAD by
+   *  default. Configuration is a privileged screen; every internal team member seeing its entry
+   *  point in navigation was broader than the screen itself allows anyone to do. */
+  mayConfigure: boolean
   /** Badge counts, computed by the workspace: a queue whose size is invisible is a queue nobody opens. */
   myWorkCount: number
   /** null for a viewer without time.approve — the badge must not leak the queue's size. */
@@ -85,6 +89,7 @@ export default function AppSidebar({
   view,
   setView,
   mayInternal,
+  mayConfigure,
   myWorkCount,
   timesheetQueue,
   notificationsUnread,
@@ -158,7 +163,7 @@ export default function AppSidebar({
           })}
           {/* My week is a page of its own, not a workspace view — a first-class link at
               last, not the phone-only toolbar anchor it started as. */}
-          {g.title === 'Your work' && (
+          {g.title === 'My work' && (
             <a className="side-item" href="/my-week" onKeyDown={rove} title="Record and submit your week — works well on a phone">
               <span className="side-label">My week</span>
             </a>
@@ -214,7 +219,7 @@ export default function AppSidebar({
       <span className="grow" />
 
       <div className="side-group side-foot">
-        {mayInternal && (
+        {mayConfigure && (
           <button
             className="side-item"
             onClick={() => {

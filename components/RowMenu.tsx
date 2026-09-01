@@ -124,6 +124,7 @@ export default function RowMenu({
 
         {childKinds.length > 0 && (
           <>
+            <div className="menu-title">Under this row</div>
             {childKinds.map((k) => (
               <button
                 key={`child-${k}`}
@@ -132,7 +133,6 @@ export default function RowMenu({
                 onClick={() => run(() => actions.addChild(row, k))}
               >
                 Add {kindLabel(labels, k)}
-                <span className="menu-sub">under this row</span>
               </button>
             ))}
           </>
@@ -140,6 +140,7 @@ export default function RowMenu({
 
         {siblingKinds.length > 0 && (
           <>
+            <div className="menu-title">Beside this row</div>
             {siblingKinds.map((k) => (
               <button
                 key={`sibling-${k}`}
@@ -148,7 +149,6 @@ export default function RowMenu({
                 onClick={() => run(() => actions.addSibling(row, k))}
               >
                 Add {kindLabel(labels, k)}
-                <span className="menu-sub">beside this row</span>
               </button>
             ))}
           </>
