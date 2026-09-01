@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server'
 import { databaseConfigured, describeDbError, isPermanentDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
+import { sendAsMailbox } from '@/lib/mail'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import type { Action } from '@/lib/workspace'
@@ -213,7 +214,46 @@ export async function POST(req: Request) {
       session.actor,
       list as SubmittedAction[],
     )
-    return NextResponse.json(result, { status: result.ok ? 200 : 409 })
+
+    /**
+     * A resolution notice, sent after the save has already committed — never inside it.
+     *
+     * `persistActions`'s own transaction closed when it returned above; `lib/db/schedule.ts`
+     * gives the reason this has to happen out here rather than alongside the write, verbatim:
+     * "Graph HTTP inside a Serializable transaction would hold locks through network I/O and
+     * race its 30s timeout." The same rule applies to this call, which is why it is not inside
+     * `persistActions` itself.
+     *
+     * Failure here must never turn a successful save into an error response — the save already
+     * happened, and whoever made it is owed that success regardless of whether a reviewer gets
+     * emailed about it. The try/catch is deliberately its own, inside the route's outer one:
+     * without it, a thrown Graph error would fall through to the outer `catch` below and answer
+     * a successful save with a 500.
+     */
+    if (result.ok && result.notify) {
+      try {
+        for (const n of result.notify.notices) {
+          const subject = `Ready to tell the client — ${n.issueId}`
+          const text =
+            `${n.issueId} — ${n.subject} — moved to Awaiting client confirmation for ${n.clientName}.` +
+            (n.suggestedContact ? `\n\nSuggested contact: ${n.suggestedContact}` : '')
+          const sent = await sendAsMailbox(result.notify.mailbox, result.notify.dest, subject, text)
+          if (!sent.ok) {
+            console.error(`resolution notice failed for ${n.issueId}: ${sent.status} ${sent.detail}`)
+          }
+        }
+      } catch (err) {
+        console.error('resolution notice failed:', err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    /**
+     * `notify` never reaches the browser. It carries an internal mailbox address, an internal
+     * reviewer's address and, via `suggestedContact`, a client contact's email — none of it
+     * secret, none of it something the frontend reads or should see in its own network tab.
+     */
+    const { notify, ...publicResult } = result
+    return NextResponse.json(publicResult, { status: result.ok ? 200 : 409 })
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: describeDbError(err), permanent: isPermanentDbError(err) },
