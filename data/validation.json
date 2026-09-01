@@ -664,6 +664,16 @@
       "impact": "This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing."
     },
     {
+      "id": "SN1",
+      "title": "A project (or engagement) snapshot is taken, and stays true after the plan moves on",
+      "expected": "Planned dates and cost are frozen at the moment the snapshot is taken, and a later change to either never rewrites it.",
+      "verdict": "PASS",
+      "actual": "A project snapshot captures both issues' planned dates (OAPIL-004: 2026-08-01→2026-08-10, OAPIL-005: 2026-08-11→2026-08-14) and a real cost (£225). Without rate.view the same call returns cost null. Moving a date and logging 20 more hours afterward left the already-taken snapshot exactly as it was — plannedStart still \"2026-08-01\", cost still £225. An engagement root walks the identical code path, scope only wider. Through the reducer: an actor without sow.edit is refused (\"Record a statement of work is not something Functional Consultant can do here.\"), Priya as ROLE_ENGAGEMENT_LEAD succeeds and the result lands in state.snapshots, and both an unknown node id and a node of the wrong kind (company) are refused rather than silently accepted.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "What did the plan look like when the client signed off, versus now — answerable for the first time, at the project or engagement level, dates and cost together."
+    },
+    {
       "id": "CR1",
       "title": "A change is agreed, and what was originally signed is still answerable",
       "expected": "An approved change moves the contracted position without touching the baseline, and a pending one is reported separately rather than added in.",

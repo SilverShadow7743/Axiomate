@@ -83,6 +83,7 @@ import {
   type AcceptanceState,
   type Milestone,
 } from './milestone'
+import { takeSnapshot, type Snapshot } from './snapshot'
 import {
   checkChange,
   contractedPosition,
@@ -397,6 +398,11 @@ export interface WorkspaceState {
    */
   milestones: Record<string, Milestone>
   /**
+   * A point-in-time copy of a project or engagement's planned dates and cost, taken
+   * deliberately and never changed once taken. See `./snapshot`.
+   */
+  snapshots: Record<string, Snapshot>
+  /**
    * What each statement of work says it will deliver. See `./scope`.
    *
    * Scope items, not tree tiers — settled 18 August. `Sow.scope` keeps the agreement in the
@@ -700,6 +706,7 @@ export function initWorkspace(
     documents: {},
     documentReviews: {},
     milestones: {},
+    snapshots: {},
     scopeItems: {},
     /**
      * One record per id, because the id is the identity.
@@ -1190,6 +1197,8 @@ export type Action =
   | { t: 'archiveSow'; id: string; now: string }
   /** Which SOW a project is delivered under. `sowId: null` detaches it. */
   | { t: 'attributeToSow'; nodeId: string; sowId: string | null; now: string }
+  /** A point-in-time copy of a project or engagement's planned dates and cost. See `./snapshot`. */
+  | { t: 'takeSnapshot'; nodeId: string; now: string }
   /* ---- CAPACITY ---- */
   | {
       t: 'upsertAllocation'
@@ -6033,6 +6042,37 @@ Question: ${review.question}`),
           }),
         },
         message: a.sowId ? 'Attributed.' : 'Detached from the statement of work.',
+      }
+    }
+
+    case 'takeSnapshot': {
+      const node = state.nodes[a.nodeId]
+      if (!node) return { state, error: 'That record no longer exists.' }
+      if (node.kind !== 'project' && node.kind !== 'engagement') {
+        return { state, error: 'A snapshot is taken of a project or an engagement, not this kind of record.' }
+      }
+      // Deciding WHAT to pass in, not WHETHER this may proceed — the funnel above already
+      // settled that. An actor without rate.view takes a snapshot with no rates, exactly the
+      // way sowCostOf already answers "nothing to price": cost null, unratedHours covering
+      // every hour. The null is frozen at THIS moment, never re-checked on a later view.
+      const rates = can(state.model, actor, 'rate.view').allowed ? Object.values(state.rates) : []
+      const seq = state.seq + 1
+      const snap = takeSnapshot(state, `snap-${seq}`, a.nodeId, rates, actor, a.now)
+      return {
+        state: {
+          ...state,
+          snapshots: { ...state.snapshots, [snap.id]: snap },
+          seq,
+          audit: log(actor, state, {
+            rowId: a.nodeId,
+            field: 'snapshot',
+            from: '',
+            to: snap.id,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `Snapshot taken — ${snap.entries.length} record${snap.entries.length === 1 ? '' : 's'}.`,
       }
     }
 

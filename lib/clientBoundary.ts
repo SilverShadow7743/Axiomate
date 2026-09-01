@@ -108,6 +108,8 @@ export function clientView(
     personSkills: {},
     documentReviews: {},
     milestones: {},
+    // Same sensitivity class as rates/sows above — a frozen cost figure is still a cost figure.
+    snapshots: {},
     scopeItems: {},
     approvals: {},
     notifications: {},

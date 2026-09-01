@@ -630,6 +630,7 @@ const SHAPES = {
   upsertSow: { id: req(idOrNull), engagementId: req(id), patch: req(plainObject), now },
   archiveSow: { id: req(id), now },
   attributeToSow: { nodeId: req(id), sowId: req(idOrNull), now },
+  takeSnapshot: { nodeId: req(id), now },
   /* ---- CAPACITY ---- */
   upsertAllocation: {
     id: req(idOrNull),

@@ -158,6 +158,7 @@ import {
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
 import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/rates'
+import { takeSnapshot } from '../lib/snapshot'
 import {
   candidatesFor,
   checkPersonSkill,
@@ -3959,6 +3960,95 @@ scenario(
       severity: '—',
       impact:
         'This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing.',
+    }
+  },
+)
+
+scenario(
+  'SN1',
+  'A project (or engagement) snapshot is taken, and stays true after the plan moves on',
+  'Planned dates and cost are frozen at the moment the snapshot is taken, and a later change to either never rewrites it.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    let live = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Snapshot rollout' }, now: NOW,
+    } as Action)
+    const projectId = Object.values(live.nodes).find((n) => n.kind === 'project' && n.name === 'Snapshot rollout')!.id
+
+    live = ok(live, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Design phase' }, now: NOW } as Action)
+    const issueA = Object.values(live.issues).find((i) => i.subject === 'Design phase')!
+    live = ok(live, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Build phase' }, now: NOW } as Action)
+    const issueB = Object.values(live.issues).find((i) => i.subject === 'Build phase')!
+
+    live = ok(live, { t: 'setDates', id: issueA.id, start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    live = ok(live, { t: 'setDates', id: issueB.id, start: '2026-08-11', end: '2026-08-14', now: NOW } as Action)
+
+    const priya = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!
+    const priyaRates: PersonRate[] = [
+      { id: 'sn1', personId: priya.id, kind: 'cost', validFrom: '2026-01-01', validTo: null, amount: 45, currency: 'GBP', recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test' },
+      { id: 'sn2', personId: priya.id, kind: 'bill', validFrom: '2026-01-01', validTo: null, amount: 110, currency: 'GBP', recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test' },
+    ]
+    live = ok(live, { t: 'addTime', issueId: issueA.id, person: 'Priya', date: TODAY, hours: 5, activity: 'Resolution', billable: true, note: '', now: NOW } as Action)
+
+    /* The pure function, driven directly — no reducer needed to prove what it captures. */
+    const taken = takeSnapshot(live, 'snap-test-1', projectId, priyaRates, A, NOW)
+    const datesRight =
+      taken.entries.length === 2 &&
+      taken.entries.find((e) => e.issueId === issueA.id)?.plannedStart === '2026-08-01' &&
+      taken.entries.find((e) => e.issueId === issueA.id)?.plannedEnd === '2026-08-10' &&
+      taken.entries.find((e) => e.issueId === issueB.id)?.plannedStart === '2026-08-11'
+    const costRight = taken.cost?.cost === 225 && taken.nodeKind === 'project' && taken.nodeName === 'Snapshot rollout'
+
+    /* Without rate.view, the caller passes no rates — sowCostOf's own answer, not new logic. */
+    const noRates = takeSnapshot(live, 'snap-test-2', projectId, [], A, NOW)
+    const costAbsent = noRates.cost === null && noRates.entries.length === 2
+
+    /* A later change to either half does not rewrite the already-taken snapshot. */
+    const moved = ok(live, { t: 'setDates', id: issueA.id, start: '2026-07-01', end: '2026-07-10', now: NOW } as Action)
+    const moreTimeLogged = ok(moved, { t: 'addTime', issueId: issueA.id, person: 'Priya', date: TODAY, hours: 10, activity: 'Resolution', billable: true, note: '', now: NOW } as Action)
+    const frozen =
+      taken.entries.find((e) => e.issueId === issueA.id)?.plannedStart === '2026-08-01' &&
+      taken.cost?.cost === 225
+
+    /* The engagement root walks the identical code path — same shape, wider scope. */
+    const engagementTaken = takeSnapshot(live, 'snap-test-3', engagementId, priyaRates, A, NOW)
+    const engagementRight = engagementTaken.nodeKind === 'engagement' && engagementTaken.entries.length >= 2
+
+    /* Now through the reducer: sow.edit gates it, an unknown or wrong-kind node refuses.
+     * `A` itself resolves to shipped ADMIN via defaultRoleIds (the same fallback every
+     * unrecognised actor gets — see scenario AC1), so a real refusal needs a staffed person
+     * whose role genuinely lacks sow.edit. */
+    const sam = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!
+    const staffed = ok(live, {
+      t: 'config', op: { k: 'upsertPerson', id: sam.id, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const staffedWithLead = ok(staffed, {
+      t: 'config', op: { k: 'upsertPerson', id: priya.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+    const functional: Actor = { id: sam.id, name: 'Sam' }
+    const lead: Actor = { id: priya.id, name: 'Priya' }
+
+    const deniedForA = apply(staffed, { t: 'takeSnapshot', nodeId: projectId, now: NOW } as Action, functional)
+    const grantedForLead = apply(staffedWithLead, { t: 'takeSnapshot', nodeId: projectId, now: NOW } as Action, lead)
+    const takenViaReducer = Object.values(grantedForLead.state.snapshots).find((s) => s.nodeId === projectId)!
+    const moduleId = Object.values(live.nodes).find((n) => n.kind === 'company')!.id
+    const wrongKind = apply(staffedWithLead, { t: 'takeSnapshot', nodeId: moduleId, now: NOW } as Action, lead)
+    const unknownNode = apply(staffedWithLead, { t: 'takeSnapshot', nodeId: 'no-such-node', now: NOW } as Action, lead)
+
+    const good =
+      datesRight && costRight && costAbsent && frozen && engagementRight &&
+      deniedForA.error !== undefined &&
+      takenViaReducer.nodeId === projectId &&
+      takenViaReducer.entries.length === 2 &&
+      wrongKind.error !== undefined &&
+      unknownNode.error !== undefined
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A project snapshot captures both issues' planned dates (${taken.entries.map((e) => `${e.issueId}: ${e.plannedStart}→${e.plannedEnd}`).join(', ')}) and a real cost (£${taken.cost?.cost}). Without rate.view the same call returns cost ${JSON.stringify(noRates.cost)}. Moving a date and logging 20 more hours afterward left the already-taken snapshot exactly as it was — plannedStart still "${taken.entries.find((e) => e.issueId === issueA.id)?.plannedStart}", cost still £${taken.cost?.cost}. An engagement root walks the identical code path, scope only ${engagementTaken.entries.length >= taken.entries.length ? 'wider' : 'narrower'}. Through the reducer: an actor without sow.edit is refused ("${deniedForA.error}"), Priya as ROLE_ENGAGEMENT_LEAD succeeds and the result lands in state.snapshots, and both an unknown node id and a node of the wrong kind (company) are refused rather than silently accepted.`,
+      stops: '—',
+      severity: '—',
+      impact: 'What did the plan look like when the client signed off, versus now — answerable for the first time, at the project or engagement level, dates and cost together.',
     }
   },
 )

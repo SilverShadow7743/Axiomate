@@ -239,6 +239,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       milestones: parsed.milestones ?? {},
       // `?? {}` because a mirror written before scope items existed has no such key.
       scopeItems: parsed.scopeItems ?? {},
+      // `?? {}` because a mirror written before snapshots existed has no such key.
+      snapshots: parsed.snapshots ?? {},
       personSkills: {
         ...(seed.personSkills ?? {}),
         ...Object.fromEntries(

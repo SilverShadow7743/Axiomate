@@ -285,6 +285,9 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
     inboundMail: Object.fromEntries(inboundMail.map((m) => [m.id, inboundMailFromRow(m)])),
     meetings: Object.fromEntries(meetings.map((m) => [m.id, meetingFromRow(m)])),
+    // TODO(snapshot persistence): placeholder until the Snapshot table/mapper/query land —
+    // reducer-provable independently of persistence, per this feature's own implementation plan.
+    snapshots: {},
     model: readModel(
       config?.model,
       issues.map((i) => [i.owner, i.raisedBy]).flat(),

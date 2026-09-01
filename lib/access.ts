@@ -589,6 +589,7 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   upsertSow: 'sow.edit',
   archiveSow: 'sow.edit',
   attributeToSow: 'sow.attribute',
+  takeSnapshot: 'sow.edit',
   updateEngagement: 'engagement.edit',
   addProjectMember: 'project.staff',
   updateProjectMember: 'project.staff',
