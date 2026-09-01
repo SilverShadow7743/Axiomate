@@ -1,4 +1,5 @@
 import { overlapProblem, valueAt, timelineOf, type Version } from './versioning'
+import type { TimeEntry } from './time'
 
 /**
  * What a person costs and what they are charged out at, over a period.
@@ -188,6 +189,44 @@ export function costOf(
     marginPct: revenue > 0 ? round((margin / revenue) * 100) : null,
     currency,
     unratedHours: 0,
+  }
+}
+
+/**
+ * What a SOW's real worked hours cost and earned — the join between "which hours belong to this
+ * SOW" and `costOf`'s own pricing. No new pricing logic; this function only gathers the input.
+ *
+ * An entry with no resolvable `personId` (an unresolved name — the one place the person/personId
+ * join still happens on a name rather than a stored id) folds into `unratedHours` exactly like an
+ * entry with no rate on its day: two different causes, one honest absence, never two silent
+ * failure modes wearing the same blank space.
+ */
+export function sowCostOf(
+  rates: PersonRate[],
+  issueIds: string[],
+  timeEntries: Record<string, TimeEntry>,
+): CostOfWork {
+  const live = Object.values(timeEntries).filter((e) => !e.deletedAt && issueIds.includes(e.issueId))
+  const withPerson = live.filter((e) => e.personId)
+  const noPersonHours =
+    withPerson.length === live.length
+      ? 0
+      : Math.round(live.filter((e) => !e.personId).reduce((n, e) => n + e.hours, 0) * 100) / 100
+
+  const priced = costOf(
+    rates,
+    withPerson.map((e) => ({ personId: e.personId!, date: e.date, hours: e.hours })),
+  )
+  if (noPersonHours === 0) return priced
+
+  return {
+    hours: Math.round((priced.hours + noPersonHours) * 100) / 100,
+    cost: null,
+    revenue: null,
+    margin: null,
+    marginPct: null,
+    currency: priced.currency,
+    unratedHours: Math.round((priced.unratedHours + noPersonHours) * 100) / 100,
   }
 }
 

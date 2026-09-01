@@ -167,9 +167,9 @@
       "expected": "The hours land on the work item, move it off stale, and become the actual half of the estimate.",
       "verdict": "PARTIAL",
       "actual": "5.5h recorded across 2 activities — 3.5h billable, 2h not — and the issue is no longer stale (last activity 2026-08-15). Refused: a future day (\"Time cannot be recorded for a day that has not happened.\"), an 18-hour entry, and 1.37 hours. Removing an entry withdraws it rather than destroying it.",
-      "stops": "at money — hours are recorded, and a rate to multiply them by does not exist anywhere",
+      "stops": "here, at the entry itself — a rate to multiply these particular hours by is not read in this scenario. It exists and is now reachable: `costOf`/`sowCostOf` price real worked hours against dated rates, proven by `RT1`, and `CommercialPanel` shows the result behind `rate.view`. This scenario is about the entry recording correctly, not about pricing it.",
       "severity": "P2",
-      "impact": "Actual effort, variance and utilisation now have a source. Cost and margin still do not."
+      "impact": "Actual effort, variance and utilisation have a source, and — proven elsewhere, not by this scenario — so now does cost and margin."
     },
     {
       "id": "J2",
@@ -187,9 +187,9 @@
       "expected": "The variance is visible on the issue, and it is honest about what it is measured against.",
       "verdict": "PARTIAL",
       "actual": "12h spent against 8h agreed — +4h, 50%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.",
-      "stops": "before it reaches the project — the variance is per issue, and nothing rolls it up to a milestone, a SOW or a margin",
+      "stops": "here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW's baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.",
       "severity": "P2",
-      "impact": "A consultant can see the overrun on the record. A partner still cannot see it on the engagement."
+      "impact": "A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap."
     },
     {
       "id": "N",
@@ -658,8 +658,8 @@
       "title": "A cost is computed from the rate in force on the day the work was done",
       "expected": "Hours are priced at their own date, an unrated hour makes the total absent rather than smaller, and nobody without the grant is sent a rate at all.",
       "verdict": "PASS",
-      "actual": "A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs 40 and 3 August costs 50, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to 900 cost against 2000 billed — margin 1100 at 55%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: 4h of 14h unrated, cost null. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.",
-      "stops": "at the timesheet — a Configuration screen records rates (`recordRate`/`correctRate`, `rate.view`/`rate.edit` gated), but nothing feeds real worked hours into `costOf` yet and no screen shows the result. Cost is computable and not yet computed.",
+      "actual": "A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs 40 and 3 August costs 50, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to 900 cost against 2000 billed — margin 1100 at 55%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: 4h of 14h unrated, cost null. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule. And now the join itself: a SOW with one baselined issue (10h agreed, 16h actually spent) and one still-draft issue (3h spent, uncounted) rolls up to 6h of variance across 1 baselined issue — the draft's own spend never enters that figure. sowCostOf gathers the same SOW's real time entries and prices them: 19h worked, 4h of it logged against a name that does not resolve to a directory entry — so cost reads null rather than a total that is quietly short by four hours' worth.",
+      "stops": "at the milestone — SowPosition now rolls variance up and sowCostOf now prices a SOW's real worked hours, shown in CommercialPanel behind `rate.view`; attributing either to a specific milestone rather than the whole SOW remains open, because Milestone carries no relationship to individual issues today and inventing one would be its own design.",
       "severity": "—",
       "impact": "This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing."
     },

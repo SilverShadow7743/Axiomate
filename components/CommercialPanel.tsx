@@ -29,6 +29,7 @@ import {
   type Milestone,
 } from '@/lib/milestone'
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
+import { sowCostOf, describeCost } from '@/lib/rates'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso, workingDaysBetween } from '@/lib/dates'
@@ -101,6 +102,7 @@ export default function CommercialPanel({
   const mayAcceptMilestone = can(state.model, actor, 'milestone.accept')
   const mayEditScope = can(state.model, actor, 'scope.edit')
   const mayApproveScope = can(state.model, actor, 'scope.approve')
+  const mayViewRate = can(state.model, actor, 'rate.view')
   const [adding, setAdding] = useState(false)
 
   const sows = useMemo(
@@ -174,6 +176,22 @@ export default function CommercialPanel({
       return sowPosition(sow, ids, state.estimates, state.timeEntries, state.model.sizeBands, Object.values(state.changes))
     })
   }, [sows, projects, issuesUnder, state.estimates, state.timeEntries, state.model.sizeBands])
+
+  /**
+   * Cost and margin, per SOW — computed only behind `rate.view`, never merely hidden after the
+   * fact. `null` here means "this actor is not shown cost at all", distinct from a per-SOW
+   * `unratedHours > 0` inside `describeCost`, which means "cost exists as a concept and genuinely
+   * has not been recorded for some of this work" — the two must never read the same to a reader.
+   */
+  const costPositions = useMemo(() => {
+    if (!mayViewRate.allowed) return null
+    return sows.map((sow) => {
+      const ids = projects
+        .filter((p) => p.sowId === sow.id)
+        .flatMap((p) => issuesUnder[p.id] ?? [])
+      return sowCostOf(Object.values(state.rates), ids, state.timeEntries)
+    })
+  }, [mayViewRate.allowed, sows, projects, issuesUnder, state.rates, state.timeEntries])
 
   const unattributed = projects.filter((p) => !p.sowId)
 
@@ -258,6 +276,16 @@ export default function CommercialPanel({
             <p className={`comm-position${position.forecastOverrun ? ' warn' : ''}`}>
               {describePosition(position)}
             </p>
+
+            {position.varianceIssueCount > 0 && (
+              <p className={`comm-position${position.varianceHours > 0 ? ' warn' : ''}`}>
+                {position.varianceHours > 0 ? '+' : ''}
+                {position.varianceHours}h against baseline across {position.varianceIssueCount}{' '}
+                baselined {position.varianceIssueCount === 1 ? 'issue' : 'issues'}.
+              </p>
+            )}
+
+            {costPositions && <p className="comm-position">{describeCost(costPositions[i])}</p>}
 
             <Scope
               sow={sow}

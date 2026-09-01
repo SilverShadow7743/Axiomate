@@ -157,7 +157,7 @@ import {
 } from '../lib/richText'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
-import { rateAt, rateProblem, costOf, describeCost, type PersonRate } from '../lib/rates'
+import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/rates'
 import {
   candidatesFor,
   checkPersonSkill,
@@ -1072,9 +1072,9 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `${total}h recorded across ${summary.byActivity.length} activities — ${summary.billable}h billable, ${summary.nonBillable}h not — and the issue is no longer stale (last activity ${more.issues['OAPIL-1'].lastActivity}). Refused: a future day ("${future.error}"), an 18-hour entry, and 1.37 hours. Removing an entry withdraws it rather than destroying it.`,
-      stops: 'at money — hours are recorded, and a rate to multiply them by does not exist anywhere',
+      stops: 'here, at the entry itself — a rate to multiply these particular hours by is not read in this scenario. It exists and is now reachable: `costOf`/`sowCostOf` price real worked hours against dated rates, proven by `RT1`, and `CommercialPanel` shows the result behind `rate.view`. This scenario is about the entry recording correctly, not about pricing it.',
       severity: 'P2',
-      impact: 'Actual effort, variance and utilisation now have a source. Cost and margin still do not.',
+      impact: 'Actual effort, variance and utilisation have a source, and — proven elsewhere, not by this scenario — so now does cost and margin.',
     }
   },
 )
@@ -1151,9 +1151,9 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `${v.actual}h spent against ${v.estimated}h agreed — ${v.varianceHours! > 0 ? '+' : ''}${v.varianceHours}h, ${Math.round(v.variancePct!)}%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.`,
-      stops: 'before it reaches the project — the variance is per issue, and nothing rolls it up to a milestone, a SOW or a margin',
+      stops: 'here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW\'s baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.',
       severity: 'P2',
-      impact: 'A consultant can see the overrun on the record. A partner still cannot see it on the engagement.',
+      impact: 'A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap.',
     }
   },
 )
@@ -3845,6 +3845,50 @@ scenario(
     const overlap = rateProblem(rates, { personId: P, kind: 'cost', validFrom: '2026-06-01', validTo: null })
     const abutting = rateProblem(rates, { personId: P, kind: 'bill', validFrom: '2025-06-01', validTo: '2026-01-01' })
 
+    /*
+     * Real worked hours, gathered by lib/rates.ts's sowCostOf and lib/sow.ts's variance rollup —
+     * the wiring this scenario used to say was still missing.
+     */
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    let live = ok(BASE, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Delta rollout' }, now: NOW,
+    } as Action)
+    const projectId = Object.values(live.nodes).find((n) => n.kind === 'project' && n.name === 'Delta rollout')!.id
+    live = ok(live, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-RT1', title: 'Delta rollout', effortHours: 40, value: 20_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sow2 = Object.values(live.sows).find((x) => x.reference === 'SOW-RT1')!
+    live = ok(live, { t: 'attributeToSow', nodeId: projectId, sowId: sow2.id, now: NOW } as Action)
+
+    live = ok(live, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Baselined task' }, now: NOW } as Action)
+    const baselinedIssue = Object.values(live.issues).find((i) => i.subject === 'Baselined task')!
+    live = ok(live, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Draft task' }, now: NOW } as Action)
+    const draftIssue = Object.values(live.issues).find((i) => i.subject === 'Draft task')!
+
+    const est = { approvedEffortHours: 10, scores: { business: 2, technical: 2, integration: 2, testing: 2, data: 2 } }
+    live = ok(live, { t: 'setEstimate', issueId: baselinedIssue.id, patch: est, now: NOW } as Action)
+    live = ok(live, { t: 'baselineEstimate', issueId: baselinedIssue.id, now: NOW } as Action)
+    live = ok(live, { t: 'setEstimate', issueId: draftIssue.id, patch: est, now: NOW } as Action)
+    // draftIssue is deliberately left unbaselined — its overrun is not yet news, and must not count.
+
+    /* Priya's real directory rate, plus time logged in her name and in a name that resolves to
+     * nobody — the one case sowCostOf must fold into unratedHours rather than drop silently. */
+    const priya = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!
+    const priyaRates: PersonRate[] = [
+      { id: 'rp1', personId: priya.id, kind: 'cost', validFrom: '2026-01-01', validTo: null, amount: 45, currency: 'GBP', recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test' },
+      { id: 'rp2', personId: priya.id, kind: 'bill', validFrom: '2026-01-01', validTo: null, amount: 110, currency: 'GBP', recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test' },
+    ]
+    live = ok(live, { t: 'addTime', issueId: baselinedIssue.id, person: 'Priya', date: TODAY, hours: 6, activity: 'Resolution', billable: true, note: '', now: NOW } as Action)
+    live = ok(live, { t: 'addTime', issueId: baselinedIssue.id, person: 'Priya', date: TODAY, hours: 6, activity: 'Investigation', billable: true, note: '', now: NOW } as Action)
+    live = ok(live, { t: 'addTime', issueId: baselinedIssue.id, person: 'Nobody Real', date: TODAY, hours: 4, activity: 'Resolution', billable: true, note: '', now: NOW } as Action)
+    live = ok(live, { t: 'addTime', issueId: draftIssue.id, person: 'Priya', date: TODAY, hours: 3, activity: 'Resolution', billable: true, note: '', now: NOW } as Action)
+
+    const rollupIssueIds = [baselinedIssue.id, draftIssue.id]
+    const rollup = sowPosition(live.sows[sow2.id], rollupIssueIds, live.estimates, live.timeEntries, live.model.sizeBands)
+    const sowCost = sowCostOf(priyaRates, rollupIssueIds, live.timeEntries)
+
     const good =
       beforeAnything === null &&
       unknownPerson === null &&
@@ -3862,12 +3906,17 @@ scenario(
       /no rate on the day/.test(describeCost(holed)) &&
       mixed.cost === null &&
       overlap !== null &&
-      abutting === null
+      abutting === null &&
+      rollup.varianceHours === 6 &&
+      rollup.varianceIssueCount === 1 &&
+      sowCost.cost === null &&
+      sowCost.unratedHours === 4 &&
+      sowCost.hours === 19
 
     return {
       verdict: good ? 'PASS' : 'FAIL',
-      actual: `A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs ${inMarch?.amount} and 3 August costs ${inAugust?.amount}, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to ${complete.cost} cost against ${complete.revenue} billed — margin ${complete.margin} at ${complete.marginPct}%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: ${holed.unratedHours}h of ${holed.hours}h unrated, cost ${JSON.stringify(holed.cost)}. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.`,
-      stops: 'at the timesheet — a Configuration screen records rates (`recordRate`/`correctRate`, `rate.view`/`rate.edit` gated), but nothing feeds real worked hours into `costOf` yet and no screen shows the result. Cost is computable and not yet computed.',
+      actual: `A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs ${inMarch?.amount} and 3 August costs ${inAugust?.amount}, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to ${complete.cost} cost against ${complete.revenue} billed — margin ${complete.margin} at ${complete.marginPct}%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: ${holed.unratedHours}h of ${holed.hours}h unrated, cost ${JSON.stringify(holed.cost)}. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule. And now the join itself: a SOW with one baselined issue (10h agreed, 16h actually spent) and one still-draft issue (3h spent, uncounted) rolls up to ${rollup.varianceHours}h of variance across ${rollup.varianceIssueCount} baselined issue — the draft's own spend never enters that figure. sowCostOf gathers the same SOW's real time entries and prices them: ${sowCost.hours}h worked, ${sowCost.unratedHours}h of it logged against a name that does not resolve to a directory entry — so cost reads ${JSON.stringify(sowCost.cost)} rather than a total that is quietly short by four hours' worth.`,
+      stops: 'at the milestone — SowPosition now rolls variance up and sowCostOf now prices a SOW\'s real worked hours, shown in CommercialPanel behind `rate.view`; attributing either to a specific milestone rather than the whole SOW remains open, because Milestone carries no relationship to individual issues today and inventing one would be its own design.',
       severity: '—',
       impact:
         'This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing.',

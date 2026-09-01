@@ -1,7 +1,7 @@
 import type { IssueEstimate, SizeBand } from './estimation'
 import { deriveEffort } from './estimation'
 import type { TimeEntry } from './time'
-import { hoursOn } from './time'
+import { hoursOn, effortVariance } from './time'
 import { contractedPosition, type ChangeRequest } from './changeRequest'
 
 /**
@@ -134,6 +134,16 @@ export interface SowPosition {
   /** Work with an estimate is the only work the plan can see. Stated, so the figure is readable. */
   estimatedCount: number
   unestimatedCount: number
+  /**
+   * Signed sum of `effortVariance` across issues whose estimate has been baselined. Positive is
+   * a net overrun. An issue not yet baselined contributes nothing — the same "an overrun against
+   * a draft is not yet news" rule `effortVariance` itself states, applied here rather than
+   * reinvented.
+   */
+  varianceHours: number
+  /** How many issues contributed to `varianceHours` — the exclusion made visible, the same role
+   *  `estimatedCount`/`unestimatedCount` already play for `plannedHours`. */
+  varianceIssueCount: number
 }
 
 /**
@@ -161,6 +171,8 @@ export function sowPosition(
   let plannedHours = 0
   let estimatedCount = 0
   let unestimatedCount = 0
+  let varianceHours = 0
+  let varianceIssueCount = 0
 
   for (const id of issueIds) {
     const estimate = estimates[id]
@@ -171,6 +183,14 @@ export function sowPosition(
     }
     estimatedCount += 1
     plannedHours += hours
+
+    if (estimate!.baselinedAt) {
+      const v = effortVariance(timeEntries, id, estimate, bands)
+      if (v.varianceHours !== null) {
+        varianceHours += v.varianceHours
+        varianceIssueCount += 1
+      }
+    }
   }
 
   const actualHours = issueIds.reduce((n, id) => n + hoursOn(timeEntries, id), 0)
@@ -201,6 +221,8 @@ export function sowPosition(
     forecastOverrun: contractedHours > 0 && plannedHours > contractedHours,
     estimatedCount,
     unestimatedCount,
+    varianceHours: round(varianceHours),
+    varianceIssueCount,
   }
 }
 
