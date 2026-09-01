@@ -19,6 +19,8 @@ import { addDays } from '../dates'
 export interface ReportDeliveryConfig {
   imsEnabled: boolean
   packsEnabled: boolean
+  /** Prompt an internal reviewer when an issue moves to Awaiting client confirmation. */
+  resolutionNoticeEnabled: boolean
   /** Internal addresses the daily IMS goes to. Empty means the IMS is not due — silence, not a crash. */
   imsRecipients: string[]
   /** Where the packs land for eyeballing. '' = resolve the operator's directory email at send time. */
@@ -28,6 +30,7 @@ export interface ReportDeliveryConfig {
 export const DEFAULT_REPORT_DELIVERY: ReportDeliveryConfig = {
   imsEnabled: false,
   packsEnabled: false,
+  resolutionNoticeEnabled: false,
   imsRecipients: [],
   packDestination: '',
 }
@@ -38,6 +41,7 @@ export function parseReportDelivery(raw: unknown): ReportDeliveryConfig {
   return {
     imsEnabled: r.imsEnabled === true,
     packsEnabled: r.packsEnabled === true,
+    resolutionNoticeEnabled: r.resolutionNoticeEnabled === true,
     imsRecipients: Array.isArray(r.imsRecipients)
       ? r.imsRecipients.filter((x): x is string => typeof x === 'string' && x.trim() !== '')
       : [],

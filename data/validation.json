@@ -423,6 +423,16 @@
       "impact": "The pass can only ever send a complete period, once."
     },
     {
+      "id": "RN1",
+      "title": "An internal reviewer is prompted when an issue moves to Awaiting client confirmation",
+      "expected": "resolutionNotices() reads the audit rows a real updateIssue transition writes, resolves the issue's client and an optional directory-backed contact, and produces nothing for an unrelated status change or a no-op patch.",
+      "verdict": "PASS",
+      "actual": "A directory contact scoped to the client resolves as the suggestion (priya@oapil.example); the identical transition with no contact on file still raises the notice, honestly with no suggestion (null); a transition to a different status raises 0 notices; a no-op status patch writes 0 audit rows and raises 0.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A reviewer prompted with the issue, the client, and — when one is on file — exactly who to forward it to, closes most of scenario S's gap: telling the client no longer depends on somebody remembering unprompted."
+    },
+    {
       "id": "GS1",
       "title": "One search over everything the reader may see, and nothing else",
       "expected": "Global search driven twice on the same fixture: for relevance (an id hit outranks a body hit, every query token must land on the record, deleted rows never appear, the cap holds, one-letter queries return nothing) and for the boundary composition that is the feature's whole point — sentinels reachable by the corpus (an internal note body, an internal record's subject, a mail body, an internal document name) are FOUND searching the raw state and ABSENT searching the same state after the client-reader cut, while rates and leave reasons cannot be found even raw because those stores are structurally outside the corpus.",

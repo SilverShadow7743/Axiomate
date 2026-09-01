@@ -124,6 +124,7 @@ import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
 import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
+import { resolutionNotices } from '../lib/reports/resolutionNotice'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
 import type { OrganizationIdentity } from '../lib/config'
@@ -2154,7 +2155,7 @@ scenario(
   'Scheduled report delivery knows what is due and stamps what it sent',
   "The delivery phase's pure halves, driven before the live pass may call them: due-logic (weekday IMS, Monday sends the PRIOR week, the 1st sends the PRIOR month, stamps dedupe, off-by-default, empty recipients silence) and the PDF renderers (checked by the async block at the end of this suite: report objects in, %PDF buffers out, a bad logo skipped rather than thrown).",
   () => {
-    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com' }
+    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, resolutionNoticeEnabled: false, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com' }
 
     const wednesday = deliveryDue(on, {}, '2026-08-26')
     const midweek = wednesday.ims === true && wednesday.weeklyFor === null && wednesday.monthlyFor === null
@@ -2188,6 +2189,69 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. PDF smoke is appended by the async block below.', stops: '—', severity: '—', impact: 'The pass can only ever send a complete period, once.' } as const
       : { verdict: 'FAIL', actual: `midweek=${midweek} priorWeek=${priorWeek} (${monday.weeklyFor}) priorMonth=${priorMonth} (${first.monthlyFor}) yearRollover=${yearRollover} weekendQuiet=${weekendQuiet} stampHolds=${stampHolds} weekStampHolds=${weekStampHolds} monthStampHolds=${monthStampHolds} offByDefault=${offByDefault} noRecipients=${noRecipients} failsClosed=${failsClosed}`, stops: 'at the due-logic — a period still in flight would be mailed, a send repeated, or a disabled workspace would email', severity: 'P1', impact: 'unattended automation that spams, goes silent, or mails an incomplete week to be forwarded to a client' } as const
+  },
+)
+
+scenario(
+  'RN1',
+  'An internal reviewer is prompted when an issue moves to Awaiting client confirmation',
+  "resolutionNotices() reads the audit rows a real updateIssue transition writes, resolves the issue's client and an optional directory-backed contact, and produces nothing for an unrelated status change or a no-op patch.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    /* (a) A contact resolves: a Client User scoped to OAPIL, with an email. */
+    const withContact = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Priya Client', roleIds: ['ROLE_CLIENT_USER'], email: 'priya@oapil.example', clientScopeId: oapilId },
+      now: NOW,
+    } as Action)
+    const toldWithContact = ok(withContact, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation', nextAction: 'Client to verify in UAT' }, now: NOW,
+    } as Action)
+    const noticesWithContact = resolutionNotices(toldWithContact, toldWithContact.audit.slice(withContact.audit.length))
+
+    /* (b) The identical transition, off a fresh BASE fork with no directory contact on file —
+       the notice is still raised, honestly missing the suggestion rather than guessing one. */
+    const toldNoContact = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation', nextAction: 'Client to verify in UAT' }, now: NOW,
+    } as Action)
+    const noticesNoContact = resolutionNotices(toldNoContact, toldNoContact.audit.slice(BASE.audit.length))
+
+    /* (c) A transition to a different status raises nothing. */
+    const closed = ok(BASE, {
+      t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Closed - no defect' }, reason: 'Confirmed no defect', now: NOW,
+    } as Action)
+    const noticesClosed = resolutionNotices(closed, closed.audit.slice(BASE.audit.length))
+
+    /* (d) A no-op patch — OAPIL-3's own seeded status, unchanged — writes no audit row at all
+       (updateIssue's own `changed` filter), so nothing is raised. Nothing new to prove about
+       resolutionNotices itself; pinned so a future change to that filter breaks this feature's
+       own test too, not just shows up as a duplicate notice in production. */
+    const noOp = ok(BASE, { t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'In Progress' }, now: NOW } as Action)
+    const newAuditNoOp = noOp.audit.slice(BASE.audit.length)
+    const noticesNoOp = resolutionNotices(noOp, newAuditNoOp)
+
+    const withContactRight =
+      noticesWithContact.length === 1 &&
+      noticesWithContact[0].issueId === 'OAPIL-3' &&
+      noticesWithContact[0].suggestedContact === 'priya@oapil.example'
+    const noContactRight =
+      noticesNoContact.length === 1 &&
+      noticesNoContact[0].issueId === 'OAPIL-3' &&
+      noticesNoContact[0].suggestedContact === null
+    const closedRight = noticesClosed.length === 0
+    const noOpRight = newAuditNoOp.length === 0 && noticesNoOp.length === 0
+
+    const good = withContactRight && noContactRight && closedRight && noOpRight
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A directory contact scoped to the client resolves as the suggestion (${noticesWithContact[0]?.suggestedContact}); the identical transition with no contact on file still raises the notice, honestly with no suggestion (${noticesNoContact[0]?.suggestedContact}); a transition to a different status raises ${noticesClosed.length} notices; a no-op status patch writes ${newAuditNoOp.length} audit rows and raises ${noticesNoOp.length}.`,
+      stops: good ? '—' : 'at resolutionNotices — a transition, its targeting, or the no-op case did not read as expected',
+      severity: good ? '—' : 'P2',
+      impact: good
+        ? "A reviewer prompted with the issue, the client, and — when one is on file — exactly who to forward it to, closes most of scenario S's gap: telling the client no longer depends on somebody remembering unprompted."
+        : 'a status change either fails to prompt anyone, prompts with the wrong client or contact, or double-raises on a no-op save',
+    }
   },
 )
 
