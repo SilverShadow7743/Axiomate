@@ -126,6 +126,85 @@ weighing" — applied here as "the system ranks, you don't have to arrange"). Wh
 or a feature depends entirely on which philosophy a firm wants; it is a genuine design
 difference, not an oversight.
 
+## Project setup and configuration
+
+Fetched 2026-09-01 from `help.hive.com/en/articles/457193` (project creation) and
+`.../2817692` (Overview page) — Axiomate side read from `lib/workspace.ts`'s `HierarchyNode`
+and `components/ConfigWorkspace.tsx`.
+
+| | Axiomate `HierarchyNode` (a "project") | Hive project setup |
+|---|---|---|
+| Fields on the node itself | `id, kind, name, parentId, owner, sowId, deletedAt` — that's all | Name, color, description, custom fields (text/dropdown, for type/tier/priority), attachments, notes |
+| Access model | Role + permission (`can()`), same funnel as everything else; no per-project visibility choice | Set per project at creation: **Everyone**, **Specific people**, or **Private to me** — plus a separate toggle for whether members may edit membership |
+| View type | One structure (tree + Gantt-style timeline pane), same for every project | Chosen per project at creation from seven: Status, Team, Calendar, Label, Gantt, Table, List |
+| Notify on creation | Not a project-level concept | "Notify users" checkbox |
+| Draft/staged rollout | Not present | "Draft Mode" — assign work before announcing the project |
+
+**Read**: this is a real, structural gap, not a styling one. A project in Axiomate is a thin tree
+node — everything richer (description, notes, attachments, custom classification) lives on
+*issues*, never on the project itself. Hive's project is a first-class object with its own
+content. Whether Axiomate needs project-level description/attachments depends on whether "what
+is this engagement's project actually for" currently has nowhere to live and is being improvised
+in an issue's description instead — worth checking with whoever runs engagements before treating
+this as a gap to close.
+
+## Project Overview page
+
+Hive's page, in the order documented: Status (color-coded On-track/Off-track/On Hold/At risk,
+with history), Activity Feed, Files (aggregated from cards+comments), custom-field Project
+Information, Description, Attachments, Notes, a %-complete dashboard, a Budget Overview
+("Billable hours budget" against submitted timesheets), and an export (download) icon.
+
+| Hive Overview section | Axiomate's equivalent | Where |
+|---|---|---|
+| Status (manually set, color-coded, historied) | Computed, not set: `scheduleHealth` per issue, and Portfolio's six named concerns (overdue/blocked/unowned/stale/**capacity**/planImpossible) per **engagement** — no single manually-declared project-level status | `lib/portfolio.ts` |
+| Activity Feed | Per-*record* History tab only (`lib/workspace.ts`'s audit log, filtered per issue). No project-wide aggregate feed. | `DetailPanel.tsx` |
+| Files / Attachments | Per-record `Evidence`/document storage (Links tab), no project-level aggregation across every issue under it | — |
+| Custom fields / Description / Notes | None on the project node itself (see table above) | — |
+| % complete dashboard | Portfolio's per-engagement counts are the closest analogue, one tier up from project | `lib/portfolio.ts` |
+| Budget Overview (billable hours vs. budget) | `sowCostOf()` + `SowPosition` — SOW-level cost/margin/variance shown in `CommercialPanel.tsx`, gated behind `rate.view` — **this session's own rate/margin rollup work** | `lib/rates.ts`, `lib/sow.ts` |
+| Export | Workspace-level only: **Export ▾** in the top bar offers Daily IMS and weekly/monthly client packs (`IssueWorkspace.tsx:1969-2000`), not a per-project overview export | — |
+
+**Read**: Axiomate's Budget Overview equivalent is real and already shipped (this session), and
+arguably more honest — it's `null` entirely for a viewer without `rate.view` rather than hidden
+after being computed. Everything else on Hive's Overview page that isn't financial has no
+project-scoped home in Axiomate today; it exists, if at all, scattered per-issue or one tier up
+at the engagement.
+
+## Snapshots / Baselines — the one Hive concept with no real Axiomate equivalent
+
+Fetched 2026-09-01 from `help.hive.com/en/articles/2889473`. A Hive **Baseline** is "a snapshot
+of what was planned before beginning a project": planned start/end date per work item, plus
+"budget definitions, totals, and other cost details at the time." Taken manually from the Gantt
+view, multiple per project, compared against current state via a "View baseline" dropdown on
+Overview, and exported with "Planned Start Date and Planned End Date from the most recent
+baseline" as columns.
+
+Axiomate's nearest concept is a false friend, not a match: `Estimate.baselinedAt`
+(`lib/estimation.ts`) is **per-issue**, agreed once, and locks *effort* — a later material change
+needs a reason and is recorded as a revision (`lib/workspace.ts:3841` refuses a silent
+re-baseline). `lib/sow.ts`'s `sowPosition()` sums `effortVariance()` across a SOW's baselined
+issues into `varianceHours`/`varianceIssueCount` (this session's rate/margin rollup). Both are
+real and proven (`RT1`), but neither is what Hive's Baseline is:
+
+- Hive snapshots **dates** (planned start/end per item) — Axiomate's baseline only ever
+  concerned effort/hours, never dates. There is no "what did we say the schedule looked like
+  before we started" record anywhere in this codebase.
+- Hive snapshots at the **project** level, once, covering every item under it in one action —
+  Axiomate's baseline is set **per issue**, one at a time, as a side effect of agreeing that
+  issue's estimate.
+- Hive keeps **multiple** named snapshots per project for comparison — Axiomate keeps exactly
+  one baseline state per issue (the agreed estimate); there is no history of "what we thought
+  three snapshots ago."
+
+**Read**: this is the strongest, most specific finding in this whole comparison. Not "Axiomate
+has a smaller version of Hive's feature" — it genuinely does not have a project-level,
+date-and-budget point-in-time snapshot at all. Worth its own brainstorm if a real need surfaces
+("what did the plan look like when the client signed off, versus now") — the domain model to
+build it on is not obviously right yet (per-issue estimates aren't structured to roll up into a
+single project-wide, repeatable, dated snapshot without new modeling), so this is a candidate to
+scope carefully, not a quick extension of `baselinedAt`.
+
 ## What Axiomate has that Hive's own documentation doesn't mention
 
 - Reason-required status transitions, checked against a configured policy before the drag/move

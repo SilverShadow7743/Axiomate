@@ -53,6 +53,13 @@ portability (no public API/webhooks — but zero lock-in, DB is ours), personal-
    (multi-firm gate, not a single-firm blocker).
 7. Real-time co-edited notes — hard; only if meeting notes move in-tool. Open.
 8. Visual proofing markup — only if review volume grows. Open.
+9. **Project-level baseline/snapshot** — 2026-09-01, screen-by-screen pass (see
+   [[hive-screen-comparison]]): Hive's Baseline snapshots planned start/end dates AND budget
+   for a whole project at once, multiple per project, compared via a dropdown. Axiomate's
+   `Estimate.baselinedAt` is a false friend — per-issue, effort-only, one at a time, no history
+   of prior snapshots. The strongest genuinely-missing concept found in this pass. Open,
+   deliberately not scoped yet — the per-issue estimate model isn't obviously the right thing
+   to extend; needs its own brainstorm if a real need surfaces.
 
 **Beyond the original list:** the clean-shell layout restructure (sidebar navigation, a
 right-overlay detail drawer replacing the bottom dock, per-view filters, calm visual tokens)
