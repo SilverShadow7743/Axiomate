@@ -1490,18 +1490,55 @@ scenario(
 scenario(
   'S',
   'An issue is resolved',
-  'The resolution is recorded, the client is told, and verification is requested.',
+  'The resolution is recorded, and somebody is prompted to tell the client and ask for verification.',
   () => {
-    const s = ok(BASE, {
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    const configured = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertIntake', id: null, patch: { address: 'intake@axiocloud.example', scopeId: moduleId, enabled: true } },
+      now: NOW,
+    } as Action)
+    const on = ok(configured, {
+      t: 'config',
+      op: {
+        k: 'setReportDelivery',
+        patch: { resolutionNoticeEnabled: true, packDestination: 'reviewer@axiocloud.example' },
+      },
+      now: NOW,
+    } as Action)
+
+    const s = ok(on, {
       t: 'updateIssue', id: 'OAPIL-3', patch: { status: 'Awaiting client confirmation', nextAction: 'Client to verify in UAT' }, now: NOW,
     } as Action)
     const audited = s.audit.filter((e) => e.rowId === 'OAPIL-3').length
+    /*
+     * notifyBundle() itself lives in lib/reports/notifyBundle.ts, deliberately outside what
+     * this scenario harness can import — it needs lib/identity.ts's currentActor(), which
+     * carries `import 'server-only'` and throws unconditionally under plain Node (found while
+     * building this feature — see the commit for RN1). So the ingredients it would read are
+     * checked directly here, the same way RN1 proves resolutionNotices() alone.
+     */
+    const notices = resolutionNotices(s, s.audit.slice(on.audit.length))
+    const mailbox = s.model.intake.find((m) => m.enabled)?.address
+    const prompted =
+      s.model.reportDelivery.resolutionNoticeEnabled &&
+      notices.length === 1 &&
+      notices[0].issueId === 'OAPIL-3' &&
+      mailbox === 'intake@axiocloud.example' &&
+      s.model.reportDelivery.packDestination === 'reviewer@axiocloud.example'
+
     return {
-      verdict: 'PARTIAL',
-      actual: `The status moves, the next action is recorded and ${audited} audit entries were written with before, after and actor. No message is sent to the client.`,
-      stops: 'at telling the client',
+      verdict: prompted ? 'PARTIAL' : 'FAIL',
+      actual: prompted
+        ? `The status moves, the next action is recorded and ${audited} audit entries were written with before, after and actor. With the notice enabled, an internal reviewer (${s.model.reportDelivery.packDestination}) is emailed the issue, the client, and a suggested contact when one is on file (RN1). Nobody is messaged automatically; a person still forwards it.`
+        : `the expected notice did not raise: enabled=${s.model.reportDelivery.resolutionNoticeEnabled} notices=${notices.length} mailbox=${mailbox} dest=${s.model.reportDelivery.packDestination}`,
+      stops: prompted
+        ? 'at the reviewer — the notice reaches a person, not the client. Forwarding it is still a manual step, the same caution the client-pack feature already applies (lib/reports/clientPack.ts).'
+        : 'at telling anyone — the notice did not raise as expected',
       severity: 'P2',
-      impact: 'Verification waits on somebody remembering to ask for it.',
+      impact: prompted
+        ? 'Telling the client no longer depends on somebody remembering unprompted — but the client still is not told automatically, only a reviewer is. Verification still waits on that person acting on the prompt.'
+        : 'Verification waits on somebody remembering to ask for it.',
     }
   },
 )

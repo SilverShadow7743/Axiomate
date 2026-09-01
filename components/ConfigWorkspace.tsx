@@ -1916,6 +1916,19 @@ function Watch({
             }}
           />
         </label>
+        <label className="cfg-check" style={{ marginTop: '10px' }}>
+          <input
+            type="checkbox"
+            checked={state.model.reportDelivery.resolutionNoticeEnabled}
+            onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { resolutionNoticeEnabled: e.target.checked } })}
+          />
+          <span>
+            <b>Prompt somebody internally</b> — the moment a record moves to Awaiting client
+            confirmation, an email goes to the same address as the packs above with who it is
+            and, when one is on file, who to tell — so the client isn&apos;t forgotten, not so
+            they&apos;re messaged automatically.
+          </span>
+        </label>
       </div>
 
       <h4 className="cfg-sub">What it looks for</h4>

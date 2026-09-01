@@ -254,12 +254,12 @@
     {
       "id": "S",
       "title": "An issue is resolved",
-      "expected": "The resolution is recorded, the client is told, and verification is requested.",
+      "expected": "The resolution is recorded, and somebody is prompted to tell the client and ask for verification.",
       "verdict": "PARTIAL",
-      "actual": "The status moves, the next action is recorded and 2 audit entries were written with before, after and actor. No message is sent to the client.",
-      "stops": "at telling the client",
+      "actual": "The status moves, the next action is recorded and 2 audit entries were written with before, after and actor. With the notice enabled, an internal reviewer (reviewer@axiocloud.example) is emailed the issue, the client, and a suggested contact when one is on file (RN1). Nobody is messaged automatically; a person still forwards it.",
+      "stops": "at the reviewer — the notice reaches a person, not the client. Forwarding it is still a manual step, the same caution the client-pack feature already applies (lib/reports/clientPack.ts).",
       "severity": "P2",
-      "impact": "Verification waits on somebody remembering to ask for it."
+      "impact": "Telling the client no longer depends on somebody remembering unprompted — but the client still is not told automatically, only a reviewer is. Verification still waits on that person acting on the prompt."
     },
     {
       "id": "T",
