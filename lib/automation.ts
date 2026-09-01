@@ -26,12 +26,19 @@ import { wrapPlainText } from './richText'
  * second set of rules about what may happen, free to disagree with the first.
  *
  * ---------------------------------------------------------------------------
- * What it deliberately cannot do
+ * Every rule reacts to an event — including the schedule's own events
  *
- * There is no schedule. Every rule here is a reaction to something that happened, so "every
- * day at 7am, escalate what is about to breach" is not expressible — that needs a clock and a
- * process to run it, and neither exists. The SLA watch the agent registry describes is exactly
- * this shape, and it stays declared until there is something to run it.
+ * A rule never fires on a bare clock tick; it always matches an `EventType`. But the scheduled
+ * pass (`runWatch`, lib/workspace.ts) raises its own onset conditions AS events —
+ * `issue.overdue`, `issue.atRisk`, `issue.dueSoon`, `issue.stale`, `project.planImpossible`,
+ * `sow.overConsumed` (lib/watch.ts's WATCH_CONDITIONS) — through this same `planActions`. So
+ * "every morning, escalate what is about to breach" already is expressible: `AUTO_OVERDUE`
+ * below is exactly that rule, shipped and enabled, proven end to end by scenario Z and SC2.
+ *
+ * What genuinely is not expressible is a rule bound to nothing but a calendar interval — "every
+ * Monday, send a status digest" with no condition ever needing to become true. `runRecurrences`
+ * (lib/workspace.ts) covers that shape, but only for raising a new issue, not for this module's
+ * notify/addNote/setNextAction/requestApproval actions.
  */
 
 /* ================================================================== *

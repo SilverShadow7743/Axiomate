@@ -958,6 +958,14 @@ scenario(
     const entry = run.state.audit.find((e) => e.field === 'notification')
     const roles = rolesFor(dated.model, SCHEDULE_ACTOR)
 
+    /*
+     * The shipped AUTO_OVERDUE rule (lib/automation.ts) is bound to the pass's own
+     * "issue.overdue" onset event, not to anything a person clicked — so this notification
+     * having fired at all is the concrete proof that a schedule-triggered rule works, not just
+     * a schedule-triggered write.
+     */
+    const overdueRuleFired = Object.values(run.state.notifications).some((n) => n.ruleId === 'AUTO_OVERDUE')
+
     /* What it may not do, driven rather than read off the grant list. */
     const tryClose = apply(dated, {
       t: 'updateIssue', id: 'OAPIL-2', patch: { status: 'Closed - no defect' }, now: NOW, reason: 'The machine says so.',
@@ -969,12 +977,13 @@ scenario(
     const good =
       entry?.by === SCHEDULE_ACTOR.name &&
       roles.join() === 'ROLE_AUTOMATION' &&
+      overdueRuleFired &&
       Boolean(tryClose.error) &&
       Boolean(tryConfigure.error)
 
     return {
       verdict: good ? 'PASS' : 'FAIL',
-      actual: `The trail says "${entry?.by}" rather than a person's name, because nobody decided it. The pass holds ${roles.join(', ')} — not the fallback role an unrecognised human would get — so it may file work and say things about it, and may not close anything ("${tryClose.error}") or change the operating model ("${tryConfigure.error}").`,
+      actual: `The trail says "${entry?.by}" rather than a person's name, because nobody decided it. The pass holds ${roles.join(', ')} — not the fallback role an unrecognised human would get — so it may file work and say things about it (the shipped AUTO_OVERDUE rule fired: ${overdueRuleFired}), and may not close anything ("${tryClose.error}") or change the operating model ("${tryConfigure.error}").`,
       stops: '—',
       severity: '—',
       impact: 'An automated path cannot quietly acquire administrator rights by being nobody in particular.',
@@ -3212,13 +3221,43 @@ scenario(
       A,
     )
 
-    const good = raised === 1 && assignmentNoticed && refused === 1 && stateIsWhole && missed.automation.misses.length === 1
+    /*
+     * The same failure shape, but for a rule the scheduled pass fires rather than a person's
+     * click — `runWatch` collects its own refusals separately (lib/workspace.ts:8667-8677),
+     * and until now nothing asserted that a rule bound to a watch-onset event fails exactly as
+     * safely as one bound to a person's action.
+     */
+    const scheduleTwoStep = ok(staffed, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_SCHEDULE', label: 'Two steps on a schedule, one impossible', on: 'issue.overdue',
+            when: [], enabled: true,
+            then: [
+              { kind: 'notify', audience: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'in-app', text: '{id} is overdue' },
+              { kind: 'requestApproval', ruleId: 'NO_SUCH_RULE', text: '' },
+            ],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const overdue = ok(scheduleTwoStep, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    const scheduled = runWatch(overdue, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const scheduleRaised = Object.values(scheduled.state.notifications).filter((n) => n.ruleId === 'AUTO_TEST_SCHEDULE').length
+    const scheduleRefused = scheduled.refusals.length
+
+    const good =
+      raised === 1 && assignmentNoticed && refused === 1 && stateIsWhole && missed.automation.misses.length === 1 &&
+      scheduleRaised === 1 && scheduleRefused === 1
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `The working step ran and the impossible one did not: ${raised} notification raised, ${refused} step refused ("${run.automation.refusals[0]?.error}"), and the original change stands. A rule addressed to a role nobody holds reports it — "${missed.automation.misses[0]?.why}" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.`,
-      stops: 'at the schedule — every rule reacts to something that happened, so "every morning, escalate what is about to breach" cannot be expressed',
-      severity: 'P2',
-      impact: 'Event-driven automation works and fails safely. Time-driven automation needs a clock and a process to run it, and this application has neither.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `The working step ran and the impossible one did not, whether the rule fired on a person's click (${raised} notification raised, ${refused} step refused: "${run.automation.refusals[0]?.error}") or on the scheduled pass's own onset event (${scheduleRaised} notification raised, ${scheduleRefused} step refused: "${scheduled.refusals[0]?.error}") — the original change stands either way. A rule addressed to a role nobody holds reports it — "${missed.automation.misses[0]?.why}" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.`,
+      stops: '—',
+      severity: '—',
+      impact: 'A rule fails exactly as safely whether a person triggered it or the scheduled pass did. Time-driven automation already exists — AUTO_OVERDUE below is a shipped, enabled rule bound to the pass\'s own "issue.overdue" event — the one remaining gap is a rule bound to a bare calendar interval with no watched condition at all, which is a different and much narrower thing.',
     }
   },
 )

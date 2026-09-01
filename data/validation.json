@@ -146,7 +146,7 @@
       "title": "The pass acts as a machine",
       "expected": "What it does is attributed to the clock, and limited to what a machine may do.",
       "verdict": "PASS",
-      "actual": "The trail says \"Scheduled pass\" rather than a person's name, because nobody decided it. The pass holds ROLE_AUTOMATION — not the fallback role an unrecognised human would get — so it may file work and say things about it, and may not close anything (\"Close work is not something Automation can do here.\") or change the operating model (\"Configure the platform is not something Automation can do here.\").",
+      "actual": "The trail says \"Scheduled pass\" rather than a person's name, because nobody decided it. The pass holds ROLE_AUTOMATION — not the fallback role an unrecognised human would get — so it may file work and say things about it (the shipped AUTO_OVERDUE rule fired: true), and may not close anything (\"Close work is not something Automation can do here.\") or change the operating model (\"Configure the platform is not something Automation can do here.\").",
       "stops": "—",
       "severity": "—",
       "impact": "An automated path cannot quietly acquire administrator rights by being nobody in particular."
@@ -577,11 +577,11 @@
       "id": "Z",
       "title": "An automation fails part-way through",
       "expected": "The run stops safely, what did happen is visible, and the failure is recorded rather than swallowed.",
-      "verdict": "PARTIAL",
-      "actual": "The working step ran and the impossible one did not: 1 notification raised, 1 step refused (\"That approval rule no longer exists.\"), and the original change stands. A rule addressed to a role nobody holds reports it — \"Reached nobody — \"role:ROLE_CLIENT_SPONSOR\" resolves to no one in the directory.\" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.",
-      "stops": "at the schedule — every rule reacts to something that happened, so \"every morning, escalate what is about to breach\" cannot be expressed",
-      "severity": "P2",
-      "impact": "Event-driven automation works and fails safely. Time-driven automation needs a clock and a process to run it, and this application has neither."
+      "verdict": "PASS",
+      "actual": "The working step ran and the impossible one did not, whether the rule fired on a person's click (1 notification raised, 1 step refused: \"That approval rule no longer exists.\") or on the scheduled pass's own onset event (1 notification raised, 1 step refused: \"That approval rule no longer exists.\") — the original change stands either way. A rule addressed to a role nobody holds reports it — \"Reached nobody — \"role:ROLE_CLIENT_SPONSOR\" resolves to no one in the directory.\" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A rule fails exactly as safely whether a person triggered it or the scheduled pass did. Time-driven automation already exists — AUTO_OVERDUE below is a shipped, enabled rule bound to the pass's own \"issue.overdue\" event — the one remaining gap is a rule bound to a bare calendar interval with no watched condition at all, which is a different and much narrower thing."
     },
     {
       "id": "AA",
