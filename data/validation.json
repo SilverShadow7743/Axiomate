@@ -1184,6 +1184,16 @@
       "impact": "none"
     },
     {
+      "id": "GA2",
+      "title": "internal.view partitions client seats from internal ones, exactly",
+      "expected": "Every ROLE_CLIENT_* role is refused internal.view — accessProblems() enforces this on the shipped policy even under a custom one — and every seeded internal role, including admin, holds it. AppSidebar’s nav trim rests entirely on this boolean.",
+      "verdict": "PASS",
+      "actual": "can() reads internal.view=true for an internal role and internal.view=false for ROLE_CLIENT_USER; the grants table agrees for all 7 internal roles and 3 client roles; accessProblems() refuses a policy that grants it to a client role.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "AppSidebar hides Portfolio, Timesheets, Mail, My week and Configuration for any viewer without internal.view — every ROLE_CLIENT_* role today, and any future custom role built the same way, since accessProblems() will not let one hold both."
+    },
+    {
       "id": "PM1",
       "title": "A member of a project may act on it",
       "expected": "canOnProject resolves the record’s project via projectOf, and a person named on a live ProjectMember row for that project keeps whatever their role already grants them.",

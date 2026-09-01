@@ -21,6 +21,19 @@ const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
   { title: 'Records', items: ['timesheet', 'mail'] },
 ]
 
+/**
+ * Without `internal.view`, everything else here is either backed by data `clientView()` zeroes
+ * (notifications, personal events, timesheets, mail, portfolio's own allocations) or is internal
+ * machinery outright — a control that does nothing must not be shown, the same rule FilterBar's
+ * own `filtersApply` already states. This is navigation relevance, not a disclosure fix: the
+ * data behind a hidden item was never redacted for a client browser to begin with (`can()`
+ * checks run against the real model client-side), so hiding the button narrows what a guest is
+ * invited to click, not what left the server.
+ */
+const CLIENT_GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
+  { title: 'Workspace', items: ['tree', 'board', 'calendar'] },
+]
+
 const VIEW_LABEL: Record<WorkspaceView, string> = {
   mywork: 'My work',
   tree: 'Tree',
@@ -47,6 +60,8 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
 interface Props {
   view: WorkspaceView
   setView: (v: WorkspaceView) => void
+  /** Whether this viewer holds `internal.view`. Without it, the rail shows only what a client's own scoped data makes relevant. */
+  mayInternal: boolean
   /** Badge counts, computed by the workspace: a queue whose size is invisible is a queue nobody opens. */
   myWorkCount: number
   /** null for a viewer without time.approve — the badge must not leak the queue's size. */
@@ -69,6 +84,7 @@ interface Props {
 export default function AppSidebar({
   view,
   setView,
+  mayInternal,
   myWorkCount,
   timesheetQueue,
   notificationsUnread,
@@ -117,9 +133,11 @@ export default function AppSidebar({
     nodes[Math.max(0, Math.min(nodes.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
   }
 
+  const groups = mayInternal ? GROUPS : CLIENT_GROUPS
+
   return (
     <nav className={`sidebar${open ? ' open' : ''}`} aria-label="Workspace navigation" ref={navRef}>
-      {GROUPS.map((g) => (
+      {groups.map((g) => (
         <div className="side-group" key={g.title}>
           <div className="side-title">{g.title}</div>
           {g.items.map((v) => {
@@ -196,17 +214,19 @@ export default function AppSidebar({
       <span className="grow" />
 
       <div className="side-group side-foot">
-        <button
-          className="side-item"
-          onClick={() => {
-            onOpenConfig()
-            onNavigate()
-          }}
-          onKeyDown={rove}
-          title="Terminology, roles, responsibilities, agents"
-        >
-          <span className="side-label">Configuration</span>
-        </button>
+        {mayInternal && (
+          <button
+            className="side-item"
+            onClick={() => {
+              onOpenConfig()
+              onNavigate()
+            }}
+            onKeyDown={rove}
+            title="Terminology, roles, responsibilities, agents"
+          >
+            <span className="side-label">Configuration</span>
+          </button>
+        )}
         {archivedCount > 0 && (
           <button
             className="side-item"

@@ -2047,6 +2047,7 @@ export default function IssueWorkspace({
       <AppSidebar
         view={view}
         setView={setView}
+        mayInternal={can(state.model, actor, 'internal.view').allowed}
         myWorkCount={myWorkCount}
         timesheetQueue={
           can(state.model, actor, 'time.approve').allowed

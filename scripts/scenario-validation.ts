@@ -45,7 +45,7 @@ import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
-import { directoryIdByName, rolesFor, canOnProject, isExempt } from '../lib/access'
+import { directoryIdByName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
@@ -6965,6 +6965,63 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'The OAPIL guest\u2019s view holds OAPIL\u2019s marked record with its ancestor chain and nothing of Rival \u2014 not the marked record, not even the nodes; Rival\u2019s guest sees the mirror image. A null scope \u2014 a sign-in matching no directory entry, or a client seat nobody attached \u2014 empties every table rather than widening to every client, which is the deny-by-default the design demands. The directory refuses an engagement node as a scope in words naming what it must be, and both the scope and the email survive an unrelated rename.', stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `oapilRight=${oapilRight} rivalRight=${rivalRight} denyRight=${denyRight} scopeValidated=${scopeValidated} scopeSurvives=${scopeSurvives}`, stops: 'the scope disagrees with the design', severity: 'P1', impact: 'one client\u2019s guest reading another client\u2019s marked content' } as const
+  },
+)
+
+scenario(
+  'GA2',
+  'internal.view partitions client seats from internal ones, exactly',
+  'Every ROLE_CLIENT_* role is refused internal.view \u2014 accessProblems() enforces this on the shipped policy even under a custom one \u2014 and every seeded internal role, including admin, holds it. AppSidebar\u2019s nav trim rests entirely on this boolean.',
+  () => {
+    // The two ends exercised through can() itself \u2014 the exact call the nav trim makes \u2014
+    // not just read off the grants table, so a change to how can() resolves roles would be
+    // caught here too.
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Priya Nair', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const withGuest = ok(staffed, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Guest Priya', roleIds: ['ROLE_CLIENT_USER'], email: 'priya@client.example' },
+      now: NOW,
+    } as Action)
+    const internalActor: Actor = { id: 'priya-internal', name: 'Priya Nair' }
+    const guestActor: Actor = { id: 'priya-guest', name: 'Guest Priya' }
+    const internalSees = can(withGuest.model, internalActor, 'internal.view').allowed
+    const guestSees = can(withGuest.model, guestActor, 'internal.view').allowed
+
+    // Every seeded role that could actually sign into the sidebar, swept directly \u2014 the fact
+    // the whole nav trim rests on. The machine role is excluded: `rolesFor` hands a machine
+    // actor its role directly and never joins it to a human viewing AppSidebar, so its own
+    // deliberately narrow grants (no internal.view \u2014 see lib/access.ts) say nothing about the
+    // partition this feature depends on.
+    const grants = BASE.model.access.grants
+    const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+    const internalRoles = Object.keys(BASE.model.roles).filter(
+      (r) => !clientRoles.includes(r) && r !== MACHINE_ROLE_ID,
+    )
+    const clientLacksIt = clientRoles.every((r) => !(grants[r] ?? []).includes('internal.view'))
+    const internalHasIt = internalRoles.every((r) => (grants[r] ?? []).includes('internal.view'))
+
+    // accessProblems() refuses to let a firm grant it to a client role even under a custom
+    // policy \u2014 the invariant the nav trim is safe to key off of beyond the shipped defaults.
+    const tampered = {
+      ...BASE.model.access,
+      grants: { ...grants, ROLE_CLIENT_USER: [...(grants.ROLE_CLIENT_USER ?? []), 'internal.view' as PermissionKey] },
+    }
+    const refused = accessProblems(tampered, Object.keys(BASE.model.roles)).some((p) => p.includes('ROLE_CLIENT_USER'))
+
+    const good = internalSees && !guestSees && clientLacksIt && internalHasIt && refused
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: good
+        ? `can() reads internal.view=${internalSees} for an internal role and internal.view=${guestSees} for ROLE_CLIENT_USER; the grants table agrees for all ${internalRoles.length} internal roles and ${clientRoles.length} client roles; accessProblems() refuses a policy that grants it to a client role.`
+        : `internalSees=${internalSees} guestSees=${guestSees} clientLacksIt=${clientLacksIt} internalHasIt=${internalHasIt} refused=${refused}`,
+      stops: good ? '\u2014' : 'the internal.view partition does not hold the way the nav trim assumes',
+      severity: good ? '\u2014' : 'P1',
+      impact: good
+        ? 'AppSidebar hides Portfolio, Timesheets, Mail, My week and Configuration for any viewer without internal.view \u2014 every ROLE_CLIENT_* role today, and any future custom role built the same way, since accessProblems() will not let one hold both.'
+        : 'a role could hold internal.view and a client-appropriate role at once, and the nav trim would show internal-only items to a guest',
+    }
   },
 )
 
