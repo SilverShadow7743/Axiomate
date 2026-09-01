@@ -46,7 +46,7 @@ import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
-import { directoryIdByName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, type PermissionKey } from '../lib/access'
+import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
@@ -622,10 +622,10 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `Assignment now consults capacity through the same arithmetic \`upsertAllocation\` uses. A name that is in no directory comes back "${stranger.kind}" rather than free — "${stranger.message.slice(0, 90)}" — which is the distinction that matters, because \`capacityFor\` would otherwise report seven and a half hours a day of somebody nobody has ever described. The seeded owner reads "${named.kind}", an unowned issue "${nobody.kind}". Only absence refuses: being away for the whole window is a fact and is blocked, while being fully committed is a judgement and is recorded against the change instead. A refusal names the escape and \`acceptUnavailable\` takes it, so the decision is written down rather than worked around.`,
-      stops: 'at the directory, which is still a free-text column rather than a reference',
+      stops: 'at the write itself — this scenario proves the reducer already resolves owner against the directory (ownerId, via directoryIdByName) and lets a typo through without refusing it, by design (OM3 chose a visible warning over a block, so a name the directory genuinely does not have yet is never wrongly refused)',
       severity: 'P2',
       impact:
-        'Work can no longer be handed to somebody who is away without that being a recorded decision. It can still be handed to a typo, because the owner column holds text and nothing constrains it to a person.',
+        'Work can no longer be handed to somebody who is away without that being a recorded decision. A name matching nobody is still accepted rather than refused — but it is no longer silent: OM3\'s isUnresolvedOwnerName surfaces the mismatch in the Owner field at the moment it is typed, using the exact join the write path resolves on save.',
     }
   },
 )
@@ -7702,6 +7702,27 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `the issue's own module reads "" and moduleOf resolves "${resolved}" from its place under the Billing node; a record with no module ancestor at all (the project itself) resolves null rather than a guess`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `own=${JSON.stringify(st.issues[issue.id].module)} resolved=${JSON.stringify(resolved)} noAncestor=${JSON.stringify(noAncestor)}`, stops: 'moduleOf does not reliably fall back to the tree position', severity: 'P2', impact: 'the Process Area field in OverviewTab would show blank for imported work instead of its real position' } as const
+  },
+)
+
+scenario(
+  'OM3',
+  'The owner field is typed straight into, and the name does not match anyone',
+  'isUnresolvedOwnerName flags it at the moment of typing, using the same join the write path already resolves on save — never a fresh, second-guessable lookup.',
+  () => {
+    const owner = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.name
+
+    const typo = isUnresolvedOwnerName(BASE.model, 'Someone Who Does Not Exist')
+    const real = isUnresolvedOwnerName(BASE.model, owner)
+    const empty = isUnresolvedOwnerName(BASE.model, '')
+    const unassigned = isUnresolvedOwnerName(BASE.model, 'Unassigned')
+    /* Case-insensitive and untrimmed input reads the same as the write path's own join. */
+    const padded = isUnresolvedOwnerName(BASE.model, `  ${owner.toUpperCase()}  `)
+
+    const good = typo && !real && !empty && !unassigned && !padded
+    return good
+      ? { verdict: 'PASS', actual: `a name nobody holds reads true; the seeded owner "${owner}", an empty field, "Unassigned" and a padded/differently-cased real name all read false`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `typo=${typo} real=${real} empty=${empty} unassigned=${unassigned} padded=${padded}`, stops: 'isUnresolvedOwnerName disagrees with directoryIdByName, the function the write path actually joins on', severity: 'P2', impact: 'the Owner field would either warn about real people or stay silent about typos' } as const
   },
 )
 

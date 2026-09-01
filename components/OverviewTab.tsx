@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
-import { can } from '@/lib/access'
+import { can, isUnresolvedOwnerName } from '@/lib/access'
 import { canEditIssue } from '@/lib/permissions'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueNote } from '@/lib/notes'
@@ -161,12 +161,18 @@ export default function OverviewTab({
         : [],
     [state.projectMembers, projectId],
   )
-
   const [draft, setDraft] = useState<IssueDraft>(() =>
     record ? draftOf(record, moduleDefault) : draftOf(issue as IssueRecord, moduleDefault),
   )
   /** Held outside the draft: it explains a change rather than being part of the record. */
   const [reason, setReason] = useState('')
+  /** Against the WHOLE directory, not just `projectMembers` above — plenty of valid owners
+   *  (a functional lead, a client contact) are real people who simply are not staffed to this
+   *  particular project, and must never be flagged as though they were a typo. */
+  const ownerMismatch = useMemo(
+    () => isUnresolvedOwnerName(state.model, draft.owner),
+    [state.model, draft.owner],
+  )
 
   const policy = state.model.statusPolicy
   const current = record?.status ?? issue.status
@@ -951,9 +957,11 @@ export default function OverviewTab({
                 <option key={m.id} value={m.person} />
               ))}
             </datalist>
-            {projectMembers.length === 0 && (
+            {ownerMismatch ? (
+              <span className="prov"> · “{draft.owner.trim()}” isn't in the directory — this will save as a name nobody can find</span>
+            ) : projectMembers.length === 0 ? (
               <span className="prov"> · nobody is staffed to this project yet — type a name</span>
-            )}
+            ) : null}
           </dd>
           <dt>{labels.ISSUE_RAISED_BY}</dt>
           <dd>

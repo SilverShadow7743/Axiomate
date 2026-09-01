@@ -333,6 +333,18 @@ export function directoryIdByName(model: OperatingModel, name: string): string |
   return matches.length === 1 ? matches[0].id : null
 }
 
+/**
+ * Whether a typed name would resolve to nobody — the identity half of what scenario G names:
+ * the directory is already the join key (`directoryIdByName`, resolved on every owner write),
+ * but nothing surfaced a mismatch until the audit trail after the fact. Empty and "Unassigned"
+ * are not mismatches; they mean no owner is claimed at all, which is an ordinary state.
+ */
+export function isUnresolvedOwnerName(model: OperatingModel, name: string): boolean {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unassigned') return false
+  return directoryIdByName(model, trimmed) === null
+}
+
 export function directoryPersonFor(model: OperatingModel, actor: Actor): Person | undefined {
   if (isMachineActor(actor)) return undefined
   const people = Object.values(model.people ?? {})

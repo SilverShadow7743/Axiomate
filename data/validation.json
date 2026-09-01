@@ -77,9 +77,9 @@
       "expected": "The system refuses, or warns, because that person is on leave or already committed.",
       "verdict": "PARTIAL",
       "actual": "Assignment now consults capacity through the same arithmetic `upsertAllocation` uses. A name that is in no directory comes back \"unknown\" rather than free — \"“Someone Who Does Not Exist” is not in the people directory, so nothing can be checked abo\" — which is the distinction that matters, because `capacityFor` would otherwise report seven and a half hours a day of somebody nobody has ever described. The seeded owner reads \"unknown\", an unowned issue \"clear\". Only absence refuses: being away for the whole window is a fact and is blocked, while being fully committed is a judgement and is recorded against the change instead. A refusal names the escape and `acceptUnavailable` takes it, so the decision is written down rather than worked around.",
-      "stops": "at the directory, which is still a free-text column rather than a reference",
+      "stops": "at the write itself — this scenario proves the reducer already resolves owner against the directory (ownerId, via directoryIdByName) and lets a typo through without refusing it, by design (OM3 chose a visible warning over a block, so a name the directory genuinely does not have yet is never wrongly refused)",
       "severity": "P2",
-      "impact": "Work can no longer be handed to somebody who is away without that being a recorded decision. It can still be handed to a typo, because the owner column holds text and nothing constrains it to a person."
+      "impact": "Work can no longer be handed to somebody who is away without that being a recorded decision. A name matching nobody is still accepted rather than refused — but it is no longer silent: OM3's isUnresolvedOwnerName surfaces the mismatch in the Owner field at the moment it is typed, using the exact join the write path resolves on save."
     },
     {
       "id": "L",
@@ -1329,6 +1329,16 @@
       "expected": "moduleOf walks to the nearest module-kind ancestor, the same way projectOf walks to the nearest project — an issue imported before the container-to-label transition is not left blank.",
       "verdict": "PASS",
       "actual": "the issue's own module reads \"\" and moduleOf resolves \"Billing\" from its place under the Billing node; a record with no module ancestor at all (the project itself) resolves null rather than a guess",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "OM3",
+      "title": "The owner field is typed straight into, and the name does not match anyone",
+      "expected": "isUnresolvedOwnerName flags it at the moment of typing, using the same join the write path already resolves on save — never a fresh, second-guessable lookup.",
+      "verdict": "PASS",
+      "actual": "a name nobody holds reads true; the seeded owner \"Sam\", an empty field, \"Unassigned\" and a padded/differently-cased real name all read false",
       "stops": "",
       "severity": "P2",
       "impact": "none"
