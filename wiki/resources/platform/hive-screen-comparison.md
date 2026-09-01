@@ -108,6 +108,54 @@ severity guess, so the comparison isn't quite apples-to-apples: Hive doesn't nee
 because its forms are structured at submission time, while Axiomate's mail-based intake has to
 interpret free text.
 
+### Form builder / layout — the deeper cut
+
+Fetched 2026-09-01 from `help.hive.com/en/articles/802410` (Hive Forms) and `.../2873120`
+(Dynamic Fields). Axiomate side re-read directly from `app/api/intake/form/route.ts`.
+
+**Hive's builder**: a drag-and-drop toolbox onto a canvas — Hive's own article doesn't specify
+the toolbox's screen position or the canvas layout in enough detail to state as fact (stated as
+a gap in the research, not filled with a guess, per this doc's own rule), only that fields are
+dragged in and a settings panel sits at the bottom of the page. The toolbox's ten field types,
+named: Checkbox Group, Date Field, File Upload, Header, Paragraph, Radio Group, Text Field
+(single or paragraph), Text Area, Ruler, Multi-text. Each field can be marked required, given
+help text, and (for text fields) a max length.
+
+**Hive's Dynamic Fields** — four types, no Axiomate equivalent at all:
+
+| Dynamic field | What it does |
+|---|---|
+| Dynamic Users | Dropdown limited to the target project's own members; "Map to action assignee" auto-assigns the submitted person to the created card, who is then notified |
+| Dynamic Projects | "Map to project" places the card in the chosen project; "Map to linked projects" creates it elsewhere but links it — the form owner must already be a member of any project offered |
+| Dynamic Labels | Submitter picks from an admin-scoped label set; the card receives it automatically |
+| Dynamic Priorities | Submitter picks from the workspace's real priority list; the answer maps straight onto the card's priority field |
+
+**Hive's routing**: a submission can create an action card, a sub-action nested under a parent
+card, or a new/updated project — gated by an explicit "Only create this action IF" condition
+against form-field criteria. **Lifecycle**: Save keeps a form in Draft (edits not live); Publish
+saves and publishes the latest version; Archive is admin/form-owner only, and a submitter who
+reaches an archived form's URL sees "the form is unavailable" rather than the form itself.
+
+**Axiomate's real shape**: not a form-*building* system at all — `app/api/intake/form/route.ts`
+is one fixed schema, five hardcoded fields (`name`, `email`, `subject`, `description`, `urgency`
+— the last capped to `'urgent' | 'low' | 'normal'`), no toolbox, no field types to choose, no
+per-form Draft/Published/Archived lifecycle, no dynamic mapping to assignee/project/label/
+priority. There is exactly one form shape a deployment can offer, not many a firm designs.
+
+**What Axiomate has that this comparison didn't surface until now**: a real security property
+Hive's own docs never claim. The route's own comment states it plainly — "an unknown token and
+a disabled form produce the SAME refusal — status, body and shape identical — so probing the
+URL space reveals nothing about what exists." Hive's Archive behavior ("the form is
+unavailable") is asymmetric with an invalid link by comparison — Hive's own docs don't state
+whether an archived form's message is indistinguishable from a token that never existed.
+
+**Read**: this is a sharper version of the same finding one level up — not "Axiomate's forms are
+less rich," but "Axiomate has no form *builder* at all, only one form." Whether that is a real
+gap depends entirely on whether this firm needs more than one intake shape (a bug report vs. a
+change request vs. a new-engagement kickoff, say) — worth checking with whoever owns intake
+before adding it to any steal-list, the same caution [[hive-comparison]] already applies to
+project-level description/attachments.
+
 ## The personal landing screen — My Work vs. Hive Home
 
 | | Axiomate `MyWorkPanel.tsx` | Hive Home |
