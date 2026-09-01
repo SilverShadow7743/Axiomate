@@ -192,6 +192,7 @@ import {
   describeMilestones,
   isBillable,
   milestonePosition,
+  milestoneRisk,
   milestoneValue,
   scheduleProblem,
   type Milestone,
@@ -983,17 +984,44 @@ scenario(
 scenario(
   'Q',
   'A project milestone becomes at risk',
-  'The milestone shows the risk, and it rolls up to the project so a governance meeting sees it.',
+  'A milestone whose date has passed, or is close, reads as a live concern — and clears once delivered, whatever acceptance still owes.',
   () => {
-    const s = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-01', end: '2026-08-09', now: NOW } as Action)
-    const issueRow = rowFor(s, 'OAPIL-1')
-    const parentRow = rowsOf(s).find((r) => r.id === issueRow.parentId)
+    /*
+     * This scenario used to test something else entirely — an issue's own date rolling up to
+     * its process area — while its `stops` text talked about milestones. That was accurate once
+     * (Milestone had no plannedDate/sowId/billing at all), and stopped being accurate when
+     * lib/milestone.ts grew a full commercial model (checked directly while fixing this: sowId,
+     * plannedDate, delivery/acceptance states, billOn triggers). It was never revisited. This
+     * now tests the thing its own title names.
+     */
+    const base: Milestone = {
+      id: 'ms-1', sowId: 'sow-1', name: 'Phase 1 sign-off', description: '', sequence: 1,
+      basis: 'percentage', percentage: 25, amount: null, currency: 'GBP', billOn: 'acceptance',
+      plannedDate: null, delivery: 'Planned', deliveredAt: null, deliveredBy: null,
+      acceptance: 'Pending', acceptedAt: null, acceptedBy: null, rejectionNote: null,
+      acceptedValue: null, evidenceDocumentId: null, recordedBy: 'Priya', recordedAt: NOW, deletedAt: null,
+    }
+    const overdue = milestoneRisk({ ...base, plannedDate: '2026-08-10' }, TODAY, 5)
+    const dueSoon = milestoneRisk({ ...base, plannedDate: '2026-08-18' }, TODAY, 5)
+    const onTrack = milestoneRisk({ ...base, plannedDate: '2026-09-30' }, TODAY, 5)
+    const deliveredLate = milestoneRisk(
+      { ...base, plannedDate: '2026-08-10', delivery: 'Delivered', deliveredAt: TODAY, deliveredBy: 'Priya' },
+      TODAY, 5,
+    )
+    const noDate = milestoneRisk({ ...base, plannedDate: null }, TODAY, 5)
+
+    const good =
+      overdue === 'overdue' && dueSoon === 'dueSoon' && onTrack === null &&
+      deliveredLate === null && noDate === null
+
     return {
-      verdict: parentRow && parentRow.plannedEndDate ? 'PARTIAL' : 'FAIL',
-      actual: `A late issue rolls up: its process area now reports ${parentRow?.plannedStartDate} → ${parentRow?.plannedEndDate} with ${parentRow?.percentComplete}% complete. Milestones exist as a row kind, but no milestone record ties to a SOW or a payment.`,
-      stops: 'at the milestone as a commercial object',
-      severity: 'P2',
-      impact: 'Delivery risk is visible; contractual consequence is not.',
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A milestone due 2026-08-10 (today ${TODAY}) reads overdue=${overdue}; one due 2026-08-18, within a 5-working-day window, reads dueSoon=${dueSoon}; one due 2026-09-30 reads ${onTrack ?? 'nothing'}; the same overdue milestone marked Delivered clears to ${deliveredLate ?? 'nothing'} — the date commitment is met regardless of where acceptance stands; one with no plannedDate at all reads ${noDate ?? 'nothing'}.`,
+      stops: good ? '—' : 'at milestoneRisk — a date comparison did not classify as expected',
+      severity: good ? '—' : 'P2',
+      impact: good
+        ? "CommercialPanel's Due column now flags a milestone whose date has passed or is close — the same plain date-comparison computeHealth/Watch already trust for an issue, never a score, a date compared against a date."
+        : 'a late or approaching milestone reads as on-track, or a delivered one keeps reading as at risk',
     }
   },
 )

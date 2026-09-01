@@ -591,6 +591,7 @@ export default function DetailPanel({
                 row={row}
                 state={state}
                 actor={actor}
+                today={today}
                 allRows={allRows}
                 onUpsert={onUpsertSow}
                 onAttribute={onAttributeToSow}

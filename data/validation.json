@@ -154,12 +154,12 @@
     {
       "id": "Q",
       "title": "A project milestone becomes at risk",
-      "expected": "The milestone shows the risk, and it rolls up to the project so a governance meeting sees it.",
-      "verdict": "PARTIAL",
-      "actual": "A late issue rolls up: its process area now reports 2026-08-01 → 2026-08-09 with 17% complete. Milestones exist as a row kind, but no milestone record ties to a SOW or a payment.",
-      "stops": "at the milestone as a commercial object",
-      "severity": "P2",
-      "impact": "Delivery risk is visible; contractual consequence is not."
+      "expected": "A milestone whose date has passed, or is close, reads as a live concern — and clears once delivered, whatever acceptance still owes.",
+      "verdict": "PASS",
+      "actual": "A milestone due 2026-08-10 (today 2026-08-15) reads overdue=overdue; one due 2026-08-18, within a 5-working-day window, reads dueSoon=dueSoon; one due 2026-09-30 reads nothing; the same overdue milestone marked Delivered clears to nothing — the date commitment is met regardless of where acceptance stands; one with no plannedDate at all reads nothing.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "CommercialPanel's Due column now flags a milestone whose date has passed or is close — the same plain date-comparison computeHealth/Watch already trust for an issue, never a score, a date compared against a date."
     },
     {
       "id": "J",

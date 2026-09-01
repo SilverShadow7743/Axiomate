@@ -31,6 +31,7 @@
  */
 
 import type { ContractedPosition } from './changeRequest'
+import { workingDaysBetween } from './dates'
 
 /** Where the work has got to. Says nothing about money. */
 export const DELIVERY_STATES = ['Planned', 'InProgress', 'Delivered'] as const
@@ -292,6 +293,24 @@ export function scheduleProblem(position: MilestonePosition): string | null {
     return `The milestones add up to ${pct}% of the contract. ${round(100 - pct)}% is not yet allocated to one.`
   }
   return null
+}
+
+export type MilestoneRisk = 'overdue' | 'dueSoon'
+
+/**
+ * Whether this milestone's date is a live concern, or null.
+ *
+ * Clears once `Delivered` — the date commitment is met at that point regardless of where
+ * acceptance stands, which the row already reports separately. The same shape `lib/schedule.ts`'s
+ * `computeHealth` and `lib/watch.ts` use for an issue's own due date: a plain string comparison
+ * decides `overdue`, `workingDaysBetween` only sizes the warning window for `dueSoon` — never a
+ * score, just a date compared against a date.
+ */
+export function milestoneRisk(m: Milestone, today: string, warnBeforeDays: number): MilestoneRisk | null {
+  if (!m.plannedDate || m.delivery === 'Delivered') return null
+  if (m.plannedDate < today) return 'overdue'
+  const left = workingDaysBetween(today, m.plannedDate)
+  return left >= 0 && left <= warnBeforeDays ? 'dueSoon' : null
 }
 
 /** Why this delivery cannot be recorded, or null. */

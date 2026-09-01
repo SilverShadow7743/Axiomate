@@ -21,6 +21,7 @@ import {
   describeMilestones,
   isBillable,
   milestonePosition,
+  milestoneRisk,
   milestoneValue,
   scheduleProblem,
   type BillingTrigger,
@@ -29,7 +30,7 @@ import {
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
-import { formatIso } from '@/lib/dates'
+import { formatIso, workingDaysBetween } from '@/lib/dates'
 import { issuesUnder as issuesUnderEngagement } from '@/lib/engagement'
 
 /**
@@ -50,6 +51,7 @@ export default function CommercialPanel({
   row,
   state,
   actor,
+  today,
   allRows,
   onUpsert,
   onAttribute,
@@ -68,6 +70,7 @@ export default function CommercialPanel({
   row: ScheduleRow
   state: WorkspaceState
   actor: Actor
+  today: string
   allRows: ScheduleRow[]
   onUpsert: (id: string | null, engagementId: string, patch: Partial<Sow>) => void
   onAttribute: (nodeId: string, sowId: string | null) => void
@@ -257,6 +260,8 @@ export default function CommercialPanel({
               sow={sow}
               milestones={Object.values(state.milestones).filter((m) => m.sowId === sow.id && !m.deletedAt)}
               contracted={contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt))}
+              today={today}
+              warnBeforeDays={state.model.watch.warnBeforeDays}
               mayEdit={mayEditMilestone.allowed}
               mayAccept={mayAcceptMilestone.allowed}
               actorName={actor.name}
@@ -697,6 +702,8 @@ function Milestones({
   sow,
   milestones,
   contracted,
+  today,
+  warnBeforeDays,
   mayEdit,
   mayAccept,
   actorName,
@@ -708,6 +715,8 @@ function Milestones({
   sow: Sow
   milestones: Milestone[]
   contracted: ReturnType<typeof contractedPosition>
+  today: string
+  warnBeforeDays: number
   mayEdit: boolean
   mayAccept: boolean
   actorName: string
@@ -759,6 +768,7 @@ function Milestones({
               /* The deliverer cannot accept — the reducer refuses it, so the control is not
                  offered either. A button that can never succeed is worse than no button. */
               const theirs = m.deliveredBy?.trim().toLowerCase() === actorName.trim().toLowerCase()
+              const risk = milestoneRisk(m, today, warnBeforeDays)
               return [
                 <tr key={m.id} title={describeMilestone(m, value)}>
                   <td className="mono">{m.sequence}</td>
@@ -768,7 +778,23 @@ function Milestones({
                     {m.basis === 'percentage' && <span className="est-block-note"> {m.percentage}%</span>}
                     {m.acceptedValue !== null && <span className="est-block-note"> · fixed at acceptance</span>}
                   </td>
-                  <td className="mono">{m.plannedDate ?? '—'}</td>
+                  <td className="mono">
+                    {m.plannedDate ?? '—'}
+                    {risk === 'overdue' && (
+                      <span className="est-block-note warn">
+                        {' '}
+                        {workingDaysBetween(m.plannedDate!, today)} working day
+                        {workingDaysBetween(m.plannedDate!, today) === 1 ? '' : 's'} overdue
+                      </span>
+                    )}
+                    {risk === 'dueSoon' && (
+                      <span className="est-block-note">
+                        {' '}
+                        {workingDaysBetween(today, m.plannedDate!)} working day
+                        {workingDaysBetween(today, m.plannedDate!) === 1 ? '' : 's'} left
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className={`comm-status st-${m.delivery.toLowerCase()}`}>{m.delivery}</span>
                   </td>
