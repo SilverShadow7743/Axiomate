@@ -75,10 +75,14 @@ that field already means something else.
 - **Every write names its actor.** `can(model, actor, key)` (`lib/access.ts:372`) is the single
   permission gate; `!model.access?.enforced` short-circuits to allow-all, which is
   config-driven, never a hardcoded bypass.
-- **The person/personId seam recurs on `Allocation`, `Commitment`, `TimeEntry`, and
-  `Timesheet`.** Name is the historical join key; id is the migration target. A rename that
-  updates only the name field silently orphans anything still joined on the old name — this has
-  caused a real incident in this project (a directory entry with a partial record left a person
-  holding zero permissions on sign-in). Any skill or feature touching resourcing must treat this
-  as a known, unresolved structural gap, not something to "fix" incidentally as a side effect of
-  unrelated work.
+- **The person/personId dual field on `Allocation`, `Commitment`, `TimeEntry`, and
+  `Timesheet` is resolved, not open.** The identity-ids migration (2026-08-22,
+  `docs/verification-checklist.md` §22) made every reducer arm resolve `personId` at write and
+  every personal join id-first with a name fallback; the backfill ran and reports zero
+  remaining unique matches. This followed a real incident in this project (a directory entry
+  with a partial record left a person holding zero permissions on sign-in), which
+  `scripts/fix-person-identity.ts` now handles safely — it moves both fields together on a
+  rename and refuses if any `TimeEntry` would be silently rewritten. `person` stays alongside
+  `personId` by design (display name, and for `TimeEntry` part of the attested record), and any
+  *new* write path must resolve `personId` at creation the way the existing ones do — that is
+  the discipline to maintain here, not a migration still to plan.

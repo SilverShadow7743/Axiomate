@@ -22,11 +22,22 @@ Four distinct layers, easy to collapse into each other by accident. Don't.
 
 **Allocation is project-level. Assignment is work-level. Timesheet is actual-level.** Capacity
 (`lib/availability.ts`) is computed from allocations plus the versioned working pattern minus
-leave/holidays/meetings — never from assignments or timesheets directly. A known, unresolved
-seam: `Allocation`, `Commitment`, and `TimeEntry` all carry a `person: String` field alongside
-an optional `personId` — name is the historical join, id is the migration target; a rename
-that only updates the name orphans anything still joined on it (see
-`.claude/skills/axiomate-domain-analysis/references/domain-model.md` for the fuller trap).
+leave/holidays/meetings — never from assignments or timesheets directly. `Allocation`,
+`Commitment`, `TimeEntry` and `Timesheet` all carry a `person: String` field alongside an
+optional `personId` — this is deliberate, not a gap: `person` is the display name (and, for
+`TimeEntry`, part of the attested record), `personId` is the resolved directory join. The
+identity-ids migration (designed, planned, built in six steps, backfilled and verified against
+live production on 2026-08-22 — `docs/verification-checklist.md` §22) made every reducer arm
+resolve `personId` at write, made every personal join id-first with a name fallback
+(`lib/dataIntegrity.ts`'s `personSeamCheck` audits drift), and ran the backfill to zero
+remaining unique matches — what's left null is imported-log compounds and placeholders, on the
+name fallback by design. `scripts/fix-person-identity.ts` moves both fields together on a
+rename and refuses if any `TimeEntry` would be silently rewritten. The one place still
+name-only is unavoidable, not unresolved: an incoming action (e.g. `addTime`) carries only a
+free-text `person` field, like every write action in this codebase, so its entry point must
+resolve a name before any id-first join can begin — see scenario `TW2`'s `stops` text for the
+one live instance of this. Any *new* write path must resolve `personId` at creation the way the
+existing ones do; that is the discipline to maintain, not a migration still to do.
 
 This distinction is also encoded in `.claude/skills/axiomate-domain-analysis`,
 `axiomate-work-model`, `axiomate-project-allocation`, and `axiomate-capacity-planning` — check

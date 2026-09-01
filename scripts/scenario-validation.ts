@@ -3632,7 +3632,7 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.`,
-      stops: 'at the name join. `addTime` now reports a long day as a warning beside the confirmation, but `Version` keys on a directory id while `TimeEntry.person` holds a name — so a person whose name does not resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.',
+      stops: 'at the action\'s own entry point, not at storage. `TimeEntry` has carried `personId` since the identity-ids migration (2026-08-22) — every entry it counts, and the `Version` it reads the cap from, are both id-first. What still resolves by name is the one thing that has no id yet: the incoming `addTime` action itself, which — like every write action in this codebase — arrives with only a free-text `person` field, never a `personId`. So the entry point looks the person up by name before anything id-first can begin, and a name that does not currently resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.',
       severity: 'P2',
       impact:
         'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
@@ -5519,19 +5519,30 @@ scenario(
     const audited = s.audit.filter((e) => e.rowId === 'OAPIL-1' && e.field === 'owner').length
     const ims = buildDailyIms(s, rowsOf(s), TODAY, 'OAPIL')
     const inReport = ims.open.some((l) => l.owner === 'Sam')
+    /*
+     * Notifications were listed as absent; they are not. `updateIssue`'s own owner-change block
+     * mints one straight from the arm for every path that reassigns work — no rule engine
+     * needed — and this fixture is exactly its trigger: a real change, not self-assignment, not
+     * a clear to Unassigned. Found by checking rather than assuming, the same way scenario Q's
+     * staleness was found.
+     */
+    const notifiesOwner = Object.values(s.notifications).some(
+      (n) => n.aboutId === 'OAPIL-1' && n.to === 'Sam' && n.ruleId === 'assignment',
+    )
     const reached = [
       row.owner === 'Sam' ? 'the work item' : null,
       audited ? 'the audit trail' : null,
       s.issues['OAPIL-1'].lastActivity === TODAY ? 'activity history' : null,
       inReport ? 'the daily report' : null,
+      notifiesOwner ? 'notifications' : null,
     ].filter(Boolean)
-    const absentAreas = ['resource workload', 'capacity', 'notifications', 'AI context']
+    const absentAreas = ['resource workload', 'capacity', 'AI context']
     return {
       verdict: 'PARTIAL',
-      actual: `${reached.length} of 8 dependent areas follow the change — ${reached.join(', ')}. The other four are absent rather than stale: ${absentAreas.join(', ')}. Nothing derived is stored, so within the areas that exist there is no drift to find: the report recomputes from the same rows the grid does.`,
-      stops: 'at the four areas that have no entity behind them',
+      actual: `${reached.length} of 8 dependent areas follow the change — ${reached.join(', ')}. The other three are absent rather than stale: ${absentAreas.join(', ')}. Nothing derived is stored, so within the areas that exist there is no drift to find: the report recomputes from the same rows the grid does, and the new owner's notification is minted straight from the arm rather than by a rule that could fall out of sync with it.`,
+      stops: 'at the three areas that have no entity behind them',
       severity: 'P2',
-      impact: 'Propagation is correct as far as it goes. It goes half as far as the operating model describes.',
+      impact: 'Propagation is correct as far as it goes. It goes further than five-of-eight now that the new owner is actually told.',
     }
   },
 )
