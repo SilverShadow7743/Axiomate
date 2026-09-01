@@ -37,7 +37,8 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
-import { DEFAULT_GRANTS, PERMISSION_KEYS, type PermissionKey } from '../lib/access'
+import { PERMISSION_KEYS, type PermissionKey } from '../lib/access'
+import { reconciliationPlan } from '../lib/capabilities'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'
@@ -64,25 +65,23 @@ async function main() {
     return
   }
 
+  // The plan itself is shared with the Configuration screen's own "Reconcile now" action — one
+  // rule, computed once, so the CLI and the UI can never disagree about what "fixed" means.
+  const plan = reconciliationPlan(state.model)
+
   const next: Record<string, PermissionKey[]> = { ...grants }
   const lines: string[] = []
 
   for (const key of orphans) {
-    const owners = Object.entries(DEFAULT_GRANTS)
-      .filter(([, keys]) => (keys as readonly PermissionKey[]).includes(key))
-      .map(([roleId]) => roleId)
-      // Only roles this workspace actually has. A grant to a role nobody holds is a grant to
-      // nobody, and writing it would make the report read as fixed when it is not.
-      .filter((roleId) => state.model.roles[roleId] && !state.model.roles[roleId].deletedAt)
-
-    if (!owners.length) {
+    const step = plan.find((s) => s.key === key)
+    if (!step) {
       lines.push(`  ${key.padEnd(22)} NOT GRANTED — the code names no live role for it. Decide who should have it.`)
       continue
     }
-    for (const roleId of owners) {
+    for (const roleId of step.addTo) {
       next[roleId] = [...new Set([...(next[roleId] ?? []), key])]
     }
-    lines.push(`  ${key.padEnd(22)} -> ${owners.map((r) => state.model.roles[r].label).join(', ')}`)
+    lines.push(`  ${key.padEnd(22)} -> ${step.addTo.map((r) => state.model.roles[r].label).join(', ')}`)
   }
 
   console.log()

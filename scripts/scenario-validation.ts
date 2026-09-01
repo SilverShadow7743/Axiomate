@@ -177,7 +177,7 @@ import { replanningFor } from '../lib/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
 import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
-import { capabilityStates, describeCapabilities } from '../lib/capabilities'
+import { capabilityStates, describeCapabilities, reconciliationPlan } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
 import {
   checkScopeItem,
@@ -5445,6 +5445,54 @@ scenario(
       severity: '—',
       impact:
         'Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen.',
+    }
+  },
+)
+
+scenario(
+  'CP2',
+  'The gap CP1 shows has a one-click fix, and the fix stops where it should',
+  'reconciliationPlan resolves an unreachable permission back to the live roles the shipped defaults name for it, and proposes nothing for one no live role can be given.',
+  () => {
+    const healthy = reconciliationPlan(BASE.model)
+
+    /* The exact incident CP1 records: strip time.approve from every role. */
+    const grants = Object.fromEntries(
+      Object.entries(BASE.model.access.grants).map(([r, ks]) => [r, ks.filter((k) => k !== 'time.approve')]),
+    ) as typeof BASE.model.access.grants
+    const stripped = { ...BASE.model, access: { ...BASE.model.access, grants } }
+    const plan = reconciliationPlan(stripped)
+    const step = plan.find((s) => s.key === 'time.approve')
+
+    /* And the case the CLI script's own "NOT GRANTED" line exists for: even the shipped owners
+     * are gone from this workspace — ADMIN included, which otherwise holds every permission and
+     * would always qualify — so nothing can be proposed. The plan must say so by leaving the key
+     * out, not by inventing a role the firm never configured. */
+    const bothRolesGone = {
+      ...stripped,
+      roles: {
+        ...stripped.roles,
+        ROLE_ADMIN: { ...stripped.roles.ROLE_ADMIN, deletedAt: NOW },
+        ROLE_ENGAGEMENT_LEAD: { ...stripped.roles.ROLE_ENGAGEMENT_LEAD, deletedAt: NOW },
+        ROLE_PROJECT_MANAGER: { ...stripped.roles.ROLE_PROJECT_MANAGER, deletedAt: NOW },
+      },
+    }
+    const orphaned = reconciliationPlan(bothRolesGone)
+    const stillOrphaned = orphaned.find((s) => s.key === 'time.approve')
+
+    const good =
+      healthy.length === 0 &&
+      Boolean(step) &&
+      step!.addTo.includes('ROLE_ENGAGEMENT_LEAD') &&
+      step!.addTo.includes('ROLE_PROJECT_MANAGER') &&
+      stillOrphaned === undefined
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A healthy workspace has nothing to reconcile. Strip time.approve from every role — CP1's own incident — and the plan proposes exactly the live roles the shipped defaults name for it: ${step?.addTo.join(', ')}. Remove those same roles from the workspace entirely and the proposal for time.approve disappears rather than naming a role the firm no longer has — the same restraint scripts/reconcile-grants.ts's own "NOT GRANTED" line applies, now shared by the CLI and the Configuration screen's own action rather than reimplemented for each.`,
+      stops: '—',
+      severity: '—',
+      impact: 'The gap CP1 makes visible now has a fix reachable from the same screen — a permission the product ships that this workspace never picked up no longer needs somebody to know the CLI script exists.',
     }
   },
 )

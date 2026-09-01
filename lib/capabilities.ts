@@ -1,4 +1,4 @@
-import { DEFAULT_GRANTS, type PermissionKey } from './access'
+import { DEFAULT_GRANTS, PERMISSION_KEYS, type PermissionKey } from './access'
 import { liveRoles, type OperatingModel } from './config'
 
 /**
@@ -308,4 +308,38 @@ export function describeCapabilities(states: CapabilityState[]): string {
     )
   }
   return `${states.length} capabilities. ${parts.join(', and ')}.`
+}
+
+export interface ReconciliationStep {
+  key: PermissionKey
+  /** Live role ids that would gain this permission. Never a role the code does not name, and
+   *  never one this workspace has removed — the same restraint `scripts/reconcile-grants.ts`
+   *  itself applies. */
+  addTo: string[]
+}
+
+/**
+ * Permissions no live role holds, matched to the roles `DEFAULT_GRANTS` says should have them —
+ * the fix `scripts/reconcile-grants.ts` already applies from the command line, extracted here so
+ * the CLI and a UI action compute the identical answer rather than maintaining two copies of the
+ * same rule. Never invents an assignment: a permission `DEFAULT_GRANTS` names no live role for is
+ * left out of the plan entirely — `capabilityStates`'s own `missing` still names it, but nothing
+ * here can fix it automatically, matching the CLI script's own "NOT GRANTED — decide who should
+ * have it" case.
+ */
+export function reconciliationPlan(model: OperatingModel): ReconciliationStep[] {
+  const roles = liveRoles(model)
+  const liveRoleIds = new Set(roles.map((r) => r.id))
+  const held = new Set(Object.values(model.access?.grants ?? {}).flat())
+
+  const steps: ReconciliationStep[] = []
+  for (const key of PERMISSION_KEYS) {
+    if (held.has(key)) continue
+    const addTo = Object.entries(DEFAULT_GRANTS)
+      .filter(([, keys]) => (keys as readonly PermissionKey[]).includes(key))
+      .map(([roleId]) => roleId)
+      .filter((roleId) => liveRoleIds.has(roleId))
+    if (addTo.length) steps.push({ key, addTo })
+  }
+  return steps
 }

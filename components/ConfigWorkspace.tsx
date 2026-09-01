@@ -34,7 +34,7 @@ import {
   type LabelKey,
   type ValueKind,
 } from '@/lib/config'
-import { capabilityStates, describeCapabilities } from '@/lib/capabilities'
+import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { describeRecurrence, type Cadence } from '@/lib/recurrence'
@@ -290,7 +290,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
 
         <div className="cfg-panel">
           {tab === 'index' && <SettingsIndex state={state} go={setTab} />}
-          {tab === 'capabilities' && <Capabilities state={state} />}
+          {tab === 'capabilities' && <Capabilities state={state} actor={actor} onConfig={onConfig} />}
           {tab === 'goals' && <Goals state={state} onConfig={onConfig} />}
           {tab === 'terminology' && (
             <Terminology
@@ -3126,9 +3126,37 @@ function Blueprints({
   )
 }
 
-function Capabilities({ state }: { state: WorkspaceState }) {
+function Capabilities({
+  state,
+  actor,
+  onConfig,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  onConfig: (op: ConfigOp) => boolean
+}) {
   const states = useMemo(() => capabilityStates(state.model), [state.model])
   const broken = states.filter((c) => !c.usable)
+  const mayConfigure = can(state.model, actor, 'config.manage')
+
+  /*
+   * The same rule `scripts/reconcile-grants.ts` applies from the command line, computed by the
+   * same function (`reconciliationPlan`) so the two can never disagree about what "fixed" means.
+   * Not every unreachable row is in this plan — a permission the shipped defaults name no live
+   * role for cannot be proposed, and stays unreachable until somebody decides who should have it.
+   */
+  const plan = useMemo(() => reconciliationPlan(state.model), [state.model])
+  const [confirming, setConfirming] = useState(false)
+
+  const apply = () => {
+    const next: Record<string, PermissionKey[]> = { ...state.model.access.grants }
+    for (const step of plan) {
+      for (const roleId of step.addTo) {
+        next[roleId] = [...new Set([...(next[roleId] ?? []), step.key])]
+      }
+    }
+    if (onConfig({ k: 'setAccess', patch: { grants: next } })) setConfirming(false)
+  }
 
   return (
     <section className="cfg-section">
@@ -3149,6 +3177,44 @@ function Capabilities({ state }: { state: WorkspaceState }) {
             unreachable. Grant the missing permission under <b>Permissions</b>, to a role somebody
             actually holds — adding it to a role nobody has changes nothing.
           </p>
+
+          {plan.length > 0 && (
+            <div className="cfg-card" style={{ marginTop: 8 }}>
+              {mayConfigure.allowed ? (
+                confirming ? (
+                  <>
+                    <p className="cfg-inherit sentence">
+                      This grants only what the shipped defaults already name — nothing is
+                      removed, and a role the product does not mention is left exactly as
+                      configured:
+                    </p>
+                    <ul className="cfg-inherit">
+                      {plan.map((step) => (
+                        <li key={step.key}>
+                          <span className="mono">{step.key}</span> →{' '}
+                          {step.addTo
+                            .map((roleId) => state.model.roles[roleId]?.label ?? roleId)
+                            .join(', ')}
+                        </li>
+                      ))}
+                    </ul>
+                    <button className="btn primary" onClick={apply}>
+                      Confirm
+                    </button>{' '}
+                    <button className="btn" onClick={() => setConfirming(false)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn" onClick={() => setConfirming(true)}>
+                    Reconcile now — fixes {plan.length} of {broken.length}
+                  </button>
+                )
+              ) : (
+                <p className="prov">{mayConfigure.reason}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

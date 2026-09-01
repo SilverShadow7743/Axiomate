@@ -854,6 +854,16 @@
       "impact": "Five permissions once existed in code with no stored role holding any of them, so nobody could submit a timesheet, approve one, see a rate, set one or decide a change request. Four features, all working, all unusable, and nothing said so. That state is now visible on a screen."
     },
     {
+      "id": "CP2",
+      "title": "The gap CP1 shows has a one-click fix, and the fix stops where it should",
+      "expected": "reconciliationPlan resolves an unreachable permission back to the live roles the shipped defaults name for it, and proposes nothing for one no live role can be given.",
+      "verdict": "PASS",
+      "actual": "A healthy workspace has nothing to reconcile. Strip time.approve from every role — CP1's own incident — and the plan proposes exactly the live roles the shipped defaults name for it: ROLE_ADMIN, ROLE_ENGAGEMENT_LEAD, ROLE_PROJECT_MANAGER. Remove those same roles from the workspace entirely and the proposal for time.approve disappears rather than naming a role the firm no longer has — the same restraint scripts/reconcile-grants.ts's own \"NOT GRANTED\" line applies, now shared by the CLI and the Configuration screen's own action rather than reimplemented for each.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The gap CP1 makes visible now has a fix reachable from the same screen — a permission the product ships that this workspace never picked up no longer needs somebody to know the CLI script exists."
+    },
+    {
       "id": "GL1",
       "title": "A firm sets a target and cannot fudge how it is doing against it",
       "expected": "A goal names a measure the register computes, there is no field to enter progress into, and a measure or scope that no longer resolves reports that rather than zero.",
