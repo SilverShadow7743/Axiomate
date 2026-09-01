@@ -74,6 +74,7 @@ import UnifiedInbox from './UnifiedInbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
+import SnapshotDrawer from './SnapshotDrawer'
 import AppSidebar from './AppSidebar'
 import FiltersHeader from './FiltersHeader'
 import { unreadCount } from '@/lib/notifications'
@@ -880,6 +881,9 @@ export default function IssueWorkspace({
   /** A section the Configuration dialog should open on — the blueprint row-menu entry. */
   const [configIntent, setConfigIntent] = useState<{ tab: 'blueprints'; source: string } | null>(null)
 
+  /** The row-menu's "View snapshots…" entry — null when the drawer is closed. */
+  const [snapshotTarget, setSnapshotTarget] = useState<{ nodeId: string; nodeName: string } | null>(null)
+
   /** Configuration changes take the same funnel as everything else, audit included. */
   const applyConfigOp = useCallback(
     (op: ConfigOp) => dispatch({ t: 'config', op, now: new Date().toISOString() }),
@@ -1371,6 +1375,13 @@ export default function IssueWorkspace({
         setConfigIntent({ tab: 'blueprints', source: row.id })
         setConfigOpen(true)
       },
+      // A discrete event, dispatched directly — the same shape as `duplicate` below, not a
+      // dialog: there is nothing to fill in, only a moment to record.
+      takeSnapshot: (row) =>
+        dispatch({ t: 'takeSnapshot', nodeId: row.id, now: new Date().toISOString() }),
+      hasSnapshots: (row) =>
+        Object.values(state.snapshots).some((s) => s.nodeId === row.id && !s.deletedAt),
+      viewSnapshots: (row) => setSnapshotTarget({ nodeId: row.id, nodeName: row.name }),
       /**
        * Duplicate mints the copy AND the `DUPLICATE_OF` back to the original — that is the
        * arm's own guarantee (design §5), not something this menu arranges, which is why there
@@ -1414,7 +1425,7 @@ export default function IssueWorkspace({
       convert: (row, type) =>
         dispatch({ t: 'updateIssue', id: row.id, patch: { type }, now: new Date().toISOString() }),
     }),
-    [sortedRows, state, dispatch, notify, requestSelect, scale],
+    [sortedRows, state, dispatch, notify, requestSelect, scale, setSnapshotTarget],
   )
 
   /* ---------------- dialog submission ---------------- */
@@ -2691,6 +2702,18 @@ export default function IssueWorkspace({
       )}
       {financeReportOpen && (
         <FinanceReportDialog state={state} today={today} onClose={() => setFinanceReportOpen(false)} />
+      )}
+
+      {snapshotTarget && (
+        <DetailDrawer wide={false} onClose={() => setSnapshotTarget(null)}>
+          <SnapshotDrawer
+            state={state}
+            actor={actor}
+            nodeId={snapshotTarget.nodeId}
+            nodeName={snapshotTarget.nodeName}
+            onClose={() => setSnapshotTarget(null)}
+          />
+        </DetailDrawer>
       )}
 
       {configOpen && (

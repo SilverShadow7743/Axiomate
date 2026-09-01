@@ -42,6 +42,12 @@ export interface RowActions {
   convert: (row: ScheduleRow, type: string) => void
   /** Store an engagement's shape for reuse — opens the blueprint screen on this source. */
   saveBlueprint?: (row: ScheduleRow) => void
+  /** A point-in-time copy of this project or engagement's planned dates and cost. */
+  takeSnapshot?: (row: ScheduleRow) => void
+  /** Whether at least one snapshot already exists for this node — "View snapshots…" hides
+   *  itself otherwise, the same rule `childKinds`/`siblingKinds` already follow. */
+  hasSnapshots?: (row: ScheduleRow) => boolean
+  viewSnapshots?: (row: ScheduleRow) => void
 }
 
 /**
@@ -225,6 +231,26 @@ export default function RowMenu({
           >
             Save as blueprint…
             <span className="menu-sub">Store this engagement's shape for the next one</span>
+          </button>
+        )}
+
+        {(row.kind === 'project' || row.kind === 'engagement') && actions.takeSnapshot && (
+          <button
+            role="menuitem"
+            className="menu-item"
+            onClick={() => run(() => actions.takeSnapshot!(row))}
+          >
+            Take snapshot…
+            <span className="menu-sub">Freeze today's planned dates and cost for later comparison</span>
+          </button>
+        )}
+        {(row.kind === 'project' || row.kind === 'engagement') && actions.hasSnapshots?.(row) && actions.viewSnapshots && (
+          <button
+            role="menuitem"
+            className="menu-item"
+            onClick={() => run(() => actions.viewSnapshots!(row))}
+          >
+            View snapshots…
           </button>
         )}
 
