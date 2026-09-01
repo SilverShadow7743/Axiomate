@@ -202,9 +202,11 @@ import {
   decideChangeProblem,
   describeContracted,
   checkChange,
+  changeRequestFor,
   type ChangeRequest,
   type ChangeStatus,
 } from '../lib/changeRequest'
+import { applicableApprovalRules, issueApprovalGate } from '../lib/approval'
 import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
@@ -1332,6 +1334,30 @@ scenario(
     const consultant: Actor = { id: 'priya', name: 'Priya' }
     const sponsor: Actor = { id: 'dana', name: 'Dana' }
 
+    /*
+     * Priced, before anyone is asked to approve the work starting — proving the two decisions
+     * are independent, and that ApprovalsBlock/CommercialPanel can now each see the other's
+     * state without either driving the other. `P` derives its own SOW rather than relying on
+     * one in `BASE`, the same way scenario O does.
+     */
+    const engagementId = Object.values(staffed.nodes).find((n) => n.kind === 'engagement')!.id
+    staffed = ok(staffed, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-P-1', title: 'The statement of work this varies', effortHours: 100, value: 50_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sow = Object.values(staffed.sows).find((x) => x.reference === 'SOW-P-1')!
+    staffed = ok(staffed, {
+      t: 'upsertChangeRequest', id: null, sowId: sow.id,
+      patch: {
+        title: 'Add a second approval step', effortHours: 8, value: 4_000,
+        reason: 'The client asked for a second approval step', scope: 'Add a second approval step',
+        issueId: crId,
+      },
+      submit: true, now: NOW,
+    } as Action)
+    const gateBeforeAsk = issueApprovalGate(staffed.model.approvalRules, staffed.approvals, { id: crId, type: 'Change Request' })
+
     /* 1. Work cannot start on it. */
     const unapproved = apply(staffed, {
       t: 'updateIssue', id: crId, patch: { status: 'In Progress' }, now: NOW,
@@ -1381,17 +1407,35 @@ scenario(
       t: 'updateIssue', id: crId, patch: { status: 'In Progress' }, now: NOW,
     } as Action, consultant)
 
+    /*
+     * 7. The join: each screen can now read the other's live state without either driving it.
+     * `decided` inherits the priced record raised against `staffed` above — still `Submitted`,
+     * because nobody has separately decided it, which is exactly the point being proven.
+     */
+    const gateAfterApproval = issueApprovalGate(decided.model.approvalRules, decided.approvals, { id: crId, type: 'Change Request' })
+    const pricedAfterApproval = changeRequestFor(Object.values(decided.changes), crId)
+
+    /* 8. An issue whose type carries no approval rule at all shows nothing to reconcile. */
+    const plainIssue = { id: 'OAPIL-1', type: BASE.issues['OAPIL-1'].type }
+    const noRuleGate = issueApprovalGate(BASE.model.approvalRules, BASE.approvals, plainIssue)
+    const noRuleApplicable = applicableApprovalRules(BASE.model.approvalRules, plainIssue.type)
+
     const good =
       Boolean(unapproved.error) && Boolean(selfApproved.error) && Boolean(wrongRole.error) &&
       !started.error && Boolean(blockedAfterRejection.error) &&
-      decided.approvals[approvalId].decidedBy === 'Dana'
+      decided.approvals[approvalId].decidedBy === 'Dana' &&
+      gateBeforeAsk === 'not-asked' &&
+      gateAfterApproval === 'approved' &&
+      pricedAfterApproval?.status === 'Submitted' &&
+      noRuleGate === 'not-applicable' &&
+      noRuleApplicable.length === 0
 
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `Unapproved, the CR cannot start: "${unapproved.error}" The consultant who asked cannot answer — "${selfApproved.error}" — and neither can an analyst, because the rule names the sponsor: "${wrongRole.error}" Once the sponsor approves, the work starts. A rejection blocks the same move and stays on the record: "${blockedAfterRejection.error}"`,
-      stops: 'at this issue-shaped change only. Approving a `ChangeRequest` DOES move the contracted position now — baseline plus approved movements, computed on read (CR1) — and the two paths are not yet joined: this scenario approves a work item, not a variation.',
+      actual: `Unapproved, the CR cannot start: "${unapproved.error}" The consultant who asked cannot answer — "${selfApproved.error}" — and neither can an analyst, because the rule names the sponsor: "${wrongRole.error}" Once the sponsor approves, the work starts. A rejection blocks the same move and stays on the record: "${blockedAfterRejection.error}" The priced record and the work-start gate are now visibly joined without being merged: before anyone is asked, \`issueApprovalGate\` reads "${gateBeforeAsk}"; once the sponsor approves and the work may start, it reads "${gateAfterApproval}", while the priced record itself is still "${pricedAfterApproval?.status}" — nobody has separately decided it counts toward the contracted position, and nothing forces them to. An issue with no approval rule at all reads "${noRuleGate}" (${noRuleApplicable.length} applicable rules) — nothing to reconcile is shown where there is nothing to reconcile.`,
+      stops: "at the procedural separation, deliberately: ApprovalsBlock now shows the linked priced record's own status and CommercialPanel now shows whether the linked issue has cleared its work-start gate, so neither screen is blind to the other any more. The two decisions still do not drive each other — a firm may start delivery before a price is agreed, or price a change before delivery begins, and both are ordinary in consulting. That separation is not a gap left to close.",
       severity: 'P2',
-      impact: 'A change can no longer be delivered without somebody with authority agreeing to it. What it is worth is still not recorded anywhere.',
+      impact: "A change can no longer be delivered without somebody with authority agreeing to it, and a reviewer on either screen can now see the other side's state at a glance rather than reconciling two records by hand.",
     }
   },
 )

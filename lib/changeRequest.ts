@@ -173,6 +173,11 @@ export interface ContractedPosition {
  * lead needs to see both, and a client-facing total that quietly includes a request nobody has
  * agreed to is the single most damaging thing this module could do.
  */
+/** The live priced record linked to an issue, if any. */
+export function changeRequestFor(changes: ChangeRequest[], issueId: string): ChangeRequest | null {
+  return changes.find((c) => !c.deletedAt && c.issueId === issueId) ?? null
+}
+
 export function contractedPosition(
   sow: { id: string; effortHours: number; value: number; currency: string },
   changes: ChangeRequest[],

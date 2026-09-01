@@ -4,13 +4,13 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can, rolesFor } from '@/lib/access'
 import {
+  applicableApprovalRules,
   approvalsFor,
   describeApproval,
-  rulesFor,
   type ApprovalDecision,
 } from '@/lib/approval'
+import { changeRequestFor } from '@/lib/changeRequest'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
-import { ISSUE_STATUSES } from '@/lib/types'
 import { formatIso } from '@/lib/dates'
 
 /**
@@ -45,8 +45,15 @@ export default function ApprovalsBlock({
 
   /** Every rule that could ever gate this record, whichever status it is heading for. */
   const applicable = useMemo(
-    () => ISSUE_STATUSES.flatMap((s) => rulesFor(state.model.approvalRules, issue.type, s)),
+    () => applicableApprovalRules(state.model.approvalRules, issue.type),
     [state.model.approvalRules, issue.type],
+  )
+
+  /** The priced record this change was raised as, when one exists — see CommercialPanel's own
+   * mirror of this fact, `issueApprovalGate`, for the read the other screen shows. */
+  const linkedChange = useMemo(
+    () => changeRequestFor(Object.values(state.changes), issue.id),
+    [state.changes, issue.id],
   )
 
   const held = useMemo(() => rolesFor(state.model, actor), [state.model, actor])
@@ -177,6 +184,14 @@ export default function ApprovalsBlock({
           </div>
         )
       })}
+
+      {applicable.length > 0 && (
+        <p className="prov appr-cr-link">
+          {linkedChange
+            ? `Priced as a change request: ${linkedChange.status}, ${linkedChange.effortHours}h · ${linkedChange.currency} ${linkedChange.value.toLocaleString()}.`
+            : 'No priced change request raised for this yet.'}
+        </p>
+      )}
 
       {approvals
         .filter((a) => !applicable.some((r) => r.id === a.ruleId))

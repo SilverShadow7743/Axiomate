@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
+import { issueApprovalGate, type ApprovalGateStatus } from '@/lib/approval'
 import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/changeRequest'
 import {
   SCOPE_KINDS,
@@ -152,6 +153,19 @@ export default function CommercialPanel({
     [state, row.id],
   )
 
+  /**
+   * Whether each of those issues has cleared its own work-start approval — the fact
+   * `ApprovalsBlock` shows on the issue side, mirrored here so CommercialPanel is never blind
+   * to it. The two decisions stay independent; this only removes the blindness between them.
+   */
+  const changeGateStatus = useMemo(
+    () =>
+      new Map(
+        changeRequestIssues.map((i) => [i.id, issueApprovalGate(state.model.approvalRules, state.approvals, i)]),
+      ),
+    [changeRequestIssues, state.model.approvalRules, state.approvals],
+  )
+
   const positions = useMemo(() => {
     return sows.map((sow) => {
       const ids = projects
@@ -275,6 +289,7 @@ export default function CommercialPanel({
               sow={sow}
               changes={Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt)}
               candidateIssues={changeRequestIssues}
+              gateStatus={changeGateStatus}
               mayRaise={mayEdit.allowed}
               mayDecide={mayDecideChange.allowed}
               actorName={actor.name}
@@ -457,6 +472,7 @@ function Changes({
   sow,
   changes,
   candidateIssues,
+  gateStatus,
   mayRaise,
   mayDecide,
   actorName,
@@ -467,7 +483,10 @@ function Changes({
   sow: Sow
   changes: ChangeRequest[]
   /** Issues under the engagement a raised change could be linking back to. See the caller. */
-  candidateIssues: { id: string; subject: string }[]
+  candidateIssues: { id: string; subject: string; type: string }[]
+  /** Each linked issue's own work-start approval, read straight off `ApprovalsBlock`'s data —
+   * never driven from here. See the caller. */
+  gateStatus: Map<string, ApprovalGateStatus>
   mayRaise: boolean
   mayDecide: boolean
   actorName: string
@@ -489,6 +508,16 @@ function Changes({
   const position = contractedPosition(sow, changes)
   const movement = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`
   const issueSubject = new Map(candidateIssues.map((i) => [i.id, i.subject]))
+  /** The other screen's own state, in the words a delivery lead would use — not a status code. */
+  const gateLabel = (g: ApprovalGateStatus | undefined): string | null => {
+    switch (g) {
+      case 'not-asked': return 'work not yet cleared to start'
+      case 'open': return 'awaiting a decision to start'
+      case 'approved': return 'cleared to start'
+      case 'rejected': return 'start declined'
+      default: return null
+    }
+  }
 
   const ready = title.trim() !== '' && reason.trim() !== '' && (Number(hours) !== 0 || Number(value) !== 0)
 
@@ -522,6 +551,9 @@ function Changes({
                     {c.title}
                     {c.issueId && (
                       <div className="est-block-note">→ {issueSubject.get(c.issueId) ?? c.issueId}</div>
+                    )}
+                    {c.issueId && gateLabel(gateStatus.get(c.issueId)) && (
+                      <div className="est-block-note">{gateLabel(gateStatus.get(c.issueId))}</div>
                     )}
                   </td>
                   <td className="mono">{movement(c.effortHours)}h</td>

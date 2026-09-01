@@ -1,4 +1,4 @@
-import type { IssueStatus } from './types'
+import { ISSUE_STATUSES, type IssueStatus } from './types'
 
 /**
  * A decision somebody with authority has to make before work may proceed.
@@ -100,6 +100,36 @@ export function rulesFor(rules: ApprovalRule[], workType: string, status: IssueS
   return rules.filter(
     (r) => r.enabled && r.status === status && (!r.workTypes.length || r.workTypes.includes(workType)),
   )
+}
+
+/** Every rule that could ever gate a work type, whichever status it is heading for. */
+export function applicableApprovalRules(rules: ApprovalRule[], workType: string): ApprovalRule[] {
+  return ISSUE_STATUSES.flatMap((s) => rulesFor(rules, workType, s))
+}
+
+/**
+ * Whether a record is blocked on an approval right now — a fact for another screen to show,
+ * never a score. `not-applicable` means no rule could ever gate this work type; the rest name
+ * exactly one of the states `ApprovalsBlock` already renders per rule.
+ */
+export type ApprovalGateStatus = 'not-applicable' | 'not-asked' | 'open' | 'approved' | 'rejected'
+
+export function issueApprovalGate(
+  rules: ApprovalRule[],
+  approvals: Record<string, Approval>,
+  issue: { id: string; type: string },
+): ApprovalGateStatus {
+  const applicable = applicableApprovalRules(rules, issue.type)
+  if (!applicable.length) return 'not-applicable'
+
+  const mine = approvalsFor(approvals, issue.id).filter((a) => applicable.some((r) => r.id === a.ruleId))
+  if (!mine.length) return 'not-asked'
+
+  if (mine.some((a) => !a.decision)) return 'open'
+
+  // `approvalsFor` sorts newest first, so the first decided entry is the most recent.
+  const decided = mine.find((a) => a.decision)!
+  return decided.decision === 'approved' ? 'approved' : 'rejected'
 }
 
 /**
