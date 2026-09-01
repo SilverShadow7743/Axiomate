@@ -103,5 +103,7 @@ own "Status as of 2026-08-31" section has the line-cited detail; this is the com
 ## Related
 
 - [[hive-screen-comparison]] — screen-by-screen, action-by-action, 2026-08-31
+- [[configuration-taxonomy-gap-analysis]] — a 21-section target admin taxonomy checked against
+  ConfigWorkspace.tsx, 2026-09-01 (not verified Hive — see its own note)
 - [[release-readiness]]
 - [[application-improvement-index]]
