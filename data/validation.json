@@ -65,11 +65,11 @@
       "id": "F",
       "title": "An issue needs another consultant to help",
       "expected": "A contributor can be added without taking ownership, and the trail shows both.",
-      "verdict": "PARTIAL",
-      "actual": "The mechanism works: an unbounded responsibility holds 2 people, the owner is still Priya, and the change is audited. But the shipped operating model has 3 responsibilities — Owner, Accountable Party, Raised By — and 0 of them accept more than one name. Contributor is a type the firm must invent.",
-      "stops": "at the shipped model — helping is possible, but not offered",
-      "severity": "P2",
-      "impact": "Out of the box, the only way to involve a second person is to hand over ownership."
+      "verdict": "PASS",
+      "actual": "Contributors ships out of the box (unbounded, not required) — no configuration needed before it holds 2 people, the owner stays Priya, and the change is audited.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A second person can lend a hand from the day one workspace opens, without a firm having to invent the type first."
     },
     {
       "id": "G",

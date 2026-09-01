@@ -551,31 +551,29 @@ scenario(
   'A contributor can be added without taking ownership, and the trail shows both.',
   () => {
     const shipped = Object.values(BASE.model.responsibilities)
-    const multi = shipped.filter((r) => r.maxCount === null || r.maxCount > 1)
+    const contrib = shipped.find((r) => r.id === 'ISSUE_CONTRIBUTOR')
 
-    // Configure one, because the shipped set does not include a contributor.
-    const withContrib = ok(BASE, {
-      t: 'config',
-      op: {
-        k: 'upsertResponsibility', id: null,
-        patch: { label: 'Contributors', description: 'Helping without owning', minCount: 0, maxCount: null, required: false },
-      },
-      now: NOW,
-    } as Action)
-    const contrib = Object.values(withContrib.model.responsibilities).find((r) => r.label === 'Contributors')!
-    const s = ok(withContrib, {
-      t: 'setAssignment', issueId: 'OAPIL-1', responsibilityId: contrib.id,
-      values: ['Sam', 'Dev'], now: NOW,
-    } as Action)
-    const assigned = s.issues['OAPIL-1'].assignments[contrib.id] ?? []
+    const s = contrib
+      ? ok(BASE, {
+          t: 'setAssignment', issueId: 'OAPIL-1', responsibilityId: contrib.id,
+          values: ['Sam', 'Dev'], now: NOW,
+        } as Action)
+      : BASE
+    const assigned = contrib ? (s.issues['OAPIL-1'].assignments[contrib.id] ?? []) : []
     const ownerUnchanged = s.issues['OAPIL-1'].owner === 'Priya'
-    const works = assigned.length === 2 && ownerUnchanged
+    const shippedUnbounded = contrib?.maxCount === null && !contrib.required
+    const works = Boolean(contrib) && assigned.length === 2 && ownerUnchanged && shippedUnbounded
+
     return {
-      verdict: works ? 'PARTIAL' : 'FAIL',
-      actual: `The mechanism works: an unbounded responsibility holds ${assigned.length} people, the owner is still ${s.issues['OAPIL-1'].owner}, and the change is audited. But the shipped operating model has ${shipped.length} responsibilities — ${shipped.map((r) => r.label).join(', ')} — and ${multi.length} of them accept more than one name. Contributor is a type the firm must invent.`,
-      stops: 'at the shipped model — helping is possible, but not offered',
-      severity: 'P2',
-      impact: 'Out of the box, the only way to involve a second person is to hand over ownership.',
+      verdict: works ? 'PASS' : 'FAIL',
+      actual: works
+        ? `Contributors ships out of the box (unbounded, not required) — no configuration needed before it holds ${assigned.length} people, the owner stays ${s.issues['OAPIL-1'].owner}, and the change is audited.`
+        : `contrib=${Boolean(contrib)} assigned=${assigned.length} ownerUnchanged=${ownerUnchanged} shippedUnbounded=${shippedUnbounded}`,
+      stops: works ? '—' : 'at the shipped model — helping is possible, but not offered',
+      severity: works ? '—' : 'P2',
+      impact: works
+        ? 'A second person can lend a hand from the day one workspace opens, without a firm having to invent the type first.'
+        : 'Out of the box, the only way to involve a second person is to hand over ownership.',
     }
   },
 )

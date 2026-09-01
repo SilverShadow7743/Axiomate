@@ -993,6 +993,27 @@ const SEED_RESPONSIBILITIES: Omit<ResponsibilityType, 'deletedAt'>[] = [
     seeded: true,
     order: 2,
   },
+  /*
+   * The only shipped responsibility with no system field — it lives in the generic
+   * `IssueRecord.assignments` map like any custom one, not a dedicated column, precisely
+   * because "who's helping" was never meant to be a single name the way owner/accountable are.
+   * A plain literal label, not a LABEL_KEYS entry: the shipped terms name concepts this app's
+   * own screens read by field (owner, accountable), and this one doesn't back a field — a firm
+   * renaming it edits the responsibility record directly, the same as any type it adds itself.
+   */
+  {
+    id: 'ISSUE_CONTRIBUTOR',
+    label: 'Contributors',
+    description: 'Helping without owning — anyone lending a hand, alongside whoever is driving it.',
+    valueKind: 'person',
+    minCount: 0,
+    maxCount: null,
+    required: false,
+    eligibleRoleIds: [],
+    systemField: null,
+    seeded: true,
+    order: 3,
+  },
 ]
 
 /**
