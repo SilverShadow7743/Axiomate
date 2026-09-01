@@ -2778,6 +2778,7 @@ export default function IssueWorkspace({
             dispatch({ t: 'removePersonSkill', id, now: new Date().toISOString() })
           }
           onOpenProfile={setOpenProfileId}
+          onLink={(actions) => dispatchMany(actions).ok}
         />
       )}
 

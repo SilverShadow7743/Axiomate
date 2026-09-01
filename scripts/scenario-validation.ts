@@ -51,7 +51,7 @@ import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
-import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, type InboundMail } from '../lib/intake'
+import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
@@ -8679,6 +8679,44 @@ scenario(
     return groups.length === 0
       ? { verdict: 'PASS', actual: JSON.stringify(groups), stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: JSON.stringify(groups), stops: 'subjects that only share a prefix are treated as the same thread', impact: 'two genuinely different topics under the same client and parent could be wrongly linked as duplicates', severity: 'P1' } as const
+  },
+)
+
+scenario(
+  'IT10',
+  'openDuplicateGroups narrows to what a reviewer still has a decision to make about',
+  'duplicateGroups itself is untouched — same three-issue thread IT6 already proves — but a duplicate already linked has nothing left to review, and the last one linked closes the group out entirely.',
+  () => {
+    const issues = {
+      'OAPIL-149': itIssue({ id: 'OAPIL-149', lastActivity: '2026-08-10', subject: 'Fw: item master' }),
+      'OAPIL-150': itIssue({ id: 'OAPIL-150', lastActivity: '2026-08-12', subject: 'RE: item master' }),
+      'OAPIL-151': itIssue({ id: 'OAPIL-151', lastActivity: '2026-08-14', subject: 're: RE: item master' }),
+    }
+    const rel = (sourceIssueId: string, targetIssueId: string) =>
+      ({ id: `rel-${sourceIssueId}`, sourceIssueId, targetIssueId, relationshipType: 'DUPLICATE_OF', note: '' })
+
+    const untouched = openDuplicateGroups(issues, [])
+    const oneLinked = openDuplicateGroups(issues, [rel('OAPIL-149', 'OAPIL-151')])
+    const bothLinked = openDuplicateGroups(issues, [
+      rel('OAPIL-149', 'OAPIL-151'),
+      rel('OAPIL-150', 'OAPIL-151'),
+    ])
+    /* A link to the WRONG target (not this group's canonical) leaves the duplicate open. */
+    const wrongTarget = openDuplicateGroups(issues, [rel('OAPIL-149', 'OAPIL-150')])
+
+    const good =
+      untouched.length === 1 && untouched[0].duplicates.length === 2 &&
+      oneLinked.length === 1 && oneLinked[0].duplicates.length === 1 && oneLinked[0].duplicates[0] === 'OAPIL-150' &&
+      bothLinked.length === 0 &&
+      wrongTarget.length === 1 && wrongTarget[0].duplicates.length === 2
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Untouched: ${untouched[0]?.duplicates.length ?? 0} still open. One linked: ${oneLinked[0]?.duplicates.length ?? 0} left, "${oneLinked[0]?.duplicates[0]}". Both linked: ${bothLinked.length} groups remain. A link to the wrong target: ${wrongTarget[0]?.duplicates.length ?? 0} still open — the existing relationship did not count against this group.`,
+      stops: '',
+      severity: 'P2',
+      impact: 'none',
+    }
   },
 )
 

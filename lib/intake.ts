@@ -1,6 +1,6 @@
 import type { IntakeMailbox, OperatingModel, RoutingRule } from './config'
 import { liveWorkTypes } from './config'
-import type { Severity } from './types'
+import type { IssueRelationship, Severity } from './types'
 import type { IssueRecord, WorkspaceState } from './workspace'
 
 /**
@@ -182,6 +182,35 @@ export function duplicateGroups(
     })
   }
   return out
+}
+
+/**
+ * `duplicateGroups`, narrowed to what a reviewer still has a decision to make about.
+ *
+ * `duplicateGroups` itself stays untouched — same signature, same result, still what the CLI
+ * script and IT6/IT7/IT9 exercise — because it groups by subject alone and has no reason to
+ * know about relationships. This is the UI's own concern: a group where every duplicate is
+ * already `DUPLICATE_OF` its canonical has nothing left to review, and a screen that kept
+ * showing it forever would never be able to say "nothing to review" honestly.
+ */
+export function openDuplicateGroups(
+  issues: Record<string, IssueRecord>,
+  relationships: IssueRelationship[],
+): { canonical: string; duplicates: string[] }[] {
+  return duplicateGroups(issues)
+    .map((g) => ({
+      canonical: g.canonical,
+      duplicates: g.duplicates.filter(
+        (dupId) =>
+          !relationships.some(
+            (r) =>
+              r.sourceIssueId === dupId &&
+              r.targetIssueId === g.canonical &&
+              r.relationshipType === 'DUPLICATE_OF',
+          ),
+      ),
+    }))
+    .filter((g) => g.duplicates.length > 0)
 }
 
 /* ================================================================== *

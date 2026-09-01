@@ -1754,6 +1754,16 @@
       "impact": "none"
     },
     {
+      "id": "IT10",
+      "title": "openDuplicateGroups narrows to what a reviewer still has a decision to make about",
+      "expected": "duplicateGroups itself is untouched — same three-issue thread IT6 already proves — but a duplicate already linked has nothing left to review, and the last one linked closes the group out entirely.",
+      "verdict": "PASS",
+      "actual": "Untouched: 2 still open. One linked: 1 left, \"OAPIL-150\". Both linked: 0 groups remain. A link to the wrong target: 2 still open — the existing relationship did not count against this group.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "IT8",
       "title": "normalizeSubject strips only a leading Re:/Fw:/Fwd: run, not one appearing mid-subject",
       "expected": "",

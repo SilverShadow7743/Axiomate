@@ -36,7 +36,9 @@ import {
 } from '@/lib/config'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
-import { canParent, kindOf, nameOf, scopeChainOf, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
+import { canParent, kindOf, nameOf, scopeChainOf, type Action, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
+import { openDuplicateGroups } from '@/lib/intake'
+import { formatIso } from '@/lib/dates'
 import { describeRecurrence, type Cadence } from '@/lib/recurrence'
 import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/lib/blueprint'
 import { ISSUE_STATUSES, type IssueStatus, type NodeKind } from '@/lib/types'
@@ -98,6 +100,7 @@ type Tab =
   | 'watch'
   | 'sizing'
   | 'scopes'
+  | 'duplicates'
 
 const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'index', label: 'All settings', group: 'Operating model' },
@@ -125,6 +128,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'routing', label: 'Routing & intake', group: 'Automation' },
   { id: 'blueprints', label: 'Blueprints', group: 'Governance' },
   { id: 'scopes', label: 'Scope overrides', group: 'Governance' },
+  { id: 'duplicates', label: 'Duplicates', group: 'Governance' },
 ]
 
 interface Props {
@@ -161,11 +165,17 @@ interface Props {
   onCorrectSkill: (id: string, patch: { level?: SkillLevel; source?: SkillSource; assessedBy?: string | null; lastUsedOn?: string | null; note?: string }) => boolean
   onRemoveSkill: (id: string) => boolean
   onOpenProfile: (personId: string) => void
+  /**
+   * Confirming a duplicate group mints `link`/`DUPLICATE_OF` actions — work-record edits, not
+   * configuration — so this travels its own path rather than through `onConfig`, the same
+   * reasoning that keeps rates and skill levels off it.
+   */
+  onLink: (actions: Action[]) => boolean
   onClose: () => void
 }
 
 export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig,
-  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onOpenProfile, onClose,
+  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onOpenProfile, onLink, onClose,
   initialTab, initialBlueprintSource }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
@@ -333,6 +343,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
               onConfig={onConfig}
             />
           )}
+          {tab === 'duplicates' && <Duplicates state={state} actor={actor} onLink={onLink} />}
         </div>
       </div>
     </div>
@@ -3255,6 +3266,119 @@ function Capabilities({
           )}
         </div>
       ))}
+    </section>
+  )
+}
+
+/* ================================================================== *
+ * Duplicates
+ * ================================================================== */
+
+/**
+ * `scripts/merge-duplicate-threads.ts`, as a screen a person can act on without a terminal.
+ *
+ * Same source (`duplicateGroups`, via `openDuplicateGroups` — narrowed to groups that still
+ * have something to confirm) and the same non-destructive `link`/`DUPLICATE_OF` action the
+ * script sends, one group at a time, with nothing remembered between visits: a dismissed group
+ * without a real link reappears next time, on purpose (see `openDuplicateGroups` in
+ * lib/intake.ts). The CLI's `--skip=` mechanic stays CLI-only — a heavier "leave this alone for
+ * good" workflow this screen deliberately doesn't offer.
+ */
+function Duplicates({
+  state,
+  actor,
+  onLink,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  onLink: (actions: Action[]) => boolean
+}) {
+  const groups = useMemo(
+    () => openDuplicateGroups(state.issues, state.relationships),
+    [state.issues, state.relationships],
+  )
+  const mayLink = can(state.model, actor, 'work.link')
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  const confirm = (canonical: string, duplicates: string[]) => {
+    const now = new Date().toISOString()
+    const actions: Action[] = duplicates.map((dupId) => ({
+      t: 'link',
+      sourceIssueId: dupId,
+      targetIssueId: canonical,
+      relationshipType: 'DUPLICATE_OF',
+      note: 'Linked from Configuration — Duplicates.',
+      now,
+    }))
+    if (onLink(actions)) setConfirmingId(null)
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Duplicates</h3>
+      <p className="cfg-note">
+        Issues on the same client, under the same parent, whose subject matches once a leading
+        Re:/Fw:/Fwd: is stripped — the shape reply-threading left behind before it was fixed.
+        This is a report to review, not a live rule: subjects get edited, translated and reused,
+        so nothing here is linked automatically. Confirming adds a non-destructive{' '}
+        <span className="mono">DUPLICATE_OF</span> cross-reference — nothing is merged, moved,
+        or reassigned, and a wrong link costs one <span className="mono">unlink</span> to undo.
+      </p>
+
+      {groups.length === 0 ? (
+        <p className="cfg-inherit sentence">No open duplicate groups.</p>
+      ) : (
+        groups.map((g) => {
+          const canonical = state.issues[g.canonical]
+          if (!canonical) return null
+          return (
+            <div className="cfg-card" key={g.canonical}>
+              <div className="cfg-card-head">
+                <b>{canonical.subject}</b>
+                <span className="grow" />
+                <Badge kind="seeded">
+                  {g.duplicates.length} {g.duplicates.length === 1 ? 'duplicate' : 'duplicates'}
+                </Badge>
+              </div>
+              <p className="cfg-inherit sentence">
+                Canonical: <span className="mono">{g.canonical}</span> — last activity{' '}
+                {formatIso(canonical.lastActivity)}.
+              </p>
+              <ul className="cfg-inherit">
+                {g.duplicates.map((dupId) => {
+                  const dup = state.issues[dupId]
+                  if (!dup) return null
+                  return (
+                    <li key={dupId}>
+                      <span className="mono">{dupId}</span> "{dup.subject}" — last activity{' '}
+                      {formatIso(dup.lastActivity)}
+                    </li>
+                  )
+                })}
+              </ul>
+
+              {mayLink.allowed ? (
+                confirmingId === g.canonical ? (
+                  <>
+                    <button className="btn primary" onClick={() => confirm(g.canonical, g.duplicates)}>
+                      Confirm — link {g.duplicates.length} to {g.canonical}
+                    </button>{' '}
+                    <button className="btn" onClick={() => setConfirmingId(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn" onClick={() => setConfirmingId(g.canonical)}>
+                    Link as duplicates…
+                  </button>
+                )
+              ) : (
+                <p className="prov">{mayLink.reason}</p>
+              )}
+            </div>
+          )
+        })
+      )}
     </section>
   )
 }
