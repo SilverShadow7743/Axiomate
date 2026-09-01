@@ -1236,13 +1236,42 @@ scenario(
       draft: { name: 'Add a second approval step', type: cr.label, severity: 'Medium' }, now: NOW,
     } as Action)
     const made = Object.values(s.issues).find((i) => i.subject === 'Add a second approval step')!
+
+    /*
+     * Priced: a statement of work to vary, and the same movement raised against it as a
+     * ChangeRequest — CommercialPanel's own raise form now offers exactly this issue as the
+     * link, since `issueId` was always on the model (see lib/changeRequest.ts) and only the
+     * UI never set it.
+     */
+    const engagementId = Object.values(s.nodes).find((n) => n.kind === 'engagement')!.id
+    const withSow = ok(s, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-O-1', title: 'The statement of work this varies', effortHours: 100, value: 50_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sow = Object.values(withSow.sows).find((x) => x.reference === 'SOW-O-1')!
+    const priced = ok(withSow, {
+      t: 'upsertChangeRequest', id: null, sowId: sow.id,
+      patch: {
+        title: made.subject, effortHours: 8, value: 4_000,
+        reason: 'The client asked for a second approval step', scope: 'Add a second approval step',
+        issueId: made.id,
+      },
+      submit: false, now: NOW,
+    } as Action)
+    const change = Object.values(priced.changes).find((c) => c.title === made.subject)!
+    const linked = change.issueId === made.id
+
     return {
-      verdict: 'PARTIAL',
-      actual: `A CR can be raised as a work item of type "${made.type}"${existing ? '' : ' — the type is configuration and had to be added first'}, linked to the issue that prompted it, and it cannot start until somebody with the authority approves it (scenario P). What it still carries is no value of its own: approving it does not move the agreed effort or value on the statement of work, so a firm sees the overrun rather than the amendment.`,
-      stops: 'at the join — a change request is now a priced record with an approval and an effective date (CR1), and this issue-shaped one is not linked to it. `ChangeRequest.issueId` exists and nothing sets it, so the register and the contract still describe the same change twice.',
-      severity: 'P2',
-      impact:
-        'The valuation gap this described is closed: an approved change moves the contracted position without touching the baseline. What is left is that the issue somebody raises and the variation somebody prices are two records, and only a person knows they are the same change.',
+      verdict: linked ? 'PASS' : 'FAIL',
+      actual: linked
+        ? `A CR can be raised as a work item of type "${made.type}"${existing ? '' : ' — the type is configuration and had to be added first'}, linked to the issue that prompted it, and cannot start until somebody with the authority approves it (scenario P). Separately, it is captured as a priced record on a statement of work (\`upsertChangeRequest\`, CR1's valuation model), and CommercialPanel's own raise form now points \`issueId\` back at ${made.id} — the register and the contract describe the same change once.`
+        : `the priced record was raised but issueId reads "${change.issueId}", not "${made.id}"`,
+      stops: linked ? '—' : 'at the join — `ChangeRequest.issueId` was set on the record but did not read back as the issue raised above',
+      severity: linked ? '—' : 'P2',
+      impact: linked
+        ? 'A firm reviewing a variation now sees, from the priced record, exactly which entry in the register it came from — no longer two records only a person could reconcile.'
+        : 'The valuation gap is closed, but the join between the issue-shaped change and the priced one still is not — a firm sees the overrun rather than the amendment.',
     }
   },
 )

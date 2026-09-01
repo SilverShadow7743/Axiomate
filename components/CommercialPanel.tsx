@@ -30,6 +30,7 @@ import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type So
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
+import { issuesUnder as issuesUnderEngagement } from '@/lib/engagement'
 
 /**
  * What has been contracted under this engagement, and how much of it is gone.
@@ -73,7 +74,7 @@ export default function CommercialPanel({
   /** Retire a statement of work. Refused by the reducer while live projects sit under it. */
   onArchive: (id: string) => void
   /** Raise a variation, optionally submitting it for a decision in the same act. */
-  onRaiseChange: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
+  onRaiseChange: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null; issueId: string | null }, submit: boolean) => boolean
   /** Approve or refuse one. Never your own — the reducer refuses that whatever the grant. */
   onDecideChange: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
   onWithdrawChange: (id: string) => void
@@ -134,6 +135,19 @@ export default function CommercialPanel({
     }
     return byProject
   }, [projects, state.nodes, state.issues])
+
+  /**
+   * Issues anywhere under this engagement that could be the change a priced request came from.
+   *
+   * Not scoped to a SOW — the register carries no per-SOW tag on an issue, and a change
+   * raised here is engagement-level knowledge before it is one contract's knowledge. Matched
+   * on the work type's label, the same way scenario O and P do: unlike Risk and Decision,
+   * "Change Request" has no seeded stable id, so a label match is the only join available.
+   */
+  const changeRequestIssues = useMemo(
+    () => issuesUnderEngagement(state, row.id).filter((i) => /change request/i.test(i.type)),
+    [state, row.id],
+  )
 
   const positions = useMemo(() => {
     return sows.map((sow) => {
@@ -255,6 +269,7 @@ export default function CommercialPanel({
             <Changes
               sow={sow}
               changes={Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt)}
+              candidateIssues={changeRequestIssues}
               mayRaise={mayEdit.allowed}
               mayDecide={mayDecideChange.allowed}
               actorName={actor.name}
@@ -436,6 +451,7 @@ function SowForm({
 function Changes({
   sow,
   changes,
+  candidateIssues,
   mayRaise,
   mayDecide,
   actorName,
@@ -445,10 +461,12 @@ function Changes({
 }: {
   sow: Sow
   changes: ChangeRequest[]
+  /** Issues under the engagement a raised change could be linking back to. See the caller. */
+  candidateIssues: { id: string; subject: string }[]
   mayRaise: boolean
   mayDecide: boolean
   actorName: string
-  onRaise: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null }, submit: boolean) => boolean
+  onRaise: (sowId: string, c: { title: string; effortHours: number; value: number; reason: string; scope: string; effectiveFrom: string | null; issueId: string | null }, submit: boolean) => boolean
   onDecide: (id: string, decision: 'approved' | 'rejected', note?: string) => boolean
   onWithdraw: (id: string) => void
 }) {
@@ -459,11 +477,13 @@ function Changes({
   const [reason, setReason] = useState('')
   const [scope, setScope] = useState('')
   const [effectiveFrom, setEffectiveFrom] = useState('')
+  const [issueId, setIssueId] = useState('')
   const [refusing, setRefusing] = useState<string | null>(null)
   const [refusal, setRefusal] = useState('')
 
   const position = contractedPosition(sow, changes)
   const movement = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`
+  const issueSubject = new Map(candidateIssues.map((i) => [i.id, i.subject]))
 
   const ready = title.trim() !== '' && reason.trim() !== '' && (Number(hours) !== 0 || Number(value) !== 0)
 
@@ -493,7 +513,12 @@ function Changes({
             <tbody>
               {changes.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.title}</td>
+                  <td>
+                    {c.title}
+                    {c.issueId && (
+                      <div className="est-block-note">→ {issueSubject.get(c.issueId) ?? c.issueId}</div>
+                    )}
+                  </td>
                   <td className="mono">{movement(c.effortHours)}h</td>
                   <td className="mono">
                     {c.value < 0 ? '−' : c.value > 0 ? '+' : ''}
@@ -594,6 +619,21 @@ function Changes({
                 <span className="fld-label">Scope</span>
                 <input value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What is being added or removed" />
               </label>
+              <label className="fld">
+                <span className="fld-label">Linked issue</span>
+                <select
+                  value={issueId}
+                  onChange={(e) => setIssueId(e.target.value)}
+                  title="The issue in the register this change was raised against, if there is one"
+                >
+                  <option value="">None</option>
+                  {candidateIssues.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.subject}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {/*
                 * Two buttons rather than one with a tick. Saving a draft and asking somebody to
                 * commit the firm to it are different acts, and a checkbox makes the second one
@@ -604,9 +644,9 @@ function Changes({
                 disabled={!ready}
                 title={ready ? 'Keep working on it' : 'Needs a title, a reason, and a movement'}
                 onClick={() => {
-                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null }, false)) {
+                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null, issueId: issueId || null }, false)) {
                     setOpen(false)
-                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom('')
+                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom(''); setIssueId('')
                   }
                 }}
               >
@@ -617,9 +657,9 @@ function Changes({
                 disabled={!ready}
                 title={ready ? 'Send it for a decision' : 'Needs a title, a reason, and a movement'}
                 onClick={() => {
-                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null }, true)) {
+                  if (onRaise(sow.id, { title, effortHours: Number(hours) || 0, value: Number(value) || 0, reason, scope, effectiveFrom: effectiveFrom || null, issueId: issueId || null }, true)) {
                     setOpen(false)
-                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom('')
+                    setTitle(''); setHours(''); setValue(''); setReason(''); setScope(''); setEffectiveFrom(''); setIssueId('')
                   }
                 }}
               >

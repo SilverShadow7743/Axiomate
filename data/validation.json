@@ -205,11 +205,11 @@
       "id": "O",
       "title": "A change request is raised",
       "expected": "It is captured as a CR, valued, and linked to the work it changes.",
-      "verdict": "PARTIAL",
-      "actual": "A CR can be raised as a work item of type \"Change Request\" — the type is configuration and had to be added first, linked to the issue that prompted it, and it cannot start until somebody with the authority approves it (scenario P). What it still carries is no value of its own: approving it does not move the agreed effort or value on the statement of work, so a firm sees the overrun rather than the amendment.",
-      "stops": "at the join — a change request is now a priced record with an approval and an effective date (CR1), and this issue-shaped one is not linked to it. `ChangeRequest.issueId` exists and nothing sets it, so the register and the contract still describe the same change twice.",
-      "severity": "P2",
-      "impact": "The valuation gap this described is closed: an approved change moves the contracted position without touching the baseline. What is left is that the issue somebody raises and the variation somebody prices are two records, and only a person knows they are the same change."
+      "verdict": "PASS",
+      "actual": "A CR can be raised as a work item of type \"Change Request\" — the type is configuration and had to be added first, linked to the issue that prompted it, and cannot start until somebody with the authority approves it (scenario P). Separately, it is captured as a priced record on a statement of work (`upsertChangeRequest`, CR1's valuation model), and CommercialPanel's own raise form now points `issueId` back at OAPIL-004 — the register and the contract describe the same change once.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A firm reviewing a variation now sees, from the priced record, exactly which entry in the register it came from — no longer two records only a person could reconcile."
     },
     {
       "id": "P",
