@@ -659,7 +659,7 @@
       "expected": "Hours are priced at their own date, an unrated hour makes the total absent rather than smaller, and nobody without the grant is sent a rate at all.",
       "verdict": "PASS",
       "actual": "A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs 40 and 3 August costs 50, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to 900 cost against 2000 billed — margin 1100 at 55%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: 4h of 14h unrated, cost null. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.",
-      "stops": "at the timesheet — nothing feeds worked hours into this yet, and no screen records a rate. Cost is computable and not yet computed.",
+      "stops": "at the timesheet — a Configuration screen records rates (`recordRate`/`correctRate`, `rate.view`/`rate.edit` gated), but nothing feeds real worked hours into `costOf` yet and no screen shows the result. Cost is computable and not yet computed.",
       "severity": "—",
       "impact": "This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing."
     },
@@ -1311,6 +1311,16 @@
       "actual": "admin sees Alpha=true, member sees Alpha=true, unstaffed sees Alpha=false but sees ungated work=true",
       "stops": "",
       "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "MO1",
+      "title": "A record with no Process Area label of its own still shows one, from its place in the tree",
+      "expected": "moduleOf walks to the nearest module-kind ancestor, the same way projectOf walks to the nearest project — an issue imported before the container-to-label transition is not left blank.",
+      "verdict": "PASS",
+      "actual": "the issue's own module reads \"\" and moduleOf resolves \"Billing\" from its place under the Billing node; a record with no module ancestor at all (the project itself) resolves null rather than a guess",
+      "stops": "",
+      "severity": "P2",
       "impact": "none"
     },
     {

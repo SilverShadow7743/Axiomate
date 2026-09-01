@@ -2398,6 +2398,7 @@ export default function IssueWorkspace({
           onClearLifecycle={(id) =>
             dispatch({ t: 'clearLifecycle', issueId: id, now: new Date().toISOString() })
           }
+          onMove={() => selected && rowActions.move(selected)}
           onAcceptProposal={(id) => {
             const i = state.issues[id]
             if (!i) return

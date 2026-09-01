@@ -28,6 +28,7 @@ import { runRecurrences,
   runWatch,
   scopeChainOf,
   projectOf,
+  moduleOf,
   type Action,
   type IssueRecord,
   type SeedIssueInput,
@@ -3866,7 +3867,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `A date before any rate answers null and does NOT fall back — there is no defensible shipped rate for a person, so unlike a working pattern this one cannot default and label the default. Where a rate is in force it is read at the WORK date: 2 March costs ${inMarch?.amount} and 3 August costs ${inAugust?.amount}, so a pay rise in July does not retrospectively change what March cost. Cost and bill are separate rows and move independently. Twenty hours across the two periods come to ${complete.cost} cost against ${complete.revenue} billed — margin ${complete.margin} at ${complete.marginPct}%. Add four hours from before any rate and the WHOLE total goes absent rather than smaller: ${holed.unratedHours}h of ${holed.hours}h unrated, cost ${JSON.stringify(holed.cost)}. A partial sum presented as a total is the failure this refuses — it looks like an answer and is short by an unknown amount. Mixed currencies are absent for the same reason. Overlapping periods are refused by lib/versioning's own check rather than a second implementation of the boundary rule.`,
-      stops: 'at the timesheet — nothing feeds worked hours into this yet, and no screen records a rate. Cost is computable and not yet computed.',
+      stops: 'at the timesheet — a Configuration screen records rates (`recordRate`/`correctRate`, `rate.view`/`rate.edit` gated), but nothing feeds real worked hours into `costOf` yet and no screen shows the result. Cost is computable and not yet computed.',
       severity: '—',
       impact:
         'This is the number the whole commercial half of the product was missing. It is deliberately absent rather than approximate whenever any hour in the set is unpriced, because a margin that is quietly short is worse than one that is missing.',
@@ -7539,6 +7540,32 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `admin sees Alpha=${adminSeesAlpha}, member sees Alpha=${memberSeesAlpha}, unstaffed sees Alpha=${unstaffedSeesAlpha} but sees ungated work=${unstaffedSeesUngated}`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `admin=${adminSeesAlpha} member=${memberSeesAlpha} unstaffedAlpha=${unstaffedSeesAlpha} unstaffedUngated=${unstaffedSeesUngated}`, stops: 'the three-way routing in boot() disagrees with the design for at least one of exempt/member/unstaffed', severity: 'P0', impact: 'either a lockout for someone who should see their own project, or a leak for someone who should not' } as const
+  },
+)
+
+scenario(
+  'MO1',
+  'A record with no Process Area label of its own still shows one, from its place in the tree',
+  'moduleOf walks to the nearest module-kind ancestor, the same way projectOf walks to the nearest project — an issue imported before the container-to-label transition is not left blank.',
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const betaId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Beta')!.id
+    st = ok(st, { t: 'create', parentId: betaId, kind: 'module', draft: { name: 'Billing' }, now: NOW } as Action)
+    const billingId = Object.values(st.nodes).find((n) => n.kind === 'module' && n.name === 'Billing')!.id
+    st = ok(st, { t: 'create', parentId: billingId, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+    const issue = Object.values(st.issues).find((i) => i.subject === 'Beta task')!
+
+    /* Imported before the label existed: the issue's own field is empty, deliberately. */
+    st = ok(st, { t: 'updateIssue', id: issue.id, patch: { module: '' }, now: NOW } as Action)
+
+    const resolved = moduleOf(st, issue.id)
+    const noAncestor = moduleOf(st, betaId)
+
+    const good = st.issues[issue.id].module === '' && resolved === 'Billing' && noAncestor === null
+    return good
+      ? { verdict: 'PASS', actual: `the issue's own module reads "" and moduleOf resolves "${resolved}" from its place under the Billing node; a record with no module ancestor at all (the project itself) resolves null rather than a guess`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `own=${JSON.stringify(st.issues[issue.id].module)} resolved=${JSON.stringify(resolved)} noAncestor=${JSON.stringify(noAncestor)}`, stops: 'moduleOf does not reliably fall back to the tree position', severity: 'P2', impact: 'the Process Area field in OverviewTab would show blank for imported work instead of its real position' } as const
   },
 )
 

@@ -783,6 +783,22 @@ export function projectOf(state: WorkspaceState, id: string): string | null {
 }
 
 /**
+ * The name of the nearest `'module'` (Process Area) ancestor, or null.
+ *
+ * `module` on `IssueRecord` is a label the record carries itself — see `OverviewTab`'s own
+ * comment on the container-to-label transition (E0 step 8b) — and an issue imported before that
+ * label was ever typed still sits under a real `'module'` node in the tree. This is the default
+ * an empty label should show, never silently saved over it: the caller decides whether to use it
+ * only as a placeholder or to let it become the stored value on save.
+ */
+export function moduleOf(state: WorkspaceState, id: string): string | null {
+  for (const scopeId of scopeChainOf(state, id)) {
+    if (state.nodes[scopeId]?.kind === 'module') return state.nodes[scopeId].name
+  }
+  return null
+}
+
+/**
  * Which project(s) an action touches, for the membership gate in `apply()`.
  *
  * `null` means not project-scoped — the action is either coarser than a project (a SOW spans

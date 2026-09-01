@@ -14,7 +14,7 @@ import type { ApprovalDecision } from '@/lib/approval'
 import ApprovalsBlock from './ApprovalsBlock'
 import { liveWorkTypes } from '@/lib/config'
 import { classificationsOf } from '@/lib/tree'
-import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
+import { moduleOf, projectOf, type IssueRecord, type WorkspaceState } from '@/lib/workspace'
 import { exposure, raidKindOf, RAID_SCALE_MAX } from '@/lib/raid'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
@@ -66,10 +66,16 @@ export interface IssueDraft {
   percentOverride: number | null
 }
 
-function draftOf(i: IssueRecord): IssueDraft {
+/**
+ * `moduleDefault` is the nearest `module`-ancestor's name, shown when the record carries no
+ * label of its own yet — an issue imported before the container-to-label transition (E0 step
+ * 8b). Shown, never silently stored: it only becomes the saved value if Save is pressed with it
+ * still showing, exactly as the field's own hint already implies.
+ */
+function draftOf(i: IssueRecord, moduleDefault: string | null): IssueDraft {
   return {
     subject: i.subject,
-    module: i.module,
+    module: i.module || moduleDefault || '',
     description: i.description,
     type: i.type,
     status: i.status,
@@ -101,6 +107,7 @@ export default function OverviewTab({
   setEditing,
   onUploadImage,
   onManageEvidence,
+  onMove,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
@@ -125,6 +132,9 @@ export default function OverviewTab({
   onUploadImage: (file: File) => Promise<{ documentId: string; alt: string } | null>
   /** Opens the evidence manager; kept out of this form so it stays a form. */
   onManageEvidence: (issueId: string) => void
+  /** Opens the Move dialog for this record. Optional so callers that have not been updated
+   *  still compile — the hint text next to Process Area is the only thing that needs it. */
+  onMove?: () => void
 }) {
   const labels = useLabels()
   const record = state.issues[issue.id]
@@ -139,8 +149,22 @@ export default function OverviewTab({
     () => Object.values(state.issues).map((i) => ({ id: i.id, subject: i.subject, status: i.status })),
     [state.issues],
   )
+  const moduleDefault = useMemo(() => moduleOf(state, issue.id), [state, issue.id])
+  const projectId = useMemo(() => projectOf(state, issue.id), [state, issue.id])
+  /** Suggestions for Owner — who this issue's project actually has staffed, per `ProjectMember`.
+   *  A datalist, not a hard `<select>`: staffing is sparse today, and an owner already recorded
+   *  who is not (yet) a formal member must still show and stay editable. */
+  const projectMembers = useMemo(
+    () =>
+      projectId
+        ? Object.values(state.projectMembers).filter((m) => m.projectId === projectId && !m.removedAt)
+        : [],
+    [state.projectMembers, projectId],
+  )
 
-  const [draft, setDraft] = useState<IssueDraft>(() => (record ? draftOf(record) : draftOf(issue as IssueRecord)))
+  const [draft, setDraft] = useState<IssueDraft>(() =>
+    record ? draftOf(record, moduleDefault) : draftOf(issue as IssueRecord, moduleDefault),
+  )
   /** Held outside the draft: it explains a change rather than being part of the record. */
   const [reason, setReason] = useState('')
 
@@ -164,16 +188,16 @@ export default function OverviewTab({
   // Re-seed when the underlying record changes identity or is saved from elsewhere. Keyed on
   // the id so switching issues never carries one record's draft onto another.
   useEffect(() => {
-    if (record && !editing) setDraft(draftOf(record))
-  }, [record, editing, issue.id])
+    if (record && !editing) setDraft(draftOf(record, moduleDefault))
+  }, [record, editing, issue.id, moduleDefault])
 
   const dirty = useMemo(() => {
     if (!record) return false
-    const base = draftOf(record)
+    const base = draftOf(record, moduleDefault)
     return (Object.keys(base) as (keyof IssueDraft)[]).some((k) =>
       k === 'description' ? !richDocsEqual(base.description, draft.description) : base[k] !== draft[k],
     )
-  }, [record, draft])
+  }, [record, draft, moduleDefault])
 
   // The unsaved-work signal lives below the compose state it also reads — see after sendMail.
 
@@ -181,14 +205,14 @@ export default function OverviewTab({
     setDraft((d) => ({ ...d, [k]: v }))
 
   const cancel = () => {
-    if (record) setDraft(draftOf(record))
+    if (record) setDraft(draftOf(record, moduleDefault))
     setReason('')
     setEditing(false)
   }
 
   const save = () => {
     if (!record) return
-    const base = draftOf(record)
+    const base = draftOf(record, moduleDefault)
     const patch: Partial<IssueRecord> = {}
     for (const k of Object.keys(base) as (keyof IssueDraft)[]) {
       if (k === 'plannedStart' || k === 'plannedEnd') continue
@@ -498,8 +522,16 @@ export default function OverviewTab({
             )}
             <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
             <dd>
-              {issue.client} · {issue.module}
-              <span className="prov"> · follows its place in the tree; use Move to change it</span>
+              {issue.client} · {issue.module || moduleDefault || '—'}
+              <span className="prov"> · follows its place in the tree</span>
+              {onMove && (
+                <>
+                  {' '}
+                  <button type="button" className="btn-link" onClick={onMove}>
+                    Move…
+                  </button>
+                </>
+              )}
             </dd>
             <dt>Type</dt>
             <dd>
@@ -908,7 +940,20 @@ export default function OverviewTab({
         <dl className="kv">
           <dt>{labels.ISSUE_OWNER}</dt>
           <dd>
-            <input value={draft.owner} onChange={(e) => set('owner', e.target.value)} aria-label={labels.ISSUE_OWNER} />
+            <input
+              list="overview-owners"
+              value={draft.owner}
+              onChange={(e) => set('owner', e.target.value)}
+              aria-label={labels.ISSUE_OWNER}
+            />
+            <datalist id="overview-owners">
+              {projectMembers.map((m) => (
+                <option key={m.id} value={m.person} />
+              ))}
+            </datalist>
+            {projectMembers.length === 0 && (
+              <span className="prov"> · nobody is staffed to this project yet — type a name</span>
+            )}
           </dd>
           <dt>{labels.ISSUE_RAISED_BY}</dt>
           <dd>

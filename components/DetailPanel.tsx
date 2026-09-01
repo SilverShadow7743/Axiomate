@@ -118,6 +118,8 @@ interface Props {
   onEditRequestHandled?: () => void
   onBuildLifecycle: (id: string) => void
   onClearLifecycle: (id: string) => void
+  /** Opens the Move dialog for the selected record — see OverviewTab's own use of it. */
+  onMove?: () => void
   onAcceptProposal: (id: string) => void
   onUnlink: (relationshipId: string) => void
   onRemoveDependency: (dependencyId: string) => void
@@ -242,6 +244,7 @@ export default function DetailPanel({
   onEditRequestHandled,
   onBuildLifecycle,
   onClearLifecycle,
+  onMove,
   onAcceptProposal,
   onUnlink,
   onRemoveDependency,
@@ -666,6 +669,7 @@ export default function DetailPanel({
             setEditing={setEditing}
             onUploadImage={(file) => onUploadImage(issue.id, file)}
             onManageEvidence={onManageEvidence}
+            onMove={onMove}
           />
         ) : tab === 'Estimation' ? (
           <EstimationTab
