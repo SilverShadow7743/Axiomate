@@ -1164,6 +1164,16 @@
       "impact": "none"
     },
     {
+      "id": "RA1",
+      "title": "A partner browses every Risk and Decision at once, workspace-wide, without opening each one",
+      "expected": "buildTree() carries raidKind/riskLikelihood/riskImpact/decisionOutcome on every row, computed once, and matchesFilters' raidOnly narrows the grid to exactly the Risk and Decision rows — a judged Risk, an unjudged one (no fabricated exposure), a Decision with its outcome, and an ordinary issue excluded.",
+      "verdict": "PASS",
+      "actual": "OAPIL-1 carries riskKind=risk, 4×5=Critical; OAPIL-2 carries riskKind=risk with no exposure computed (not yet judged, never defaulted); OAPIL-3 carries raidKind=decision, outcome \"Ship the interim mapping.\". raidOnly keeps all three and excludes OAPIL-004, an ordinary issue never touched by this scenario.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Risk and Decision records were previously findable only by opening each issue’s own Overview tab or guessing at a keyword search. This is the first thing that lets a partner see every one of them together, workspace-wide, as a real filter — not a new screen, not a score, the same Tree grid everything else already uses."
+    },
+    {
       "id": "GA1",
       "title": "A guest sees one client’s marked content, and an unattached seat sees nothing",
       "expected": "The withheld view is scoped to the reader’s own client node; null — no directory entry, or a client seat nobody attached — empties everything rather than widening to every client; the directory refuses a scope that is not a client node.",

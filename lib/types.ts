@@ -238,6 +238,18 @@ export interface ScheduleRow {
   owner: string | null
   accountable: AccountableParty | null
 
+  /**
+   * RAID (`lib/raid.ts`) — `null` on a non-Risk row, or a Risk not yet judged. Never a
+   * default: a risk nobody has judged is a different fact from a low one.
+   */
+  riskLikelihood: number | null
+  riskImpact: number | null
+  /** `null` on a non-Decision row, or an open Decision with no recorded outcome yet. */
+  decisionOutcome: string | null
+  /** Resolved once here via `raidKindOf`, not re-derived per filter check — `matchesFilters`
+   *  has no model reference to call it with. */
+  raidKind: 'risk' | 'decision' | null
+
   scheduleMode: ScheduleMode
 
   plannedStartDate: string | null
@@ -362,6 +374,8 @@ export interface FilterState {
   owner: string
   accountable: string
   health: string
+  /** Show only Risk and Decision rows (`lib/raid.ts`'s RaidKind), together — the RAID log. */
+  raidOnly: boolean
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -376,4 +390,5 @@ export const EMPTY_FILTERS: FilterState = {
   owner: 'All',
   accountable: 'All',
   health: 'All',
+  raidOnly: false,
 }

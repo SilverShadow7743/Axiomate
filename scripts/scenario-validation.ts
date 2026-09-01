@@ -103,7 +103,7 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, visibleRows } from '../lib/tree'
+import { buildTree, matchesFilters, visibleRows } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
@@ -6795,6 +6795,75 @@ scenario(
   },
 )
 
+scenario(
+  'RA1',
+  'A partner browses every Risk and Decision at once, workspace-wide, without opening each one',
+  "buildTree() carries raidKind/riskLikelihood/riskImpact/decisionOutcome on every row, computed once, and matchesFilters' raidOnly narrows the grid to exactly the Risk and Decision rows — a judged Risk, an unjudged one (no fabricated exposure), a Decision with its outcome, and an ordinary issue excluded.",
+  () => {
+    /* BASE ships exactly three issues (OAPIL-1..3) — all three become RAID cases below, so a
+       fourth, genuinely untouched issue is created fresh for the exclusion case, the same
+       t: 'create' shape every other scenario in this file already uses for a plain new issue. */
+    const withOrdinary = ok(BASE, {
+      t: 'create', parentId: BASE.issues['OAPIL-1'].parentId!, kind: 'issue',
+      draft: { name: 'Ordinary defect, not RAID', type: 'Defect' }, now: NOW,
+    } as Action)
+    const ordinaryId = Object.values(withOrdinary.issues).find((i) => i.subject === 'Ordinary defect, not RAID')!.id
+
+    /* Reuses RD1's own real-edit pattern — the same updateIssue patch shape, the same real
+       issue ids — rather than hand-building a fixture the reducer never produced. */
+    const judged = ok(withOrdinary, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { type: 'Risk', riskLikelihood: 4, riskImpact: 5 }, now: NOW,
+    } as Action)
+    const unjudged = ok(judged, {
+      t: 'updateIssue', id: 'OAPIL-2', patch: { type: 'Risk' }, now: NOW,
+    } as Action)
+    const state = ok(unjudged, {
+      t: 'updateIssue', id: 'OAPIL-3',
+      patch: { type: 'Decision', decisionOutcome: 'Ship the interim mapping.' }, now: NOW,
+    } as Action)
+
+    const rows = buildTree(state, TODAY)
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const risk = byId.get('OAPIL-1')
+    const unjudgedRisk = byId.get('OAPIL-2')
+    const decision = byId.get('OAPIL-3')
+    /* Never touched by any RAID edit above — a Decision/Risk log that flags an ordinary issue
+       would be worse than one that misses a real one. */
+    const ordinary = byId.get(ordinaryId)
+
+    const rowsRight =
+      risk?.raidKind === 'risk' && risk.riskLikelihood === 4 && risk.riskImpact === 5 &&
+      exposure(risk.riskLikelihood, risk.riskImpact)?.band === 'Critical' &&
+      unjudgedRisk?.raidKind === 'risk' && unjudgedRisk.riskLikelihood === null &&
+      exposure(unjudgedRisk.riskLikelihood, unjudgedRisk.riskImpact) === null &&
+      decision?.raidKind === 'decision' && decision.decisionOutcome === 'Ship the interim mapping.' &&
+      ordinary !== undefined && ordinary.raidKind === null
+
+    const raidOnly = { ...EMPTY_FILTERS, raidOnly: true }
+    const filterRight =
+      matchesFilters(risk!, raidOnly) &&
+      matchesFilters(unjudgedRisk!, raidOnly) &&
+      matchesFilters(decision!, raidOnly) &&
+      !matchesFilters(ordinary!, raidOnly) &&
+      /* raidOnly changes nothing about who passes when it is off — additive, not a second
+         gate everyone must also clear. */
+      matchesFilters(ordinary!, EMPTY_FILTERS)
+
+    const good = rowsRight && filterRight
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: risk && unjudgedRisk && decision && ordinary
+        ? `${risk.id} carries riskKind=risk, ${risk.riskLikelihood}×${risk.riskImpact}=${exposure(risk.riskLikelihood, risk.riskImpact)?.band}; ${unjudgedRisk.id} carries riskKind=risk with no exposure computed (not yet judged, never defaulted); ${decision.id} carries raidKind=decision, outcome "${decision.decisionOutcome}". raidOnly keeps all three and excludes ${ordinary.id}, an ordinary issue never touched by this scenario.`
+        : `one or more rows not found: risk=${Boolean(risk)} unjudgedRisk=${Boolean(unjudgedRisk)} decision=${Boolean(decision)} ordinary=${Boolean(ordinary)}`,
+      stops: good ? '—' : 'at buildTree/matchesFilters — a RAID field or the raidOnly filter did not read as expected',
+      severity: good ? '—' : 'P2',
+      impact:
+        'Risk and Decision records were previously findable only by opening each issue’s own Overview tab or guessing at a keyword search. This is the first thing that lets a partner see every one of them together, workspace-wide, as a real filter — not a new screen, not a score, the same Tree grid everything else already uses.',
+    }
+  },
+)
+
 /* ================================================================== *
  * Guest access (design 2026-08-23, phase 7)
  * ================================================================== */
@@ -7753,7 +7822,9 @@ function tvRow(
   return {
     depth: 0, displayId: over.id, name: over.id, type: 'Defect', discipline: null,
     status: issue?.status ?? null, severity: issue?.severity ?? null, owner: issue?.owner ?? null,
-    accountable: issue?.accountable ?? null, scheduleMode: 'AUTO', plannedStartDate: null,
+    accountable: issue?.accountable ?? null,
+    riskLikelihood: null, riskImpact: null, decisionOutcome: null, raidKind: null,
+    scheduleMode: 'AUTO', plannedStartDate: null,
     plannedEndDate: null, actualStartDate: null, actualEndDate: null, plannedOrigin: null,
     actualOrigin: null, duration: null, workingDuration: null, percentComplete: 0,
     progressOrigin: 'status-derived', projectedCompletionDate: null, scheduleHealth: 'Unscheduled',

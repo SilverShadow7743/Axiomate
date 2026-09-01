@@ -1,6 +1,7 @@
 import type { FilterState, ScheduleRow } from './types'
 import { isGroupRow } from './types'
 import { disciplineLabel, kindLabel, resolveLabels } from './config'
+import { raidKindOf } from './raid'
 import type { IssueRecord, WorkspaceState } from './workspace'
 import { computeDurations, computeHealth, isTerminal, pausedCalendarDays, rollUp, STATUS_PROGRESS } from './schedule'
 import { maxIso, minIso } from './dates'
@@ -139,6 +140,10 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
     row.severity = issue.severity
     row.owner = issue.owner
     row.accountable = issue.accountable
+    row.riskLikelihood = issue.riskLikelihood ?? null
+    row.riskImpact = issue.riskImpact ?? null
+    row.decisionOutcome = issue.decisionOutcome ?? null
+    row.raidKind = raidKindOf(state.model, issue.type)
     row.nextAction = issue.nextAction
     row.actualStartDate = issue.raised
     row.actualEndDate = issue.actualEnd
@@ -307,6 +312,10 @@ function blank(
     status: null,
     severity: null,
     owner: null,
+    riskLikelihood: null,
+    riskImpact: null,
+    decisionOutcome: null,
+    raidKind: null,
     // Null, not rolled up. A tier is resolved by whoever its children need; taking the
     // commonest discipline among them would present an average as a fact about the tier.
     discipline: null,
@@ -389,6 +398,7 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   if (f.owner !== 'All' && i.owner !== f.owner) return false
   if (f.accountable !== 'All' && i.accountable !== f.accountable) return false
   if (f.health !== 'All' && row.scheduleHealth !== f.health) return false
+  if (f.raidOnly && row.raidKind === null) return false
   if (f.search.trim()) {
     const q = f.search.toLowerCase()
     const hay =
