@@ -53,6 +53,35 @@ Everything else routes onto **existing** work types — `WT_TASK`, `WT_ISSUE`, `
 `Issue.sourceType`, the field that exists exactly for "what the source log called this, when
 type was mapped onto another taxonomy." No other work type is added.
 
+### New reducer capabilities (also Phase 1 — code, not just configuration)
+
+Checking the actual write paths (not just the schema) for the three "model it properly" targets
+below found three different situations, so three different fixes:
+
+- **`IssueActivity`** has no free-form creation action — only `buildLifecycle`, which
+  auto-generates a fixed 5-phase template from `issue.raised` and cannot reproduce a real WBS
+  row's own title, dates or owner. **New action**: `{ t: 'addActivity', issueId, phase,
+  isMilestone, plannedStartDate, plannedEndDate, owner, now }`, a new `case 'addActivity':` arm
+  in `lib/workspace.ts` alongside `buildLifecycle`, gated on `lifecycle.build` (the same
+  permission `buildLifecycle` already uses — this is the same authority, a different way of
+  exercising it).
+- **`Approval`** needs no new code — `requestApproval` already works against any configured,
+  enabled `ApprovalRule`; there just isn't one for historical/imported approvals yet. **New
+  config, Phase 1**: one `ApprovalRule` added to `OperatingModel.model.approvalRules` (e.g.
+  `id: 'imported-historical'`, question something like "Historical approval — recorded for
+  completeness, no live decision captured through this rule").
+- **`Meeting`** hit a real data gap, not a missing action: `meetingProblem()` requires at least
+  one resolved attendee, and this phase's own Owner-resolution is deferred (per the user's
+  direction above), so every imported meeting would have zero attendees. Both sampled rows
+  (`OAPIL-052`, `SLG-007`) DO have real `Planned Start`/`Planned Finish` dates, so only the
+  attendee requirement is actually blocking — the time requirement isn't. **Scoped fix**:
+  `meetingProblem()` takes an options argument, `{ requireAttendees?: boolean }`, defaulting to
+  `true` — every existing call site (the UI's own meeting form, `case 'upsertMeeting':`) keeps
+  today's behaviour unchanged; only the import path passes `requireAttendees: false`. This is a
+  narrower change than the blanket relaxation first proposed: nobody using the app UI can create
+  a meeting with no attendees after this, only the import script can, and only because it has no
+  attendee ids to give it yet.
+
 ## Phase 2 — WBS import
 
 ### Type routing (151 rows, both projects)
@@ -65,21 +94,21 @@ type was mapped onto another taxonomy." No other work type is added.
 | Requirement | 8 | `Issue`, `type=WT_REQUEST`, `sourceType='Requirement'` |
 | Deliverable | 5 | `Issue`, `type=WT_DELIVERABLE` |
 | Issue | 5 | `Issue`, `type=WT_ISSUE` |
-| Corrective Action | 6 | `IssueActivity` (phase) under its parent issue |
-| Milestone | 5 | `IssueActivity{isMilestone:true}` under its parent issue |
+| Corrective Action | 6 | `addActivity` (new) under its parent issue |
+| Milestone | 5 | `addActivity{isMilestone:true}` (new) under its parent issue |
 | Risk | 3 | `Issue`, `type=WT_RISK` (`riskLikelihood`/`riskImpact` left null — not judged in the sheet) |
 | Dependency (Type column) | 4 | `Issue`, `type=WT_ISSUE`, `sourceType='Dependency'` |
 | Work Package | 2 | `Issue`, `type=WT_TASK`, `sourceType='Work Package'` |
 | CHALLENGE | 2 | `Issue`, `type=WT_ISSUE`, `sourceType='CHALLENGE'` |
 | Defect | 2 | `Issue`, `type=WT_DEFECT` |
-| Approval | 2 | real `Approval` record, `subjectId` = the parent issue |
-| Investigation | 2 | `IssueActivity` (phase) under its parent issue |
+| Approval | 2 | `requestApproval` against the new `imported-historical` rule, `subjectId` = the parent issue |
+| Investigation | 2 | `addActivity` (new) under its parent issue |
 | Change | 2 | `Issue`, `type=WT_CHANGE_REQUEST` |
-| Meeting | 2 | real `Meeting` record |
+| Meeting | 2 | `upsertMeeting` with `attendeeIds: []`, real `Planned Start`/`Finish` as `startAt`/`endAt` |
 | Development | 1 | `Issue`, `type=WT_TASK`, `sourceType='Development'` |
-| Verification | 1 | `IssueActivity` (phase) under its parent issue |
+| Verification | 1 | `addActivity` (new) under its parent issue |
 
-Every one of the 18 rows routed to `IssueActivity`/`Approval`/`Meeting` has a real `Parent` set
+Every one of the 18 rows routed to `addActivity`/`Approval`/`Meeting` has a real `Parent` set
 in the sheet (verified directly, row by row — none are free-floating), so "attach to the parent
 issue" holds for all of them. This means the WBS's own row order matters for the import: a
 row's parent must exist (as an already-created `Issue`) before the row itself is processed, so
@@ -163,3 +192,7 @@ description text as before.
 - If the new module nodes created for the WBS workstream taxonomy turn out to need merging with
   the existing Client-Issue-Log-derived modules once Phase 3 is designed — better to find that
   out before Phase 3 is built on top of two separate, un-reconciled module sets, than after.
+- If `addActivity` turns out to need more validation than "the parent issue exists and the actor
+  holds `lifecycle.build`" once real rows are run through it (e.g. a phase name colliding with
+  an existing activity, or a milestone date that precedes the issue's `raisedDate`) — surfaced
+  by the scenario the plan writes for it, before it is wired into the import script, not after.
