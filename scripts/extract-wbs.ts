@@ -53,7 +53,12 @@ async function main() {
         if (!header) return
         const cell = row.getCell(colNumber)
         const v = cell.value
-        record[header] = v === null || v === undefined ? null : typeof v === 'object' ? String(v) : v
+        record[header] =
+          v === null || v === undefined
+            ? null
+            : typeof v === 'string' || typeof v === 'number'
+              ? v
+              : String(v)
       })
       rows.push(record)
     })
