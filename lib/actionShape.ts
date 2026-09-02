@@ -673,11 +673,21 @@ const SHAPES = {
     scopeKind: opt(oneOf(new Set(['issue', 'project']))),
     scopeId: opt(text),
     note: req(text),
+    requireAttendees: opt(bool),
     now,
   },
   cancelMeeting: { id: req(id), now },
   /* ---- LIFECYCLE ---- */
   buildLifecycle: { issueId: req(id), slaDays: req(num), now },
+  addActivity: {
+    issueId: req(id),
+    phase: req(text),
+    isMilestone: req(bool),
+    plannedStartDate: req(isoDate),
+    plannedEndDate: req(isoDate),
+    owner: req(text),
+    now,
+  },
   clearLifecycle: { issueId: req(id), now },
   /* ---- CONFIGURATION ---- */
   config: { op: req(configOp), now },

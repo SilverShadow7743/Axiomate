@@ -867,6 +867,7 @@ export function projectScopeOf(state: WorkspaceState, a: Action): string[] | nul
     case 'baselineEstimate':
     case 'addTime':
     case 'buildLifecycle':
+    case 'addActivity':
     case 'clearLifecycle':
     case 'setAssignment':
       return one(a.issueId)
@@ -1304,11 +1305,30 @@ export type Action =
       scopeKind?: MeetingScopeKind | null
       scopeId?: string | null
       note: string
+      /** Defaults to true (today's rule) when omitted — see meetingProblem's own doc comment. */
+      requireAttendees?: boolean
       now: string
     }
   | { t: 'cancelMeeting'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
   | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
+  /**
+   * One activity with caller-supplied fields, alongside `buildLifecycle`'s auto-generated
+   * 5-phase template — for a real historical phase (an import, a record of what actually
+   * happened) that has its own title, dates and owner rather than an SLA window to synthesise
+   * one from. `phase` is free text on purpose, matching `ActivityRec.phase`'s own
+   * `ActivityPhase | string` — not every real phase is one of the five standard ones.
+   */
+  | {
+      t: 'addActivity'
+      issueId: string
+      phase: string
+      isMilestone: boolean
+      plannedStartDate: string
+      plannedEndDate: string
+      owner: string
+      now: string
+    }
   | { t: 'clearLifecycle'; issueId: string; now: string }
   /* ---- CONFIGURATION ---- */
   | { t: 'config'; op: ConfigOp; now: string }
@@ -3425,6 +3445,58 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: `Lifecycle plan created for ${a.issueId}.`,
+      }
+    }
+
+    case 'addActivity': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'Issue not found.' }
+      const phase = a.phase.trim()
+      if (!phase) return { state, error: 'An activity needs a phase.' }
+
+      // Continues buildLifecycle's own `${issueId}#${n}` scheme rather than a fixed `#1..#5`,
+      // so the two can never collide even though nothing in this codebase calls both against
+      // the same issue today.
+      const existing = Object.values(state.activities).filter((x) => x.issueId === a.issueId)
+      const seq = state.seq + 1
+      const id = `${a.issueId}#${existing.length + 1}`
+
+      const percentComplete = STATUS_PROGRESS[issue.status] ?? 0
+      const activities = {
+        ...state.activities,
+        [id]: {
+          id,
+          issueId: a.issueId,
+          phase,
+          order: existing.length,
+          plannedStartDate: a.plannedStartDate,
+          plannedEndDate: a.plannedEndDate,
+          percentComplete,
+          owner: a.owner,
+          scheduleMode: 'MANUAL',
+          isMilestone: a.isMilestone,
+          // A reported fact (an import, a real record), not something the lifecycle generator
+          // synthesised — `ActivityRec.origin`'s own distinction is exactly this.
+          origin: 'user',
+          deletedAt: null,
+        } satisfies ActivityRec,
+      }
+
+      return {
+        state: {
+          ...state,
+          seq,
+          activities,
+          audit: log(actor, state, {
+            rowId: a.issueId,
+            field: 'activity',
+            from: null,
+            to: `${phase}${a.isMilestone ? ' (milestone)' : ''} added`,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${phase} added to ${a.issueId}.`,
       }
     }
 
@@ -6611,7 +6683,10 @@ Question: ${review.question}`),
       if (unknown.length) {
         return { state, error: `Attendees are directory people, and ${unknown.length === 1 ? 'one id resolves' : `${unknown.length} ids resolve`} to nobody.` }
       }
-      const problem = meetingProblem({ title: a.title, startAt: a.startAt, endAt: a.endAt, attendeeIds })
+      const problem = meetingProblem(
+        { title: a.title, startAt: a.startAt, endAt: a.endAt, attendeeIds },
+        { requireAttendees: a.requireAttendees },
+      )
       if (problem) return { state, error: problem.message }
 
       const meId = directoryPersonFor(state.model, actor)?.id ?? null

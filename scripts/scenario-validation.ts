@@ -115,7 +115,7 @@ import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
-import { ISSUE_STATUSES, EMPTY_FILTERS, type ScheduleRow, type IssueDetail } from '../lib/types'
+import { ISSUE_STATUSES, EMPTY_FILTERS, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -9933,6 +9933,80 @@ scenario(
     return good
       ? { verdict: "PASS", actual: "46 live messages arrive as the newest 40, the removed message travels nowhere, the 3,000-character body is cut to 800 with an ellipsis, truncation is stated, and the scope context rides along.", stops: "", severity: "P2", impact: "none" } as const
       : { verdict: "FAIL", actual: `stubFree=${stubFree} capped=${capped} (${req.messages.length}/${req.truncated}) longCut=${longCut} context=${context}`, stops: "at the payload — a removed message travels, or an unbounded thread becomes an unbounded bill", severity: "P2", impact: "either deleted words reach the model or a long thread costs whatever it costs" } as const
+  },
+)
+
+scenario(
+  'AA1',
+  'addActivity records a real historical phase, refuses without lifecycle.build, and never collides with buildLifecycle',
+  'The OAPIL/SLG WBS import (docs/plans/2026-09-02-oapil-slg-wbs-import-plan.md) needs one activity with its own real dates and title — not the auto-generated 5-phase template buildLifecycle produces from an SLA window. addActivity is that free-form arm: same permission as buildLifecycle (the same authority, exercised a different way), a phase that is free text (not one of the five standard ones), origin:user (a reported fact, not something the generator synthesised), and an id scheme that keeps counting the same per-issue sequence buildLifecycle already uses, so the two can never mint the same id even against one issue.',
+  () => {
+    // An actor with no directory entry falls to defaultRoleIds, which this fixture (like the
+    // shipped default) resolves to Administrator — no refusal test there. A real directory
+    // person on ROLE_SUPPORT (work.create/edit/assign, note, evidence, time — no
+    // lifecycle.build) is the actual low-privilege case.
+    const supportId = 'aa1-support'
+    const staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: supportId, name: 'AA1 Support', roleIds: ['ROLE_SUPPORT'] }, now: NOW } as Action)
+    const P: Actor = { id: supportId, name: 'AA1 Support' }
+    const refused = apply(staffed, { t: 'addActivity', issueId: 'OAPIL-1', phase: 'Investigation', isMilestone: false, plannedStartDate: '2026-08-01', plannedEndDate: '2026-08-05', owner: 'Nishant', now: NOW } as Action, P)
+    const refusal = Boolean(refused.error)
+
+    let s = ok(BASE, { t: 'addActivity', issueId: 'OAPIL-1', phase: 'Investigation', isMilestone: false, plannedStartDate: '2026-08-01', plannedEndDate: '2026-08-05', owner: 'Nishant', now: NOW } as Action)
+    const first = Object.values(s.activities).find((a) => a.issueId === 'OAPIL-1')!
+    const shape =
+      first.phase === 'Investigation' &&
+      first.isMilestone === false &&
+      first.plannedStartDate === '2026-08-01' &&
+      first.plannedEndDate === '2026-08-05' &&
+      first.owner === 'Nishant' &&
+      first.scheduleMode === 'MANUAL' &&
+      first.origin === 'user' &&
+      first.id === 'OAPIL-1#1'
+
+    // A second addActivity on the SAME issue must not collide with the first — the shared
+    // per-issue counter buildLifecycle already relies on.
+    s = ok(s, { t: 'addActivity', issueId: 'OAPIL-1', phase: 'Corrective Action', isMilestone: false, plannedStartDate: '2026-08-06', plannedEndDate: '2026-08-10', owner: 'Nishant', now: NOW } as Action)
+    const second = Object.values(s.activities).find((a) => a.issueId === 'OAPIL-1' && a.phase === 'Corrective Action')!
+    const noCollision = second.id === 'OAPIL-1#2' && second.id !== first.id
+
+    // Now buildLifecycle's own auto-template on a DIFFERENT issue proves the two mechanisms
+    // share the scheme without either having to know about the other.
+    s = ok(s, { t: 'buildLifecycle', issueId: 'OAPIL-2', slaDays: 5, now: NOW } as Action)
+    const generated = Object.values(s.activities).filter((a) => a.issueId === 'OAPIL-2')
+    const lifecycleUnaffected = generated.length === ACTIVITY_PHASES.length && generated.every((a) => a.origin === 'generated')
+
+    const good = refusal && shape && noCollision && lifecycleUnaffected
+    return good
+      ? { verdict: 'PASS', actual: 'Refused without lifecycle.build; the created activity carries its own caller-supplied phase, dates, owner, MANUAL schedule mode and user origin rather than any generated default; a second addActivity on the same issue mints a non-colliding id continuing the same per-issue counter; buildLifecycle\'s own 5-phase template on a different issue is unaffected.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `refusal=${refusal} shape=${shape} noCollision=${noCollision} (first=${first.id} second=${second?.id}) lifecycleUnaffected=${lifecycleUnaffected}`, stops: 'at the reducer arm — a historical import activity would land with the wrong fields, collide with an existing id, or leak into the auto-generated lifecycle template', severity: 'P1', impact: 'the WBS import (13 activities) would either be refused, silently corrupt an id, or misrepresent an imported fact as machine-generated' } as const
+  },
+)
+
+scenario(
+  'AA2',
+  'A meeting with nobody in it is still refused by default; only an explicit requireAttendees:false import path admits one',
+  'The other half of the WBS import\'s addActivity work: two Meeting-typed WBS rows have no resolved attendee ids yet (owner-name resolution is deferred to a later action), so meetingProblem() gained a scoped requireAttendees option rather than a blanket relaxation. This is the regression the plan itself named as the highest risk in the whole import — every ordinary caller (the UI\'s own meeting form) omits the field and must keep refusing an empty attendee list exactly as before; only a caller that explicitly passes requireAttendees:false may book one.',
+  () => {
+    const base = { t: 'upsertMeeting' as const, id: null, title: 'Historical import meeting', startAt: '2026-08-11T09:00:00.000Z', endAt: '2026-08-11T10:00:00.000Z', attendeeIds: [] as string[], note: '', now: NOW }
+
+    // Today's default: omitted requireAttendees still refuses, same message as before this change.
+    const defaultRefused = act(BASE, base as Action)
+    const defaultRefusal = Boolean(defaultRefused.error) && /nobody in it/.test(defaultRefused.error ?? '')
+
+    // Explicit true behaves identically to omitted — the option adds a capability, it does not
+    // change what "true" means.
+    const explicitTrueRefused = act(BASE, { ...base, requireAttendees: true } as Action)
+    const explicitTrueRefusal = Boolean(explicitTrueRefused.error) && /nobody in it/.test(explicitTrueRefused.error ?? '')
+
+    // Only the explicit opt-out admits an attendee-less meeting.
+    const s = ok(BASE, { ...base, requireAttendees: false } as Action)
+    const created = Object.values(s.meetings).find((m) => m.title === 'Historical import meeting')
+    const admitted = created !== undefined && created.attendeeIds.length === 0
+
+    const good = defaultRefusal && explicitTrueRefusal && admitted
+    return good
+      ? { verdict: 'PASS', actual: 'Omitting requireAttendees refuses an attendee-less meeting with the same message as before this change; explicit true refuses identically; only explicit requireAttendees:false admits one.', stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `defaultRefusal=${defaultRefusal} explicitTrueRefusal=${explicitTrueRefusal} admitted=${admitted}`, stops: 'at meetingProblem\'s own default — the scoped opt-out leaked into the ordinary path, or the import path stayed blocked', severity: 'P1', impact: 'either anyone using the ordinary meeting form can now book a meeting with nobody in it, or the WBS import\'s 2 historical meetings cannot be created at all' } as const
   },
 )
 

@@ -43,13 +43,17 @@ export interface MeetingProblem {
 
 export function meetingProblem(
   m: Pick<Meeting, 'title' | 'startAt' | 'endAt' | 'attendeeIds'>,
+  opts: { requireAttendees?: boolean } = {},
 ): MeetingProblem | null {
   if (!m.title.trim()) return { field: 'title', message: 'A meeting needs a title.' }
   if (!m.startAt || !m.endAt) return { field: 'times', message: 'A meeting needs a start and an end.' }
   if (Date.parse(m.endAt) <= Date.parse(m.startAt)) {
     return { field: 'times', message: 'The end falls before the start.' }
   }
-  if (!m.attendeeIds.length) {
+  // Defaults to required — every ordinary caller (the UI's own meeting form) omits the option
+  // and keeps today's rule. Only a historical import, whose owner names have not been resolved
+  // to attendee ids yet, passes false; see the WBS import design/plan docs.
+  if ((opts.requireAttendees ?? true) && !m.attendeeIds.length) {
     return { field: 'attendees', message: 'A meeting with nobody in it is a calendar note — name at least one attendee.' }
   }
   return null

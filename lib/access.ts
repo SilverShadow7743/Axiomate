@@ -523,6 +523,7 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   setEstimate: 'estimate.edit',
   baselineEstimate: 'estimate.agree',
   buildLifecycle: 'lifecycle.build',
+  addActivity: 'lifecycle.build',
   clearLifecycle: 'lifecycle.build',
   upsertAllocation: 'capacity.allocate',
   removeAllocation: 'capacity.allocate',
