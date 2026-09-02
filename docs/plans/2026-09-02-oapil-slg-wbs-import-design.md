@@ -151,6 +151,28 @@ A child row (real `Parent`) gets `parentIssueId` = the parent's issue id and no 
 schema statement "either under a hierarchy node, or under another issue — never both" is
 followed exactly.
 
+**Correction (found during implementation):** only root rows' workstream names become modules
+— 9 for OAPIL and 3 for SLG (12 total), not the 11+3=14 estimated above by listing every row's
+`Workstream` regardless of root/child status. Two of the listed OAPIL workstreams,
+`Procure-to-Pay` and `Order-to-Cash & Logistics`, turn out to appear only on non-root rows
+(5 `Task` rows nested under `OAPIL-010`, a `Program & Commercial Governance` epic) — those rows
+attach via `parentIssueId`, never `nodeId`, so nothing ever needs a module under either label.
+
+**Correction (found during implementation):** one issue-shaped row's `Parent` points at a row
+that isn't issue-shaped — `OAPIL-154` (`Task`)'s `Parent` is `OAPIL-151` (`Milestone`), and
+`Issue.parentId` may only be a hierarchy node or another *issue*, never an activity. The
+transform walks past non-issue-shaped ancestors to the nearest real issue (`OAPIL-150`, the
+epic both ultimately belong to) rather than passing the raw `Parent` value through unchecked —
+confirmed to be the only such row in the real data.
+
+**Correction (found during implementation, resolved by the user):** 24 root rows (mostly Epics)
+have no `Planned Start` at all, and no ancestor to inherit one from either — a real conflict
+with `Issue.raisedDate` being required and this workbook's own stated convention ("Not Provided
+/ To Be Confirmed — used wherever the source material does not state a value. Never invented.").
+Resolved by explicit user direction: those 24 default to the import's own run date, flagged in
+the issue's description as a default rather than a stated fact, never silently indistinguishable
+from a real one.
+
 ### Status mapping
 
 `ISSUE_STATUSES` (`lib/types.ts`) is documented as closed vocabulary — "we do not invent new

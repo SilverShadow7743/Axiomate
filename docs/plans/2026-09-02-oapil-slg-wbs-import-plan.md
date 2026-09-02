@@ -68,11 +68,14 @@ This step does the real modeling work the design doc specifies:
   issue id. `Approval` → an approval-shaped record. `Meeting` → a meeting-shaped record.
 - **Status mapping**, per the design doc's table, with the raw value appended to the record's
   description text (`"Source status: <raw value>"`) rather than dropped.
-- **Hierarchy targeting.** Each root row's `Workstream` value, split on the first `(`, becomes a
-  module name; the transform collects the distinct set (11 for OAPIL, 3 for SLG — confirm the
-  exact count against Step 1's real output, don't assume the count read during design) as a
-  separate `modules` list in the seed output, so the import step can create them once each rather
-  than the transform trying to deduplicate node-creation across 151 rows itself.
+- **Hierarchy targeting.** Each ROOT row's `Workstream` value, split on the first `(`, becomes a
+  module name — collected from root rows only (9 for OAPIL, 3 for SLG = 12, not the 14 the design
+  doc first estimated from scanning every row's `Workstream` regardless of root/child status; 2
+  of the 11 all-row OAPIL workstream labels — `Procure-to-Pay`, `Order-to-Cash & Logistics` —
+  turn out to appear only on non-root rows nested under `OAPIL-010`, a `Program & Commercial
+  Governance` epic, so nothing ever needs a module node under either label). Collected into a
+  separate `modules` list in the seed output, so the import step creates each one once rather
+  than deduplicating node-creation across 151 rows itself.
 - **Owner/Discipline**: written through verbatim as raw text (`owner` field), `ownerId` and
   `discipline` absent from the seed record entirely — not merely null, absent, so a later reader
   can't mistake "the transform ran and found nothing" for "this field was never attempted."
@@ -84,9 +87,11 @@ Output shape mirrors `issues.seed.json`'s own convention: `{ meta: {...}, module
 never touches a database) then inspect `data/wbs.seed.json`: `issues.length` should be `151 -
 13 (activities) - 2 (approvals) - 2 (meetings) = 134`, `activities.length === 13` (5 Milestone +
 5 Corrective Action + 2 Investigation + 1 Verification), `approvals.length === 2`,
-`meetings.length === 2`, `modules.length === 14` (11 OAPIL + 3 SLG) — all confirmed against the
-real extracted `data/wbs.raw.json` during Step 1, not assumed from the design doc's first-draft
-counts (which had three tallying errors, corrected in the design doc itself).
+`meetings.length === 2`, `modules.length === 12` (9 OAPIL + 3 SLG, root rows only) — all
+confirmed by actually running the transform against the real extracted `data/wbs.raw.json`, not
+assumed from the design doc's first-draft counts (which had four corrections in total: three
+type-count tallying errors, and the module count itself, all found during implementation, not
+design).
 Re-run with one row's `Type` temporarily edited in `data/wbs.raw.json` to an unmapped value and
 confirm the script throws rather than silently defaulting — this is the one behavior in this
 step worth proving negatively, not just positively.
@@ -209,21 +214,22 @@ tx.$queryRaw...)` or simplest: re-run `loadWorkspace('axiocloud')` and check
 `state.model.workTypes.WT_EPIC`, `.WT_DELIVERABLE`, and `state.model.approvalRules.find(r =>
 r.id === 'imported-historical')` are all present with the expected fields.
 
-## Step 7 — Phase 2 hierarchy write: 14 new module nodes (live data, not a commit)
+## Step 7 — Phase 2 hierarchy write: 12 new module nodes (live data, not a commit)
 
 Same one-off script, continuing the batch or a second `persistActions` call (either is fine —
 these are structural, non-issue creates, and don't depend on Step 6 having happened in a
-separate transaction, only on having happened first). For each of the 14 module names Step 2's
-`data/wbs.seed.json` collected: `{ t: 'create', parentId: 'project:2' (OAPIL) or 'project:3'
-(SLG), kind: 'module', draft: { name: <workstream name> }, now }`. Confirm `canParent('module',
-'project')` holds (it must — the existing Client-Issue-Log-derived modules already sit at this
-exact position) before dispatching, and confirm the createdId scheme (`module:<seq>`, per
+separate transaction, only on having happened first). For each of the 12 module names Step 2's
+`data/wbs.seed.json` collected (9 OAPIL + 3 SLG, root rows only — see Step 2's own note on why
+this isn't 14): `{ t: 'create', parentId: 'project:2' (OAPIL) or 'project:3' (SLG), kind:
+'module', draft: { name: <workstream name> }, now }`. Confirm `canParent('module', 'project')`
+holds (it must — the existing Client-Issue-Log-derived modules already sit at this exact
+position) before dispatching, and confirm the createdId scheme (`module:<seq>`, per
 `case 'create':`'s structural-node branch, line ~2002) so Step 8 can look each new module id up
 by matching on `.name` after this step, rather than needing this step to hand ids back directly.
 
 **Verify:** re-load the workspace, `Object.values(state.nodes).filter(n => n.kind === 'module'
 && n.parentId === 'project:2').length` should be `existing OAPIL module count (12, confirmed
-this session) + 11`; same check for SLG (`existing 3 + 3`). Confirm none of the 14 new names
+this session) + 9`; same check for SLG (`existing 3 + 3`). Confirm none of the 12 new names
 collide with an existing module's name under the same project (they shouldn't — the two
 taxonomies were confirmed not to overlap during design — but confirm rather than assume).
 
