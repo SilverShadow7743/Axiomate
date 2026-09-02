@@ -47,7 +47,7 @@ export default function DetailDrawer({ wide, onClose, children }: Props) {
     // scrim itself, so nothing that starts inside the drawer can bubble into a close.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- the scrim is a pointer affordance; Escape (via DetailPanel) is the keyboard path to the same close
     <div
-      className="drawer-scrim"
+      className="record-drawer-scrim"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

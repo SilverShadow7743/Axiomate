@@ -1356,8 +1356,13 @@ select.cell-editor {
 /* ---------- record detail drawer ----------
    The detail pane's home since the clean shell: a right-hand overlay, so the Tree and Gantt
    keep their full width underneath. The scrim is deliberately light — this is a workspace
-   surface visited dozens of times a day, not a modal moment. */
-.drawer-scrim {
+   surface visited dozens of times a day, not a modal moment.
+   Named `record-drawer-scrim`, not `drawer-scrim` — that name was already claimed by the
+   evidence panel below, and shared class names with different z-indexes is exactly how one
+   silently overrides the other: the evidence panel's later rule was winning the cascade for
+   BOTH, which is why editing a record from its drawer opened a dialog that rendered under the
+   drawer instead of over it. */
+.record-drawer-scrim {
   position: fixed;
   inset: 0;
   z-index: var(--z-drawer);
