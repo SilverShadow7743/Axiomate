@@ -92,25 +92,37 @@ below found three different situations, so three different fixes:
 | Epic | 21 | `Issue`, `type=WT_EPIC` |
 | Decision | 14 | `Issue`, `type=WT_DECISION` |
 | Requirement | 8 | `Issue`, `type=WT_REQUEST`, `sourceType='Requirement'` |
+| CHALLENGE | 6 | `Issue`, `type=WT_ISSUE`, `sourceType='CHALLENGE'` |
 | Deliverable | 5 | `Issue`, `type=WT_DELIVERABLE` |
-| Issue | 5 | `Issue`, `type=WT_ISSUE` |
-| Corrective Action | 6 | `addActivity` (new) under its parent issue |
 | Milestone | 5 | `addActivity{isMilestone:true}` (new) under its parent issue |
-| Risk | 3 | `Issue`, `type=WT_RISK` (`riskLikelihood`/`riskImpact` left null — not judged in the sheet) |
+| Issue | 5 | `Issue`, `type=WT_ISSUE` |
+| Development | 5 | `Issue`, `type=WT_TASK`, `sourceType='Development'` |
+| Corrective Action | 5 | `addActivity` (new) under its parent issue |
 | Dependency (Type column) | 4 | `Issue`, `type=WT_ISSUE`, `sourceType='Dependency'` |
+| Risk | 3 | `Issue`, `type=WT_RISK` (`riskLikelihood`/`riskImpact` left null — not judged in the sheet) |
 | Work Package | 2 | `Issue`, `type=WT_TASK`, `sourceType='Work Package'` |
-| CHALLENGE | 2 | `Issue`, `type=WT_ISSUE`, `sourceType='CHALLENGE'` |
 | Defect | 2 | `Issue`, `type=WT_DEFECT` |
 | Approval | 2 | `requestApproval` against the new `imported-historical` rule, `subjectId` = the parent issue |
+| Meeting | 2 | `upsertMeeting` with `attendeeIds: []`, real `Planned Start`/`Finish` as `startAt`/`endAt` |
 | Investigation | 2 | `addActivity` (new) under its parent issue |
 | Change | 2 | `Issue`, `type=WT_CHANGE_REQUEST` |
-| Meeting | 2 | `upsertMeeting` with `attendeeIds: []`, real `Planned Start`/`Finish` as `startAt`/`endAt` |
-| Development | 1 | `Issue`, `type=WT_TASK`, `sourceType='Development'` |
+| Testing | 2 | `Issue`, `type=WT_TASK`, `sourceType='Testing'` |
 | Verification | 1 | `addActivity` (new) under its parent issue |
 
-Every one of the 18 rows routed to `addActivity`/`Approval`/`Meeting` has a real `Parent` set
-in the sheet (verified directly, row by row — none are free-floating), so "attach to the parent
-issue" holds for all of them. This means the WBS's own row order matters for the import: a
+**Correction (found during implementation, not during design):** the counts above were
+transcribed from two separate per-sheet tallies (OAPIL WBS and SLG WBS read independently) and
+three were added wrong when combined — `CHALLENGE` (6, not 2), `Development` (5, not 1),
+`Corrective Action` (5, not 6) — and one type, `Testing` (2 rows, both SLG, both real WBS work
+items with a real `Parent` and no real dates), was missed entirely. `Testing` routes the same
+way `Work Package`/`Development` already do: onto `WT_TASK` with the original label kept in
+`sourceType`, since it's the same shape of thing — a task-like WBS row whose label doesn't
+happen to match an existing work type. Confirmed against the real extracted data
+(`data/wbs.raw.json`, all 151 rows, 20 distinct `Type` values, verified to sum to exactly 151)
+rather than trusted from the design-time read. Total: 20 types, 151 rows.
+
+Every one of the 17 rows routed to `addActivity`/`Approval`/`Meeting` (13 activities + 2
+approvals + 2 meetings) has a real `Parent` set in the sheet (verified directly, row by row —
+none are free-floating), so "attach to the parent issue" holds for all of them. This means the WBS's own row order matters for the import: a
 row's parent must exist (as an already-created `Issue`) before the row itself is processed, so
 the import walks the sheet in parent-before-child order (a topological pass over the `Parent`
 column), not simple top-to-bottom.

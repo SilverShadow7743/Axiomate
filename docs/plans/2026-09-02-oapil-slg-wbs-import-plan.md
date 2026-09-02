@@ -82,8 +82,11 @@ Output shape mirrors `issues.seed.json`'s own convention: `{ meta: {...}, module
 
 **Verify:** `node scripts/transform-wbs.mjs` (no `--apply` flag exists or is needed — this script
 never touches a database) then inspect `data/wbs.seed.json`: `issues.length` should be `151 -
-14 (activities) - 2 (approvals) - 2 (meetings) = 133`, `activities.length === 14`,
-`approvals.length === 2`, `meetings.length === 2`, `modules.length === 14` (11 OAPIL + 3 SLG).
+13 (activities) - 2 (approvals) - 2 (meetings) = 134`, `activities.length === 13` (5 Milestone +
+5 Corrective Action + 2 Investigation + 1 Verification), `approvals.length === 2`,
+`meetings.length === 2`, `modules.length === 14` (11 OAPIL + 3 SLG) — all confirmed against the
+real extracted `data/wbs.raw.json` during Step 1, not assumed from the design doc's first-draft
+counts (which had three tallying errors, corrected in the design doc itself).
 Re-run with one row's `Type` temporarily edited in `data/wbs.raw.json` to an unmapped value and
 confirm the script throws rather than silently defaulting — this is the one behavior in this
 step worth proving negatively, not just positively.
@@ -261,7 +264,7 @@ different real status, decide (or leave the approval open) accordingly, per row.
 count, meeting count, and the topological order's first/last few ids) and read it — this is the
 same "review before apply" discipline `scripts/merge-duplicate-threads.ts` already follows with
 its dry-run default. After dispatching: re-load the workspace and confirm exact counts —
-`Object.keys(state.issues).length === 133`, activities added `=== 14`, approvals `=== 2`,
+`Object.keys(state.issues).length === 134`, activities added `=== 13`, approvals `=== 2`,
 meetings `=== 2` — plus spot-check one full row end-to-end (e.g. `OAPIL-082`, an Investigation
 activity, really attached to the real created id for `OAPIL-081`'s issue, with the right dates).
 
