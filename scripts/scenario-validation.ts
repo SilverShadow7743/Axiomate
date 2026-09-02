@@ -10010,6 +10010,27 @@ scenario(
   },
 )
 
+scenario(
+  'AA3',
+  "create honors a stated sourceType and lastActivity, and still defaults both for every ordinary caller",
+  "The last piece the WBS import needs from create: sourceType (always '' before this change, regardless of the draft) and lastActivity (always \"now\", regardless of the draft) are the only two fields on the issue-creation arm that did NOT already accept a draft override — raised, type, status, severity, owner and several others already did. Additive only: a draft that never sets these two keys must land exactly as it always has.",
+  () => {
+    const ordinary = ok(BASE, { t: 'create', parentId: Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id, kind: 'issue', draft: { name: 'Ordinary creation' }, now: NOW } as Action)
+    const created1 = Object.values(ordinary.issues).find((i) => i.subject === 'Ordinary creation')!
+    const ordinaryUnaffected = created1.sourceType === '' && created1.lastActivity === NOW.slice(0, 10)
+
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    const historical = ok(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Historical import row', sourceType: 'Epic', raised: '2026-07-01', lastActivity: '2026-08-15' }, now: NOW } as Action)
+    const created2 = Object.values(historical.issues).find((i) => i.subject === 'Historical import row')!
+    const historicalHonored = created2.sourceType === 'Epic' && created2.raised === '2026-07-01' && created2.lastActivity === '2026-08-15'
+
+    const good = ordinaryUnaffected && historicalHonored
+    return good
+      ? { verdict: 'PASS', actual: "An ordinary draft with no sourceType/lastActivity keys still lands sourceType='' and lastActivity=now, exactly as before; a draft stating both (plus the already-supported raised) lands every one of the three real values.", stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `ordinaryUnaffected=${ordinaryUnaffected} (sourceType=${JSON.stringify(created1.sourceType)} lastActivity=${created1.lastActivity}) historicalHonored=${historicalHonored} (sourceType=${JSON.stringify(created2.sourceType)} raised=${created2.raised} lastActivity=${created2.lastActivity})`, stops: 'at the create arm — either every ordinary issue in the app now carries a stray sourceType/lastActivity default, or the WBS import cannot state its own historical facts', severity: 'P1', impact: 'the WBS import (134 issues) would either be refused the fields it needs, or every other feature that creates an issue through the ordinary path would start seeing unexpected sourceType/lastActivity values' } as const
+  },
+)
+
 /* ================================================================== *
  * RD1's async half — the PDF renderers.
  *

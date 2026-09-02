@@ -2102,6 +2102,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "AA3",
+      "title": "create honors a stated sourceType and lastActivity, and still defaults both for every ordinary caller",
+      "expected": "The last piece the WBS import needs from create: sourceType (always '' before this change, regardless of the draft) and lastActivity (always \"now\", regardless of the draft) are the only two fields on the issue-creation arm that did NOT already accept a draft override — raised, type, status, severity, owner and several others already did. Additive only: a draft that never sets these two keys must land exactly as it always has.",
+      "verdict": "PASS",
+      "actual": "An ordinary draft with no sourceType/lastActivity keys still lands sourceType='' and lastActivity=now, exactly as before; a draft stating both (plus the already-supported raised) lands every one of the three real values.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

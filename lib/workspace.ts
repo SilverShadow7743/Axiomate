@@ -2098,8 +2098,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // hardcoded here, so a workspace that had archived Defect — or never had one —
           // would still mint records classified as it, and no filter would show them.
           type: a.draft.type || liveWorkTypes(state.model)[0]?.label || '',
-          // Created here, so there is no earlier classification to preserve.
-          sourceType: '',
+          // Empty unless the caller states an earlier classification to preserve — an import
+          // (the WBS transform, e.g.) is the only caller that has one; the ordinary UI form
+          // never passes this key, so it keeps meaning "created here" for everyone else.
+          sourceType: a.draft.sourceType || '',
           /*
            * Unclassified unless the person creating it said otherwise, and NOT defaulted to the
            * first configured discipline the way `type` is above.
@@ -2118,7 +2120,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           raisedBy: a.draft.raisedBy || by,
           accountable: (a.draft.accountable as AccountableParty) || 'Unassigned',
           raised: a.draft.raised || a.now.slice(0, 10),
-          lastActivity: a.now.slice(0, 10),
+          // Same posture as `raised` just above: a stated historical value wins, otherwise
+          // "now" — the correct default for every ordinary creation, where there is no earlier
+          // activity to record.
+          lastActivity: a.draft.lastActivity || a.now.slice(0, 10),
           actualEnd: null,
           age: 0,
           daysSinceActivity: 0,
