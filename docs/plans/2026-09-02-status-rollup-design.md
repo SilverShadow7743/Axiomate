@@ -94,11 +94,12 @@ does today.
 ## Tree grid
 
 A new column in `lib/columns.ts`, following the `exposure`/`decisionOutcome` columns'
-(`RAID log`, 2026-09-01) exact `ColumnDef` shape — added to `COLUMNS`, **not** to
-`DEFAULT_VISIBLE`, so nobody's existing view changes; a person toggles it on, or a Saved View
-captures the choice once made. This is an inference from that precedent rather than something
-explicitly asked for this session — worth a second look if the point is to see this at a glance
-without opting in.
+(`RAID log`, 2026-09-01) exact `ColumnDef` shape, but **default-visible** — added to both
+`COLUMNS` and `DEFAULT_VISIBLE`, unlike the RAID columns. The whole point is seeing a mismatch
+like `OAPIL-091` at a glance while scanning a hierarchy, not after opting in — so it ships on by
+default. Existing Saved Views that captured a specific column set before this ships won't gain
+it automatically (a saved column list is exactly that — saved), but anyone on the default view,
+or building a new one, sees it without a toggle.
 
 Rendered in `TreeGrid.tsx`'s Cell switch using the exact `Schedule Health` chip pattern
 (`case 'health':`, ~line 920) — text label plus a colored dot, never color alone:
@@ -145,5 +146,3 @@ them, not a replacement.
 - If the four-tier collapse loses a distinction somebody genuinely needs (e.g., telling
   `Closed - confirmed` apart from `Superseded` at the parent level) — that's a real gap in the
   mapping, not something to route around by inventing a fifth ad hoc tier.
-- If `DEFAULT_VISIBLE` turns out to be the wrong default and the whole point was "see this
-  without opting in" — flagged above as an inference, not a decision, and cheap to reverse.
