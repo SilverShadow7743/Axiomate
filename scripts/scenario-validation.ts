@@ -2155,6 +2155,7 @@ scenario(
     const RATE_SENTINEL = '77123.45'
     const NOTE_SENTINEL = 'SENTINEL-NOTE-PACK'
     const REC_SENTINEL = 'SENTINEL-INTERNAL-REC'
+    const MILESTONE_SENTINEL = 'SENTINEL-OTHER-CLIENT-MILESTONE'
 
     /*
      * OAPIL-1: client-visible, open, raised inside the weekly window, planned dates and a 40%
@@ -2162,8 +2163,23 @@ scenario(
      * sentinel — its existence must not reach either pack. The internal note sits on the
      * VISIBLE record, because that is the copy-paste accident the boundary exists to stop.
      */
+    const oapilScope = clientScopeIdFor(BASE, 'OAPIL')
+    if (!oapilScope) return { verdict: 'FAIL', actual: 'No client scope resolves for OAPIL.', stops: 'before either pack — the scope walk', severity: 'P1', impact: 'no pack can be produced at all' } as const
+    const oapilEngagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement' && n.parentId === oapilScope)!.id
+    /* BASE seeds exactly one client (OAPIL) — see its own "one client, one engagement" header
+     * comment — so a second, out-of-scope engagement is fabricated directly on the node map
+     * (no reducer action needed, this is a pure-function test of clientPack.ts, not of the
+     * reducer) parented at the company root, never under OAPIL's own client node. */
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const otherEngagementId = 'engagement-other-client'
+
+    const COST_SENTINEL = '999999.99'
     const st: WorkspaceState = {
       ...BASE,
+      nodes: {
+        ...BASE.nodes,
+        [otherEngagementId]: { id: otherEngagementId, kind: 'engagement', name: 'Other Client Engagement', parentId: companyId, owner: null, deletedAt: null },
+      },
       issues: {
         ...BASE.issues,
         'OAPIL-1': { ...BASE.issues['OAPIL-1'], clientVisible: true, raised: '2026-08-12', lastActivity: '2026-08-12', plannedStart: '2026-08-10', plannedEnd: '2026-09-10', percentOverride: 40 },
@@ -2172,6 +2188,19 @@ scenario(
       },
       rates: { r1: { id: 'r1', amount: 77123.45, person: 'Priya' } as never },
       notes: { n1: { id: 'n1', issueId: 'OAPIL-1', body: NOTE_SENTINEL, clientVisible: false } as never },
+      /* One SOW/milestone under OAPIL's own engagement (must appear in the pack), one under a
+       * different client's engagement (must not) — proves milestonesOf's scoping matches
+       * clientView()'s own ancestor-walk rather than leaking across clients. The SOW's own
+       * `value`/`effortHours` carry a cost-shaped sentinel nowhere referenced by milestonesOf,
+       * proving the pack reads the milestone's own amount, never the SOW's commercial total. */
+      sows: {
+        'sow-oapil': { id: 'sow-oapil', engagementId: oapilEngagementId, reference: 'SOW-2026-014', title: 'Phase 1', status: 'Signed', signedOn: '2026-01-01', startDate: '2026-01-01', endDate: '2026-12-31', effortHours: 500, value: 999999.99, currency: 'USD', scope: '', exclusions: '', acceptanceCriteria: '', createdBy: 'x', createdAt: 'x', updatedBy: null, updatedAt: null, deletedAt: null },
+        'sow-other': { id: 'sow-other', engagementId: otherEngagementId, reference: 'SOW-OTHER-01', title: 'Other client work', status: 'Signed', signedOn: '2026-01-01', startDate: '2026-01-01', endDate: '2026-12-31', effortHours: 100, value: 50000, currency: 'USD', scope: '', exclusions: '', acceptanceCriteria: '', createdBy: 'x', createdAt: 'x', updatedBy: null, updatedAt: null, deletedAt: null },
+      } as never,
+      milestones: {
+        'ms-oapil': { id: 'ms-oapil', sowId: 'sow-oapil', name: 'UAT sign-off', description: '', sequence: 1, basis: 'amount', percentage: null, amount: 25000, currency: 'USD', billOn: 'acceptance', plannedDate: '2026-09-15', delivery: 'Delivered', deliveredAt: '2026-09-10', deliveredBy: 'x', acceptance: 'Accepted', acceptedAt: '2026-09-12', acceptedBy: 'x', rejectionNote: null, acceptedValue: 25000, evidenceDocumentId: null, recordedBy: 'x', recordedAt: 'x', deletedAt: null },
+        'ms-other': { id: 'ms-other', sowId: 'sow-other', name: MILESTONE_SENTINEL, description: '', sequence: 1, basis: 'amount', percentage: null, amount: 10000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-09-01', delivery: 'Planned', deliveredAt: null, deliveredBy: null, acceptance: 'Pending', acceptedAt: null, acceptedBy: null, rejectionNote: null, acceptedValue: null, evidenceDocumentId: null, recordedBy: 'x', recordedAt: 'x', deletedAt: null },
+      } as never,
     }
 
     const scopeId = clientScopeIdFor(st, 'OAPIL')
@@ -2180,7 +2209,17 @@ scenario(
     const monthly = buildMonthlyGovernancePack(st, scopeId, TODAY)
     const text = JSON.stringify(weekly) + JSON.stringify(monthly)
 
-    const clean = !text.includes(RATE_SENTINEL) && !text.includes(NOTE_SENTINEL) && !text.includes(REC_SENTINEL)
+    const oapilMilestone = monthly.milestones.find((m) => m.id === 'ms-oapil')
+    const milestonesRight =
+      monthly.milestones.length === 1 &&
+      oapilMilestone?.sowReference === 'SOW-2026-014' &&
+      oapilMilestone?.name === 'UAT sign-off' &&
+      oapilMilestone?.delivery === 'Delivered' &&
+      oapilMilestone?.acceptance === 'Accepted' &&
+      oapilMilestone?.amount === 25000 &&
+      oapilMilestone?.currency === 'USD'
+
+    const clean = !text.includes(RATE_SENTINEL) && !text.includes(NOTE_SENTINEL) && !text.includes(REC_SENTINEL) && !text.includes(COST_SENTINEL) && !text.includes(MILESTONE_SENTINEL)
     const honest = weekly.disclosure.shown === 2 && weekly.disclosure.total === 3 && monthly.disclosure.shown === 2
     const carriesLines = weekly.lines.length === 1 && weekly.lines[0].id === 'OAPIL-1' && weekly.position.open === 1
     const weeklyDeltas = weekly.progress.periodDeltas.closed === 1 && weekly.progress.periodDeltas.raised === 1
@@ -2194,10 +2233,10 @@ scenario(
      * the two sources coexist and the movement block keeps its own honesty flag. */
     const deltasOutliveTrail = monthly.movement.trailAvailable === false && monthly.progress.periodDeltas.closed === 1
 
-    const good = clean && honest && carriesLines && weeklyDeltas && monthlyDeltas && schedule && deltasOutliveTrail
+    const good = clean && honest && carriesLines && weeklyDeltas && monthlyDeltas && schedule && deltasOutliveTrail && milestonesRight
     return good
-      ? { verdict: 'PASS', actual: 'Both packs build from the boundary: the internal record, the internal note on a VISIBLE record, and the rate amount are all absent from the serialized packs, while the disclosure line says 2 of 3 shown. Progress computes — closed 1 / raised 1 this week (raised 2 this month, both from record dates), 70% complete, 1 on track, projected finish from the planned date — and the record-date deltas stay complete while the audit-based movement honestly reports an empty trail.', stops: '—', severity: '—', impact: 'A client pack with progress a client can read, produced by the boundary rather than by hand.' } as const
-      : { verdict: 'FAIL', actual: `clean=${clean} honest=${honest} (${weekly.disclosure.shown}/${weekly.disclosure.total}) carriesLines=${carriesLines} weeklyDeltas=${weeklyDeltas} (closed=${weekly.progress.periodDeltas.closed} raised=${weekly.progress.periodDeltas.raised}) monthlyDeltas=${monthlyDeltas} (closed=${monthly.progress.periodDeltas.closed} raised=${monthly.progress.periodDeltas.raised}) schedule=${schedule} (pct=${weekly.progress.schedule.pctComplete} onTrack=${weekly.progress.schedule.onTrack} overdue=${weekly.progress.schedule.overdue} finish=${weekly.progress.schedule.projectedFinish}) deltasOutliveTrail=${deltasOutliveTrail}`, stops: 'at the boundary or the progress arithmetic — an internal value survives serialization, the disclosure miscounts, or a figure disagrees with the rows behind it', severity: 'P1', impact: 'either something internal reaches a client document, or the progress figures cannot be trusted against the grid' } as const
+      ? { verdict: 'PASS', actual: 'Both packs build from the boundary: the internal record, the internal note on a VISIBLE record, the rate amount, the SOW cost sentinel, and the other client\'s milestone are all absent from the serialized packs, while the disclosure line says 2 of 3 shown. Progress computes — closed 1 / raised 1 this week (raised 2 this month, both from record dates), 70% complete, 1 on track, projected finish from the planned date — and the record-date deltas stay complete while the audit-based movement honestly reports an empty trail. The monthly pack carries exactly the one OAPIL milestone, with its own delivery/acceptance state and contracted amount, scoped by SOW engagement the same way clientView() scopes issues.', stops: '—', severity: '—', impact: 'A client pack with progress and payment-schedule status a client can read, produced by the boundary rather than by hand.' } as const
+      : { verdict: 'FAIL', actual: `clean=${clean} honest=${honest} (${weekly.disclosure.shown}/${weekly.disclosure.total}) carriesLines=${carriesLines} weeklyDeltas=${weeklyDeltas} (closed=${weekly.progress.periodDeltas.closed} raised=${weekly.progress.periodDeltas.raised}) monthlyDeltas=${monthlyDeltas} (closed=${monthly.progress.periodDeltas.closed} raised=${monthly.progress.periodDeltas.raised}) schedule=${schedule} (pct=${weekly.progress.schedule.pctComplete} onTrack=${weekly.progress.schedule.onTrack} overdue=${weekly.progress.schedule.overdue} finish=${weekly.progress.schedule.projectedFinish}) deltasOutliveTrail=${deltasOutliveTrail} milestonesRight=${milestonesRight} (count=${monthly.milestones.length} ${JSON.stringify(oapilMilestone)})`, stops: 'at the boundary, the progress arithmetic, or the milestone scoping — an internal value survives serialization, the disclosure miscounts, a figure disagrees with the rows behind it, or a milestone leaks across a client boundary it should not cross', severity: 'P1', impact: 'either something internal reaches a client document, the progress figures cannot be trusted against the grid, or one client\'s payment schedule is visible to another client' } as const
   },
 )
 
@@ -10065,6 +10104,7 @@ scenario(
     window: { from: '2026-07-16', to: '2026-08-15' },
     movement: { trailAvailable: false, raised: 0, resolved: 0 },
     progress: { periodDeltas: { closed: 1, raised: 2 }, schedule: { pctComplete: 70, onTrack: 1, overdue: 0, projectedFinish: '2026-09-10' } },
+    milestones: [],
   }
   const PDF_IMS: DailyIms = {
     scope: 'All clients', asAt: '2026-08-15',

@@ -397,10 +397,10 @@
       "title": "Weekly client and monthly governance reporting",
       "expected": "Both packs driven end to end from a fixture holding internal-only records and notes with planted sentinels: everything internal must be absent from the serialized packs (including an internal note on a client-VISIBLE record — the sharpest leak), the disclosure line must count shown against total honestly, and the new progress block must compute its deltas from record dates and its schedule position from the same row logic the grid uses.",
       "verdict": "PASS",
-      "actual": "Both packs build from the boundary: the internal record, the internal note on a VISIBLE record, and the rate amount are all absent from the serialized packs, while the disclosure line says 2 of 3 shown. Progress computes — closed 1 / raised 1 this week (raised 2 this month, both from record dates), 70% complete, 1 on track, projected finish from the planned date — and the record-date deltas stay complete while the audit-based movement honestly reports an empty trail.",
+      "actual": "Both packs build from the boundary: the internal record, the internal note on a VISIBLE record, the rate amount, the SOW cost sentinel, and the other client's milestone are all absent from the serialized packs, while the disclosure line says 2 of 3 shown. Progress computes — closed 1 / raised 1 this week (raised 2 this month, both from record dates), 70% complete, 1 on track, projected finish from the planned date — and the record-date deltas stay complete while the audit-based movement honestly reports an empty trail. The monthly pack carries exactly the one OAPIL milestone, with its own delivery/acceptance state and contracted amount, scoped by SOW engagement the same way clientView() scopes issues.",
       "stops": "—",
       "severity": "—",
-      "impact": "A client pack with progress a client can read, produced by the boundary rather than by hand."
+      "impact": "A client pack with progress and payment-schedule status a client can read, produced by the boundary rather than by hand."
     },
     {
       "id": "RF1",

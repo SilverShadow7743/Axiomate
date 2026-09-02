@@ -28,10 +28,15 @@ import { buildTree } from '../tree'
  * ---------------------------------------------------------------------------
  * What is deliberately absent
  *
- * No `sowId`, no `Milestone`, nothing commercial: `clientView()`'s own rule is that everything
- * commercial is withheld unconditionally, and a governance rollup that surfaced milestone
- * delivery state would be carving a quiet exception into an already-shipped boundary. See the
- * design document's own "What this deliberately is not".
+ * No rate, no cost, no margin: `clientView()`'s own rule is that everything commercial is
+ * withheld unconditionally from the general boundary, and this file never weakens that for the
+ * issue/progress halves above. The monthly pack's payment-schedule section (`milestonesOf`,
+ * below) is a narrow, deliberate exception to the "no Milestone" half of that rule specifically
+ * — not a change to `clientView()` itself, which every other reader of this app still goes
+ * through unmodified. A milestone's own contracted value (`amount`/`percentage`/`currency`) is
+ * data the client already agreed to in the SOW; it is not the firm's internal cost or margin,
+ * and neither of those ever appears here. See the design document's own "What this deliberately
+ * is not", and the 2026-09-02 revision that scoped this specific carve-out.
  */
 
 interface Position {
@@ -56,6 +61,29 @@ export interface ClientPackLine {
 export interface ClientPackDisclosure {
   shown: number
   total: number
+}
+
+/**
+ * One row of a client's own payment schedule — fields read directly off `Milestone` itself,
+ * never derived from SOW-level cost or rate data. `sowReference`/`sowTitle` group the rows by
+ * contract; neither carries the SOW's own value or cost totals.
+ */
+export interface MilestonePackLine {
+  id: string
+  sowReference: string
+  sowTitle: string
+  name: string
+  sequence: number
+  plannedDate: string | null
+  delivery: string
+  deliveredAt: string | null
+  acceptance: string
+  acceptedAt: string | null
+  basis: string
+  percentage: number | null
+  amount: number | null
+  currency: string
+  billOn: string
 }
 
 /**
@@ -108,6 +136,8 @@ export interface MonthlyGovernancePack {
     resolved: number
   }
   progress: PackProgress
+  /** The client's own payment schedule — see `milestonesOf`'s own doc comment for scope. */
+  milestones: MilestonePackLine[]
 }
 
 /** Resolves a client name (what `filters.client` carries) to that client's own node id — a
@@ -133,6 +163,50 @@ function underScopeOf(
     cur = state.nodes[cur]?.parentId
   }
   return false
+}
+
+/**
+ * The client's own payment schedule — the one deliberate, narrow exception to `clientView()`'s
+ * "no Milestone" rule, scoped to this file alone. Reads `Milestone`/`Sow` straight off the FULL
+ * `state`, not off `clientView()`'s already-zeroed `visible.milestones`/`visible.sows` — this is
+ * what makes the carve-out narrow: `clientView()` itself is never touched, so every other reader
+ * of a redacted state (the live sign-in boundary, the discussion boundary) keeps withholding
+ * milestones exactly as before. Scoping mirrors `underScopeOf`: a milestone survives only when
+ * its SOW's engagement sits under the reader's own client node.
+ *
+ * Only fields carried directly on `Milestone` itself are exposed — never a resolved dollar
+ * value pulled from `ContractedPosition`/`milestoneValue()`, and never anything from
+ * `lib/rates.ts`. A milestone's own `amount`/`percentage`/`currency` is the figure the client
+ * already agreed to in the SOW; the firm's cost or margin against it is a different question
+ * this function does not answer.
+ */
+function milestonesOf(state: WorkspaceState, clientScopeId: string): MilestonePackLine[] {
+  return Object.values(state.milestones)
+    .filter((m) => {
+      const sow = state.sows[m.sowId]
+      return sow && underScopeOf(state, sow.engagementId, clientScopeId)
+    })
+    .map((m) => {
+      const sow = state.sows[m.sowId]
+      return {
+        id: m.id,
+        sowReference: sow.reference,
+        sowTitle: sow.title,
+        name: m.name,
+        sequence: m.sequence,
+        plannedDate: m.plannedDate,
+        delivery: m.delivery,
+        deliveredAt: m.deliveredAt,
+        acceptance: m.acceptance,
+        acceptedAt: m.acceptedAt,
+        basis: m.basis,
+        percentage: m.percentage,
+        amount: m.amount,
+        currency: m.currency,
+        billOn: m.billOn,
+      }
+    })
+    .sort((a, b) => (a.sowReference === b.sowReference ? a.sequence - b.sequence : a.sowReference.localeCompare(b.sowReference)))
 }
 
 function isoDateMinusDays(date: string, days: number): string {
@@ -258,5 +332,6 @@ export function buildMonthlyGovernancePack(
       resolved,
     },
     progress: progressOf(visible, from, asOf),
+    milestones: milestonesOf(state, clientScopeId),
   }
 }
