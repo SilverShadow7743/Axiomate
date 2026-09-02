@@ -907,6 +907,17 @@ export async function persistSteps(
       return
 
     /**
+     * One row, the same shape `buildLifecycle`'s own arm writes many of — diffed by id rather
+     * than assumed to be exactly one, so this stays correct if a future caller ever batches more
+     * than one addActivity for the same issue in a single persisted action.
+     */
+    case 'addActivity': {
+      const created = Object.values(after.activities).filter((a) => !before.activities[a.id])
+      for (const a of created) await tx.issueActivity.create({ data: activityToRow(tenantId, a) })
+      return
+    }
+
+    /**
      * Configuration is one JSON document, so any change writes the whole thing. That is the
      * tradeoff accepted when it was modelled as a document rather than as tables: it is small,
      * it is edited as a whole, and the alternative is eleven tables for something one person
