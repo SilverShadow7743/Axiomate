@@ -46,8 +46,8 @@ import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
-import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, type PermissionKey } from '../lib/access'
-import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
+import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
+import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
@@ -10240,6 +10240,143 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `${live.length} live issues, all under a project (P1: ${underP1.length}, P2: ${underP2.length}); a Technical seat is exempt=${!nonExempt}; projectView keeps [${underP1.join(', ')}] and drops [${underP2.join(', ')}]; facetsOf over the redacted state lists clients [${facets}], the unredacted state [${unredacted}] — the filter's options and the payload come from the one set {${[...stakeholders].join(',')}}.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `allProjectScoped=${allProjectScoped} (live=${live.length}, P1=${underP1.length}, P2=${underP2.length}) nonExempt=${nonExempt} keepsP1=${keepsP1} dropsP2=${dropsP2} facetsAgree=${facetsAgree} (facets=[${facets}] expected=[${expected}]) bothBefore=${bothBefore} (unredacted=[${unredacted}])`, stops: "at projectView or facetsOf — either the read gate keeps a non-stakeholder project's issue, drops a stakeholder project's, or the Client facets over the scoped payload name a client the person has no live project under", severity: 'P0', impact: 'the Client dropdown would offer a client whose work the person cannot see, or the payload would leak a project they are not staffed on — two stakeholder sets instead of one' } as const
+  },
+)
+
+/*
+ * The scope steps 6 and 7 of ART-20260905-024 add is the person's view handed to the filter as
+ * data — never a second stakeholder set, never a change to the read gate. CD4 pins BR9-BR12 of
+ * ART-20260905-023 on a fixture the real reducer built, through clientFilterScopeFor (the one
+ * constructor, delegating to memberProjectIdsFor and projectOf) and the three filter functions
+ * in lib/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
+ * projectView never called on the path.
+ */
+
+scenario(
+  'CD4',
+  "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
+  "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const nodeId = (s: WorkspaceState, kind: string, name: string) =>
+      Object.values(s.nodes).find((n) => n.kind === kind && n.name === name)!.id
+    const issueId = (s: WorkspaceState, subject: string) =>
+      Object.values(s.issues).find((i) => i.subject === subject && !i.deletedAt)!.id
+
+    /* BASE's seeded issues are ungated too (a module with no project above it). They are archived
+       out so the fixture's one no-project issue is the only ungated record and every list below
+       can be asserted exactly — the same trim CD3 makes. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = nodeId(st, 'client', 'Rival Ltd')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const p1 = nodeId(st, 'project', 'Alpha')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const p2 = nodeId(st, 'project', 'Beta')
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'project', draft: { name: 'Gamma' }, now: NOW } as Action)
+    const p3 = nodeId(st, 'project', 'Gamma')
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p3, kind: 'issue', draft: { name: 'Gamma task' }, now: NOW } as Action)
+    /* Directly under the client node: canParent permits it, and projectOf answers null. */
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'issue', draft: { name: 'Rival note' }, now: NOW } as Action)
+    const i1 = issueId(st, 'Alpha task')
+    const i2 = issueId(st, 'Beta task')
+    const i3 = issueId(st, 'Gamma task')
+    const ungated = issueId(st, 'Rival note')
+    const liveCount = Object.values(st.issues).filter((i) => !i.deletedAt).length
+    const fixtureHolds =
+      liveCount === 4 &&
+      projectOf(st, i1) === p1 && projectOf(st, i2) === p2 && projectOf(st, i3) === p3 && projectOf(st, ungated) === null
+
+    /* Priya: a Technical seat, not exempt, live on P1 only. Sam: ROLE_ADMIN, exempt, live on P1
+       only. Dev: a Technical seat on no project at all — resolved, but a member of nothing. */
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(st.model.people).find((pp) => pp.name === 'Sam')!.id
+    const devId = 'PERSON_CD4_DEV'
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: [ADMIN_ROLE_ID] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: devId, name: 'Dev', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Sam', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+    const seats =
+      !isExempt(st.model, priya) &&
+      rolesFor(st.model, sam).includes(ADMIN_ROLE_ID) && isExempt(st.model, sam) &&
+      memberProjectIdsFor(st, devId).size === 0
+
+    /* (g) The access answers, read before any scope exists. */
+    const access = (actor: Actor) => `${isExempt(st.model, actor)}|${PERMISSION_KEYS.map((k) => can(st.model, actor, k).allowed).join(',')}`
+    const samBefore = access(sam)
+    const priyaBefore = access(priya)
+
+    const all = rowsOf(st)
+    const external = externalPartyKinds(tiersOf(st.model))
+    const issueIds = (rows: ScheduleRow[]) => rows.filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const ids = (rows: ScheduleRow[]) => new Set(rows.map((r) => r.id))
+    const clientsOf = (rows: ScheduleRow[]) => [...new Set(rows.filter((r) => r.kind === 'issue').map((r) => r.issue!.client))].sort().join(',')
+    const CHOSE_OAPIL = { ...EMPTY_FILTERS, client: 'OAPIL' }
+    const twoRows = [i1, ungated].sort().join(',')
+
+    /* (a) BR9 rows: the member's 'All' is P1's issue and the ungated one — P2 and P3 gone, not
+       even as empty branches; P1 and the ungated issue's client node stay as the ancestors. */
+    const scope = clientFilterScopeFor(st, priyaId)
+    const allRows = visibleRows(all, UNFILTERED, new Set(), external, scope)
+    const a = issueIds(allRows) === twoRows && !ids(allRows).has(p2) && !ids(allRows).has(p3) && ids(allRows).has(p1) && ids(allRows).has(rivalId)
+
+    /* (b) BR9 dropdown: exactly the clients of those two rows; without the scope, both clients
+       as today. */
+    const scopedClients = facetsOf(st, scope).clients.join(',')
+    const unscopedClients = facetsOf(st).clients.join(',')
+    const b = scopedClients === clientsOf(allRows) && scopedClients === 'OAPIL,Rival Ltd' && unscopedClients === 'OAPIL,Rival Ltd'
+
+    /* (c) BR10: an explicit client is scoped too — P2's issue is OAPIL's and is still out, and it
+       is the scope that removes it, not the name test. */
+    const chosen = visibleRows(all, CHOSE_OAPIL, new Set(), external, scope)
+    const betaRow = all.find((r) => r.id === i2)!
+    const c = issueIds(chosen) === i1 && !ids(chosen).has(p2) && matchesFilters(betaRow, CHOSE_OAPIL) && !matchesFilters(betaRow, CHOSE_OAPIL, scope)
+
+    /* (d) BR11: an actor the directory cannot resolve is an empty set, not the absence of a
+       scope — nothing under any project, only the ungated record and its client. */
+    const none = clientFilterScopeFor(st, null)
+    const noneRows = visibleRows(all, UNFILTERED, new Set(), external, none)
+    const d =
+      none.memberProjectIds.size === 0 &&
+      issueIds(noneRows) === ungated &&
+      ![p1, p2, p3].some((p) => ids(noneRows).has(p)) &&
+      facetsOf(st, none).clients.join(',') === 'Rival Ltd'
+
+    /* (e) BR12 exempt seat: Sam is exempt from the read gate and sees the whole firm in the
+       payload — and this unredacted state is what the filter is run over here, so his rows and
+       facets narrow exactly as Priya's do. projectView is never called on this path. */
+    const samScope = clientFilterScopeFor(st, samId)
+    const samRows = visibleRows(all, UNFILTERED, new Set(), external, samScope)
+    const samChosen = visibleRows(all, CHOSE_OAPIL, new Set(), external, samScope)
+    const e =
+      issueIds(samRows) === twoRows && !ids(samRows).has(p2) && !ids(samRows).has(p3) &&
+      facetsOf(st, samScope).clients.join(',') === scopedClients &&
+      issueIds(samChosen) === i1
+
+    /* (f) BR12 ungated: the no-project issue is in under 'All' for the member, the non-member and
+       the null person alike. */
+    const devScope = clientFilterScopeFor(st, devId)
+    const ungatedRow = all.find((r) => r.id === ungated)!
+    const f =
+      matchesFilters(ungatedRow, UNFILTERED, scope) &&
+      matchesFilters(ungatedRow, UNFILTERED, devScope) &&
+      matchesFilters(ungatedRow, UNFILTERED, none) &&
+      issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope)) === ungated
+
+    /* (g) BR12 access: building and applying the scope changed nobody's authority. */
+    const g = access(sam) === samBefore && access(priya) === priyaBefore && samBefore.startsWith('true|') && priyaBefore.startsWith('false|')
+
+    const good = fixtureHolds && seats && a && b && c && d && e && f && g
+    return good
+      ? { verdict: 'PASS', actual: `${liveCount} live issues: ${i1} under P1, ${i2} under P2 (both OAPIL), ${i3} under P3 (Rival Ltd), ${ungated} directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [${issueIds(allRows)}] with P2 and P3 absent; facets [${scopedClients}] vs unscoped [${unscopedClients}]; 'OAPIL' lists [${issueIds(chosen)}]. Null person: [${issueIds(noneRows)}], facets [${facetsOf(st, none).clients.join(',')}]. Sam (ROLE_ADMIN, exempt=${isExempt(st.model, sam)}, on P1) over the unredacted state: 'All' lists [${issueIds(samRows)}], 'OAPIL' lists [${issueIds(samChosen)}]. Dev (on nothing): [${issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope))}]. isExempt and can() over ${PERMISSION_KEYS.length} keys read the same before and after for both actors; projectView not called.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
   },
 )
 

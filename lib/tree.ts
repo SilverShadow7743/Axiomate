@@ -344,8 +344,41 @@ function blank(
  * Filtering
  * ------------------------------------------------------------------ */
 
-export function facetsOf(state: WorkspaceState) {
-  const live = Object.values(state.issues).filter((i) => !i.deletedAt)
+/**
+ * The person's view of the workspace, handed to the three filter functions as data
+ * (BR9, BR10, BR12; ADR 0002 decisions 1 and 2).
+ *
+ * `memberProjectIds` is the stakeholder set — `memberProjectIdsFor` in `lib/projectBoundary.ts`,
+ * the one definition, never recomputed here. `projectOf` is the project-tier ancestor of a row
+ * id — `lib/workspace.ts`'s `projectOf`, which answers by node kind in the one place that
+ * decision lives. Both arrive as values rather than imports because `lib/watch.ts` imports
+ * `buildTree` from this file and `lib/workspace.ts` imports `lib/watch.ts`: a value import of
+ * `projectOf` here would close that cycle. `clientFilterScopeFor` (step 7) is the constructor.
+ *
+ * Scoping is a property of the person's view, not of the 'All' option: a row on a project the
+ * person is not a member of is out under 'All' AND under an explicit client name alike (BR10).
+ * A row with no project-tier ancestor stays in — it is ungated (BR12). An empty set is a real
+ * scope, not the absence of one: an actor the directory cannot resolve sees nothing but
+ * ungated records (BR11). No scope at all means today's behaviour, unchanged.
+ */
+export interface ClientFilterScope {
+  memberProjectIds: ReadonlySet<string>
+  projectOf: (id: string) => string | null
+}
+
+/** True when there is no scope, the row is ungated, or its project is one of the person's. */
+function withinScope(scope: ClientFilterScope | undefined, id: string): boolean {
+  if (!scope) return true
+  const project = scope.projectOf(id)
+  return project === null || scope.memberProjectIds.has(project)
+}
+
+export function facetsOf(state: WorkspaceState, scope?: ClientFilterScope) {
+  // Keyed by id, so the scope is asked about the key: the dropdown then offers only the clients
+  // under which the person holds at least one stakeholder project or an ungated record (BR9).
+  const live = Object.entries(state.issues)
+    .filter(([id, i]) => !i.deletedAt && withinScope(scope, id))
+    .map(([, i]) => i)
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort()
   return {
     clients: uniq(live.map((i) => i.client)),
@@ -378,7 +411,7 @@ export function classificationsOf(state: WorkspaceState): string[] {
   return [...new Set([...fromIssues, ...fromNodes].filter((m) => m && m !== 'Unclassified'))].sort()
 }
 
-export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
+export function matchesFilters(row: ScheduleRow, f: FilterState, scope?: ClientFilterScope): boolean {
   const i = row.issue
   if (!i) return false
   // Finished work is hidden unless asked for. Checked first because it is the broadest cut
@@ -388,6 +421,9 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   // not the Discipline facet's 'None' below, which is a real query rather than the absence
   // of one (BR7).
   if (f.client === NO_CLIENT_CHOSEN) return false
+  // A project the person is not a member of is out whatever the client value says — before
+  // the name test, because the name test is what 'All' skips and this must not be (BR10).
+  if (!withinScope(scope, row.id)) return false
   if (f.client !== 'All' && i.client !== f.client) return false
   if (f.type !== 'All' && i.type !== f.type) return false
   /*
@@ -425,6 +461,13 @@ export function visibleRows(
    * without a model in hand keep today's behaviour; the workspace passes the real set.
    */
   externalKinds: ReadonlySet<string> = new Set(['client']),
+  /**
+   * The person's stakeholder scope, when the caller has one (see `ClientFilterScope`). Every
+   * issue test below goes through it, and so does the empty-structural-row pass, so that an
+   * empty branch of a project the person is not on does not ride along as an empty branch of
+   * a chosen client. Absent, the rows are exactly what they were before scoping existed.
+   */
+  scope?: ClientFilterScope,
 ): ScheduleRow[] {
   const byId = new Map(all.map((r) => [r.id, r]))
   const keep = new Set<string>()
@@ -432,7 +475,7 @@ export function visibleRows(
 
   for (const row of all) {
     if (row.kind !== 'issue') continue
-    if (!matchesFilters(row, filters)) continue
+    if (!matchesFilters(row, filters, scope)) continue
     matching.add(row.id)
     keep.add(row.id)
     let p = row.parentId
@@ -453,7 +496,7 @@ export function visibleRows(
      */
     for (const child of all) {
       if (child.parentId !== row.id) continue
-      if (child.kind === 'issue' && !matchesFilters(child, filters)) continue
+      if (child.kind === 'issue' && !matchesFilters(child, filters, scope)) continue
       keep.add(child.id)
     }
   }
@@ -474,6 +517,11 @@ export function visibleRows(
   // With no client chosen there is no branch to show, so no empty structural row rides along
   // either: the resting view is empty by definition (BR2), and an Engagement listed on its own
   // would read as a client somebody chose.
+  //
+  // The same reasoning applies to a scope: an empty Project (or a Process Area under one) the
+  // person is not a member of is not theirs to see, under 'All' or under its client's name
+  // (BR10), so it does not ride along either. Rows above the project tier have no project
+  // ancestor and are unaffected, exactly as an issue with no project ancestor is (BR12).
   const hasIssueDescendant = new Set<string>()
   for (const row of all) {
     if (row.kind !== 'issue') continue
@@ -495,6 +543,7 @@ export function visibleRows(
     if (row.kind === 'issue' || row.kind === 'activity' || row.kind === 'milestone') continue
     if (hasIssueDescendant.has(row.id)) continue
     if (filters.client === NO_CLIENT_CHOSEN) continue
+    if (!withinScope(scope, row.id)) continue
     if (filters.client !== 'All') {
       const client = clientOf(row)
       if (client !== null && client !== filters.client) continue

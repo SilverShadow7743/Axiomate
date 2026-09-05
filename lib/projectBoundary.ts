@@ -1,4 +1,5 @@
 import { projectOf, type WorkspaceState } from './workspace'
+import type { ClientFilterScope } from './tree'
 
 /**
  * The project boundary's withholding, as a pure function — what an internal reader who isn't
@@ -98,9 +99,11 @@ export function projectView(state: WorkspaceState, memberProjectIds: Set<string>
  *
  * The project read gate and the boot banner (`lib/db/boot.ts`) read this function today; the
  * Client filter, its facets, `scopeLabel` and the `CD` scenarios read it as they land
- * (ART-20260905-017), never a second definition. Do not add another stakeholder function beside
- * it: if the Client filter and the payload ever disagree about which projects a person is on,
- * one of them has stopped calling this.
+ * (ART-20260905-017), never a second definition. `clientFilterScopeFor` below is the Client
+ * filter's entry point and delegates the set to this function; it is a constructor, not a second
+ * definition. Do not add another stakeholder function beside it: if the Client filter and the
+ * payload ever disagree about which projects a person is on, one of them has stopped calling
+ * this.
  */
 export function memberProjectIdsFor(state: WorkspaceState, personId: string | null): Set<string> {
   if (!personId) return new Set()
@@ -109,4 +112,20 @@ export function memberProjectIdsFor(state: WorkspaceState, personId: string | nu
       .filter((m) => m.personId === personId && !m.removedAt)
       .map((m) => m.projectId),
   )
+}
+
+/**
+ * The one constructor of the scope the Client filter consumes (`matchesFilters`, `visibleRows`
+ * and `facetsOf` in `./tree`; ART-20260905-024 step 7). It defines nothing: the stakeholder set
+ * is `memberProjectIdsFor` (BR1, BR8) and the project-tier ancestor is `projectOf`, handed to
+ * `./tree` as data because a value import there would close the `tree -> watch -> workspace`
+ * cycle. A null `personId` yields an empty set, so the scope lists nothing but ungated records
+ * (BR11). Exempt seats are not special-cased here or anywhere else (BR12): the scope is built
+ * from the person, never from `isExempt`, and `projectView` is untouched by it.
+ */
+export function clientFilterScopeFor(state: WorkspaceState, personId: string | null): ClientFilterScope {
+  return {
+    memberProjectIds: memberProjectIdsFor(state, personId),
+    projectOf: (id) => projectOf(state, id),
+  }
 }

@@ -2142,6 +2142,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD4",
+      "title": "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
+      "expected": "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
+      "verdict": "PASS",
+      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 45 keys read the same before and after for both actors; projectView not called.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
