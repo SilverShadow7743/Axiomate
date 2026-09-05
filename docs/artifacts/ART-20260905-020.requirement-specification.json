@@ -1,16 +1,16 @@
 {
-  "id": "ART-20260905-016",
+  "id": "ART-20260905-020",
   "kind": "requirement-specification",
-  "version": 2,
+  "version": 3,
   "status": "superseded",
   "producer": {
     "agent": "intent-orchestrator",
-    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-oq1"
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-oq3"
   },
   "created": "2026-09-05",
   "title": "Client filter defaults: rest at nothing chosen, scope All to the signed-in person's stakeholder projects, remember each person's choice",
   "traces": [],
-  "supersedes": "ART-20260905-004",
+  "supersedes": "ART-20260905-016",
   "approvals": [
     {
       "role": "product-owner",
@@ -23,6 +23,12 @@
       "by": "Nishant Sekhar",
       "date": "2026-09-05",
       "evidence": "OQ1 answered in the Claude Code session: \"stakeholder means live ProjectMember row\" (definition d of OQ1). Version 2 records it as BR8 and retires AC14 and AC16, which were conditional on definitions a and b."
+    },
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-05",
+      "evidence": "OQ3, OQ4, OQ10 and OQ11 answered in the Claude Code session on 2026-09-05: scoped-All narrows both the Client dropdown and the rows; an explicit client choice is scoped too; unresolved actors see nothing; exempt seats get the same scoped All while access is unchanged; records with no project-tier ancestor stay in. Recorded as BR9-BR12; version 3 supersedes version 2."
     }
   ],
   "body": {
@@ -152,7 +158,11 @@
       "BR8. The client-seat boundary (clientView) and the project read gate (redactForReader, projectView, isExempt) are applied before any filter default and are never widened or narrowed by this feature.",
       "BR9. Nothing here changes what a person may do; can(model, actor, key) is untouched. Visibility by stakeholder is a default view, not an authorisation.",
       "BR10. Allocation stays a capacity fact and ProjectMember stays an access fact (CLAUDE.md resource model). If OQ1 chooses Allocation, the filter reads it and never writes it; choosing one candidate never creates or implies a record of another kind.",
-      "BR8 (OQ1 resolved, E1, Nishant Sekhar 2026-09-05). A person is a stakeholder on a project if and only if they hold a live ProjectMember row on it: personId matches, removedAt is null. Project role is not a filter. Allocation, engagement naming and SOW naming do not confer stakeholder status. This is the definition the project read gate already uses (lib/projectBoundary.ts), so \"All shows my projects\" for non-exempt seats reuses it rather than adding a second notion of stakeholder."
+      "BR8 (OQ1 resolved, E1, Nishant Sekhar 2026-09-05). A person is a stakeholder on a project if and only if they hold a live ProjectMember row on it: personId matches, removedAt is null. Project role is not a filter. Allocation, engagement naming and SOW naming do not confer stakeholder status. This is the definition the project read gate already uses (lib/projectBoundary.ts), so \"All shows my projects\" for non-exempt seats reuses it rather than adding a second notion of stakeholder.",
+      "BR9 (OQ3 resolved, E1, Nishant Sekhar 2026-09-05). Scoped-All narrows both: the Client dropdown lists only clients where the signed-in person holds at least one stakeholder project (BR8), and the rows under All are only issues whose project-tier ancestor is a stakeholder project.",
+      "BR10 (OQ4 resolved, E1, Nishant Sekhar 2026-09-05). An explicit client choice is scoped the same way: rows are that client's stakeholder projects only. Scoping is a property of the person's view, not of the All option.",
+      "BR11 (OQ10 resolved, E1, Nishant Sekhar 2026-09-05). A signed-in actor who does not resolve to a directory Person has no stakeholder projects: All shows no rows and the dropdown is empty, with a caption saying the account is not in the directory. The unscoped fallback view is retired for the filter.",
+      "BR12 (OQ11 resolved, E1, Nishant Sekhar 2026-09-05). Exempt seats (ROLE_ADMIN, the machine actor) get the same scoped All as everyone; their access is unchanged and any client remains choosable. Records with no project-tier ancestor, which the membership design leaves ungated, stay in under All."
     ],
     "domain_entities": [
       "FilterState.client and EMPTY_FILTERS (lib/types.ts:351-393; protected path)",
@@ -168,15 +178,11 @@
     ],
     "open_questions": [
       "OQ2. What does 'None' show: an empty grid until a choice is made (the E3 reading used in AC1), or the person's last choice, with 'nothing chosen' only ever seen on first use? If a choice persists (part 3), parts 1 and 3 are one behaviour, not two.",
-      "OQ3. Does scoped-All narrow the Client dropdown's options, the rows, or both? The control is by client and the scoping is by project; a client can have projects the person is on and projects they are not.",
-      "OQ4. Does an explicit client selection also get scoped to the person's projects, or is scoping only what 'All' means? (AC5)",
       "OQ5. Persistence scope: per browser (localStorage, the lib/viewChoice.ts pattern; follows the machine, no attribution, touches no protected path) or per person across devices (a per-person map on the operating model in the notificationPrefs shape: new reducer arm, ACTION_PERMISSIONS row, SHAPES and KINDS entries, audited, no Prisma migration; touches lib/workspace.ts and lib/access.ts, so Gate 3 with the architect). 'Persists for them' reads as per person (E3); ART-20260905-006 proposes the per-person form and records the browser-local form as the alternative.",
       "OQ6. 'Each person picks their own project': the Client control has no project level and facetsOf has no project facet. Is a Project control being asked for (an addition to the filter bar, a Principle 10 check), or is 'project' here the client? If a project control, which tier when the organisation's chain is configured differently from the default?",
       "OQ7. People whose role makes them accountable for everything (Platform Administrator; Engagement Leader, which G7 records as carrying all 38 permissions) but who hold no allocation and no membership: do they see nothing under All? BR2 says yes unless the definition says otherwise; the membership design already names the engagement leader as its known limitation.",
       "OQ8. Clear, revealIssue and saved views: return to the person's choice / nothing chosen (AC9, AC10 as drafted), to scoped-All, or to the revealed record's own client? A saved view captured at the resting state: exclude the sentinel on save, or define what applying it does? (AC12)",
       "OQ9. Reports under scoped-All: should the Daily IMS position figures count the whole workspace (as completed-hidden rows are counted today) or only the person's projects? A report that says 'All clients' over a scoped view would be the misread the scopeLabel comment warns about.",
-      "OQ10. Unresolved actors (the fallback-role case): should they see nothing (AC4 as drafted) or the unscoped view they see today?",
-      "OQ11. Exempt seats. Does the requester hold ROLE_ADMIN? If so, part (2) as observed is the deliberate admin exemption from the project read gate, not a missing feature, and the decision is whether the filter's All should narrow for exempt seats while access does not (AC17). Also: records with no project-tier ancestor are deliberately ungated by the membership design; are they in or out of scoped-All?",
       "OQ12. Was scripts/backfill-project-members.ts --commit run against production, and when? docs/verification-checklist.md has no entry. If OQ1 lands on ProjectMember and the backfill was not run, every non-exempt internal seat is already seeing an empty tree today, which would be a live defect, not a feature gap.",
       "OQ13. Priority. The requester did not state a band. P2 is entered here only because the schema requires a value and the canonical-model definition of P2 ('real, but belongs to a named person or a named date') matches A4's standing as an item waiting on one answer from the product owner; it is the analyst's placeholder (E3), to be confirmed or changed at Gate 1."
     ]
