@@ -373,7 +373,7 @@ and it is why the founder dependency inventory rates product operations Amber.
 | 2 Architecture | Any Architecture Decision | architect | The ADR with alternatives rejected and principles checked | The specification is approved but blocked on design |
 | 3 Plan | Plan touches a protected path, a migration, security or tenancy | engineering-lead (architect for protected paths) | The plan's steps, ownership, the highest-risk step, the rollback | Low-risk plans proceed; risky ones wait |
 | 4 Security | Any high-severity security finding in Proof | security-approver | The finding, the exploit path, the proposed fix | Validation is `fail`; nothing ships |
-| 5 Release | Every deployment | release-approver | Release Decision, readiness verdict, conditions, rollback | Nothing reaches production |
+| 5 Release | Every deployment | release-approver | Release Decision, readiness verdict, conditions, rollback | Nothing reaches production. **Today this gate is the operator running the clean-room release recipe by hand**: the pipeline's deploy job is manual-dispatch only because the GitHub `production` environment has no secrets and the B1 plan has no deployment slots (`deploy.yml`, deploy job comment). The environment approval is Phase 2 infrastructure, not current practice. |
 
 **Where human time is worth most.** Gate 1 and Gate 5. Gate 1 because a wrong specification costs
 every downstream orchestra; Gate 5 because it is the only irreversible step and the one with a
@@ -437,7 +437,7 @@ Worked cases:
 
 Three stages of infrastructure, matched to the roadmap, so nothing is built before it is needed.
 
-**Stage A (Phases 1–2): no new infrastructure.**
+**Stage A (Phases 1–2): no new infrastructure.** One correction found on the first push (5 Sep): the deploy job is manual-dispatch only and the `production` environment holds no secrets, so "GitHub environment approval" below describes the intended Gate 5, and the release recipe in `docs/deployment.md` run by the operator is the actual one until the environment is configured and the plan has slots.
 
 ```
  Claude Code (workflows, agents, skills)  ──►  git branches  ──►  GitHub Actions
