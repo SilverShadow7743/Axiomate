@@ -2122,6 +2122,26 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD2",
+      "title": "A stakeholder is a live ProjectMember row — removedAt ends it, the project role never enters",
+      "expected": "AC15 of ART-20260905-016: with the signed-in person on project P (removedAt set, Sponsor) and on project Q (removedAt null, Customer), memberProjectIdsFor is exactly {Q}; changing the project role on either row changes nothing; clearing P's removedAt puts P back; a null personId is the empty set (BR2); and projectView over the same rows keeps Q and drops P, so the read gate and the filter answer from one definition.",
+      "verdict": "PASS",
+      "actual": "memberProjectIdsFor = {project:3} (Q only); Sponsor/Customer swapped on either row → still {project:3}; P's removedAt cleared → {project:2,project:3}; null personId → 0 projects; projectView keeps Q=true and P=false.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD3",
+      "title": "For a non-exempt seat, the read gate and the Client facets agree on one stakeholder set",
+      "expected": "The definite half of AC2 and BR8 of ART-20260905-016 under definition (d) ProjectMember: over a fixture whose live issues all sit under a project-tier node (so the ungated no-project-ancestor case OQ11 still owns does not enter), projectView(state, memberProjectIdsFor(state, p)) drops every issue whose project is P2 and keeps every issue under P1 — including one two tiers down, through projectOf's ancestor walk — and facetsOf over that redacted state lists exactly the client names of the projects p is live on, so the filter agrees with the payload rather than computing a second set. Asserts what the read gate already does; step 5's callers are unchanged.",
+      "verdict": "PASS",
+      "actual": "3 live issues, all under a project (P1: 2, P2: 1); a Technical seat is exempt=false; projectView keeps [OAPIL-004, OAPIL-005] and drops [RIVALLTD-001]; facetsOf over the redacted state lists clients [OAPIL], the unredacted state [OAPIL,Rival Ltd] — the filter's options and the payload come from the one set {project:3}.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

@@ -84,7 +84,24 @@ export function projectView(state: WorkspaceState, memberProjectIds: Set<string>
   }
 }
 
-/** The set of project ids this actor is a live member of. Empty for someone staffed nowhere. */
+/**
+ * The set of project ids this actor is a live member of. Empty for someone staffed nowhere.
+ *
+ * This is the single stakeholder definition (ART-20260905-016 BR1, BR8; ADR 0002 decision 2): a
+ * person is a stakeholder on a project if and only if they hold a live `ProjectMember` row on
+ * it — `personId` matches and `removedAt` is null. `projectRoleId` is ignored; sponsor, customer
+ * and stakeholder roles all count the same. An `Allocation`, an engagement name or a SOW name
+ * confers nothing — allocation is a capacity fact, membership is an access fact (see the
+ * resource-model note in `CLAUDE.md`). A null `personId` — an actor the directory could not
+ * resolve — is the empty set, not everything (deny by default). The definition is not
+ * date-bounded, which is why there is no `today` parameter.
+ *
+ * The project read gate and the boot banner (`lib/db/boot.ts`) read this function today; the
+ * Client filter, its facets, `scopeLabel` and the `CD` scenarios read it as they land
+ * (ART-20260905-017), never a second definition. Do not add another stakeholder function beside
+ * it: if the Client filter and the payload ever disagree about which projects a person is on,
+ * one of them has stopped calling this.
+ */
 export function memberProjectIdsFor(state: WorkspaceState, personId: string | null): Set<string> {
   if (!personId) return new Set()
   return new Set(

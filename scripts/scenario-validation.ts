@@ -40,7 +40,7 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
-  wouldCreateManagerCycle, directReportsOf, holidaySetOf, type Person,
+  wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, type Person,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -104,7 +104,7 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, matchesFilters, visibleRows } from '../lib/tree'
+import { buildTree, facetsOf, matchesFilters, visibleRows } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
@@ -10113,6 +10113,133 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `EMPTY_FILTERS lists 0 rows through visibleRows and admits 0 through matchesFilters over ${all.length} tree rows; client 'All' lists [${issueIds(everyClient)}] under their client node; client 'All' + discipline 'None' lists [${issueIds(unclassified)}]; EMPTY_FILTERS.client is ${JSON.stringify(EMPTY_FILTERS.client)}.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `listsNothing=${listsNothing} (visible=[${resting.map((r) => r.id).join(', ')}] admitted=[${admitted.map((r) => r.id).join(', ')}]) asToday=${asToday} (issues=[${issueIds(everyClient)}]) noneIsAQuery=${noneIsAQuery} (issues=[${issueIds(unclassified)}]) distinctToken=${distinctToken} (client=${JSON.stringify(EMPTY_FILTERS.client)})`, stops: 'at matchesFilters/visibleRows — the resting value either lists rows it must not, or has collapsed into \'All\' or \'None\'', severity: 'P1', impact: 'the workspace either opens on every client\'s work for a person who chose none (the fail-open BR2 forbids), or a chosen \'All\' or an "unclassified" query stops meaning what it did' } as const
+  },
+)
+
+/*
+ * The stakeholder function the Client filter reads is memberProjectIdsFor, and nothing beside it
+ * (ART-20260905-016 BR1, BR8; ADR 0002 decision 2): a live ProjectMember row — personId matches,
+ * removedAt null — and the project role on the row confers nothing. CD2 pins the definition on
+ * the function itself; CD3 pins that the read gate and the filter's facets, both reading that one
+ * set, agree — the proof AC2 asks for under definition (d), not a claim that the filter's callers
+ * (step 5, still blocked on OQ3) have changed.
+ */
+
+scenario(
+  'CD2',
+  'A stakeholder is a live ProjectMember row — removedAt ends it, the project role never enters',
+  "AC15 of ART-20260905-016: with the signed-in person on project P (removedAt set, Sponsor) and on project Q (removedAt null, Customer), memberProjectIdsFor is exactly {Q}; changing the project role on either row changes nothing; clearing P's removedAt puts P back; a null personId is the empty set (BR2); and projectView over the same rows keeps Q and drops P, so the read gate and the filter answer from one definition.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const pId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const qId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+
+    /* Two roles the spec names, so the role really is present on the rows and really is ignored. */
+    st = ok(st, { t: 'addProjectMember', projectId: pId, person: 'Priya', projectRoleId: 'PROJROLE_SPONSOR', now: NOW } as Action)
+    const pRowId = Object.values(st.projectMembers).find((m) => m.projectId === pId && m.personId === priyaId)!.id
+    st = ok(st, { t: 'addProjectMember', projectId: qId, person: 'Priya', projectRoleId: 'PROJROLE_CUSTOMER', now: NOW } as Action)
+    const qRowId = Object.values(st.projectMembers).find((m) => m.projectId === qId && m.personId === priyaId)!.id
+    st = ok(st, { t: 'removeProjectMember', id: pRowId, now: NOW } as Action)
+
+    const setOf = (s: Set<string>) => [...s].sort().join(',')
+    const stakeholders = memberProjectIdsFor(st, priyaId)
+    const exactlyQ = setOf(stakeholders) === qId
+
+    /* The live row's role changes through the reducer; the removed row refuses an update (its
+       own arm says so), so its role is varied on the state directly — the function's input is
+       the rows, and the rows are what BR8 says it ignores. */
+    const reroledLive = ok(st, { t: 'updateProjectMember', id: qRowId, projectRoleId: 'PROJROLE_SPONSOR', now: NOW } as Action)
+    const reroledGone: WorkspaceState = {
+      ...st,
+      projectMembers: { ...st.projectMembers, [pRowId]: { ...st.projectMembers[pRowId], projectRoleId: 'PROJROLE_CUSTOMER' } },
+    }
+    const roleIgnored =
+      setOf(memberProjectIdsFor(reroledLive, priyaId)) === qId &&
+      setOf(memberProjectIdsFor(reroledGone, priyaId)) === qId
+
+    /* Only removedAt decides: clear it and P is a stakeholder project again. */
+    const restored: WorkspaceState = {
+      ...st,
+      projectMembers: { ...st.projectMembers, [pRowId]: { ...st.projectMembers[pRowId], removedAt: null } },
+    }
+    const removedAtDecides = setOf(memberProjectIdsFor(restored, priyaId)) === [pId, qId].sort().join(',')
+
+    const unresolvedIsEmpty = memberProjectIdsFor(st, null).size === 0
+
+    /* The same rows the read gate consults produce the same answer: the gate keeps Q and drops P. */
+    const view = projectView(st, stakeholders)
+    const gateAgrees = Boolean(view.nodes[qId]) && !view.nodes[pId]
+
+    const good = exactlyQ && roleIgnored && removedAtDecides && unresolvedIsEmpty && gateAgrees
+    return good
+      ? { verdict: 'PASS', actual: `memberProjectIdsFor = {${setOf(stakeholders)}} (Q only); Sponsor/Customer swapped on either row → still {${setOf(memberProjectIdsFor(reroledLive, priyaId))}}; P's removedAt cleared → {${setOf(memberProjectIdsFor(restored, priyaId))}}; null personId → ${memberProjectIdsFor(st, null).size} projects; projectView keeps Q=${Boolean(view.nodes[qId])} and P=${Boolean(view.nodes[pId])}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `exactlyQ=${exactlyQ} (got {${setOf(stakeholders)}}, P=${pId}, Q=${qId}) roleIgnored=${roleIgnored} removedAtDecides=${removedAtDecides} (got {${setOf(memberProjectIdsFor(restored, priyaId))}}) unresolvedIsEmpty=${unresolvedIsEmpty} gateAgrees=${gateAgrees}`, stops: 'at memberProjectIdsFor — the stakeholder set either reads a removed row, reads the project role, or disagrees with the read gate over the same rows', severity: 'P0', impact: 'the Client filter would show a person projects they were removed from, hide ones they are on, or answer differently from the payload the read gate already scoped' } as const
+  },
+)
+
+scenario(
+  'CD3',
+  'For a non-exempt seat, the read gate and the Client facets agree on one stakeholder set',
+  "The definite half of AC2 and BR8 of ART-20260905-016 under definition (d) ProjectMember: over a fixture whose live issues all sit under a project-tier node (so the ungated no-project-ancestor case OQ11 still owns does not enter), projectView(state, memberProjectIdsFor(state, p)) drops every issue whose project is P2 and keeps every issue under P1 — including one two tiers down, through projectOf's ancestor walk — and facetsOf over that redacted state lists exactly the client names of the projects p is live on, so the filter agrees with the payload rather than computing a second set. Asserts what the read gate already does; step 5's callers are unchanged.",
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    /* Two clients, a project under each, and every live issue under one of the two projects.
+       BASE's seeded issues sit under a module with no project — the ungated case — so they are
+       archived out of the fixture rather than left to enter the facets by the ALLOW default. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = Object.values(st.nodes).find((n) => n.kind === 'client' && n.name === 'Rival Ltd')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const p1 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Alpha')!.id
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const p2 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Beta')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'module', draft: { name: 'Billing' }, now: NOW } as Action)
+    const billingId = Object.values(st.nodes).find((n) => n.kind === 'module' && n.name === 'Billing')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: billingId, kind: 'issue', draft: { name: 'Alpha billing task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+
+    const live = Object.values(st.issues).filter((i) => !i.deletedAt)
+    const underP1 = live.filter((i) => projectOf(st, i.id) === p1).map((i) => i.id)
+    const underP2 = live.filter((i) => projectOf(st, i.id) === p2).map((i) => i.id)
+    const allProjectScoped = live.length === 3 && underP1.length === 2 && underP2.length === 1
+
+    /* A Technical seat: not exempt from the read gate, so projectView is what boot() applies. */
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const nonExempt = !isExempt(st.model, priya)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const stakeholders = memberProjectIdsFor(st, priyaId)
+    const view = projectView(st, stakeholders)
+    const keepsP1 = underP1.every((id) => Boolean(view.issues[id]))
+    const dropsP2 = underP2.every((id) => !view.issues[id])
+
+    /* The clients the person is a stakeholder of, derived from the stakeholder set itself by
+       the same walk the create arm uses — the externalParty tier, not the literal kind. */
+    const external = externalPartyKinds(tiersOf(st.model))
+    const clientOfProject = (projectId: string): string =>
+      scopeChainOf(st, projectId).map((id) => st.nodes[id]).find((n) => n && external.has(n.kind))?.name ?? ''
+    const expected = [...new Set([...stakeholders].map(clientOfProject))].sort().join(',')
+    const facets = facetsOf(view).clients.join(',')
+    const facetsAgree = facets === expected && expected === 'OAPIL'
+    /* And the narrowing is the redaction's doing: the unredacted state still offers both. */
+    const unredacted = facetsOf(st).clients.join(',')
+    const bothBefore = unredacted === 'OAPIL,Rival Ltd'
+
+    const good = allProjectScoped && nonExempt && keepsP1 && dropsP2 && facetsAgree && bothBefore
+    return good
+      ? { verdict: 'PASS', actual: `${live.length} live issues, all under a project (P1: ${underP1.length}, P2: ${underP2.length}); a Technical seat is exempt=${!nonExempt}; projectView keeps [${underP1.join(', ')}] and drops [${underP2.join(', ')}]; facetsOf over the redacted state lists clients [${facets}], the unredacted state [${unredacted}] — the filter's options and the payload come from the one set {${[...stakeholders].join(',')}}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `allProjectScoped=${allProjectScoped} (live=${live.length}, P1=${underP1.length}, P2=${underP2.length}) nonExempt=${nonExempt} keepsP1=${keepsP1} dropsP2=${dropsP2} facetsAgree=${facetsAgree} (facets=[${facets}] expected=[${expected}]) bothBefore=${bothBefore} (unredacted=[${unredacted}])`, stops: "at projectView or facetsOf — either the read gate keeps a non-stakeholder project's issue, drops a stakeholder project's, or the Client facets over the scoped payload name a client the person has no live project under", severity: 'P0', impact: 'the Client dropdown would offer a client whose work the person cannot see, or the payload would leak a project they are not staffed on — two stakeholder sets instead of one' } as const
   },
 )
 
