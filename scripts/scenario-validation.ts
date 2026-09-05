@@ -117,6 +117,7 @@ import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
 import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
 import { activeFilterCount, clientPackProblem, clientRestingCaption, emptyGridReason, isActiveFilter, scopeLabelFor } from '../lib/filterPresentation'
+import { applySavedFilters, parseSavedView } from '../lib/savedViews'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -10483,6 +10484,84 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `At rest the label reads ${JSON.stringify(atRest)}; under 'All' it reads ${JSON.stringify(underAll)} from a scope of ${stakeholderProjects} project on ${stakeholderClients} client at ${organization}; clientPackProblem is ${JSON.stringify(atRestProblem)} for the sentinel and for 'All' alike, and null for 'OAPIL'.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `restSaysSo=${restSaysSo} (atRest=${JSON.stringify(atRest)}) namesOwnScope=${namesOwnScope} (underAll=${JSON.stringify(underAll)} projects=${stakeholderProjects} clients=${stakeholderClients}) packRefuses=${packRefuses} (sentinel=${JSON.stringify(atRestProblem)} all=${JSON.stringify(allProblem)} chosen=${JSON.stringify(chosenProblem)})`, stops: "at lib/filterPresentation.ts — the scope label prints 'All clients' or no resting part, or the client pack accepts the sentinel, refuses a chosen client, or teaches two different things for the sentinel and 'All'", severity: 'P1', impact: "a Daily IMS would state a scope wider than the rows it was computed from (BR15), or a client pack would be attempted from no client at all — a report nobody should trust, or a refusal nobody can act on" } as const
+  },
+)
+
+scenario(
+  'CD7',
+  "A view saved at rest stores no client and says so; applying it keeps the person's own; an old 'All' view loads intact; junk lands on the resting value; ownership still holds",
+  "Step 11 of ART-20260905-024 through the real reducer (BR14, AC12 of ART-20260905-023): an upsertSavedView whose filters carry NO_CLIENT_CHOSEN is accepted, stores filters.client as the sentinel — the one canonical 'no client stored' — and returns the message naming that it keeps each person's own client; an action whose filters omit client stores the same value with the same message; a record stored before this change with client 'All' loads through parseSavedView (the loader lib/config.ts's mergeModel runs) with 'All' intact, and the arm saving 'All' today does not claim it keeps each person's own; applySavedFilters over the at-rest view with 'Acme' yields 'Acme' and over the 'All' view yields 'All', with the other keys carried, so applying either leaves the person's choice in place; a hand-built filters object with client 42 stores the resting value, not a number; and SV1's ownership rule holds on the at-rest view — another person's rewrite bounces naming the grant, an admin's lands.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? 'P?'
+    const samId0 = Object.values(BASE.model.people).find((p) => p.name === 'Sam')?.id ?? 'S?'
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId0, name: 'Sam' }
+    /* Real roles, as SV1: a roleless actor falls back to ADMIN and the ownership rule would
+       never be exercised. */
+    let staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    staffed = ok(staffed, { t: 'config', op: { k: 'upsertPerson', id: samId0, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const keepsOwn = /keeps each person's own client/
+
+    /* Saved at rest: the sentinel goes in as the browser would send it, and comes out as the
+       one canonical resting value — nothing refused, and the message says what was stored. */
+    const atRest = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Open work', filters: { ...EMPTY_FILTERS, status: 'Open' }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const atRestRec = atRest.state.model.savedViews[0]
+    const restStored =
+      !atRest.error && atRestRec != null && atRestRec.filters.client === NO_CLIENT_CHOSEN &&
+      atRestRec.filters.status === 'Open' && keepsOwn.test(atRest.message ?? '')
+
+    /* Client omitted altogether: the same canonical value, the same message. */
+    const absent = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'No client key', filters: { status: 'Open' }, view: 'board' }, now: NOW,
+    } as Action, priya)
+    const absentRec = absent.state.model.savedViews[0]
+    const absentStored =
+      !absent.error && absentRec != null && absentRec.filters.client === NO_CLIENT_CHOSEN &&
+      absentRec.filters.status === 'Open' && keepsOwn.test(absent.message ?? '')
+
+    /* A record from before this change, as it sits in the OperatingModel JSON: 'All' is a
+       stored value, not the sentinel, and loads as itself. */
+    const legacy = parseSavedView({ id: 'view-1', name: 'Everything', filters: { client: 'All', status: 'Open' }, view: 'tree', createdBy: 'Priya', createdAt: NOW })
+    const legacyLoads = legacy !== null && legacy.filters.client === 'All' && legacy.filters.status === 'Open'
+    const savedAll = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Everything', filters: { ...EMPTY_FILTERS, client: 'All' }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const allStored =
+      !savedAll.error && savedAll.state.model.savedViews[0]?.filters.client === 'All' && !keepsOwn.test(savedAll.message ?? '')
+
+    /* Apply: the at-rest view takes the person's own client; the 'All' view applies 'All';
+       the other keys travel either way. */
+    const appliedRest = atRestRec ? applySavedFilters(atRestRec.filters, 'Acme') : null
+    const appliedAll = legacy ? applySavedFilters(legacy.filters, 'Acme') : null
+    const applies =
+      appliedRest !== null && appliedRest.client === 'Acme' && appliedRest.status === 'Open' &&
+      appliedAll !== null && appliedAll.client === 'All' && appliedAll.status === 'Open'
+
+    /* Junk: a number where a name should be lands on the resting value, never on the number. */
+    const junk = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Junk', filters: { client: 42 }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const junkRec = junk.state.model.savedViews[0]
+    const junkStored = !junk.error && junkRec != null && typeof junkRec.filters.client === 'string' && junkRec.filters.client === NO_CLIENT_CHOSEN
+
+    /* Ownership on the at-rest view: SV1's rule, unchanged by the write boundary. */
+    const rewrite = apply(atRest.state, {
+      t: 'upsertSavedView', view: { id: atRestRec?.id, name: 'Hijacked', filters: { ...EMPTY_FILTERS }, view: 'tree' }, now: NOW,
+    } as Action, sam)
+    const rewriteBounces = Boolean(rewrite.error) && /Configure the platform/.test(rewrite.error ?? '')
+    const adminRewrite = apply(atRest.state, {
+      t: 'upsertSavedView', view: { id: atRestRec?.id, name: 'Renamed by admin', filters: { ...EMPTY_FILTERS }, view: 'tree' }, now: NOW,
+    } as Action, A)
+    const adminMay =
+      !adminRewrite.error && adminRewrite.state.model.savedViews[0]?.name === 'Renamed by admin' &&
+      adminRewrite.state.model.savedViews[0]?.filters.client === NO_CLIENT_CHOSEN
+
+    const good = restStored && absentStored && legacyLoads && allStored && applies && junkStored && rewriteBounces && adminMay
+    return good
+      ? { verdict: 'PASS', actual: `Saved at rest, the view stores client=${JSON.stringify(atRestRec?.filters.client)} and the arm says ${JSON.stringify(atRest.message)}; a payload without a client stores the same; a stored 'All' loads as 'All' and saves without that message; applySavedFilters gives 'Acme' over the at-rest view and 'All' over the old one; client 42 stores the resting value; Sam's rewrite of the at-rest view bounces naming the grant while the admin's lands.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `restStored=${restStored} (client=${JSON.stringify(atRestRec?.filters.client)} message=${JSON.stringify(atRest.message ?? atRest.error)}) absentStored=${absentStored} (client=${JSON.stringify(absentRec?.filters.client)}) legacyLoads=${legacyLoads} (client=${JSON.stringify(legacy?.filters.client)}) allStored=${allStored} (message=${JSON.stringify(savedAll.message ?? savedAll.error)}) applies=${applies} (rest=${JSON.stringify(appliedRest?.client)} all=${JSON.stringify(appliedAll?.client)}) junkStored=${junkStored} (client=${JSON.stringify(junkRec?.filters.client)}) rewriteBounces=${rewriteBounces} (${(rewrite.error ?? '').slice(0, 60)}) adminMay=${adminMay}`, stops: "at lib/savedViews.ts or the upsertSavedView arm — the sentinel, an absent client or junk is stored as something other than the one resting value, the message does not say what was stored, an old 'All' view is rewritten on load, applySavedFilters rests the grid or overrides a stored client, or the ownership rule slipped", severity: 'P1', impact: "a saved view either rests the grid for whoever applies it, silently widens a person's view to All, stores a value nothing can apply, or lets another person rewrite a view they do not own — the write boundary AC12 and BR14 define would exist only in the browser" } as const
   },
 )
 

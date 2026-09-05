@@ -35,7 +35,7 @@ import type {
   Severity,
   SlaPolicy,
 } from './types'
-import { ACTIVITY_PHASES } from './types'
+import { ACTIVITY_PHASES, NO_CLIENT_CHOSEN } from './types'
 
 /**
  * Re-exported so the many callers that reach for `NodeKind` from the workspace keep working.
@@ -5755,6 +5755,13 @@ Question: ${review.question}`),
       if (existing && existing.createdBy !== by && !can(state.model, actor, 'config.manage').allowed) {
         return { state, error: `“${existing.name}” was saved by ${existing.createdBy}. Changing it needs “Configure the platform”.` }
       }
+      /*
+       * The write boundary for a view's client (BR14, AC12): parseSavedFilters lands the
+       * sentinel, an absent client, or junk on the one canonical resting value, which for a
+       * saved view means "no client stored — keep each person's own" (applySavedFilters puts
+       * it back on apply). Nothing is refused: saving at rest is legitimate, and the message
+       * says what was stored so the browser guard is not the only line.
+       */
       const filters = parseSavedFilters(a.view.filters)
       const viewTab = parseWorkspaceView(a.view.view)
       const seq = existing ? state.seq : state.seq + 1
@@ -5780,7 +5787,10 @@ Question: ${review.question}`),
             by,
           }),
         },
-        message: `View “${name}” saved for everyone.`,
+        message:
+          filters.client === NO_CLIENT_CHOSEN
+            ? `View “${name}” saved for everyone; it keeps each person's own client.`
+            : `View “${name}” saved for everyone.`,
       }
     }
 

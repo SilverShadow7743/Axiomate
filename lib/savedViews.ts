@@ -1,4 +1,4 @@
-import { EMPTY_FILTERS, type FilterState } from './types'
+import { EMPTY_FILTERS, NO_CLIENT_CHOSEN, type FilterState } from './types'
 import { WORKSPACE_VIEWS, type WorkspaceView } from './viewChoice'
 
 /**
@@ -10,8 +10,16 @@ import { WORKSPACE_VIEWS, type WorkspaceView } from './viewChoice'
  * these survive machines and answer "who changed this view" like everything else here.
  *
  * Parsing fails CLOSED: a stored view whose `filters` predate a FilterState change loads with
- * unknown keys dropped and missing keys defaulted, so old views degrade to broader ones
- * rather than crashing or filtering wrongly.
+ * unknown keys dropped and missing keys defaulted to `EMPTY_FILTERS`, and a missing client
+ * defaults to the person's own choice rather than to All — a view never widens what a person
+ * sees because a key was absent. The client's fate specifically (BR14, AC12):
+ *
+ *   - absent, not a string, or `NO_CLIENT_CHOSEN` itself → `NO_CLIENT_CHOSEN`. For a saved
+ *     view the sentinel means "no client stored: keep the person's own" — a view captured at
+ *     rest stores no client, and `applySavedFilters` puts the person's own back on apply.
+ *   - 'All' → 'All', read on apply as the person-relative All (the scope narrows it).
+ *   - any other string → kept as the client name; it matches what it matches, so an unknown
+ *     name lists nothing, never unscoped All.
  */
 
 export interface SavedView {
@@ -36,7 +44,22 @@ export function parseSavedFilters(raw: unknown): FilterState {
       ;(out as Record<string, unknown>)[key] = v
     }
   }
+  /*
+   * The client is stated, not left to the spread: anything that is not a client name or 'All'
+   * lands on the one canonical resting value, so a hand-built action carrying junk, an absent
+   * client, or the sentinel itself all store the same thing with the same defined apply.
+   */
+  out.client = typeof r.client === 'string' && r.client !== NO_CLIENT_CHOSEN ? r.client : NO_CLIENT_CHOSEN
   return out
+}
+
+/**
+ * The apply side of the sentinel: a view stored with no client takes the person's own client
+ * when applied, so applying a view never rests the grid by accident and leaves the person's
+ * choice in place (BR14). A view stored with 'All' or a name applies that value as-is.
+ */
+export function applySavedFilters(saved: FilterState, personsClient: string): FilterState {
+  return { ...saved, client: saved.client === NO_CLIENT_CHOSEN ? personsClient : saved.client }
 }
 
 export function parseWorkspaceView(raw: unknown): WorkspaceView {

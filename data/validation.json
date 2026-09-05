@@ -2172,6 +2172,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD7",
+      "title": "A view saved at rest stores no client and says so; applying it keeps the person's own; an old 'All' view loads intact; junk lands on the resting value; ownership still holds",
+      "expected": "Step 11 of ART-20260905-024 through the real reducer (BR14, AC12 of ART-20260905-023): an upsertSavedView whose filters carry NO_CLIENT_CHOSEN is accepted, stores filters.client as the sentinel — the one canonical 'no client stored' — and returns the message naming that it keeps each person's own client; an action whose filters omit client stores the same value with the same message; a record stored before this change with client 'All' loads through parseSavedView (the loader lib/config.ts's mergeModel runs) with 'All' intact, and the arm saving 'All' today does not claim it keeps each person's own; applySavedFilters over the at-rest view with 'Acme' yields 'Acme' and over the 'All' view yields 'All', with the other keys carried, so applying either leaves the person's choice in place; a hand-built filters object with client 42 stores the resting value, not a number; and SV1's ownership rule holds on the at-rest view — another person's rewrite bounces naming the grant, an admin's lands.",
+      "verdict": "PASS",
+      "actual": "Saved at rest, the view stores client=\"__NO_CLIENT_CHOSEN__\" and the arm says \"View “Open work” saved for everyone; it keeps each person's own client.\"; a payload without a client stores the same; a stored 'All' loads as 'All' and saves without that message; applySavedFilters gives 'Acme' over the at-rest view and 'All' over the old one; client 42 stores the resting value; Sam's rewrite of the at-rest view bounces naming the grant while the admin's lands.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
