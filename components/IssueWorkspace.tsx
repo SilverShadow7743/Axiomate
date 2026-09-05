@@ -989,8 +989,19 @@ export default function IssueWorkspace({
         return next
       })
       if (!matchesFilters(row, filters)) {
-        setFilters(EMPTY_FILTERS)
-        notify(`Filters cleared so ${id} is visible.`)
+        // EMPTY_FILTERS rests the Client facet at NO_CLIENT_CHOSEN, under which matchesFilters
+        // admits nothing (BR2) — so a bare reset would hide the very row this promised to show,
+        // and the reveal effect below would find no index and give up. Choose the revealed
+        // record's own client instead: the row carries it, and the reveal decides nothing about
+        // the general Clear semantics still open under OQ8 (ART-20260905-017 step 10).
+        const client = row.issue?.client
+        if (client) {
+          setFilters({ ...EMPTY_FILTERS, client })
+          notify(`Filters cleared and Client set to ${client} so ${id} is visible.`)
+        } else {
+          setFilters(EMPTY_FILTERS)
+          notify(`Filters cleared, but ${id} carries no client — choose one in the Filters row to list it.`, true)
+        }
       }
       setRevealTarget(id)
     },
@@ -2093,13 +2104,21 @@ export default function IssueWorkspace({
         onDeleteSavedView={(id) =>
           dispatch({ t: 'deleteSavedView', id, now: new Date().toISOString() })
         }
-        onSaveCurrentView={(name) =>
+        onSaveCurrentView={(name) => {
+          // A view saved while the Client facet rests would write the UI sentinel into the
+          // shared model for every colleague, and apply to an empty grid. Whether the sentinel
+          // is excluded on save or defined on apply is OQ8's call (ART-20260905-017 step 6);
+          // until then nothing at rest is stored.
+          if (filters.client === NO_CLIENT_CHOSEN) {
+            notify('Choose a client (or All) in the Filters row before saving a view.', true)
+            return
+          }
           dispatch({
             t: 'upsertSavedView',
             view: { name, filters, view },
             now: new Date().toISOString(),
           })
-        }
+        }}
         onOpenConfig={() => setConfigOpen(true)}
         archivedCount={archivedCount}
         onOpenArchive={() => setArchiveOpen(true)}
