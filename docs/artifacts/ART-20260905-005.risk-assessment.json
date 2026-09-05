@@ -1,0 +1,108 @@
+{
+  "id": "ART-20260905-005",
+  "kind": "risk-assessment",
+  "version": 1,
+  "status": "final",
+  "producer": { "agent": "intent-orchestrator", "run": "wf-axiomate-change-intent-20260905-1" },
+  "created": "2026-09-05",
+  "title": "Risk assessment for ART-20260905-004: Client filter defaults",
+  "traces": ["ART-20260905-004"],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "subject_ref": "ART-20260905-004",
+    "risks": [
+      {
+        "id": "R1",
+        "description": "'Stakeholder' is built on a candidate the requester did not mean. Four computable candidates and one non-computable one (OQ1) give different sets; the requester's recorded counter-example (a client sponsor has no allocation) does not separate them because client-role seats are governed by clientScopeId, not by any of the candidates. Building before the answer produces a filter that disagrees with what the product owner expects and cannot be corrected without re-reading every criterion marked conditional.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "Gate 1 answers OQ1 with one example person for whom the candidates differ. No scenario is written for a conditional criterion until then (AC2, AC5, AC14-AC16).",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R2",
+        "description": "A second, softer definition of 'who is on a project' is added beside the one the read gate already enforces. Since 2026-08-24 redactForReader narrows every non-exempt internal seat to live ProjectMember projects; if the filter computes stakeholders from Allocation or Engagement names, a person can be a member with no allocation (project in the payload, absent from All) or allocated with no membership (option offered, payload withholds the records, the filter points at nothing).",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "BR1 requires one pure function; ADR ART-20260905-006 proposes that if the definition is ProjectMember the function is memberProjectIdsFor itself, and that any other definition is stated with the divergence from the read gate accepted in writing.",
+        "owner": "architect"
+      },
+      {
+        "id": "R3",
+        "description": "The word 'None' is reused as the value. The Discipline facet already uses 'None' to mean 'records with no discipline yet', a real filter that returns rows (lib/tree.ts:389-394). A shared token in adjacent controls of the same bar means one of them is wrong in matchesFilters, in parseSavedFilters, or in the Filters chip count.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "BR7: a typed sentinel on FilterState with an instructing caption ('Client: choose...'); every consumer that compares to the literal 'All' is moved to compare to the resting value.",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R4",
+        "description": "Existing reset paths hide everything. revealIssue (IssueWorkspace.tsx:992) and Clear (FilterBar.tsx:286) both reset to EMPTY_FILTERS; a saved view captured at the new resting state applies an empty grid; a pre-existing saved view with client 'All' silently changes meaning. These are regressions in behaviour people already rely on if the specification leaves them undefined.",
+        "likelihood": "high",
+        "impact": "medium",
+        "mitigation": "OQ8 fixes the target of each reset and the treatment of the sentinel in saved views before planning; AC9, AC10 and AC12 carry the behaviour once fixed; scenarios pin each path.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R5",
+        "description": "Per-person persistence lands on protected paths. If OQ5 is per person, a new reducer arm (lib/workspace.ts), an ACTION_PERMISSIONS row (lib/access.ts) and a change to EMPTY_FILTERS (lib/types.ts) are needed; if it is made a saved view, it reverses the 2026-08-31 saved-views decision that personal views are a non-goal.",
+        "likelihood": "high",
+        "impact": "medium",
+        "mitigation": "Gate 3 with the architect for the plan; the ADR proposes the notificationPrefs shape (self-service gate, audited, no migration) and rejects the saved-view route; browser-local storage is recorded as the cheaper alternative if the owner reads 'for them' as per browser.",
+        "owner": "architect"
+      },
+      {
+        "id": "R6",
+        "description": "A name-only join is reintroduced. Engagement.engagementLeader, projectManager and clientSponsor are free-text names with no personId; using them for stakeholder resolution either joins on display name (the seam the identity migration closed for new paths, CLAUDE.md) or forces a Prisma migration to ids on Engagement.",
+        "likelihood": "low",
+        "impact": "high",
+        "mitigation": "Conditional on OQ1 choosing (b). If chosen, the ADR is superseded by one that carries the schema change, and AC16 is kept to make the cost visible.",
+        "owner": "architect"
+      },
+      {
+        "id": "R7",
+        "description": "Allocation is read as an access fact. The resource model keeps Allocation (capacity) and ProjectMember (access) as siblings answering different questions; a filter default computed from live allocations also needs a 'live' date rule the code does not define for this purpose and must take 'today' as a parameter to keep the computation pure.",
+        "likelihood": "low",
+        "impact": "medium",
+        "mitigation": "Conditional on OQ1 choosing (a). BR10 keeps the read one-way; AC14 pins the date boundaries; 'today' is a parameter, never the clock.",
+        "owner": "architect"
+      },
+      {
+        "id": "R8",
+        "description": "Reports misstate their scope. scopeLabel prints 'All clients - <org>' when client is 'All'; over a person-scoped view a Daily IMS or client pack would claim firm-wide coverage it does not have, the misread the scopeLabel comment already warns about.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "AC13 and OQ9: the label states the actual scope and openClientPack refuses the resting state; the owner decides whether position figures count the whole workspace or the person's projects.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R9",
+        "description": "The ProjectMember backfill may not have been committed against production. docs/verification-checklist.md has no entry for scripts/backfill-project-members.ts --commit. If OQ1 lands on ProjectMember and the backfill was not run, non-exempt internal seats already see an empty tree, and the request would be masking a live defect rather than describing a feature gap.",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "OQ12: confirm and record the backfill run before Gate 1 closes; if unrecorded, run the integrity audit and treat an empty tree for a staffed person as an incident, not as this feature.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R10",
+        "description": "Accountable roles see nothing. An Engagement Leader (all 38 permissions per G7) or a Platform Administrator who holds no allocation and no membership would, under deny-by-default (BR2), see an empty All; the membership design already names the engagement leader as its known limitation. If the requester is ROLE_ADMIN, the whole-firm view they see today is the deliberate exemption, and narrowing the filter for exempt seats is a product choice the request does not state.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "OQ7 and OQ11 answered at Gate 1; AC17 keeps isExempt and redactForReader unmodified either way.",
+        "owner": "product-owner"
+      }
+    ],
+    "overall": "medium",
+    "requires_human": true,
+    "reasons": [
+      "The requester's own open question (what 'stakeholder' resolves to) is unanswered and blocks five criteria; the analysts were told to surface it, not pick, and none of the three did. The requirement analyst describes four candidates and adds ProjectMember (post-dates D1); the architecture analyst finds 'role scoped to the project' collapses into ProjectMember and that the client-sponsor example is handled by clientScopeId rather than by any candidate; the UX analyst adds 'named on the SOW' from A4 and notes Sow carries no person reference. All three agree the candidates yield different sets. Product owner decides.",
+      "Disagreement on whether part (2) is already built. The architecture and UX analysts read the 2026-08-24 project read gate (redactForReader, projectView, memberProjectIdsFor) as already delivering 'All shows only my projects' for every non-exempt internal seat, leaving only ROLE_ADMIN, the machine actor and records with no project ancestor as the visible change. The requirement analyst wrote the criteria as if the behaviour were new. The specification records both: AC2 verifies agreement with the read gate under ProjectMember and AC17 isolates the exempt-seat decision. Whether the requester holds ROLE_ADMIN (OQ11) settles which reading describes what they see.",
+      "Disagreement on persistence scope. The requirement analyst reads 'persists for them' as per person across devices (E3). The UX analyst recommends the per-person notificationPrefs shape (directory id, self-or-admin, audited) and rejects saved views and localStorage. The architecture analyst lists browser-local (P1), model preference (P2) and personal saved views (P3) with costs and does not choose, noting P1 touches no protected path. ADR ART-20260905-006 proposes P2 with P1 as the alternative the architect may prefer; OQ5 carries it to the product owner.",
+      "Disagreement on the token. The requester said 'None'; all three analysts reject reusing the string because the Discipline facet already uses 'None' as a real filter. The UX analyst wants an instructing caption; the architecture analyst asks whether 'None' is a filter value (storable in saved views) or a UI resting state. The specification requires a typed sentinel (BR7) and leaves the caption and the saved-view treatment to OQ8.",
+      "Disagreement on the client-sponsor example. The requester offered it as the case that separates the candidates. The architecture analyst finds it does not: a client-role sponsor is governed by clientScopeId and clientView, and an internal sponsor is a ProjectMember with PROJROLE_SPONSOR. The requirement analyst kept it as the requester's own words. The specification records both readings in OQ1 and asks for a different discriminating example.",
+      "Priority is a placeholder. The requester stated none; the schema requires one; P2 was entered from the canonical band definition and is flagged as E3 in OQ13 for the product owner to confirm or change.",
+      "Protected paths are implicated (lib/types.ts certainly; lib/workspace.ts and lib/access.ts if per-person persistence; prisma/schema.prisma only if Engagement names are chosen), so the plan will need Gate 3 with the architect regardless of which options are chosen."
+    ]
+  }
+}

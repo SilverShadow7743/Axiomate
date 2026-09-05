@@ -1,0 +1,260 @@
+{
+  "id": "ART-20260905-010",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "proposed",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "wf-axiomate-change-intent-20260905-2"
+  },
+  "created": "2026-09-05",
+  "title": "Project membership: automatic on staffing, with a per-project change log",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "problem": "Since the project-membership design shipped (docs/plans/2026-08-24-project-membership-design.md; storage, reducer arms and backfill in commit 0b3d6ff; read gate live in lib/db/boot.ts:418 via projectView(base, memberProjectIdsFor(state, mine))), a non-exempt internal person sees a project only if a live ProjectMember row names them on it (lib/projectBoundary.ts:88; lib/access.ts:424-428). Membership rows are created in exactly two ways: the three deliberate reducer arms addProjectMember / updateProjectMember / removeProjectMember (lib/workspace.ts:6991-7085, gated by project.staff, lib/access.ts:595-597) and the one-off backfill scripts/backfill-project-members.ts, whose --commit was run against production on 2026-08-24 (12 rows across 6 projects, E1 from the request and the commit message). Nothing connects staffing to membership: upsertAllocation (lib/workspace.ts:6310) writes an Allocation and an audit row and never touches state.projectMembers; setAssignment (:6921) writes the issue's owner or assignments map and never touches it; create (:2119), duplicate (:2383), updateIssue (:2634) and move (:3029) resolve or carry an owner and do the same. So anyone allocated to a project, or named as an issue's owner, after 24 August and not added by hand on the Members tab is staffed and cannot see the project, which is the state the boot banner describes ('You aren't staffed on any project yet', lib/db/boot.ts:201). Separately, the Members panel (components/ProjectMembersPanel.tsx) lists live rows only (!m.removedAt, line 37) and shows addedAt as 'Since'; who added a person, who removed one, or that a role changed is recorded only in ScheduleAudit rows the three arms write (rowId: projectId, field: 'project member', prose from/to), which the project row's History tab renders unfiltered for the whole workspace (components/DetailPanel.tsx:586, no forId), which are loaded newest-5000 at boot (lib/db/repo.ts:101-103, 213; AXIOMATE_AUDIT_WINDOW), and which the backfill never wrote at all (its rows carry addedBy 'backfill migration 20260824000001' and nothing else). On 2026-09-05 Nishant Sekhar decided three things (E1): add, edit, update and change history for members; staffing through an allocation or an issue assignment creates membership automatically when none exists, so nobody can be staffed and invisible; and a per-project change log on the Members panel showing who was added, removed or had their role changed, by whom, when, and whether from staffing or a deliberate act, with removed rows kept as history. A dry run of the backfill against production is being taken today to catch anyone staffed since 24 August. Two facts read from the code on 2026-09-05 bear directly on today's run and are recorded in the risk assessment: the backfill upserts on an id keyed to iteration order (projmem-backfill-<seq>, scripts/backfill-project-members.ts:102-111, 163), so a --commit re-run can rewrite existing rows; and setAssignment writes issue.owner but not issue.ownerId, which the backfill's first signal reads, so people assigned through the assignment panel or intake since 24 August may be missed.",
+    "source": {
+      "reference": "Decision by Nishant Sekhar, 2026-09-05, in the Claude Code session, answering four questions about the 24 August ProjectMember backfill (commit 0b3d6ff, applied to production: 12 rows across 6 projects). Three decisions, recorded as BR1-BR3 below. Code observations are E1 from the files named at file:line on 2026-09-05 and were re-verified by the orchestrator where the analysts disagreed; analyst inferences are marked E3 where they occur.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "feature",
+    "priority": "P2",
+    "scope_in": [
+      "Automatic membership on allocation: upsertAllocation for a person who resolves to exactly one directory entry, on a 'project' node, creates a live ProjectMember row for that (project, personId) if none is live, in the same reducer transition, attributed to the acting actor, with a recorded origin of staffing.",
+      "Automatic membership on issue assignment: every write path that names a person on an issue whose projectOf(state, issueId) resolves to a project does the same. At minimum setAssignment for the Owner system field; the other person-valued responsibilities and the owner-writing paths create, duplicate, updateIssue (patch.owner) and move are in or out per OQ1.",
+      "Origin recorded at the moment of creation (staffing, deliberate through addProjectMember, or backfill through the script), stamped by the reducer arm that creates the row, never accepted from the wire and never recomputed later. Where it lives (row field, log event, or both) is the architecture decision ART-20260905-012.",
+      "A per-project membership log on the Members tab of a project row, beneath the live table: one line per event (added / role changed from → to / removed) with the person, who did it, when and origin; newest first; removed members visible in the log; the live table above it unchanged.",
+      "The log is complete for the project: not bounded by the newest-5000 audit window at boot, and it includes the backfill rows, which have no audit entry.",
+      "Visibility of the log follows visibility of the project (a non-member never receives it; exempt readers see every project's); reading it needs no project.staff; the existing add / role / remove controls keep needing it.",
+      "Messages: a staffing action that also created a membership says so in its returned message; one that could not (unresolvable person) says why.",
+      "Persistence of automatically created rows: lib/db/persist.ts writes projectMembers under the staffing action cases as it does under the three membership cases today, so a row created inside setAssignment or upsertAllocation survives reload.",
+      "A standing integrity check (lib/dataIntegrity.ts, run by audit:integrity) that lists every resolvable person live-allocated to, or assigned on work under, a project without a live membership and not exempt: the computed, never stored, proof of 'nobody is staffed and invisible'.",
+      "Scenarios for every criterion below, added after PM13 in scripts/scenario-validation.ts; PM1-PM7 and PM10-PM13 stay green."
+    ],
+    "scope_out": [
+      "Add, role update and remove. addProjectMember, updateProjectMember, removeProjectMember (lib/workspace.ts:6991, 7045, 7070), their refusals, their audit entries, and ACTION_PERMISSIONS naming project.staff for all three (lib/access.ts:595-597) exist and are not rebuilt. Decision (1)'s 'add, edit, update' is these arms; they are extended only to stamp origin and removedBy where the ADR places them. Their contracts do not change.",
+      "The permission. project.staff, granted to ROLE_ENGAGEMENT_LEAD and ROLE_PROJECT_MANAGER (lib/access.ts:150-152, 252, 259). No new permission key; no change to who may add or remove by hand.",
+      "Soft delete. removedAt (lib/staffing.ts:29; prisma/schema.prisma:666); PM7 already proves removal is soft and immediate. The log reads it; it does not replace it.",
+      "The read gate and the write gate: isStaffedOn, canOnProject, isExempt (lib/access.ts:400-456), projectScopeOf (lib/workspace.ts:827-887), the funnel check at :1957, projectView / memberProjectIdsFor (lib/projectBoundary.ts), redactForReader (lib/db/boot.ts:418). Untouched. upsertAllocation is not in projectScopeOf today (the allocating actor need not be a member) and stays so.",
+      "Membership as access, not capability. ProjectRole remains descriptive (lib/staffing.ts:20-21). An auto-created membership grants nothing beyond visibility and the write gate, exactly like a manual one; the gate never reads origin.",
+      "Allocation, assignment and membership as three facts (CLAUDE.md resource model). This writes a membership record as a consequence of a staffing act; it never makes visibility a read-time function of allocations or assignments, and never creates an allocation or assignment from a membership.",
+      "Automatic removal. Decision (2) is about creation only. Nothing here ends a membership when an allocation is deleted or expires, an assignment is cleared, or an issue is archived (BR8; OQ10 asks the product owner to confirm).",
+      "Allocation.personId optional. An allocation may still be recorded for a name that does not resolve (lib/workspace.ts:6325); not tightened here unless OQ3 says otherwise.",
+      "The Members panel's live table (person, role select, Since, Remove, add form) and the project tab set ['Capacity', 'Members', 'Discussion', 'History'] (components/DetailPanel.tsx:345). The log is added beneath the table; removed members are not shown as rows in the live table, which answers 'who can see this now'.",
+      "The project row's History tab. It keeps its global, unfiltered behaviour on structural rows (DetailPanel.tsx:582-586); once the Members log exists the same events appear there a second time. Scoping History to the row is a separate correction, recorded here, not widened into this change.",
+      "The backfill script as a scheduled or reducer-folded pass. It stays a one-off catch-up tool. Fixing its re-run hazard (keying on (projectId, personId), skipping pairs with a live row, stamping today's addedBy) is in scope only as far as OQ12 requires a run at ship.",
+      "The setAssignment / issue.ownerId seam drift (setAssignment writes owner, not ownerId; updateIssue writes both). A separate correction specification (OQ15); the automatic path resolves personId itself and does not depend on ownerId.",
+      "Client seats (clientScopeId, clientView), the engagement leader's known limitation in the membership design, per-project roles as a grants table, and the ART-20260905-004 stakeholder-filter work."
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "project P; Sam resolving to samId via directoryIdByName; no ProjectMember row with projectId === P && personId === samId && !removedAt; Priya holding capacity.allocate",
+        "when": "Priya applies upsertAllocation for Sam on P with now = NOW and it is accepted (passes checkAllocation and the cap policy)",
+        "then": "the allocation is written exactly as today, and state.projectMembers additionally holds one new row { projectId: P, person: 'Sam', personId: samId, addedBy: 'Priya', addedAt: NOW, removedAt: null } with origin staffing and the project role fixed by OQ2; memberProjectIdsFor(state, samId) contains P; the action's message says membership was created; seq advances once per new record (setAssignment does not touch seq today and must)."
+      },
+      {
+        "id": "AC2",
+        "given": "a live row for (P, samId) already exists with role Developer and addedAt T0",
+        "when": "Priya applies upsertAllocation for Sam on P, whether a new allocation or an edit of an existing one",
+        "then": "no second row is created; the existing row's projectRoleId, addedAt, addedBy and origin are unchanged; the membership log gains no line."
+      },
+      {
+        "id": "AC3",
+        "given": "allocationPolicy.cap === 'hard' and an allocation for Sam that over-allocates him",
+        "when": "upsertAllocation is applied",
+        "then": "the result is the existing refusal ({ state, error }) and state is the input state: no allocation, no membership row, no audit entry, no log line."
+      },
+      {
+        "id": "AC4",
+        "given": "issue I with projectOf(state, I) === P; Priya a member of P holding work.assign; Sam resolving; no live row for (P, samId)",
+        "when": "Priya applies setAssignment naming Sam on the Owner responsibility (systemField 'owner') and the availability check passes or acceptUnavailable is set",
+        "then": "the assignment is written as today and a membership row is created as in AC1 with origin staffing; after boot() for Sam's session, P is in the payload.",
+        "scenario": "PM10 (read gate) extended"
+      },
+      {
+        "id": "AC5",
+        "given": "issue J whose ancestor chain has no 'project' node (projectOf null)",
+        "when": "Sam is assigned Owner on J",
+        "then": "no membership row is created, no error is raised, and J remains ungated.",
+        "scenario": "PM4, PM12 hold"
+      },
+      {
+        "id": "AC6",
+        "given": "a parent node whose projectOf is P and Sam resolving with no live row [conditional on OQ1]",
+        "when": "create is applied with draft.owner = 'Sam', or duplicate of an issue owned by Sam into P, or updateIssue with patch.owner = 'Sam' on an issue under P",
+        "then": "each creates the membership row as in AC1, once (AC2 applies)."
+      },
+      {
+        "id": "AC7",
+        "given": "issue I owned by Sam under P1 (Sam a member of P1) and Sam not a member of P2 [conditional on OQ1]",
+        "when": "Priya applies move of I to a parent under P2",
+        "then": "a membership row for (P2, samId) is created with origin staffing; the (P1, samId) row is untouched."
+      },
+      {
+        "id": "AC8",
+        "given": "an allocation for 'Tarun' where directoryIdByName returns null [drafted default, conditional on OQ3]",
+        "when": "upsertAllocation is applied",
+        "then": "the allocation is written with personId: null exactly as today; no membership row is created (a row without personId is refused by lib/staffing.ts's rule); the message states that no membership was created because the name matches no directory entry; the integrity check in scope_in lists the pair. [E3 on the default]"
+      },
+      {
+        "id": "AC9",
+        "given": "a row for (P, samId) with removedAt set (Priya removed Sam at T1) [drafted default, conditional on OQ4]",
+        "when": "Sam is allocated to P again at T2",
+        "then": "a new row (new id) is created with origin staffing and addedAt T2; the removed row is retained; the log shows 'removed by Priya at T1' and then 'added (staffing) by <actor> at T2'. [E3: 'if none exists' read as 'none live', consistent with the already-staffed check at lib/workspace.ts:7010-7013]"
+      },
+      {
+        "id": "AC10",
+        "given": "Priya holding project.staff",
+        "when": "she applies addProjectMember for Sam on P",
+        "then": "the arm behaves exactly as today and the resulting row and log line carry origin deliberate.",
+        "scenario": "PM5, PM6 pass unchanged"
+      },
+      {
+        "id": "AC11",
+        "given": "Sam holds capacity.allocate but not project.staff (a configured role or a firm's grant change) [conditional on OQ5]",
+        "when": "Sam applies upsertAllocation for Amolak on P",
+        "then": "the allocation and the automatic membership both succeed; the log line says added by Sam with origin staffing. The automatic path is authorised by the staffing action's own permission; it is not a second way to invoke addProjectMember."
+      },
+      {
+        "id": "AC12",
+        "given": "P has, in order: a backfill row (addedBy 'backfill migration 20260824000001', addedAt backdated); a deliberate add of Sam by Priya at T1; a role change of Sam from Consultant to Developer by Priya at T2; an automatic add of Amolak via allocation by Nishant at T3; a removal of Sam by Priya at T4",
+        "when": "a member of P opens the Members tab",
+        "then": "beneath the live table a log lists, newest first: Sam removed by Priya at T4; Amolak added by Nishant at T3 (staffing); Sam role Consultant → Developer by Priya at T2; Sam added by Priya at T1 (deliberate); the backfill person added at the backdated date (backfill). Sam appears in the log although he is no longer in the live table. Origin and event kind are carried by words, with shape as a secondary cue and never by colour alone."
+      },
+      {
+        "id": "AC13",
+        "given": "membership events on P1 and P2",
+        "when": "P1's Members tab is opened",
+        "then": "only P1's events are listed, unlike the project row's History tab, which keeps its global behaviour (components/DetailPanel.tsx:586)."
+      },
+      {
+        "id": "AC14",
+        "given": "AXIOMATE_AUDIT_WINDOW=10 and more than ten audit rows written after P's membership events",
+        "when": "the workspace boots",
+        "then": "P's membership log still shows every added and removed event from AC12 with actor and origin, and states plainly which enrichment (role-change lines older than the window) is not available, rather than showing a shorter log with no signal. [Bound set by ART-20260905-012; see OQ6]"
+      },
+      {
+        "id": "AC15",
+        "given": "a live row for Sam on P",
+        "when": "Priya applies removeProjectMember",
+        "then": "removedAt === NOW, the row records who removed it (removedBy 'Priya' where the ADR places it), the log line says removed by Priya at NOW, and identity (byId, byEmail) is stamped where the log's storage carries it.",
+        "scenario": "PM7 extended"
+      },
+      {
+        "id": "AC16",
+        "given": "a live row for Sam on P with role Consultant",
+        "when": "Priya applies updateProjectMember changing Sam's role to Developer",
+        "then": "the log line shows Consultant → Developer, by Priya, at NOW; the live table shows the new role; the row's origin is unchanged (a role edit never rewrites how the row came to exist)."
+      },
+      {
+        "id": "AC17",
+        "given": "Sam is a member of P1 and not of P2, and is not exempt",
+        "when": "Sam's session boots",
+        "then": "P2's membership log is not in Sam's payload (the same redaction PM11 proves for audit entries) and P1's is. Given Sam is a member of P1 without project.staff, the log is shown and no add/remove/role controls are (ProjectMembersPanel.tsx:34, 60, 78, 96).",
+        "scenario": "PM11 extended"
+      },
+      {
+        "id": "AC18",
+        "given": "Nishant holds ROLE_ADMIN",
+        "when": "he opens any project's Members tab",
+        "then": "the full log for that project is shown, whether or not he has a membership row himself.",
+        "scenario": "PM3, PM13 exemption"
+      },
+      {
+        "id": "AC19",
+        "given": "any of the above applied through apply(state, action, actor)",
+        "when": "the reducer stamps addedBy, removedBy, the log's by/byId/byEmail and origin",
+        "then": "every value comes from the actor parameter and now, never from fields on the action (the rule at lib/workspace.ts:1978-1990); origin is set by which arm is running and is not a wire field (lib/actionShape.ts gains no new field for it)."
+      },
+      {
+        "id": "AC20",
+        "given": "two tenants each with a project named P",
+        "when": "tenant A's workspace loads",
+        "then": "its membership log contains only tenant A's rows; every read runs under withTenant(); any new column sits on ProjectMember, whose primary key is (tenantId, id)."
+      },
+      {
+        "id": "AC21",
+        "given": "an allocation for Sam on P with endDate before today, or startDate after today [conditional on OQ10]",
+        "when": "it is written, and later removed with removeAllocation",
+        "then": "membership is created all the same on write (a fact about the staffing act, not the allocation's window; the log line carries the write time, not the dates) and the membership row is unchanged on removal."
+      },
+      {
+        "id": "AC22",
+        "given": "a membership row created inside setAssignment or upsertAllocation (AC1, AC4)",
+        "when": "the action is persisted through lib/db/persist.ts and the workspace is booted again from Postgres",
+        "then": "the row is present after reload with the same id, origin, addedBy and addedAt. (Today persist.ts diffs projectMembers only under the three membership action cases, lines 493-495; setAssignment persists the issue only, line 384; upsertAllocation persists allocations only, lines 479-491. E1, verified 2026-09-05.)"
+      },
+      {
+        "id": "AC23",
+        "given": "a state with a live allocation for a resolvable, non-exempt person on project P and no live membership for (P, personId)",
+        "when": "the integrity check in lib/dataIntegrity.ts runs (audit:integrity)",
+        "then": "it reports the (project, person) pair; with the membership present it reports nothing; the check reads state only and stores nothing."
+      },
+      {
+        "id": "AC24",
+        "given": "a person who resolves to a client-scoped directory entry (Person.clientScopeId set) named on a person-valued responsibility of an issue under P [conditional on OQ1]",
+        "when": "setAssignment is applied",
+        "then": "the assignment is written as today and no membership row is created: nobody is both a client seat and an internal member (2026-08-24 design), and the message says why."
+      },
+      {
+        "id": "AC25",
+        "given": "one of the 12 production rows written by the backfill (addedBy 'backfill migration 20260824000001', no audit row) after the migration in ART-20260905-012 runs",
+        "when": "its project's Members tab is opened",
+        "then": "the roster's Since cell and the log's added line show origin backfill with the backdated addedAt; it is never displayed as deliberate, and origin is never inferred from the addedBy text at read."
+      }
+    ],
+    "business_rules": [
+      "BR1 (decision 1, E1, Nishant Sekhar 2026-09-05). There is provision to add, edit, update and see the change history of a project's members. Add, role update and remove are the existing addProjectMember / updateProjectMember / removeProjectMember arms under project.staff; the change history is new.",
+      "BR2 (decision 2, E1, Nishant Sekhar 2026-09-05). When a person is staffed onto a project through an allocation or an issue assignment, their project membership is created automatically if none exists. Nobody can be staffed and invisible.",
+      "BR3 (decision 3, E1, Nishant Sekhar 2026-09-05). The change history is per project: on the project's Members panel, a log of who was added, removed or had their project role changed, by whom, when, and whether the membership came from staffing or from a deliberate act. Removed rows stay visible as history.",
+      "BR4. Allocation, assignment and membership stay three recorded facts (CLAUDE.md resource model). BR2 is a one-way creation rule executed at the staffing write, never a derivation: nothing computes visibility from allocations or assignments at read, and nothing creates an allocation or assignment from a membership. The gate (isStaffedOn, projectView) reads only the row and never reads origin.",
+      "BR5. Automatic creation happens inside the same reducer arm and the same state transition as the staffing act, through one shared pure helper, so the reducer stays the single mutation funnel. No automation rule, no scheduled pass, no second action dispatched by the client. The staffing act is judged exactly as today (capacity cap, availability, checkAssignment); automatic membership never adds a reason to refuse it and never runs when it is refused.",
+      "BR6. personId is resolved at write and required for every membership row (lib/staffing.ts; PM6). An unresolvable name never produces a membership row; BR2's guarantee therefore covers people who resolve to a directory entry, and the integrity check lists the rest. What the staffing act does in that case is OQ3.",
+      "BR7. Origin is provenance recorded at the event by the arm that creates the row, in the same class as ProjectMember.addedBy, Allocation.createdBy, ScheduleAudit.reason and CapacityProfile.source ('stated' | 'default', lib/capacity.ts:65). It describes how the row came to exist, cannot be recomputed later (the allocation that caused it may be deleted), and is therefore not a derived value. What must never be stored is a membership status derived from allocations or assignments. Origin is never accepted from the wire and never inferred from addedBy text; the backfill rows are stamped once by migration. A later role edit does not rewrite origin (unlike Activity.origin, lib/workspace.ts:337, which this deliberately does not follow).",
+      "BR8. Removal and role change are deliberate acts only, through removeProjectMember / updateProjectMember under project.staff. No allocation end, allocation removal, assignment change or issue archive ends a membership. The log makes leftover access legible so a PM can remove deliberately.",
+      "BR9. The log is append-only and per project. Rows and events are never hard-deleted. Each line carries person, event, actor display name, timestamp and origin, and the actor's identity (byId, byEmail per AuditEntry, lib/types.ts:176-195) wherever the storage carries it. Removal attribution is recorded on the row as well as in audit, so it survives the audit window.",
+      "BR10. The log's visibility is the project's visibility: redacted by projectView for non-members, exempt for isExempt, readable by any member, editable (add / role / remove) only under project.staff. The log is read-only for everyone.",
+      "BR11. Attribution is a parameter (actor, now), never a field of the action. An automatically created row is attributed to the person whose staffing act caused it; when the actor is the machine actor (intake), the row is attributed to the machine actor as itself.",
+      "BR12. Tenant isolation at every layer; any new column sits under ProjectMember's (tenantId, id) key and its row-level security; any new read of ScheduleAudit runs in withTenant() naming the tenant at the call.",
+      "BR13. The project role given to an automatically created membership is chosen by one pure function shared with scripts/backfill-project-members.ts's defaultProjectRoleId (:42-44: ROLE_PROJECT_MANAGER → PROJROLE_PM, ROLE_ENGAGEMENT_LEAD → PROJROLE_ENGAGEMENT_MANAGER, else PROJROLE_CONSULTANT), unless OQ2 chooses a different rule, in which case the script adopts it. Whatever rule is chosen, the roster and log say the role was defaulted, not chosen, until updateProjectMember is applied.",
+      "BR14. The automatic path is authorised by the staffing action's own permission key (capacity.allocate, work.assign, work.create, work.edit, work.move per lib/access.ts:490-528) and is not gated on project.staff; its log line says so by origin. This widens what those keys effectively do, including for the ROLE_AUTOMATION actor, and is confirmed at OQ5 and reviewed by the Security Reviewer rather than absorbed silently.",
+      "BR15. A person who resolves to a client-scoped seat (Person.clientScopeId set) is never enrolled by the automatic path: nobody is both a client seat and an internal member (2026-08-24 design). Whether an exempt person (ROLE_ADMIN, machine actor) is enrolled is OQ7.",
+      "BR16. The existing arms, refusals, messages and scenarios PM1-PM7, PM10-PM13 are preserved; this adds, it does not alter. The live table and the project tab set are unchanged; the log is a third section of the Members panel reusing the drawer's existing entry idiom (.appr-block / .appr-entry, .prov suffixes, History's reverse-chronological line) rather than a new pattern, and distinguishes origin by wording and shape, never by colour alone."
+    ],
+    "domain_entities": [
+      "ProjectMember (lib/staffing.ts:14-30; prisma/schema.prisma:652-671): personId required, addedBy display name only, addedAt, removedAt; no removedBy, no origin. Candidate new columns per ART-20260905-012: source, removedBy.",
+      "ProjectRole, DEFAULT_PROJECT_ROLES (lib/staffing.ts:32-66); defaultProjectRoleId in scripts/backfill-project-members.ts:42-44",
+      "Allocation (prisma/schema.prisma:622-644; lib/capacity.ts): personId optional; arms upsertAllocation (lib/workspace.ts:6310, personId: directoryIdByName(...) may be null) and removeAllocation",
+      "Issue people: IssueRecord.owner / ownerId (lib/workspace.ts:270; set at :2119, :2383, :2634); assignments map and responsibility types (valueKind: 'person', systemField); setAssignment :6921-6990 (writes owner, not ownerId, E1); checkAssignment; availabilityForAssignment; move :3029",
+      "Project resolution: projectOf, scopeChainOf, projectScopeOf (lib/workspace.ts:764-887)",
+      "Gates: isStaffedOn, canOnProject, isExempt (lib/access.ts:400-456); memberProjectIdsFor, projectView (lib/projectBoundary.ts:20, 88; audit kept by rowId at :69); redactForReader (lib/db/boot.ts:418); unstaffed banner (lib/db/boot.ts:192-201)",
+      "Permissions: project.staff (lib/access.ts:150); ACTION_PERMISSIONS rows for the staffing actions (:490-528) and the three membership arms (:595-597); MACHINE_ROLE_ID grants including work.assign (:245); intake dispatch of setAssignment (app/api/intake/route.ts:299, app/api/intake/form/route.ts:148)",
+      "Audit: AuditEntry (lib/types.ts:176-195); log() / logAll() / identityOf (lib/workspace.ts:1496-1544); ScheduleAudit (prisma/schema.prisma:1144-1170, byId/byEmail); auditWindow() newest-5000 (lib/db/repo.ts:101-103, 213)",
+      "Persistence: lib/db/persist.ts cases setAssignment (:384, issue only), upsertAllocation (:479, allocations only), the three membership cases (:493-500, projectMembers diff); lib/db/map.ts projectMemberToRow; lib/db/repo.ts load",
+      "Integrity: lib/dataIntegrity.ts (personSeamCheck pattern), scripts/integrity-audit.ts",
+      "Provenance precedents: CapacityProfile.source 'stated' | 'default' (lib/capacity.ts:65); Activity.origin 'generated' | 'user' (lib/workspace.ts:337); DateOrigin (lib/types.ts:144-153); ScheduleAudit.reason",
+      "UI: components/ProjectMembersPanel.tsx (live table, add form, can(..., 'project.staff') decides controls); components/DetailPanel.tsx:343-346 (project tabs), :615-623 (mount), :582-586 (global History on structural rows), History :1368-1408; components/ApprovalsBlock.tsx and app/globals.css:5324-5368 (.appr-block / .appr-entry idiom); .prov (globals.css:4488); dispatch at components/IssueWorkspace.tsx:2471",
+      "Backfill: scripts/backfill-project-members.ts (dry-run default, --commit; signals: issue ownerId, time-entry personId, live allocations; skips ROLE_ADMIN :107-108; id projmem-backfill-<seq> :102-111; addedBy literal :116; upsert :163; writes no ScheduleAudit row)",
+      "Scenarios: PM1-PM7, PM10-PM13 (scripts/scenario-validation.ts:7505-7790)"
+    ],
+    "open_questions": [
+      "OQ1 (blocks AC4, AC6, AC7, AC24). Which acts count as 'staffing'? The decision names allocation and issue assignment. In code a person is named on an issue through setAssignment (Owner, and every responsibility with valueKind 'person', which the arm treats as putting work on somebody, lib/workspace.ts:6947-6960), create, duplicate, updateIssue and move. Does 'assignment' mean Owner only, or every person-valued responsibility? raisedBy is person-valued and often names a client contact; accountable is typed AccountableParty. Time recorded for someone under time.recordForOthers was a backfill signal but is not in the decision. Intake paths that set an owner dispatch setAssignment as the machine actor. move carries the assignees to the new project with nobody re-checking them; the architect recommends calling the helper from move, or accepting that the integrity check catches it. The product owner states the list.",
+      "OQ2 (blocks AC1). Project role for an automatic membership: the backfill's org-role mapping (BR13), always Consultant, or a new neutral seeded role such as 'Staffed' so the badge does not overstate what is known. Related: the UX analyst holds that a defaulted role must display as defaulted until somebody sets it, so the record does not present a value nobody chose as a chosen one; the architect's ADR carries no role-history on the row, so 'defaulted' would be read from origin plus the absence of a role-change event, which is window-bounded. A neutral 'Staffed' role sidesteps this. The product owner chooses.",
+      "OQ3 (AC8). A staffing act for a name with no directory entry: proceed without membership and say so (the default all three analysts recommend, keeping Allocation.personId optional as today), or refuse the staffing act until the person is in the directory (which changes allocation semantics and the imported log's tolerance). Either way BR2 covers resolvable people only, and the specification says so (BR6). Note such a person cannot sign in until a directory entry exists, and nothing here retroactively creates membership when it does; that is the backfill's job (OQ12).",
+      "OQ4 (AC9). After a deliberate removal, does a later staffing act silently re-create membership (drafted: yes, the later act wins and the log shows both; the architect agrees, because the alternative makes a removal a hidden block on staffing), warn, or refuse the staffing act?",
+      "OQ5 (AC11). Confirm that capacity.allocate and work.assign holders may cause membership rows without project.staff, and specifically that the ROLE_AUTOMATION actor used by both intake routes may enrol a person by assigning them an owner from inbound mail. This follows from decision (2) as stated; the log makes it visible; it is the one place this requirement widens what an existing permission effectively does. The Security Reviewer reads it at Proof.",
+      "OQ6 (architecture; Gate 2, ART-20260905-012). Where origin lives and what the log is read from. The ADR proposes: an immutable creation-time source on ProjectMember ('stated' | 'staffing' | 'backfill') plus removedBy; no new table; the log's durable skeleton is the rows themselves (added and removed with actor and origin) enriched by the existing ScheduleAudit lines (role changes, reasons) when they are within the boot window, labelled as such when they are not. The UX analyst's alternative: a membership-event collection (add / role change / remove, actor, at, origin, cause reference) so role-change history is durable and each line can cite the allocation or issue that caused it. The product owner should know what the proposed shape cannot show: a role change older than the audit window is not recoverable from rows. Whether that bound is acceptable belongs with this question.",
+      "OQ7. Should staffing an exempt person (ROLE_ADMIN, the machine actor) create a membership row? The backfill skipped them (:107-108) because they need none, and the architect recommends the same; a row would appear in the live table and the log. 'The members list shows who is staffed' says create.",
+      "OQ8 (AC14). History before ship: the three arms have written ScheduleAudit rows with field 'project member' since 24 August, and the backfill rows have addedBy but no audit row. Does the log reconstruct pre-ship events from those, or start at ship with the backfill rows shown from addedAt / addedBy alone?",
+      "OQ9. Does the log show membership events only (drafted), or also the allocation or assignment that caused an automatic add? The architect puts the cause in the audit entry's reason ('Staffed by allocation alloc-12'), not on the row, because a pointer to a soft-deletable fact invites treating it as live; the UX analyst wants a cause reference on the origin field so the roster's Since cell can say 'from staffing — allocation by Sam Lee'. Product owner on whether the cause must be shown; the architect on where it lives.",
+      "OQ10 (AC21). Confirm that nothing ends a membership automatically: allocation removed or expired, assignment cleared, issue archived (BR8). All three analysts recommend against symmetry; the decision did not say.",
+      "OQ11. Priority band. P2 is the orchestrator's placeholder (E3): the requester named no band; the production dry run today mitigates the live exposure, which is why this is not entered as P1. If the dry run finds people staffed-and-invisible whom nobody will add by hand, the band should rise. Confirm or change at Gate 1.",
+      "OQ12. The gap between today's dry run or commit and the ship date: anyone staffed in between is invisible again until someone adds them. Is the backfill to be run once more at ship, as its own plan step as the 24 August design did, and should its rows from today's run be recognisable in the log as backfill? Before any --commit today or later, the script's upsert must be re-keyed (see risk R1 in ART-20260905-011): it currently keys on iteration order and can rewrite the 12 existing rows.",
+      "OQ13 (UX). Wording of the 'also added to members' message on the staffing act (proposed: 'Allocation saved. <Person> is now staffed on this project — see Members.'), and placement of the log as a third section beneath the live table and add form on the Members tab (proposed, heading 'Changes to who is staffed', latest 20 with 'Show all N') versus a sub-tab. Confirm.",
+      "OQ14. Does a person being staffed on a project under one engagement get anything on sibling projects? The 24 August design says no ('no automatic visibility across them'); confirm this requirement keeps that boundary.",
+      "OQ15. setAssignment writes issue.owner but not issue.ownerId (lib/workspace.ts:6921-6989; updateIssue does both at :2634), which is the seam drift CLAUDE.md says every write path must avoid and which makes the backfill's first signal miss people assigned through the panel or intake. Should this be raised as its own correction specification now, ahead of this feature? The automatic path here resolves personId itself and does not depend on it."
+    ]
+  }
+}

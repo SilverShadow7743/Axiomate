@@ -1,0 +1,135 @@
+{
+  "id": "ART-20260905-014",
+  "kind": "risk-assessment",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "wf-axiomate-change-intent-20260905-3"
+  },
+  "created": "2026-09-05",
+  "title": "Risk assessment for ART-20260905-013: backfill-project-members.ts re-run hazard",
+  "traces": ["ART-20260905-013"],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "subject_ref": "ART-20260905-013",
+    "risks": [
+      {
+        "id": "R1",
+        "description": "Already observed, not predicted: re-running --commit today against production rewrites six live ProjectMember rows. The dry run of 2026-09-05 reported 'would create 6' for six people who already hold rows projmem-backfill-1, -2, -9, -10, -11, -12 (E1, CEO). The script numbers rows from an iteration counter (scripts/backfill-project-members.ts:109-111) and upserts by that id with a full-row update (:161-169); today's order differs from 24 August's, so projmem-backfill-1 (Dharmendra, project:2) would become Tarun on project:5 and so on, and six people would lose project access under the read gate while the report read as six additions. Only the RLS accident in R4 may stand between the command and the damage.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "Do not run --commit against production (the CEO's standing instruction). Land the header (AC11) and the one-line interim guard (AC14) first; then the planner, create-only write and proof (AC1-AC10). The proof's AC4 reproduces this exact shape so it cannot regress silently.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R2",
+        "description": "The dry run misreports. With one bucket, a person who is already a member is printed under 'Would create', so a reader judging the report 'safe' (which is what the header tells them to do) is judging the wrong list. The 2026-09-05 report is the instance: six additions that were six rewrites.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "BR5 and AC1, AC8: three buckets computed by the pure planner from state.projectMembers; the footer states that 'would create' is exactly what --commit writes and no longer invites --commit as the next step.",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R3",
+        "description": "A live-only skip re-enrols deliberately removed people. The CEO's outcome names people who hold a live row; the six OAPIL client-staff rows are removed (removedAt set) and their signals (issues, time entries, allocations) still exist, so a script that skips only live rows lists them under 'would create' and re-enrols them on --commit, reversing a decision a person made. Whether they appear in today's list is not known (they may drop at :106 if their directory entries are gone).",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "BR2 and AC5: skip on any row, live or removed, and report removed people in their own bucket. OQ2 asks the product owner to confirm; if re-enrolment is wanted it is a new row, never the old one un-removed.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R4",
+        "description": "The commit path is outside the tenant discipline, and its likely failure is mistaken for safety. The script writes through its own bare PrismaClient (:37) with no set_config('app.tenant_id') while ProjectMember is under FORCE ROW LEVEL SECURITY with a USING-only policy applied after the backfill ran (migration 20260824000004:78-80). Both analysts infer (E3) that --commit now fails at the policy unless the database role bypasses RLS, which neither verified. If it fails, the first person to 'fix' the tenant setting without fixing the id scheme gets R1; if the role bypasses RLS, R1 is live today. audit:tenancy cannot see either because it scans lib/db only.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "BR6 and AC9: every write through persistActions or withTenant; the proof records whether a bare-client write against its own tenant is refused (OQ5), turning the inference into evidence. The header describes this hazard as well as the id hazard.",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R5",
+        "description": "The 'stable derived id' half of the CEO's outcome, if built as written, produces a different overwrite. A derived id such as projmem-<personId>-<projectId> sits beside a reducer-minted projmem-<seq> row for the same pair (a duplicate the reducer would have refused) and collides with a soft-removed row after a remove-then-re-add, where an upsert on it resurrects or overwrites attested history. The requirement analyst wrote AC3 to allow either route; the architecture analyst holds the derived id is neither necessary nor sufficient.",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "The specification fixes the outcome (no counter, create-only, skip by the (project, person) predicate) and leaves the mechanism to Gate 2. ART-20260905-015 proposes the reducer route and records the derived id as rejected with this reason. The architect decides.",
+        "owner": "architect"
+      },
+      {
+        "id": "R6",
+        "description": "The reducer route disagrees with ADR 0003 on provenance and ids. ART-20260905-012 stamps ProjectMember.source 'stated' inside addProjectMember and 'backfill' by a migration matching id LIKE 'projmem-backfill-%'. Rows this script creates through addProjectMember would be 'stated' with projmem-<seq> ids, so the membership log in ART-20260905-010 would show them as deliberate adds by the operator, and the migration would not recognise them as backfill. The two ADRs are both proposed and can be approved inconsistently.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "OQ9 in the specification and the consequences of ART-20260905-015 name the seam: the enrolment helper takes source as a parameter the script can set, or the script retires before ADR 0003 lands, or the migration's inference widens. The architect approves the two ADRs together.",
+        "owner": "architect"
+      },
+      {
+        "id": "R7",
+        "description": "Under the reducer route, persistActions stops at the first refusal and keeps earlier writes (lib/db/persist.ts:85-92). A batch containing one already-member or one unresolvable name leaves the run half-written and the report unable to say which rows landed. The script also needs an operator holding project.staff (lib/access.ts:595), which ROLE_AUTOMATION does not hold; running as a non-admin operator not on the project is refused by the project gate, which is the rule working, not a bug.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "AC12 and AC13: the planner's buckets filter already-members and removed people before submission so the batch holds creates only; any refusal is printed as a stop; the operator is resolved through directoryPersonFor and refused if nobody. lib/access.ts is not widened.",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R8",
+        "description": "Backdating through the reducer backdates the audit. The 24 August design set addedAt to the earliest evidence date. Through addProjectMember, addedAt is a.now; passing evidence dates as now reproduces the backdating but stamps the audit entry's at with the same date, so a membership log would show the row as added before the script ran. Stamping the run time instead loses the design's 'since' fidelity on the roster.",
+        "likelihood": "medium",
+        "impact": "low",
+        "mitigation": "OQ8 puts the choice to the product owner (design fidelity vs audit fidelity); the evidence date can be carried in the audit reason either way.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R9",
+        "description": "No storage-level guard exists. ProjectMember has an index on (tenantId, projectId, personId) but no unique (prisma/schema.prisma:669), so every writer, this script, the reducer's persist case, a future feature, relies on discipline to avoid a duplicate live membership. A partial unique index WHERE removedAt IS NULL would close that from any writer but is a migration on a protected path needing a pre-check of production.",
+        "likelihood": "low",
+        "impact": "medium",
+        "mitigation": "Deferred, not rejected: OQ6 and the deferred alternative in ART-20260905-015. Meanwhile AC15 adds duplicateLiveMembershipCheck to audit:integrity so the damage is reported if it ever occurs.",
+        "owner": "architect"
+      },
+      {
+        "id": "R10",
+        "description": "The correction is built for a script that retires. ART-20260905-010 replaces the backfill's guarantee with a standing integrity check and enrolment at the staffing event; its OQ12 contemplates one re-keyed run at ship. If the product owner does not intend any further run, the planner, proof and integrity check are cost without use, while the header and the interim guard are still needed today.",
+        "likelihood": "medium",
+        "impact": "low",
+        "mitigation": "OQ3 asks the product owner whether the script has any remaining planned use; AC11 and AC14 land regardless; AC1-AC10 and AC15 are deferred to the retirement if the answer is none.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R11",
+        "description": "The dry run's 'would create' list is also incomplete, and the fix does not make it complete. setAssignment writes issue.owner but not ownerId (ART-20260905-011 R2; ART-20260905-010 OQ15), so people assigned through the panel or intake since 24 August are missed by the first signal. A corrected script that is honest about what it writes can still leave staffed people invisible; a reader may take a clean three-bucket report as proof that nobody is missing.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "Out of scope here and stated as such; the seam is its own correction, and ART-20260905-010's staffedWithoutMembershipCheck is the standing answer. The footer should say the list is from three signals and name the seam.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R12",
+        "description": "The written record still says the opposite. docs/plans/2026-08-24-project-membership-plan.md:123-125 says the backfill is 'safe to get wrong and cheap to re-run', and the script's header and footer say the same in effect. Anyone who reads either before this artifact repeats today's near miss.",
+        "likelihood": "high",
+        "impact": "medium",
+        "mitigation": "AC11 (header and footer) and the one-line dated correction beside the plan sentence, both in scope_in and both landable today.",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R13",
+        "description": "The production figures and the seventh live row are unverified by anyone but the CEO. 13 rows, 7 live, 6 removed, and the six-name id mapping are E1 from the session; the 24 August run wrote 12 and six named ids are live, so one live row came from elsewhere. Neither analyst nor the orchestrator queried production.",
+        "likelihood": "low",
+        "impact": "low",
+        "mitigation": "OQ11: not needed for the requirement; confirm before any proof fixture is modelled on production. The proof seeds its own tenant and does not depend on these figures.",
+        "owner": "product-owner"
+      }
+    ],
+    "overall": "high",
+    "requires_human": true,
+    "reasons": [
+      "R1 is observed, not inferred: the CEO watched the dry run propose six rewrites as six additions, and the code does exactly what the observation says. The band is high because the one thing that may stand between the command and the damage (R4, the RLS policy refusing a write with no tenant set) is an unverified accident of migration order, not a control. The standing instruction not to re-run --commit is the only real control today.",
+      "Disagreement on mechanism, carried to Gate 2 rather than picked. The CEO's outcome offers two routes (derived ids, or the reducer's addProjectMember arm). The requirement analyst drafted for either and marked the design open. The architecture analyst rejects the derived id outright (R5) and recommends the reducer route as the house rule's consequence. The specification fixes the outcome and ART-20260905-015 carries the recommendation with the derived id as a rejected alternative; the architect decides.",
+      "Gap in the stated outcome, not a disagreement with it: the CEO's outcome covers people with a live row and is silent on deliberately removed people who still have signals (R3). Both analysts draft 'never re-enrol, report separately'; OQ2 asks the product owner to confirm because a live-only reading would undo the six OAPIL removals.",
+      "Second defect found by both analysts independently (R4): the commit path runs outside the tenant discipline. They agree on the fact and on the inference that it probably fails under RLS today; neither could verify the database role. The specification makes the proof settle it (AC9, OQ5) rather than either analyst's inference becoming a stated fact.",
+      "Interaction with the concurrent feature (R6, R10). ART-20260905-010/-011/-012 and docs/adr/0003 exist in the working tree and name this hazard from the feature side; ADR 0003's consequence says the script must be re-keyed on (tenantId, projectId, personId), which the architecture analyst here reads as the skip predicate, not a derived id. The two ADRs disagree on what a backfill-created row's provenance and id look like if the script goes through the reducer; OQ9 records it so the architect approves them consistently.",
+      "Priority is proposed, not confirmed (OQ10). The CEO stated no band; P1 is the orchestrator's proposal on the exposure and the need for the header and interim guard this week; the product owner has not confirmed it.",
+      "Protected paths: none required by the specification as written. OQ6 (partial unique index) would touch prisma/schema.prisma and prisma/migrations/; the reducer route reads lib/access.ts grants but changes nothing there. Gate 3 with the architect is needed only if OQ6 is taken up."
+    ]
+  }
+}

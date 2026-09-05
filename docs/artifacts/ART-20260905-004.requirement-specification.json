@@ -1,0 +1,190 @@
+{
+  "id": "ART-20260905-004",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "wf-axiomate-change-intent-20260905-1"
+  },
+  "created": "2026-09-05",
+  "title": "Client filter defaults: rest at nothing chosen, scope All to the signed-in person's stakeholder projects, remember each person's choice",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-05",
+      "evidence": "Stated by the CEO in the Claude Code session (\"Approved\", 2026-09-05) after the intent-stage summary. The 13 open questions, including OQ1 (the stakeholder definition, which blocks AC2, AC5, AC14-AC16), were not answered at approval; the implementation planner must surface OQ1 before any step that depends on it."
+    }
+  ],
+  "body": {
+    "problem": "The issue workspace opens with the Client filter at 'All' (EMPTY_FILTERS.client in lib/types.ts:384; components/IssueWorkspace.tsx:621 seeds state from it), so a signed-in person sees every client's work in the payload they receive before choosing anything, and the Clear button (components/FilterBar.tsx:286) and the reveal-a-hidden-row path (IssueWorkspace.tsx:992) both return to that same view. Nishant Sekhar asked on 2026-08-17 (docs/pending-actions.md D1, A4) for three changes: (1) the Client filter rests at None rather than every client; (2) choosing All shows only the projects on which the signed-in person is a stakeholder, not every project in the firm; (3) each person picks their own project and the choice persists for them. Two facts read from the code on 2026-09-05 change the shape of the request without resolving it. First, part (2) is already true for every non-exempt internal seat: since the project-membership design of 2026-08-24, redactForReader (lib/db/boot.ts:418) applies projectView(memberProjectIdsFor(state, mine)) so a non-member project never reaches the browser; the exemption for ROLE_ADMIN and the machine actor (isExempt, lib/access.ts:407) and records with no project-tier ancestor are the only places where All still shows the whole firm. D1 was written a week before that design and was never reconciled against it. Second, the control is client-tier (it compares issue.client, the nearest external-party ancestor's name; facetsOf lib/tree.ts:351) while every candidate meaning of stakeholder is project- or engagement-tier, so on this control 'All shows my projects' can only mean 'list the clients under which I hold at least one stakeholder project'. The request cannot be built as stated because 'stakeholder' has no single computable meaning in the data (see open_questions OQ1) and because no per-person persisted preference for a filter exists (saved views are deliberately the team's, lib/savedViews.ts; viewChoice and panel layout are per browser).",
+    "source": {
+      "reference": "docs/pending-actions.md rows D1 and A4 (Nishant Sekhar, 2026-08-17; document last edited 2026-08-23, commit b4d5b3b). Code observations dated 2026-09-05 are cited file:line in the criteria and rules; inferences by the analysts are marked E3 where they occur.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "feature",
+    "priority": "P2",
+    "scope_in": [
+      "The Client control in the issue workspace (Tree, Board and Calendar, the views FiltersHeader mounts; My work, Portfolio and the record views are untouched) rests at a value meaning 'nothing chosen' for a person who has not yet chosen, instead of 'All'.",
+      "A person-relative reading of All: the clients listed and the rows shown are limited to projects on which the signed-in person (directoryPersonFor(model, actor), resolved server-side) is a stakeholder, per a definition the product owner fixes in OQ1.",
+      "Each signed-in person can choose a client (or a project, see OQ6) and that choice is restored for that person on their next visit, in the persistence scope fixed by OQ5.",
+      "The reset paths that return to 'All' today (Clear, revealIssue) and the report scope label (scopeLabel, openClientPack) are made consistent with the new resting state.",
+      "Client-seat behaviour (Person.clientScopeId, clientView, scenario GA1) is preserved unchanged."
+    ],
+    "scope_out": [
+      "Any change to the client-seat boundary (Person.clientScopeId, clientView, GA1). This request is about internal seats' default view.",
+      "Any change to what a person may DO on a project (can(), lib/access.ts) or to the project read gate (redactForReader, projectView, isExempt in lib/db/boot.ts). Stakeholder-scoping is a view default, not a permission; if the product owner intends it as access control, that is a permission-model change and a different requirement.",
+      "Changing Allocation, ProjectMember or Engagement semantics to make one of them mean 'stakeholder'. The definition is chosen among what exists or declared new; the data models are not bent to fit.",
+      "Converting saved views (lib/savedViews.ts) to per-person. The saved-views design of 2026-08-31 lists personal-only views as a non-goal; reversing that needs its own ADR.",
+      "D2, the issue-type taxonomy, which shares the same pending-actions section but is a separate modelling decision.",
+      "Portfolio and My work views, which compute their own lists and ignore record filters."
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a signed-in internal person for whom no client or project choice has been recorded",
+        "when": "the issue workspace loads on the Tree, Board or Calendar view",
+        "then": "the Client control shows the 'nothing chosen' state with an instructing caption (not 'Client: All' and not the bare word 'None'), no issue rows are listed, the grid shows a one-line prompt naming the next action, the counts strip still reports the full total the way hidden-completed records are counted today, and the Filters chip does not count the resting value as an active filter. [E3 on the empty grid; conditional on OQ2]"
+      },
+      {
+        "id": "AC2",
+        "given": "the signed-in person resolves via directoryPersonFor to a directory Person who is a stakeholder on project P1 and not on project P2 under the OQ1 definition, and is not exempt from the project read gate",
+        "when": "they choose All",
+        "then": "issues whose project-tier ancestor (found through tiersOf, not a literal kind) is P1 are listed and issues under P2 are not, and the Client dropdown offers only clients that have at least one project the person is a stakeholder on. For a non-exempt seat under definition (d) ProjectMember this already holds through the read gate; the criterion then verifies that the filter agrees with the payload rather than computing a second, different set. [conditional on OQ1, OQ3]"
+      },
+      {
+        "id": "AC3",
+        "given": "the person resolves but is a stakeholder on no project under the OQ1 definition",
+        "when": "they choose All",
+        "then": "the view is empty and a message states why in the codebase's teaching-message convention, distinguishable from the boot banner's 'not staffed on any project' note, and the view is NOT widened to every project. [E3, mirrors GA1's deny-by-default]"
+      },
+      {
+        "id": "AC4",
+        "given": "the signed-in actor does not resolve to a directory Person (the fallback-role case, lib/access.ts:348-360)",
+        "when": "they choose All",
+        "then": "the outcome is the same empty-with-reason state as AC3, never every project. [E3; conditional on OQ10]"
+      },
+      {
+        "id": "AC5",
+        "given": "the person picks a single client X from the dropdown",
+        "when": "the filter applies",
+        "then": "the rows shown are those with issue.client === X AND, per OQ4, either every project under X or only X's projects the person is a stakeholder on. [conditional on OQ4]"
+      },
+      {
+        "id": "AC6",
+        "given": "person A chose client or project P and the choice was recorded",
+        "when": "A opens the workspace again within the persistence scope fixed by OQ5",
+        "then": "the Client control shows P and the rows are filtered to P without A choosing again. [conditional on OQ5, OQ6]"
+      },
+      {
+        "id": "AC7",
+        "given": "person A has chosen P1 and person B, in the same tenant, chooses P2",
+        "when": "A opens the workspace",
+        "then": "A sees P1; B's choice never changes A's; neither choice appears in the shared saved-views list (lib/savedViews.ts) and neither is disclosed to a client seat through clientView. [E3 on saved views]"
+      },
+      {
+        "id": "AC8",
+        "given": "the same person has seats in two tenants",
+        "when": "they switch tenant",
+        "then": "the choice restored is the one recorded for that tenant, and a node id from the other tenant is never applied: an unknown id degrades to 'nothing chosen', never to All, following parseSavedFilters' fail-closed discipline. [E3]"
+      },
+      {
+        "id": "AC9",
+        "given": "filters have been changed",
+        "when": "Clear is pressed (FilterBar.tsx:286, today setFilters(EMPTY_FILTERS))",
+        "then": "client returns to the person's recorded choice if one exists, else to 'nothing chosen', never to unscoped All. [E3; conditional on OQ8]"
+      },
+      {
+        "id": "AC10",
+        "given": "a person follows a notification, search hit or My-work row to an issue outside the currently filtered set (revealIssue, IssueWorkspace.tsx:985-996, today resets to EMPTY_FILTERS and toasts 'Filters cleared')",
+        "when": "the issue's project is inside the person's stakeholder set",
+        "then": "filters widen to scoped-All (or to the record's own client, per OQ8) and the issue is revealed; when it is outside, the row is not revealed and the notice says why, rather than resetting to a state that hides everything. [E3; conditional on OQ8]"
+      },
+      {
+        "id": "AC11",
+        "given": "a client-role seat with Person.clientScopeId set, or an unattached client seat",
+        "when": "the workspace loads",
+        "then": "the clientView boundary applies exactly as today: the attached seat never sees anything outside its client and the unattached seat stays empty. Cite clientView(state, clientScopeId), not a new gate.",
+        "scenario": "GA1"
+      },
+      {
+        "id": "AC12",
+        "given": "a saved view whose filters.client is 'All' (any view saved before this change) or that was saved while the client rested at 'nothing chosen'",
+        "when": "a person applies it",
+        "then": "'All' is read as the person-relative All of AC2, and the resting sentinel is either excluded on save or applying it is defined, so a shared view never applies an empty grid by accident. [E3; conditional on OQ8]"
+      },
+      {
+        "id": "AC13",
+        "given": "the Client control is at 'nothing chosen' or scoped-All",
+        "when": "the Daily IMS or a client pack is exported",
+        "then": "scopeLabel does not print 'All clients - <org>'; it states the actual scope, and openClientPack refuses 'nothing chosen' with the same teaching message it uses for 'All' today (IssueWorkspace.tsx:1779-1782). Whether position figures count the whole workspace or only the person's projects is OQ9. [E3]"
+      },
+      {
+        "id": "AC14",
+        "given": "OQ1 lands on definition (a) live Allocation, and an Allocation on P whose endDate is yesterday, one whose startDate is today, one with deletedAt set, and one whose personId is null with only the name matching",
+        "when": "All is chosen today, with 'today' passed as a parameter",
+        "then": "P is out, in, out, and as OQ1 decides for the name-only case respectively; never silent inclusion by a rule different from the codebase's id-first-then-name joins. [conditional on OQ1]"
+      },
+      {
+        "id": "AC15",
+        "given": "OQ1 lands on definition (d) ProjectMember, and a ProjectMember row on P with removedAt set and another active row with any projectRoleId",
+        "when": "All is chosen",
+        "then": "P is out for the removed row and in for the active row unless OQ1 restricts to particular project roles; the set equals memberProjectIdsFor(state, personId) so the filter and the read gate cannot disagree. [conditional on OQ1]"
+      },
+      {
+        "id": "AC16",
+        "given": "OQ1 lands on definition (b) named on the Engagement, and an Engagement whose engagementLeader string equals the person's directory name while its projectManager string resolves to nobody",
+        "when": "All is chosen by the leader and then by the owner of the non-resolving name",
+        "then": "every project under that engagement node is in the leader's set; nothing is added and nothing errors for the other. This criterion exists to make the name-join cost visible; if OQ1 rejects (b) it is dropped. [conditional on OQ1]"
+      },
+      {
+        "id": "AC17",
+        "given": "a ROLE_ADMIN holder or the machine actor, exempt from the project read gate",
+        "when": "they choose All",
+        "then": "the outcome is whichever OQ11 fixes: the filter narrows to their stakeholder set while the payload stays whole (a display default, not an access change), or All stays the whole firm for exempt seats. Either way isExempt and redactForReader are not modified. [conditional on OQ11]"
+      }
+    ],
+    "business_rules": [
+      "BR1. 'Stakeholder' is computed in exactly one pure function of (WorkspaceState, resolved personId, and 'today' as a parameter if the definition is date-bounded), never by display name alone; the UI, reports and scenarios all read that one function. If OQ1 lands on ProjectMember, that function is memberProjectIdsFor (lib/projectBoundary.ts:88), not a second definition beside it.",
+      "BR2. Deny by default: an unresolved person, an unattached seat, or a person on no project sees an empty scoped view with a reason, never a widened one; the rule GA1 fixes for client seats is applied to the new default for internal seats.",
+      "BR3. The stakeholder set is derived at read and never stored (derived-never-stored); only the person's own choice, a stated preference, is stored, as a node id rather than a client name.",
+      "BR4. A person's choice is a per-person fact keyed by directory personId and tenant. It is not a saved view (those are the team's by design) and is never visible to, or applied to, anyone else.",
+      "BR5. Any new write path that records a person's choice resolves personId at write, as CLAUDE.md's resource-model note requires of every write path, and refuses rather than storing a name-only record; the actor is passed in from the sealed session, never taken from the request body.",
+      "BR6. Tenant isolation holds at both layers: the stakeholder computation reads only the actor's tenant (every collection involved already loads under withTenant()), and a stored choice is keyed by tenant.",
+      "BR7. 'Nothing chosen' on the Client facet is a typed sentinel on FilterState that cannot be confused with the discipline facet's 'None' ('records without a discipline', lib/tree.ts:389-394). Same word to the requester, different meaning; the code must not share the token, and every consumer that today compares to the literal 'All' (FilterDropdown's on-accent, FiltersHeader's activeCount, matchesFilters, visibleRows, scopeLabel, revealIssue) compares to the resting value instead.",
+      "BR8. The client-seat boundary (clientView) and the project read gate (redactForReader, projectView, isExempt) are applied before any filter default and are never widened or narrowed by this feature.",
+      "BR9. Nothing here changes what a person may do; can(model, actor, key) is untouched. Visibility by stakeholder is a default view, not an authorisation.",
+      "BR10. Allocation stays a capacity fact and ProjectMember stays an access fact (CLAUDE.md resource model). If OQ1 chooses Allocation, the filter reads it and never writes it; choosing one candidate never creates or implies a record of another kind."
+    ],
+    "domain_entities": [
+      "FilterState.client and EMPTY_FILTERS (lib/types.ts:351-393; protected path)",
+      "IssueDetail.client (free-text client name the filter compares; lib/tree.ts matchesFilters 383-400, visibleRows 461-495, facetsOf 351)",
+      "ScheduleRow kind/parentId chain and NODE_KINDS client | engagement | project via tiersOf (the control is at the client tier, the scoping at the project tier)",
+      "Allocation (prisma/schema.prisma:622; lib/capacity.ts:234): projectId, optional personId, startDate/endDate, percentage, deletedAt",
+      "ProjectMember and DEFAULT_PROJECT_ROLES incl. PROJROLE_SPONSOR, PROJROLE_CUSTOMER, PROJROLE_STAKEHOLDER (lib/staffing.ts; prisma/schema.prisma:652); memberProjectIdsFor and projectView (lib/projectBoundary.ts)",
+      "Engagement.engagementLeader / projectManager / clientSponsor (prisma/schema.prisma:543-546; lib/engagement.ts:49-52): free-text names, no personId, engagement tier",
+      "Person.roleIds (organisation-wide) and Person.clientScopeId (client-scoped) (lib/config.ts:234-262)",
+      "Actor, directoryPersonFor (lib/access.ts:348), isExempt (lib/access.ts:407), redactForReader (lib/db/boot.ts:315-425)",
+      "SavedView and parseSavedFilters (lib/savedViews.ts); model.notificationPrefs and setNotificationPref (lib/workspace.ts:5810) as the per-person preference precedent; viewChoice (lib/viewChoice.ts) as the per-browser precedent",
+      "clientView (lib/clientBoundary.ts) and scenario GA1; SessionUser (lib/session.ts)"
+    ],
+    "open_questions": [
+      "OQ1 (the requester's own recorded question; blocks AC2, AC5, AC14-AC16). What does 'stakeholder' resolve to? Candidates and their data facts: (a) live Allocation on the project: a capacity commitment, personId optional with name fallback, date-bounded so 'live' needs a rule the code does not define for this purpose, and the resource model in CLAUDE.md keeps it deliberately separate from access; excludes a client sponsor, a PM at 0% and anyone overseeing without a percentage. (b) Named on the Engagement as leader, PM or sponsor: three free-text String @default(\"\") fields with no personId, at the engagement tier not the project tier, so it needs a name-only join (the seam the identity work closed for new paths) or a schema migration to ids, plus a walk down to every project under the engagement. (c) Holds a role scoped to the project: no such permission concept exists; OrgRole grants are global and ScopeOverride carries no roles or people. The only project-scoped role fact is ProjectMember.projectRoleId, which is documented as descriptive only, so (c) collapses into (d). (d) ProjectMember (added 2026-08-24, a week after D1; personId required; removedAt soft-end; ships Sponsor, Customer and Stakeholder project roles): the definition the read gate already uses, so under it part (2) is already true for non-exempt seats; an internal sponsor without an allocation can be recorded here. (e) Named on the SOW, recorded as a candidate in A4: Sow carries no person reference, so it is not computable today. A union is also possible; if so, which members. The recorded counter-example (a client sponsor has no allocation) does not separate the candidates: a client-role sponsor's view is governed by Person.clientScopeId and clientView, and the membership design states nobody is both a client seat and an internal member. The product owner should state the definition with one example person for whom the candidates differ.",
+      "OQ2. What does 'None' show: an empty grid until a choice is made (the E3 reading used in AC1), or the person's last choice, with 'nothing chosen' only ever seen on first use? If a choice persists (part 3), parts 1 and 3 are one behaviour, not two.",
+      "OQ3. Does scoped-All narrow the Client dropdown's options, the rows, or both? The control is by client and the scoping is by project; a client can have projects the person is on and projects they are not.",
+      "OQ4. Does an explicit client selection also get scoped to the person's projects, or is scoping only what 'All' means? (AC5)",
+      "OQ5. Persistence scope: per browser (localStorage, the lib/viewChoice.ts pattern; follows the machine, no attribution, touches no protected path) or per person across devices (a per-person map on the operating model in the notificationPrefs shape: new reducer arm, ACTION_PERMISSIONS row, SHAPES and KINDS entries, audited, no Prisma migration; touches lib/workspace.ts and lib/access.ts, so Gate 3 with the architect). 'Persists for them' reads as per person (E3); ART-20260905-006 proposes the per-person form and records the browser-local form as the alternative.",
+      "OQ6. 'Each person picks their own project': the Client control has no project level and facetsOf has no project facet. Is a Project control being asked for (an addition to the filter bar, a Principle 10 check), or is 'project' here the client? If a project control, which tier when the organisation's chain is configured differently from the default?",
+      "OQ7. People whose role makes them accountable for everything (Platform Administrator; Engagement Leader, which G7 records as carrying all 38 permissions) but who hold no allocation and no membership: do they see nothing under All? BR2 says yes unless the definition says otherwise; the membership design already names the engagement leader as its known limitation.",
+      "OQ8. Clear, revealIssue and saved views: return to the person's choice / nothing chosen (AC9, AC10 as drafted), to scoped-All, or to the revealed record's own client? A saved view captured at the resting state: exclude the sentinel on save, or define what applying it does? (AC12)",
+      "OQ9. Reports under scoped-All: should the Daily IMS position figures count the whole workspace (as completed-hidden rows are counted today) or only the person's projects? A report that says 'All clients' over a scoped view would be the misread the scopeLabel comment warns about.",
+      "OQ10. Unresolved actors (the fallback-role case): should they see nothing (AC4 as drafted) or the unscoped view they see today?",
+      "OQ11. Exempt seats. Does the requester hold ROLE_ADMIN? If so, part (2) as observed is the deliberate admin exemption from the project read gate, not a missing feature, and the decision is whether the filter's All should narrow for exempt seats while access does not (AC17). Also: records with no project-tier ancestor are deliberately ungated by the membership design; are they in or out of scoped-All?",
+      "OQ12. Was scripts/backfill-project-members.ts --commit run against production, and when? docs/verification-checklist.md has no entry. If OQ1 lands on ProjectMember and the backfill was not run, every non-exempt internal seat is already seeing an empty tree today, which would be a live defect, not a feature gap.",
+      "OQ13. Priority. The requester did not state a band. P2 is entered here only because the schema requires a value and the canonical-model definition of P2 ('real, but belongs to a named person or a named date') matches A4's standing as an item waiting on one answer from the product owner; it is the analyst's placeholder (E3), to be confirmed or changed at Gate 1."
+    ]
+  }
+}

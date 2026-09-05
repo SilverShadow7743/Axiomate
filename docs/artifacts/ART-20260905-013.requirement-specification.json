@@ -1,0 +1,177 @@
+{
+  "id": "ART-20260905-013",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "proposed",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "wf-axiomate-change-intent-20260905-3"
+  },
+  "created": "2026-09-05",
+  "title": "backfill-project-members.ts must never overwrite or duplicate a ProjectMember row: skip existing members, create-only write under the tenant, three-bucket dry run, seeded proof, and a header that says never re-run --commit",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "problem": "scripts/backfill-project-members.ts seeds ProjectMember rows from three signals (issue ownerId, time-entry personId, live allocations) and was run once with --commit on 2026-08-24 (commit 0b3d6ff, 12 rows across 6 projects). It is not safe to run with --commit a second time, and nothing in it says so. Observed by the CEO on 2026-09-05 (E1, direct observation): a dry run against production reported 'would create 6 membership row(s)' for Dharmendra Kumar Dwivedi, Jaya Jothi R and Amolak on project:2, Michael Thomas and Amolak on project:3, and M Tarun Kumar on project:5, all six of whom already hold live rows projmem-backfill-1, -2, -9, -10, -11, -12 from the 24 August run. Mechanism, read from the working tree on 2026-09-05 (E1): (1) the row build (lines 101-121) iterates a Map filled in signal-encounter order and numbers each row `projmem-backfill-${seq}` from a local counter; it never reads state.projectMembers, although loadWorkspace has already loaded that collection into the same state object (lib/db/repo.ts). (2) The commit (lines 161-169) is prisma.projectMember.upsert({ where: { tenantId_id }, create: row, update: row }), so any id that already exists is rewritten field for field to whatever (project, person) the counter assigned it this time. (3) Because today's iteration order differs from 24 August's, --commit would rewrite projmem-backfill-1 (Dharmendra, project:2) as Tarun on project:5, and so on for six rows, removing six people's project access under the read gate (redactForReader -> projectView(memberProjectIdsFor)) while the dry-run report read as six harmless additions. (4) The dry run has one bucket ('Would create'); it cannot say 'already a member'. (5) The database does not guard the pair: ProjectMember has @@id([tenantId, id]) and two plain indexes, no unique on (tenantId, projectId, personId) (prisma/schema.prisma:652-671). (6) The reducer's own arm addProjectMember (lib/workspace.ts:6991-7040) refuses a duplicate live pair ('X is already staffed on this project.', :7010-7013) and mints ids from state.seq; the script bypasses that arm and reimplements the write without the guard. A second defect, found by both analysts (E1 on the code, E3 on its effect): the script constructs its own bare PrismaClient (line 37) and its --commit transaction never sets app.tenant_id, while ProjectMember is under FORCE ROW LEVEL SECURITY with a USING-only policy (prisma/migrations/20260824000004_row_level_security/migration.sql:78-80) applied after the backfill ran. Postgres applies USING as the check on INSERT and UPDATE when WITH CHECK is omitted, so unless the connecting role bypasses RLS, today's --commit most likely fails at the policy rather than overwriting. That is an accident of migration ordering, not a safeguard: the first person who 'fixes' the tenant setting without fixing the id scheme gets the overwrite exactly as observed, and it is a Layer-1 tenancy violation that audit:tenancy (scripts/tenant-audit.mjs, which scans lib/db only) cannot see. The script's header (lines 5-7) and dry-run footer ('DRY RUN - nothing written. Re-run with --commit to apply.', line 156) invite the re-run; the plan's sentence that the backfill is 'safe to get wrong and cheap to re-run' (docs/plans/2026-08-24-project-membership-plan.md:123-125) was true only before the read gate shipped and has been false since. Production state verified by the CEO today with the tenant set for RLS (E1): 13 rows, 7 live, six OAPIL client staff removed deliberately. The CEO decided on 2026-09-05 to raise this as a kind: correction requirement with the outcome recorded in scope_in; ART-20260905-010 (automatic membership on staffing, proposed) may retire the script, and until then the header must say never re-run --commit.",
+    "source": {
+      "reference": "CEO's Claude Code session, 2026-09-05: direct observation of the dry-run output against production and of the live ProjectMember rows with app.tenant_id set; decision recorded in the same session to raise a kind: correction requirement through Intent. Code facts cited file:line were read by the two analysts and re-verified by the orchestrator from the working tree on 2026-09-05 (branch state at commit a4ec16a plus the uncommitted operating-model files). Related: commit 0b3d6ff (24 August backfill), commit bbdc4c4 (read gate live), ART-20260905-010 / -011 (risk R1) / -012 and docs/adr/0003-membership-on-staffing.md, which name the same hazard from the feature side. Inferences are marked E3 where they occur.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P1",
+    "scope_in": [
+      "Skip on an existing row. Before building any row the script consults state.projectMembers and treats membership as decided by the predicate (tenantId, projectId, personId), the same predicate the reducer's guard and memberProjectIdsFor use, never by row id. A pair with a live row is reported as 'already a member' with the existing row id; a pair whose only row is removed (removedAt set) is reported separately and not re-enrolled (drafted default, OQ2).",
+      "No counter ids and no rewrite. The script never produces an id from iteration order and never assigns an id that exists to a different (project, person). The commit path is create-only: there is no `update` branch anywhere in it. Whether the id is minted by the reducer through the addProjectMember arm (the architecture analyst's recommendation, ART-20260905-015) or derived in place is Gate 2's decision; what this specification fixes is that a pre-existing id or a pre-existing live pair at write time aborts the whole run with a named reason and zero rows changed.",
+      "Tenant discipline on the write. Every read and write runs under app.tenant_id for the configured tenant, through persistActions (runBatch sets it as the first statement of its transaction) or withTenant; the script never uses a bare PrismaClient against a tenant-scoped table.",
+      "Three-bucket dry run. The report lists, per project: 'would create', 'already a member' (with row id and since-date) and 'removed on <date> - not re-enrolled', plus the existing unresolved-signal lists, and its footer states that the number under 'would create' is exactly what --commit would write. The footer no longer invites --commit as a routine next step.",
+      "Attribution as a parameter. addedBy names who ran it and when; the literal 'backfill migration 20260824000001' is not written by any later run. If the reducer route is chosen, the script runs as a named operator resolved through directoryPersonFor and refuses if the operator resolves to nobody (OQ4).",
+      "A proof against a seeded workspace, wired as an audit:* script in package.json so the Gate Runner runs it: own tenant created at start and removed at end (scripts/persistence-proof.ts pattern), seeded through importWorkspace / persistActions, exercising every criterion below including the counter-collision case (AC4) and the removed-row case (AC5), and asserting that the script contains no upsert on projectMember.",
+      "Structure for provability (house order pure logic -> callers -> storage): the planning is extracted into a pure function over WorkspaceState (working name planMembershipBackfill(state) returning the create / alreadyMember / removed / unresolved buckets) in a new non-protected module so the buckets are asserted without a database; the script becomes load -> plan -> print -> (commit) write.",
+      "Header and footer. The header states: --commit is never re-run against production (the CEO's decision, wording per OQ7); names this artifact and ART-20260905-010 as the condition under which the script retires; states both hazards accurately (counter-keyed upsert, write outside the tenant discipline); and says membership is decided by the (project, person) fact, not by id.",
+      "Interim mechanical guard, shippable before the rest lands (conditional on OQ3): --commit refuses when the tenant already holds any ProjectMember row, so a first-run-only seed cannot be re-run by accident while the correction is built. A comment does not stop anyone; this does.",
+      "A one-line dated correction beside docs/plans/2026-08-24-project-membership-plan.md:123-125 pointing here, so the next reader does not inherit 'safe to get wrong and cheap to re-run'.",
+      "A standing integrity check duplicateLiveMembershipCheck (kind: 'error') in lib/dataIntegrity.ts, run by audit:integrity, reporting two live rows for one (tenant, project, person): the exact damage a bad re-run would leave, computed over state and never stored."
+    ],
+    "scope_out": [
+      "ART-20260905-010 (automatic membership on staffing) and its ADR ART-20260905-012 / docs/adr/0003. Whether that feature retires this script is decided there; this correction makes the script safe in the meantime and does not pre-empt retirement. Where the two touch (provenance stamping, id prefix inference, re-running the backfill at ship) is recorded in OQ9 and the risk assessment, not resolved here.",
+      "Any change to the reducer arms addProjectMember / updateProjectMember / removeProjectMember, the read gate (redactForReader, projectView, isExempt), ACTION_PERMISSIONS, or ROLE_AUTOMATION's grants. lib/workspace.ts, lib/access.ts and lib/actionShape.ts are protected paths and this correction needs nothing from them; if the reducer route is chosen the script calls the existing arm unchanged and passes the person's name as the arm already expects.",
+      "A database-level guard (partial unique index on ProjectMember (tenantId, projectId, personId) WHERE removedAt IS NULL). It is the only thing that makes a duplicate live membership impossible from any writer, but it is a migration on a protected path (Gate 3) and it needs a pre-check that production holds no duplicate live pair. Recorded as OQ6 and as the deferred alternative in ART-20260905-015; not required to satisfy this correction.",
+      "Repairing production data. The CEO verified the live rows are correct today (7 live, 6 removed deliberately). Nothing here rewrites, resurrects or removes any existing row.",
+      "The three signal sources, the ROLE_ADMIN exemption (isExempt), defaultProjectRoleId, and the unresolved-signal reporting. They stay as they are. The setAssignment / issue.ownerId seam (ART-20260905-010 OQ15, ART-20260905-011 R2), which makes the first signal under-report, is a separate correction; this one does not make the dry run's list more complete, only honest about what it would write.",
+      "Re-enrolment semantics for a deliberately removed person beyond 'report and do not re-enrol' (OQ2). If re-enrolment is ever wanted it is an addProjectMember by a person, and the row is a new one, never the old one un-removed."
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a seeded workspace with project P and person A who holds a ProjectMember row on P with removedAt null, and an issue under P whose ownerId is A (a signal the script would otherwise act on)",
+        "when": "the script runs without --commit",
+        "then": "the report lists A under 'already a member' for P citing the existing row id and its addedAt; A does not appear under 'would create' for P; and the 'would create' count excludes A. The bucket is produced by the pure planner from state.projectMembers, not by catching a database error."
+      },
+      {
+        "id": "AC2",
+        "given": "person B with a time entry against an issue under P (personId resolved) and no ProjectMember row on P, in the same seeded workspace as AC1",
+        "when": "the script runs without --commit, then with --commit as a permitted operator",
+        "then": "the dry run lists B under 'would create' for P with the derived projectRoleId; after --commit exactly one row for (P, B) exists with removedAt null, an id that contains no run-order counter, addedBy naming the operator or the script-and-date per OQ4, and A's row from AC1 is field-for-field unchanged (id, projectId, personId, projectRoleId, addedBy, addedAt, removedAt)."
+      },
+      {
+        "id": "AC3",
+        "given": "two seeded workspaces containing the same projects, people and signals, with the signal records inserted in different orders (for instance issues created in reverse)",
+        "when": "the script runs against each",
+        "then": "the set of (project, person) pairs under 'would create' is identical in both, and no id the script writes is a function of the order in which signals were encountered: reducer-minted ids come from state.seq and are never reused for another pair, or, if Gate 2 chooses derivation, the id for (P, B) is identical in both runs. [conditional on ART-20260905-015]"
+      },
+      {
+        "id": "AC4",
+        "given": "a live row R with id 'projmem-backfill-1' holding (P, A, PROJROLE_PM, addedBy 'backfill migration 20260824000001', addedAt 2026-07-01, removedAt null), and a seeded state whose iteration order would have made the old counter assign 'projmem-backfill-1' to a different pair (Q, C) that has no row - the shape of the production observation",
+        "when": "the script runs with --commit",
+        "then": "after the run, row 'projmem-backfill-1' still holds (P, A, PROJROLE_PM, the original addedBy, the original addedAt, removedAt null) field for field; (Q, C) exists under a different id; the write path contains no `update` branch (the proof asserts the script has no projectMember.upsert); and if the script ever computes an id that already exists, the transaction aborts naming the id and the pair with the row count and every existing row unchanged."
+      },
+      {
+        "id": "AC5",
+        "given": "person D who holds a row on P with removedAt set (the six OAPIL client-staff rows are the live instance) and who still has a signal under P (an owned issue, a time entry or a live allocation)",
+        "when": "the script runs without --commit, then with --commit",
+        "then": "D is listed under 'removed on <date> - not re-enrolled' for P, not under 'would create'; after --commit no new row for (P, D) exists and D's removed row is unchanged. [drafted default; conditional on OQ2. If the product owner wants re-enrolment, the row is a new one under a new id and the removed row is still unchanged; the old row is never un-removed]"
+      },
+      {
+        "id": "AC6",
+        "given": "--commit has just completed on the seeded workspace",
+        "when": "the script runs without --commit, and then with --commit, a second time",
+        "then": "the dry run reports 'would create' = 0 and every row created by the first run under 'already a member'; the second --commit changes zero rows (row count, and every field of every row, identical before and after)."
+      },
+      {
+        "id": "AC7",
+        "given": "person E holding ROLE_ADMIN with signals under P, and person F whose issue-owner string resolves to no directory id",
+        "when": "the script runs",
+        "then": "E is not proposed for any row (isExempt by role, existing behaviour at lines 107-108), and if E holds a live row anyway it is reported as 'already a member' and left untouched; F's issue is reported under UNRESOLVED OWNERS exactly as today. The existing unresolved-signal reporting is unchanged."
+      },
+      {
+        "id": "AC8",
+        "given": "any workspace state, including the collision state of AC4",
+        "when": "the script runs without --commit",
+        "then": "the ProjectMember row count and every row are identical before and after; the footer states the number it would create, the number already members and the number removed-not-re-enrolled; and it does not print 'Re-run with --commit to apply' unqualified."
+      },
+      {
+        "id": "AC9",
+        "given": "AXIOMATE_TENANT set to tenant T1, and rows for the same people in tenant T2",
+        "when": "the script runs with --commit",
+        "then": "every read and write executes with app.tenant_id = T1 (persistActions' runBatch or withTenant; no bare PrismaClient write); rows are created only in T1; T2's rows are untouched; a loadWorkspace(T2) afterwards shows no row added by this run; and the proof records whether a bare-client write against the proof tenant is refused by the RLS policy, settling OQ5 with evidence rather than inference."
+      },
+      {
+        "id": "AC10",
+        "given": "a proof script that, following scripts/persistence-proof.ts, uses its own tenant (created at start, removed at end through withTenant) and seeds via importWorkspace / persistActions: projects P and Q; person A with a live row on P; person B with a time entry and no row; person D with a removed row on P and a live signal; ROLE_ADMIN E with signals; issue insertion order arranged so the old counter would assign A's id to (Q, C)",
+        "when": "the audit:* script named by the implementer (proposed audit:backfill-members) runs, invoking the script's planner dry and then its commit path against that tenant",
+        "then": "it asserts the AC1-AC9 outcomes by reading rows back through loadWorkspace, prints one check line per assertion, exits non-zero on any failure, never touches any tenant other than its own, and is listed with the other audit:* proofs the Gate Runner executes."
+      },
+      {
+        "id": "AC11",
+        "given": "the corrected script file",
+        "when": "a person reads its header comment and runs it dry",
+        "then": "the header states that --commit must never be re-run against production (wording per OQ7), cites this artifact and ART-20260905-010 as the retirement condition, describes both hazards (counter-keyed upsert; write outside the tenant discipline) as history, and says existence is decided by the (project, person) fact and never by id; the dry-run footer is as AC8 requires."
+      },
+      {
+        "id": "AC12",
+        "given": "the reducer route is chosen (ART-20260905-015) and the script is run as an operator who does not hold project.staff (ACTION_PERMISSIONS, lib/access.ts:595; scenario scripts/scenario-validation.ts around :7611)",
+        "when": "--commit is run",
+        "then": "the batch is refused with the reducer's own teaching message and zero rows are written; run as an operator who holds project.staff, the arm's duplicate guard (lib/workspace.ts:7010-7013) is the backstop that refuses a live duplicate, and the script's own planner is what keeps such pairs out of the batch in the first place. [conditional on ART-20260905-015]"
+      },
+      {
+        "id": "AC13",
+        "given": "the reducer route and a mix of people, some already members",
+        "when": "the script submits its actions",
+        "then": "already-members and removed people are filtered out before submission (the dry-run buckets are the filter), so a single 'already staffed' refusal from persistActions, which stops at the first rejection and keeps earlier writes (lib/db/persist.ts:85-92), cannot leave a half-written batch; the final report reconciles submitted, created and refused, and any refusal is printed as a stop, never bypassed. [conditional on ART-20260905-015]"
+      },
+      {
+        "id": "AC14",
+        "given": "the interim guard is adopted (OQ3) and the tenant already holds at least one ProjectMember row",
+        "when": "the current, uncorrected script is run with --commit",
+        "then": "it refuses before opening a transaction, prints why (the tenant has N membership rows; this script seeds an empty table only; see ART-20260905-013), and writes nothing; with zero rows it behaves as before. [conditional on OQ3]"
+      },
+      {
+        "id": "AC15",
+        "given": "a WorkspaceState with two live rows for one (project, person), and one with none",
+        "when": "runIntegrityChecks in lib/dataIntegrity.ts runs (audit:integrity)",
+        "then": "the first reports a duplicateLiveMembershipCheck error naming the project, person and both row ids; the second reports nothing; the check reads state only and stores nothing, and is pinned by a scenario like the existing checks."
+      }
+    ],
+    "business_rules": [
+      "BR1. Whether a person is a member of a project is decided by the predicate (tenantId, projectId, personId, removedAt null), the same predicate as the reducer's guard (lib/workspace.ts:7010-7013) and memberProjectIdsFor (lib/projectBoundary.ts), never by row id. An id is a handle, not a fact.",
+      "BR2. A backfill only adds. It never updates, never removes, never resurrects a row. removedAt is a decision recorded by a person (or, under ART-20260905-010, by a future arm under its own rules) and a script does not reverse it; a deliberately removed person whose signals still exist is reported and left alone (OQ2).",
+      "BR3. No id is ever derived from iteration order, and no id is ever reassigned to a different (project, person). Ids minted by the reducer come from state.seq; if Gate 2 allows an id minted outside the reducer, it is a deterministic function of the identity it names.",
+      "BR4. The write is create-only and transactional: a collision or a live duplicate detected at write time aborts the whole run with zero rows changed and a message naming what collided. Silence is not an outcome.",
+      "BR5. Dry run is the default and writes nothing. Its report separates 'would create' from 'already a member' from 'removed - not re-enrolled' and from unresolved signals, per project, so the number it prints is the number --commit would write.",
+      "BR6. Tenant isolation at both layers: every read and write runs under app.tenant_id for the configured tenant (persistActions or withTenant); the script never uses the bare prisma client for a tenant-scoped table. A write that happens to be refused by RLS is not a safeguard.",
+      "BR7. Existing exemptions and refusals stand: ROLE_ADMIN holders get no row (isExempt, lib/access.ts:407); a person who does not resolve to exactly one directory id gets no row (directoryIdByName); unresolved signals are reported by name.",
+      "BR8. Attribution is a parameter: addedBy names who ran the script and when, never a migration that did not run and never a person who did not act; under the reducer route it is the operator the reducer records, per scripts/seed-allocations.ts's precedent.",
+      "BR9. Only scripts/, a new non-protected lib module, lib/dataIntegrity.ts, package.json and the two docs named in scope_in change. No protected path (lib/workspace.ts, lib/types.ts, lib/access.ts, lib/actionShape.ts, prisma/schema.prisma, prisma/migrations/) is touched; a schema-level guard is a separate decision (OQ6).",
+      "BR10. Until ART-20260905-010 retires the script, its header carries the standing instruction not to re-run --commit against production, and the proof in AC10 stays in the gate so the guard cannot silently regress.",
+      "BR11. The reducer is the only writer of membership as a house rule (design Part 13); this correction does not create a second validation site for the duplicate rule. If the script writes without the reducer (Gate 2's fallback), its skip check is a copy of the reducer's predicate and is named as such."
+    ],
+    "domain_entities": [
+      "ProjectMember (lib/staffing.ts:14-31; prisma/schema.prisma:652-671): id, projectId, person, personId (required), projectRoleId, addedBy, addedAt, removedAt (soft-ended, not destroyed). @@id([tenantId, id]); indexes on (tenantId, projectId, personId) and (tenantId, personId); no unique on the pair.",
+      "WorkspaceState.projectMembers and state.seq (loaded by lib/db/repo.ts loadWorkspace under withTenant).",
+      "Reducer arm addProjectMember (lib/workspace.ts:6991-7040): project check, project-role check, directoryIdByName, duplicate guard at :7010-7013, id `projmem-${seq}`, addedBy from the reducer's by, audit entry via log(); removeProjectMember (:7070-7085) sets removedAt only.",
+      "Persistence: persistActions (lib/db/persist.ts:94) -> runBatch (:147; set_config('app.tenant_id') at :170); stops at the first refusal and keeps earlier writes (:85-92); projectMember write case (:493-505) upserts by reducer-minted id; projectMemberToRow / FromRow (lib/db/map.ts).",
+      "withTenant (lib/db/client.ts:180-188); currentTenantId / AXIOMATE_TENANT (lib/tenant.ts).",
+      "RLS: ProjectMember ENABLE + FORCE ROW LEVEL SECURITY, policy tenant_isolation USING current_setting('app.tenant_id', true), no WITH CHECK (prisma/migrations/20260824000004_row_level_security/migration.sql:78-80); scripts/rls-proof.ts proves reads, not writes.",
+      "Access: project.staff (lib/access.ts:150, granted to ROLE_ENGAGEMENT_LEAD :252 and ROLE_PROJECT_MANAGER :259; ACTION_PERMISSIONS :595-597); ROLE_AUTOMATION does not hold it; directoryPersonFor (:348), isExempt (:407); memberProjectIdsFor and projectView (lib/projectBoundary.ts); redactForReader (lib/db/boot.ts).",
+      "projectOf (lib/workspace.ts) reused by the script; defaultProjectRoleId (script :41-45), which ART-20260905-010 BR13 proposes to share.",
+      "The script itself: scripts/backfill-project-members.ts (bare PrismaClient :37; signals :67-99; row build :101-121; report :123-153; footer :156; commit :161-169). Precedents: scripts/seed-allocations.ts (persistActions with a stated operator ACTOR), scripts/directory-staffing.ts ('already holds' reporting), scripts/persistence-proof.ts and scripts/restore-proof.ts (own tenant, check lines, non-zero exit).",
+      "lib/dataIntegrity.ts runIntegrityChecks and scripts/integrity-audit.ts (audit:integrity); scripts/tenant-audit.mjs (audit:tenancy, scans lib/db only).",
+      "Scenarios pinning the arm: scripts/scenario-validation.ts PM1-PM7, PM10-PM13 (:7505-7790).",
+      "ART-20260905-010 (feature that may retire the script), ART-20260905-011 R1 and R12, ART-20260905-012 / docs/adr/0003 (source 'backfill' stamped by id prefix 'projmem-backfill-%'; 'the backfill script must be re-keyed on (tenantId, projectId, personId) before any further --commit')."
+    ],
+    "open_questions": [
+      "OQ1 (Gate 2, ART-20260905-015; blocks AC3, AC12, AC13). The CEO's outcome allows either 'ids derived from person and project' or 'go through the reducer's addProjectMember arm'. The requirement analyst left the choice open; the domain and architecture analyst recommends the reducer route and holds that a derived id is neither necessary nor sufficient: it would sit beside a reducer-minted projmem-<seq> row for the same pair (creating the duplicate the reducer refuses) and would collide with a soft-removed row on re-add, where an upsert on it overwrites attested history. The specification therefore fixes the outcome (no counter, create-only, skip by predicate) and leaves the mechanism to the architect. Costs of the reducer route the architect should weigh: a named operator holding project.staff is required (ROLE_AUTOMATION does not hold it and widening it is out of scope); addedAt is a.now unless the script passes earliest evidence as now, which also backdates the audit entry (OQ8); each row consumes a workspace seq; the action carries a person name, not personId, so the script passes state.model.people[personId].name and reports any reducer refusal.",
+      "OQ2 (product owner; blocks AC5). A person whose row was deliberately removed (removedAt set) but who still has signals under the project: the CEO's outcome speaks only of live rows, and a live-only skip would list the six removed OAPIL client staff under 'would create' and re-enrol them on --commit, undoing the deliberate removals. Both analysts draft 'never re-enrol, report separately' (BR2). Confirm, or state that fresh signals should re-enrol; if so, it is a new row under a new id, never the old row un-removed.",
+      "OQ3 (product owner). Is the correction worth building if ART-20260905-010 retires the script in the same cycle? The header change (AC11) and the interim guard (AC14, one line: refuse --commit when any ProjectMember row exists) are minutes and should land regardless; the planner, create-only write, proof and integrity check (AC1-AC10, AC15) are the cost. Does the script have any remaining planned use (a new tenant, a project with history, the run-at-ship that ART-20260905-010 OQ12 contemplates)? If not, 'refuse --commit outright until 010 lands' is the cheaper safe state and AC1-AC10 become the retirement's problem.",
+      "OQ4. addedBy for a corrected run. Under the reducer route it is the operator's name (the reducer's by), so the script needs an operator parameter (proposed: --as <email>, resolved through directoryPersonFor, refused if nobody). Under an in-place write the proposal is 'backfill-project-members.ts run YYYY-MM-DD'. Either way the 2026-08-24 literal is never written again.",
+      "OQ5 (settled by evidence at AC9, not by decision). Does --commit currently fail under FORCE RLS because the script's own transaction never sets app.tenant_id? Both analysts infer yes (E3) unless the database role holds BYPASSRLS or is a superuser, which neither verified. The proof records the answer against its own tenant. The answer changes the risk assessment's likelihood, not the requirement.",
+      "OQ6 (architect). A partial unique index on ProjectMember (tenantId, projectId, personId) WHERE removedAt IS NULL would make a duplicate live membership impossible from any writer, including future ones. It is a migration on a protected path (Gate 3) and needs a pre-check that production holds no duplicate live pair. Wanted now, or recorded as debt? Deferred in ART-20260905-015.",
+      "OQ7. Header wording. The decision is 'never re-run --commit' until ART-20260905-010 retires the script. Once AC1-AC10 hold, --commit is safe by construction, so an absolute prohibition and a script whose only purpose is to be run sit oddly together. Drafted as absolute per the decision; the alternative is 'only on the product owner's decision, after reading the three-bucket dry run'.",
+      "OQ8 (product owner, if the reducer route is chosen). The 24 August design backdated addedAt to the earliest evidence date. Through the reducer, addedAt is a.now; passing earliest evidence as now reproduces the backdating but also backdates the audit entry's at, so the membership log ART-20260905-010 proposes would show the row as added before the script ran. Backdate (design fidelity) or stamp the run time with the evidence date in the audit reason (audit fidelity)?",
+      "OQ9 (architect; interaction with ART-20260905-012). ADR 0003 proposes ProjectMember.source stamped 'stated' by addProjectMember and 'backfill' by a migration that matches id LIKE 'projmem-backfill-%'. If this correction routes the script through addProjectMember, rows it creates would be stamped 'stated' and carry projmem-<seq> ids the migration would not recognise as backfill. Either the helper in ADR 0003 takes source as a parameter the script can set, or the script retires before ADR 0003 lands, or the migration's inference is widened. Recorded so the two ADRs are approved consistently, not resolved here.",
+      "OQ10. Priority. The CEO stated no band and the product owner has not confirmed one. P1 is the orchestrator's proposal: the exposure is six named people's project access on a script whose own text invites the re-run, and the header and interim guard need action this week. If OQ3 leans to retirement, the code fix and proof could reasonably be P2 with a named owner. Confirm or change at Gate 1.",
+      "OQ11. Production figures (13 rows, 7 live, 6 removed; the six would-create names and their id mapping) are the CEO's E1 observation; neither analyst nor the orchestrator queried production. The 24 August run created 12 rows and six named ids are live, so the seventh live row was not created by the backfill's named ids (presumably a UI addition). Not needed for this requirement; confirm before any proof fixture is modelled on production."
+    ]
+  }
+}

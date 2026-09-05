@@ -1,0 +1,131 @@
+{
+  "id": "ART-20260905-007",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "proposed",
+  "producer": { "agent": "implementation-planner", "run": "wf-axiomate-change-build-20260905-1" },
+  "created": "2026-09-05",
+  "title": "Client filter defaults: the resting sentinel and its consumers now; stakeholder scope, saved-view fate and the per-person choice blocked on OQ1, OQ8 and OQ5",
+  "traces": ["ART-20260905-004", "ART-20260905-006"],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "design_ref": "docs/adr/0002-client-filter-stakeholder-scope.md (ART-20260905-006); specification ART-20260905-004, whose 13 open questions were unanswered at its approval. Only steps that depend on no open question are planned to run; every other step is titled BLOCKED ON OQn and is re-planned in version 2 once the product owner answers. Baseline confirmed this session: npx tsc --noEmit clean; npm run validate:scenarios 211 scenarios, 192 PASS; npm run audit:contracts green.",
+    "workstreams": [
+      { "name": "filter-logic", "owns": ["lib/types.ts", "lib/tree.ts", "lib/savedViews.ts"] },
+      { "name": "stakeholder-logic", "owns": ["lib/projectBoundary.ts"] },
+      { "name": "preference-storage", "owns": ["lib/workspace.ts", "lib/access.ts", "lib/actionShape.ts", "lib/config.ts", "lib/clientBoundary.ts", "app/api/workspace/route.ts"] },
+      { "name": "ui", "owns": ["components/FilterBar.tsx", "components/FiltersHeader.tsx", "components/TreeGrid.tsx", "components/IssueWorkspace.tsx"] },
+      { "name": "proof", "owns": ["scripts/scenario-validation.ts"] }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "NO_CLIENT_CHOSEN sentinel on FilterState.client (lib/types.ts, beside EMPTY_FILTERS at :381): an exported typed constant that is neither 'All' nor the Discipline facet's 'None' (BR7); EMPTY_FILTERS.client rests on it; matchesFilters (lib/tree.ts:387) returns false for every issue row at the sentinel and visibleRows (lib/tree.ts:489) keeps no structural row either (BR2 deny-by-default); the discipline 'None' branch at lib/tree.ts:394 and every 'All' branch are left meaning what they mean today until OQ1 lands. OQ2 changes how often this state is seen, not what it is, so it does not block this step. Highest regression risk: every consumer that compares to the literal 'All' and parseSavedFilters' spread of EMPTY_FILTERS pick the sentinel up silently, which is why steps 1, 2 and 9 ship in one commit.",
+        "workstream": "filter-logic",
+        "verify_command": "npx tsc --noEmit && npx tsx -e \"import('./lib/types.ts').then(m=>{const s=m.NO_CLIENT_CHOSEN;if(typeof s!=='string'||s==='All'||s==='None'||m.EMPTY_FILTERS.client!==s)process.exit(1);console.log('sentinel',JSON.stringify(s))})\"",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 2,
+        "title": "Scenario CD1 in scripts/scenario-validation.ts (after AA3, ~line 10070; CD is an unused prefix): against BASE and buildTree, EMPTY_FILTERS lists no issue row and no structural row through visibleRows; {...EMPTY_FILTERS, client: 'All'} lists the fixture's issues exactly as today; {...EMPTY_FILTERS, client: 'All', discipline: 'None'} still returns the rows without a discipline, proving the two tokens are not shared; EMPTY_FILTERS.client is neither 'All' nor 'None'. PASS count today is 192 (confirmed this session); CD1 makes 193.",
+        "workstream": "proof",
+        "verify_command": "npm run validate:scenarios 2>&1 | awk '/^CD1[[:space:]]+PASS/{f=1} /^[^[:space:]]+[[:space:]]+PASS[[:space:]]/{n++} END{exit !(f && n==193)}'",
+        "risk": "low",
+        "done": false
+      },
+      {
+        "n": 3,
+        "title": "BLOCKED ON OQ1: the one pure stakeholder function (BR1, ADR decision 2) in lib/projectBoundary.ts beside memberProjectIdsFor (:88), signature (state, personId, today). Under definition (d) ProjectMember it IS memberProjectIdsFor and nothing is added (AC15); under (a) live Allocation a 'live' date rule with today as a parameter and the id-first-then-name join stated in its comment (AC14); under (b) Engagement names, or a union, ART-20260905-006 is superseded and this plan is re-issued under the new ADR. The definition is not guessed here.",
+        "workstream": "stakeholder-logic",
+        "verify_command": "echo blocked on OQ1",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 4,
+        "title": "BLOCKED ON OQ1: scenarios CD2-CD4 pinning whichever of AC14 (Allocation: ended yesterday out, starts today in, deletedAt out, name-only as OQ1 decides), AC15 (ProjectMember: removedAt out, active in, set equals memberProjectIdsFor) or AC16 (Engagement names) survives OQ1; the criteria for the rejected definitions are dropped, not written.",
+        "workstream": "proof",
+        "verify_command": "echo blocked on OQ1",
+        "risk": "low",
+        "done": false
+      },
+      {
+        "n": 5,
+        "title": "BLOCKED ON OQ1: the callers - facetsOf (lib/tree.ts:351), matchesFilters and visibleRows take the stakeholder project set from step 3 so that 'All' means scoped-All (AC2, AC3, AC4, AC5), with project ancestry through projectOf/tiersOf and never a literal kind. Also needs OQ3 (dropdown options, rows, or both), OQ4 (is an explicit client selection scoped), OQ10 (unresolved actors) and OQ11 (exempt seats; records with no project-tier ancestor).",
+        "workstream": "filter-logic",
+        "verify_command": "echo blocked on OQ1",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 6,
+        "title": "BLOCKED ON OQ8: parseSavedFilters (lib/savedViews.ts:28) decides the sentinel's fate in a saved view - excluded on save or defined on apply - and reads a stored client 'All' as the person-relative All (AC12); an unknown value keeps degrading to the resting value, never to unscoped All (the fail-closed discipline AC8 cites).",
+        "workstream": "filter-logic",
+        "verify_command": "echo blocked on OQ8",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 7,
+        "title": "BLOCKED ON OQ5: the per-person choice on the operating model in the setNotificationPref shape (ADR decision 4; OQ5 is still open and the ADR itself says the browser-local alternative stands if the product owner reads 'for them' as per browser). When unblocked: Action union entry and 'setClientChoice' arm in lib/workspace.ts beside :5810 (self-or-config.manage gate, refuses an unresolved personId, refuses a node id absent from state.nodes, audit line, actor from the sealed session, never a name-only record: BR3, BR4, BR5, BR6); clientChoices: Record<personId, nodeId> on OperatingModel with seed (:1296) and merge (:1665) in lib/config.ts; SHAPES entry in lib/actionShape.ts (:613); KINDS entry in app/api/workspace/route.ts (:28); 'setClientChoice: null' in ACTION_PERMISSIONS (lib/access.ts:618); clientView withholds model.clientChoices the way projectMembers is withheld (lib/clientBoundary.ts:124), because clientView spreads model whole. No Prisma migration: the map lives in the OperatingModel JSON column. OQ6 fixes which node kind the id names.",
+        "workstream": "preference-storage",
+        "verify_command": "echo blocked on OQ5",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 8,
+        "title": "BLOCKED ON OQ5: scenario CD5 - the person sets their own choice; another person's attempt is refused without config.manage and allowed with it; an unresolved actor is refused; a node id outside the tenant's state is refused at write and degrades to nothing chosen at read (AC7, AC8); the map is absent from clientView(state, clientScopeId) (AC7, AC11, GA1 still PASS); validatedKinds() still equals the route's KINDS.",
+        "workstream": "proof",
+        "verify_command": "echo blocked on OQ5",
+        "risk": "low",
+        "done": false
+      },
+      {
+        "n": 9,
+        "title": "Resting-state UI for the sentinel (AC1; AC13's sentinel half; BR7): FilterDropdown for name='client' offers the resting option with an instructing caption such as 'Client: choose one' instead of 'Client: All', never the bare word 'None', keeps an 'All' option, and takes the on-accent only when the value is neither (components/FilterBar.tsx:63-65; the generic 'v !== All' tests at FilterBar.tsx:193 and :204 exclude the sentinel); FiltersHeader's activeCount and start-expanded rule ignore the sentinel (components/FiltersHeader.tsx:29-32) while shown/total keep reporting the full total; TreeGrid's empty branch (components/TreeGrid.tsx:477) shows a one-line prompt naming the next action when client rests at the sentinel, distinct from 'No issues match the current filters'; scopeLabel (components/IssueWorkspace.tsx:1739) states 'No client chosen' rather than 'All clients - <org>' at the sentinel; openClientPack (IssueWorkspace.tsx:1779) refuses the sentinel with the same teaching message it uses for 'All'. Clear and revealIssue are NOT changed here (step 10). Board and Calendar receive the same empty row set; if either needs its own prompt, re-plan rather than widen ownership. Manual check: Tree, Board and Calendar open on the prompt; choosing a client lists rows; a client seat (GA1) is unchanged.",
+        "workstream": "ui",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y && npm run validate:scenarios 2>&1 | grep -E \"^GA1[[:space:]]+PASS\"",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 10,
+        "title": "BLOCKED ON OQ8: Clear (components/FilterBar.tsx:286, today setFilters(EMPTY_FILTERS)) and revealIssue (components/IssueWorkspace.tsx:992, today EMPTY_FILTERS plus 'Filters cleared') return to the person's recorded choice, to nothing chosen, to scoped-All, or to the revealed record's own client as OQ8 fixes (AC9, AC10); a reveal outside the stakeholder set is refused with a reason rather than reset to a state that hides everything.",
+        "workstream": "ui",
+        "verify_command": "echo blocked on OQ8",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 11,
+        "title": "BLOCKED ON OQ5: IssueWorkspace seeds filters (components/IssueWorkspace.tsx:621) from model.clientChoices[directoryPersonFor(state.model, actor)?.id] resolved to the node's name within this tenant (an unknown id degrades to the sentinel, AC8), dispatches setClientChoice when the person changes the Client control, and never writes for an unresolved actor (AC6, AC7). Depends on step 7.",
+        "workstream": "ui",
+        "verify_command": "echo blocked on OQ5",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 12,
+        "title": "BLOCKED ON OQ1: scoped-All in the UI - the Client dropdown lists only clients with at least one stakeholder project (OQ3), AC3/AC4's empty-with-reason teaching message distinguishable from the boot banner's 'not staffed on any project' note, the Daily IMS position figures under scoped-All (OQ9), and the exempt-seat rule for ROLE_ADMIN and the machine actor (OQ11, AC17; isExempt and redactForReader untouched). Depends on steps 3 and 5.",
+        "workstream": "ui",
+        "verify_command": "echo blocked on OQ1",
+        "risk": "high",
+        "done": false
+      }
+    ],
+    "protected_paths_touched": ["lib/types.ts", "lib/workspace.ts", "lib/access.ts"],
+    "migration": false,
+    "commit_boundaries": [
+      "steps 1, 2 and 9 together: the sentinel without its consumers leaves the workspace opening on an empty grid captioned 'No issues match the current filters' with the Filters chip armed - a broken intermediate, not a step",
+      "steps 3, 4 and 5 together, once OQ1 is answered and this plan is re-issued as version 2: a stakeholder function nothing reads has no proof",
+      "step 6 alone, once OQ8 is answered",
+      "steps 7 and 8 together and alone, once OQ5 is answered: the reducer arm with its scenario, separate from every UI commit so the storage change reverts on its own. No migration exists in this plan; if OQ1 lands on Engagement names, the superseding ADR's Prisma migration is its own commit under a new plan",
+      "step 10 alone; step 11 alone; step 12 alone"
+    ],
+    "highest_regression_risk_step": 1,
+    "rollback": "Revert the commits in reverse order; no schema change. Two cautions. (1) Reverting the step 1/2/9 commit restores 'All' as the resting client value for every internal seat, which is the pre-change behaviour, not a data loss. (2) A clientChoices key already written into a tenant's OperatingModel JSON by step 7 rides along after a revert, because mergeModel spreads stored wholesale (lib/config.ts:1609), and a reverted clientView no longer withholds it from client seats; so a rollback of step 7 after any tenant has written must also strip the key from each tenant's OperatingModel row, or the revert lands before any write."
+  }
+}

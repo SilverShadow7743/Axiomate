@@ -1,0 +1,87 @@
+{
+  "id": "ART-20260905-006",
+  "kind": "architecture-decision",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "domain-architecture-analyst",
+    "run": "wf-axiomate-change-intent-20260905-1"
+  },
+  "created": "2026-09-05",
+  "title": "Client filter stakeholder scope is a derived view default over the existing read gate; the person's choice is a per-person preference on the operating model",
+  "traces": [
+    "ART-20260905-004"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-05",
+      "evidence": "Stated by the CEO in the Claude Code session (\"Approved\", 2026-09-05), covering the architecture decision alongside the specification it traces. Open questions on ART-20260905-004 remain unanswered."
+    }
+  ],
+  "body": {
+    "context": "ART-20260905-004 asks the Client filter to rest at nothing chosen, to read All as the signed-in person's stakeholder projects, and to remember each person's choice. The design is open on two axes. Axis A, what 'stakeholder' resolves to: live Allocation (a capacity fact, optional personId, date-bounded), Engagement leader/PM/sponsor names (free text, no personId, engagement tier), a role scoped to the project (does not exist as a permission concept; the only project-scoped role fact is ProjectMember.projectRoleId, which is descriptive), ProjectMember (the definition the read gate already enforces since 2026-08-24 via redactForReader, projectView and memberProjectIdsFor), or named on the SOW (Sow has no person reference). Axis B, where a per-person choice persists: browser localStorage (viewChoice pattern), a per-person map on the operating model (notificationPrefs pattern), or personal saved views (a non-goal of the 2026-08-31 saved-views design). Two boundaries already exist and must not be disturbed: clientView for client-role seats and the project read gate with its ROLE_ADMIN exemption for internal seats. This ADR fixes the shape of the solution so that whichever meaning the product owner gives 'stakeholder' at Gate 1 lands in one place; it does not fix the meaning, which the requester recorded as the open question and which is surfaced in OQ1 of the specification.",
+    "decision": "1. Stakeholder-scoping of the Client filter is a view default computed at read, not an authorisation change: redactForReader, projectView, isExempt, clientView and can() are unchanged. 2. The set of a person's stakeholder projects is produced by exactly one pure function of (WorkspaceState, resolved personId, and today as a parameter where the definition is date-bounded), parameterised by the definition the product owner fixes in OQ1; the UI, facetsOf, matchesFilters, scopeLabel and scenarios read that one function. If the definition is ProjectMember, that function is memberProjectIdsFor in lib/projectBoundary.ts and nothing is added beside it. If the definition is Allocation or Engagement names, the function lives in lib/projectBoundary.ts next to memberProjectIdsFor with the divergence from the read gate stated in its comment, and the Engagement-names case supersedes this ADR because it requires a schema change from names to ids. 3. 'Nothing chosen' is a typed sentinel on FilterState.client in lib/types.ts, distinct from the string 'None' that the Discipline facet already uses as a real filter; every consumer that compares to the literal 'All' compares to the resting value instead. 4. The person's chosen node is a stated preference stored on the operating model as a per-person map keyed by directory personId, in the notificationPrefs shape: one reducer arm with the self-service gate (the person themselves or config.manage), one ACTION_PERMISSIONS row, SHAPES and KINDS entries, audited, tenant-keyed through the existing OperatingModel JSON column; no Prisma migration. The stored value is a node id, never a client name; an id that does not resolve in the reader's tenant degrades to nothing chosen. The stakeholder set itself is never stored.",
+    "alternatives": [
+      {
+        "option": "Make stakeholder-scoping an access change by narrowing the read gate for exempt seats or adding a second gate in redactForReader",
+        "rejected_because": "The request is about what a person sees by default, not what they may see or do. The read gate and its ROLE_ADMIN exemption were decided on 2026-08-24 for access reasons; changing them for an attention default couples two questions the membership design separated. If the product owner wants stakeholder visibility as a permission, that is a permission-model requirement, not this one."
+      },
+      {
+        "option": "Store the computed stakeholder set on Person or in the preference so the filter does not recompute it",
+        "rejected_because": "Derived values are never stored. The set changes whenever a membership, allocation or engagement record changes; a stored copy drifts from the read gate and from the record it was derived from."
+      },
+      {
+        "option": "Reuse the string 'None' as the resting client value",
+        "rejected_because": "The Discipline facet already uses 'None' to mean 'records without a discipline', which returns rows. The same token with the opposite meaning in adjacent controls of one bar is wrong in matchesFilters, parseSavedFilters or the Filters chip count, whichever consumer is fixed last."
+      },
+      {
+        "option": "Persist the choice in browser localStorage (the viewChoice pattern)",
+        "rejected_because": "It follows the browser profile, not the person: no attribution, no audit, lost on a new machine, and 'persists for them' reads as per person. It touches no protected path, which is its only advantage; if the product owner reads 'for them' as per browser at OQ5, this alternative stands and the architect may prefer it."
+      },
+      {
+        "option": "Persist the choice as a personal saved view",
+        "rejected_because": "Saved views are deliberately the team's (docs/plans/2026-08-31-saved-views-design.md lists personal-only views as a non-goal), a saved view carries the view choice with the filters, and it would be visible to and deletable by everyone. Reopening the personal-versus-shared split is a separate decision."
+      },
+      {
+        "option": "Union of the candidate definitions (member OR allocated OR named on the engagement)",
+        "rejected_because": "Not rejected on merit; not decided here. It needs three joins, one of them name-only, and hides the divergences between the candidates that the product owner needs to see. If OQ1 chooses a union, this ADR is superseded by one that carries each member's cost."
+      }
+    ],
+    "consequences": [
+      "For non-exempt internal seats under a ProjectMember definition, part (2) of the request is already delivered by the read gate; the work reduces to the resting sentinel, the per-person preference, the reset paths and the report label. Exempt seats (ROLE_ADMIN, machine actor) and records with no project-tier ancestor are where the filter's All can still differ from the payload, and that difference is a display default the product owner decides in OQ11.",
+      "lib/types.ts changes (FilterState.client sentinel, EMPTY_FILTERS), and if the preference is per person lib/workspace.ts and lib/access.ts change too, so the implementation plan needs the architect at Gate 3.",
+      "Every consumer that compares filters.client to the literal 'All' (FilterDropdown accent and caption, FiltersHeader activeCount and start-expanded rule, matchesFilters, visibleRows pruning, scopeLabel, openClientPack, revealIssue) is touched; the scenario suite must pin each.",
+      "parseSavedFilters must decide the sentinel's fate: excluded on save, or defined on apply. A saved view with client 'All' changes meaning to the person-relative All.",
+      "If OQ1 chooses Allocation, a 'live' date rule is defined for this purpose and passed 'today' as a parameter; Allocation stays read-only from this feature and never implies membership.",
+      "If OQ1 chooses Engagement names, this ADR is superseded: Engagement.engagementLeader, projectManager and clientSponsor become person ids through a Prisma migration, or the feature reintroduces a name-only join the identity work retired for new paths.",
+      "The per-person preference map lives inside model, which clientView spreads to client seats; the map must be withheld from client views the way projectMembers is, or client seats learn which internal people watch which projects.",
+      "If the ProjectMember backfill was never committed against production (OQ12), the ProjectMember definition makes an already-empty tree look like a feature outcome; that is checked before Gate 1 closes, not after build."
+    ],
+    "affects": [
+      "lib/types.ts",
+      "lib/tree.ts",
+      "lib/projectBoundary.ts",
+      "lib/savedViews.ts",
+      "lib/workspace.ts",
+      "lib/access.ts",
+      "lib/config.ts",
+      "lib/actionShape.ts",
+      "lib/clientBoundary.ts",
+      "components/FilterBar.tsx",
+      "components/FiltersHeader.tsx",
+      "components/IssueWorkspace.tsx",
+      "scripts/scenario-validation.ts",
+      "docs/adr/0002-client-filter-stakeholder-scope.md"
+    ],
+    "principles_checked": [
+      "tenant-isolation",
+      "pure-reducer",
+      "attribution-as-parameter",
+      "derived-never-stored"
+    ],
+    "adr_path": "docs/adr/0002-client-filter-stakeholder-scope.md"
+  }
+}

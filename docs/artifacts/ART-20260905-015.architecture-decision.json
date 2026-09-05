@@ -1,0 +1,72 @@
+{
+  "id": "ART-20260905-015",
+  "kind": "architecture-decision",
+  "version": 1,
+  "status": "proposed",
+  "producer": {
+    "agent": "domain-architecture-analyst",
+    "run": "wf-axiomate-change-intent-20260905-3"
+  },
+  "created": "2026-09-05",
+  "title": "The membership backfill plans in a pure function, skips on any existing (project, person) row, and writes only through the reducer's addProjectMember arm; ids are never derived from person and project",
+  "traces": ["ART-20260905-013"],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "context": "ART-20260905-013 records a correction to scripts/backfill-project-members.ts: the script builds rows without reading state.projectMembers, numbers them projmem-backfill-<counter> in Map iteration order (lines 101-121), and on --commit upserts by that id with a full-row update (161-169) through a bare PrismaClient (37) that never sets app.tenant_id. A re-run would rewrite six live production rows (E1, CEO, 2026-09-05). The CEO's required outcome allows two mechanisms: 'ids are stable and derived from person and project rather than a counter, or the script goes through the reducer's addProjectMember arm which already refuses duplicates'. The requirement analyst drafted criteria for either and marked the design open; this analyst holds that the two are not equivalent and that one of them reintroduces the defect in a different shape. Facts constraining the choice, read 2026-09-05: the reducer's addProjectMember (lib/workspace.ts:6991-7040) refuses a live duplicate by the predicate (projectId, personId, !removedAt) at :7010-7013, mints projmem-<seq> from state.seq, stamps addedBy from the reducer's by and writes an audit entry; membership is soft-ended (lib/staffing.ts:26-28), so the same pair legitimately has more than one row after a remove and re-add; ProjectMember has no unique on (tenantId, projectId, personId), only an index (prisma/schema.prisma:669); persistActions (lib/db/persist.ts:94) sets app.tenant_id as the first statement of runBatch's serializable transaction and stops at the first refusal keeping earlier writes (:85-92); addProjectMember needs project.staff (lib/access.ts:595), which ROLE_AUTOMATION does not hold and which is deliberately narrow; the action carries a person name, not a personId (lib/actionShape.ts); ProjectMember is under FORCE ROW LEVEL SECURITY with a USING-only policy (migration 20260824000004:78-80). The concurrent ART-20260905-012 / docs/adr/0003 proposes ProjectMember.source stamped 'stated' by addProjectMember and 'backfill' by a migration matching id LIKE 'projmem-backfill-%', and states that the script 'must be re-keyed on (tenantId, projectId, personId) before any further --commit'. The design here is open on whether that re-keying means a derived id or a skip predicate, on whether the script writes through the reducer, and on whether a schema-level guard is taken now.",
+    "decision": "1. Planning is a pure function. planMembershipBackfill(state: WorkspaceState) in a new non-protected module (lib/backfillMembers.ts) returns { create, alreadyMember, removed, unresolvedOwners, unresolvedTimeEntries, unresolvedAllocations }, where alreadyMember holds every (project, person) pair with a live row (removedAt null) and removed holds every pair whose rows are all removed; both are computed by the predicate the reducer and memberProjectIdsFor use, never by id. The script becomes load -> plan -> print buckets -> (commit) write, and the proof asserts the buckets without a database. 2. The skip covers any existing row, live or removed. A removed row is a decision a person attested; evidence-derived enrolment never out-votes it. If re-enrolment is wanted it is an addProjectMember by a person and a new row. 3. Writes go through the reducer. For the create bucket only, the script builds { t: 'addProjectMember', projectId, person: state.model.people[personId].name, projectRoleId, now } actions and submits them through persistActions(tenantId, operator, actions), one action per pair or as one batch whose contents the planner has already filtered. The reducer mints projmem-<seq> ids, stamps addedBy from the operator, writes the audit entry, and its duplicate guard is the backstop that cannot be bypassed; runBatch sets the tenant, curing the bare-client write with no new code. 4. The operator is a parameter (--as <email or id>), resolved through directoryPersonFor, refused if it resolves to nobody, and must hold project.staff; ROLE_AUTOMATION's grants are not widened and lib/access.ts is untouched. 5. No id is ever derived from person and project, and the script never contains an upsert on projectMember; the proof asserts both. 6. addedAt: the script passes now per the product owner's answer to OQ8 of the specification (earliest evidence, or run time with the evidence date in the audit reason); the mechanism is the same either way. 7. A standing check duplicateLiveMembershipCheck in lib/dataIntegrity.ts (audit:integrity) reports two live rows for one (tenant, project, person), computed over state and never stored. 8. Interim, before the above lands: the current script refuses --commit when state.projectMembers is non-empty, a first-run-only seed guard, and its header states both hazards and the standing instruction. 9. The partial unique index on ProjectMember (tenantId, projectId, personId) WHERE removedAt IS NULL is deferred as debt (specification OQ6), not rejected: it is the only Layer-2 guarantee, it is a migration on a protected path, and it needs a pre-check that production holds no duplicate live pair.",
+    "alternatives": [
+      {
+        "option": "Derive the id from person and project (for instance projmem-<personId>-<projectId>) and keep an in-place upsert keyed on it, the first half of the CEO's stated outcome",
+        "rejected_because": "Neither necessary nor sufficient. Not sufficient: rows created through the UI are minted by the reducer as projmem-<seq>, so a derived id sits beside an existing projmem-42 for the same pair and creates a second live membership, the duplicate the reducer refuses; only a lookup on (projectId, personId) prevents that, and once that lookup exists the id scheme is doing nothing. Not sufficient again: membership is soft-ended, so after a remove-then-re-add the same pair legitimately has two rows; a derived id collides with the removed row and an upsert on it resurrects or overwrites attested history, a direct breach of 'the script can never overwrite an existing row'. Not necessary: once the script skips on an existing row and never upserts, the id only needs to be unique, and the reducer already mints one. ADR 0003's phrase 're-keyed on (tenantId, projectId, personId)' is read here as the skip predicate, not as an id."
+      },
+      {
+        "option": "Fix in place: read state.projectMembers, skip existing pairs, and write with prisma.projectMember.create (not upsert) inside withTenant, with a hand-written addedBy",
+        "rejected_because": "The fallback if the reducer route is refused at Gate 2, and stated as such: it is safe (a PK collision fails with P2002 instead of overwriting, and withTenant sets the tenant) but weaker. It writes no audit entry, hand-writes attribution, and keeps a second copy of the duplicate rule beside the reducer's, which lib/db/persist.ts:51's own comment calls the fastest way to drift. The house rule (design Part 13) is that the reducer is the only writer of membership. It also keeps backdated addedAt for free, which is the one thing the reducer route needs OQ8 to settle."
+      },
+      {
+        "option": "Extend the addProjectMember action to accept personId so the script need not pass a name",
+        "rejected_because": "Touches lib/workspace.ts and lib/actionShape.ts (protected) for no gain: the script holds personId and can pass state.model.people[personId].name; directoryIdByName resolves it back to the same id, and any refusal (a duplicate display name) is reported as 'unresolvable via reducer' rather than bypassed."
+      },
+      {
+        "option": "Widen ROLE_AUTOMATION to hold project.staff so the script can run as the machine actor",
+        "rejected_because": "lib/access.ts:245's comment says the automation grant is deliberately narrow, the widening is unrelated to this correction, lib/access.ts is protected, and ART-20260905-010 is already asking the security reviewer to look at the machine actor causing access facts. A named operator is the precedent (scripts/seed-allocations.ts) and gives the rows honest attribution."
+      },
+      {
+        "option": "Add the partial unique index now, as part of this correction",
+        "rejected_because": "Not rejected on merit; deferred. It is the strongest 'never duplicates' guarantee and would protect every future writer, but it is a migration on prisma/schema.prisma and prisma/migrations/ (Gate 3 with the architect), it needs a pre-check of production for existing duplicate live pairs, and the correction as specified needs nothing from it. Recorded as OQ6 in the specification for the architect to take up separately."
+      },
+      {
+        "option": "Do nothing to the script because ART-20260905-010 retires it; rely on the header",
+        "rejected_because": "A comment does not stop anyone, the retirement is proposed and unscheduled, and ART-20260905-010's own OQ12 contemplates one more run at ship. The interim guard (decision 8) is one line and closes the hazard today; the product owner decides at the specification's OQ3 whether the rest is built or deferred to the retirement."
+      }
+    ],
+    "consequences": [
+      "Rows this script creates carry reducer-minted projmem-<seq> ids and addedBy = the operator's name, and consume a workspace seq each; they are attributed like any deliberate add. The 2026-08-24 literal 'backfill migration 20260824000001' is never written again.",
+      "Interaction with ART-20260905-012 / ADR 0003, which must be resolved before both are approved: under ADR 0003 the enrolment helper stamps source 'stated' from addProjectMember and the migration infers 'backfill' from the id prefix projmem-backfill-%. Rows created by this route would be 'stated' with unrecognised ids. Either the helper takes source as a parameter the script sets to 'backfill', or the script retires before ADR 0003 lands, or ADR 0003's migration inference is widened. Specification OQ9.",
+      "The operator must hold project.staff and, unless ROLE_ADMIN, must pass the project gate for every project in the batch; a refusal for a project the operator is not on is the rule working and the script reports it as a stop.",
+      "persistActions stops at the first refusal and keeps earlier writes, so the planner's filtering is load-bearing: the batch holds creates only, and the report reconciles submitted, created and refused. Submitting one action per pair is acceptable and makes the reconciliation trivial.",
+      "Backdating addedAt through the reducer also backdates the audit entry's at (specification OQ8); the product owner chooses between design fidelity and audit fidelity, and the mechanism does not change.",
+      "Tenant isolation at Layer 1 is restored by construction: runBatch sets app.tenant_id and the script no longer holds a bare PrismaClient for writes. The proof records whether a bare-client write is refused by RLS against its own tenant, settling specification OQ5 with evidence.",
+      "No protected path changes. Touched: scripts/backfill-project-members.ts, lib/backfillMembers.ts (new), lib/dataIntegrity.ts, scripts/backfill-members-proof.ts (new), package.json, docs/plans/2026-08-24-project-membership-plan.md (one dated line). The partial unique index remains debt with a named question.",
+      "The script stays a one-off tool; ART-20260905-010's staffedWithoutMembershipCheck replaces it as the standing guarantee and this correction's duplicateLiveMembershipCheck reports the damage a bad writer would leave."
+    ],
+    "affects": [
+      "scripts/backfill-project-members.ts",
+      "lib/backfillMembers.ts",
+      "lib/dataIntegrity.ts",
+      "scripts/backfill-members-proof.ts",
+      "scripts/integrity-audit.ts",
+      "package.json",
+      "docs/plans/2026-08-24-project-membership-plan.md",
+      "docs/adr/0004-backfill-through-the-reducer.md"
+    ],
+    "principles_checked": [
+      "tenant-isolation",
+      "pure-reducer",
+      "attribution-as-parameter",
+      "derived-never-stored"
+    ],
+    "adr_path": "docs/adr/0004-backfill-through-the-reducer.md"
+  }
+}

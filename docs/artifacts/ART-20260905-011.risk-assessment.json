@@ -1,0 +1,138 @@
+{
+  "id": "ART-20260905-011",
+  "kind": "risk-assessment",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "wf-axiomate-change-intent-20260905-2"
+  },
+  "created": "2026-09-05",
+  "title": "Risk assessment for ART-20260905-010: project membership automatic on staffing, with a per-project change log",
+  "traces": ["ART-20260905-010"],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "subject_ref": "ART-20260905-010",
+    "risks": [
+      {
+        "id": "R1",
+        "description": "Today's production backfill is not idempotent by person. scripts/backfill-project-members.ts upserts on id = projmem-backfill-<seq> (lines 102-111, 163), where seq is the iteration order of a Map built from issues, time entries and allocations. Any record added since 24 August can shift the order, so projmem-backfill-3 can now denote a different (project, person) pair and a --commit would rewrite one of the 12 live rows' person, role and addedAt, and re-stamp addedBy with the 24 August label. The dry run is safe; a commit is not. E1 from the code, read 2026-09-05; the collision is inferred, not observed.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "Diff today's dry-run output against the 12 live rows before any --commit. Do not commit until the script keys on (tenantId, projectId, personId), skips pairs with a live row, and stamps addedBy with today's run. This is a script change outside the protected paths and can precede the feature.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R2",
+        "description": "Today's dry run under-reports. setAssignment writes issue.owner (lib/workspace.ts:6939) and nothing in 6921-6989 writes ownerId; updateIssue does (:2634). The grid (components/IssueWorkspace.tsx:2577) and both intake routes dispatch setAssignment, and the backfill's first signal reads issue.ownerId, so a person assigned as owner through the assignment panel or intake since 24 August can carry a stale or null ownerId and be missed. E1 on the code; the effect on production data is inferred.",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "Before trusting the dry run's list, count production issues whose owner name resolves to a directory id that differs from, or is absent in, ownerId. Raise the seam drift as its own correction specification (spec OQ15); the feature's automatic path resolves personId itself and does not inherit this gap.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R3",
+        "description": "A membership created inside a staffing arm applies in memory and never reaches Postgres. lib/db/persist.ts diffs and upserts projectMembers only under case 'addProjectMember' / 'updateProjectMember' / 'removeProjectMember' (493-500); case 'setAssignment' persists the issue only (384) and case 'upsertAllocation' persists allocations only (479-491). Verified E1 on 2026-09-05. Every scenario would pass in memory and the row would vanish on the next boot, which is the state decision (2) exists to end.",
+        "likelihood": "high",
+        "impact": "high",
+        "mitigation": "AC22 pins a persist-and-reboot round trip; the plan's storage step adds projectMembers diffing under the staffing cases; audit:persistence gains a check for exactly this. Also: setAssignment does not bump seq today and the helper mints projmem-<seq> ids, and audit must go through logAll so the staffing entry and the membership entry both land (lib/workspace.ts:1520-1528).",
+        "owner": "implementation-planner"
+      },
+      {
+        "id": "R4",
+        "description": "The permission boundary moves. An actor holding work.assign or capacity.allocate but not project.staff now causes an access fact to be written. ROLE_AUTOMATION holds work.assign (lib/access.ts:245) and both intake routes (app/api/intake/route.ts:299, app/api/intake/form/route.ts:148) dispatch setAssignment as the machine actor, so inbound mail can enrol a person onto a project. This is the direct cost of decision (2) as stated, not an error in it.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "Stated in the ADR consequences and spec BR14; OQ5 asks the product owner to confirm it knowingly, naming the intake case; the Security Reviewer reads the change set for it. The alternative that avoids the widening (refuse the staffing act when the actor lacks project.staff and the person is not a member) is recorded in the ADR as rejected because decision (2) chose creation over refusal.",
+        "owner": "security-reviewer"
+      },
+      {
+        "id": "R5",
+        "description": "'Nobody can be staffed and invisible' cannot hold for a name that does not resolve. Allocation.personId is nullable by design (lib/workspace.ts:6325); setAssignment values are free text; the backfill found 26 issues with compound 'X / Y' owners; ProjectMember.personId is required and addProjectMember refuses. A staffing act against such a name cannot enrol.",
+        "likelihood": "high",
+        "impact": "medium",
+        "mitigation": "BR6 states the guarantee covers resolvable people; AC8 drafts proceed-and-say-so; the integrity check (AC23) lists the rest so the gap is visible rather than silent. OQ3 gives the product owner the stricter option (refuse the staffing act) with its cost to allocation semantics.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R6",
+        "description": "Origin is stored in a way that reads as a derived value, or is inferred at read from the addedBy string. The 12 production rows carry only addedBy 'backfill migration 20260824000001'; if the UI classifies by that text they display as deliberate the day the string changes, and the script's own header says audit by fields are never identity data (scripts/backfill-project-members.ts:16-19). Separately, the request's phrase 'like Allocation's stated/derived pattern' names a field Allocation does not have; the vocabulary lives on CapacityProfile.source ('stated' | 'default', lib/capacity.ts:65), and 'default' is the wrong second value here.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "BR7: origin is creation-time provenance stamped by the arm, never a wire field, never inferred from text, never rewritten by a role edit; the migration stamps the backfill rows once (by the id prefix the script itself mints, stated in the migration comment); until stamped the UI shows 'origin not recorded', never deliberate. The ADR fixes the values as 'stated' | 'staffing' | 'backfill'.",
+        "owner": "architect"
+      },
+      {
+        "id": "R7",
+        "description": "The log is silently partial. state.audit holds at most auditWindow() rows tenant-wide (lib/db/repo.ts:101-103, 213; default 5000) and is boot-trimmed; the backfill rows have no audit entry; role changes exist only in audit. A log read from audit alone shows a busy tenant a shorter history with no signal that it is short, and never shows the 12 backfill rows at all.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "ADR: the ProjectMember rows (addedAt/addedBy/source, removedAt/removedBy) are the durable skeleton; audit lines enrich; AC14 requires the panel to state what enrichment is unavailable. The bound that remains, role changes older than the window, is stated in OQ6 for the product owner to accept or to choose the UX analyst's event-collection alternative.",
+        "owner": "architect"
+      },
+      {
+        "id": "R8",
+        "description": "The wrong people are enrolled. If 'assignment' means every person-valued responsibility, raisedBy (often a client contact) and custom person-valued responsibilities would enrol client seats, breaking the 2026-08-24 rule that nobody is both a client seat and an internal member; if it means Owner only, people named on other responsibilities stay invisible. move carries assignees to a new project with nobody re-checking them.",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "BR15 excludes client-scoped people unconditionally (AC24); OQ1 asks the product owner to state the list of acts; the integrity check catches whatever the list leaves out.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R9",
+        "description": "A role nobody chose is displayed as a recorded fact. The automatic path must store some projectRoleId (the backfill mapped by org role); the UX analyst holds the roster and log must say it was defaulted until somebody sets it, and the ADR's row shape has no role history, so 'defaulted' can only be read from origin plus the absence of a role-change audit line, which is window-bounded.",
+        "likelihood": "medium",
+        "impact": "low",
+        "mitigation": "OQ2: a neutral seeded role such as 'Staffed' removes the problem; otherwise BR13's shared function keeps the default consistent with the backfill and the panel shows the '.prov' suffix while origin is staffing or backfill and no role-change line exists.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R10",
+        "description": "A later staffing act silently undoes a PM's deliberate removal. Under 'if none exists' read as 'none live' (AC9), allocating a removed person re-enrols them with no warning to the PM who removed them.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "OQ4 offers re-enrol (drafted; the log shows both events), warn, or refuse; the requirement and architecture analysts both recommend re-enrol because the alternative makes a removal a hidden block on staffing.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R11",
+        "description": "Protected paths and a migration. lib/workspace.ts (new behaviour inside upsertAllocation, setAssignment and possibly create, duplicate, updateIssue, move; origin and removedBy on the three membership arms), prisma/schema.prisma and prisma/migrations/** (two columns and a one-time stamp), lib/types.ts if AuditEntry changes, lib/access.ts implicated by the permission widening even if its text is unchanged.",
+        "likelihood": "high",
+        "impact": "medium",
+        "mitigation": "Gate 2 for ART-20260905-012; Gate 3 with the architect for the plan; the migration is its own workstream and commit; the house order (pure helper and integrity check, then callers and persist, then storage, then UI) keeps the reducer change provable before the schema moves.",
+        "owner": "architect"
+      },
+      {
+        "id": "R12",
+        "description": "The gap between today's run and ship. Anyone staffed between today's backfill and the feature shipping is invisible again until added by hand; and if the backfill is re-run at ship without R1's fix it rewrites rows.",
+        "likelihood": "medium",
+        "impact": "medium",
+        "mitigation": "OQ12: a re-keyed backfill run as its own plan step at ship, as the 24 August plan did, with its rows stamped source 'backfill' and recognisable in the log.",
+        "owner": "product-owner"
+      },
+      {
+        "id": "R13",
+        "description": "The same events appear twice on a project row: in the new Members log and in the project row's History tab, which renders the whole workspace's audit unfiltered (components/DetailPanel.tsx:582-586). A reader may take the shorter or longer list as the authoritative one.",
+        "likelihood": "low",
+        "impact": "low",
+        "mitigation": "Scope_out records the overlap and leaves History alone; scoping History to the row is a separate correction. The Members log's heading names its scope ('Changes to who is staffed').",
+        "owner": "ux-placement"
+      }
+    ],
+    "overall": "medium",
+    "requires_human": true,
+    "reasons": [
+      "Two risks are about an action being taken today, not about the specification: R1 (a --commit of the backfill can rewrite the 12 production rows because the upsert key is iteration order) and R2 (the dry run's owner signal misses people assigned through setAssignment or intake, which never refresh ownerId). Both are rated high individually; the overall band stays medium because a dry run is safe and the product owner controls whether a commit follows. If a commit is planned today, treat R1 as a stop until the script is re-keyed.",
+      "The three decisions are E1 and are recorded as business rules BR1-BR3; none of the analysts disputes them. What is open is the mechanism and six domain rules the decision text does not settle, which is why an architecture decision (ART-20260905-012) is drafted and why fifteen open questions are carried to Gate 1.",
+      "Disagreement on where origin lives and what the log is read from. The requirement analyst left it open (row, log or both; new table or derived). The architecture analyst proposes an immutable source column plus removedBy on ProjectMember, no new table, rows as the durable skeleton and existing audit lines as enrichment, accepting that role changes older than the audit window are not recoverable. The UX analyst wants a typed origin with a cause reference (allocation id, or issueId plus responsibilityId) and a membership-event collection so role-change history is durable. The ADR proposes the architect's shape and records the event collection as the alternative; OQ6 tells the product owner what the proposed shape cannot show so the bound is accepted knowingly, not discovered later.",
+      "Disagreement on whether the cause of an automatic add is stored. The architect puts it in the audit entry's reason, not on the row, because a pointer to a soft-deletable allocation invites treating it as live; the UX analyst wants it on the row so the roster's Since cell can name the allocation and the person who saved it. OQ9 separates the product question (must the cause be shown) from the architecture question (where it lives).",
+      "Disagreement, mild, on vocabulary. The requirement analyst wrote 'staffing | deliberate | backfill'; the architect 'stated | staffing | backfill' to match CapacityProfile.source; the UX analyst writes 'deliberate / from staffing / backfilled' as display words. The ADR fixes the stored values and the display words are the UX analyst's; the request's own phrase 'Allocation's stated/derived pattern' names a field Allocation does not have, corrected in R6.",
+      "The requirement analyst and the UX analyst read 'if none exists' as 'none live' so a removed person is re-enrolled by a later staffing act; the architect agrees and says why; nobody asked the product owner, so OQ4 does. The requirement and architecture analysts both drafted proceed-without-membership for an unresolvable name; the UX analyst extended the existing owner-field wording for it; OQ3 gives the product owner the refuse option with its cost.",
+      "The role of an automatically created member is unsettled and interacts with derived-never-stored: the UX analyst insists a defaulted role must display as defaulted; the architect's shape has no role history to read that from durably; the requirement analyst offers a neutral 'Staffed' role that sidesteps it. OQ2. Product owner decides.",
+      "The permission widening (work.assign and capacity.allocate holders, and the intake machine actor, causing access facts without project.staff) is a consequence of the decision, flagged by all three analysts and recorded as BR14, OQ5 and R4 rather than absorbed. The Security Reviewer reads it at Proof; the product owner confirms it at Gate 1.",
+      "Priority is a placeholder. The requester stated none; P2 was entered because the dry run today bounds the live exposure; OQ11 asks the product owner to confirm or raise it depending on what the dry run finds.",
+      "Protected paths and a migration are certain (lib/workspace.ts, prisma/schema.prisma, prisma/migrations/**; lib/types.ts and lib/access.ts implicated), so Gate 2 for the ADR and Gate 3 with the architect for the plan apply whichever options are chosen."
+    ]
+  }
+}
