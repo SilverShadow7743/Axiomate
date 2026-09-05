@@ -1,0 +1,95 @@
+{
+  "id": "ART-20260905-018",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "wf-axiomate-change-build-proof-20260905-3"
+  },
+  "created": "2026-09-05",
+  "title": "Client filter on feat/ART-20260905-016: steps 1-4 and 9 of plan ART-20260905-017 built and reviewed; two review findings fixed in the ui workstream, one (data/validation.json outside every owns list) left for the planner, so the verdict is blocked",
+  "traces": [
+    "ART-20260905-016",
+    "ART-20260905-017"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260905-016",
+    "base": "500e0eb00ee8f68f23f8d7f0d5c7e7f086486d58",
+    "commits": [
+      "4cabc5916d3ff4bdac770a053514fd4f6320f7e3",
+      "0bd630b173eccccef42aa74804a8b8b8eba0c3f1",
+      "961c14ec309d647c842cc2b860697fb0eca3ff1c"
+    ],
+    "files": [
+      { "path": "lib/types.ts", "workstream": "filter-logic" },
+      { "path": "lib/tree.ts", "workstream": "filter-logic" },
+      { "path": "lib/projectBoundary.ts", "workstream": "stakeholder-logic" },
+      { "path": "components/FilterBar.tsx", "workstream": "ui" },
+      { "path": "components/FiltersHeader.tsx", "workstream": "ui" },
+      { "path": "components/TreeGrid.tsx", "workstream": "ui" },
+      { "path": "components/IssueWorkspace.tsx", "workstream": "ui" },
+      { "path": "scripts/scenario-validation.ts", "workstream": "proof" },
+      { "path": "data/validation.json", "workstream": "unowned" }
+    ],
+    "plan_ref": "ART-20260905-017",
+    "steps_built": [1, 2, 3, 4, 9],
+    "steps_not_built": {
+      "5": "blocked on OQ3 (plan step 5)",
+      "6": "blocked on OQ8 (plan step 6)",
+      "7": "blocked on OQ5 (plan step 7)",
+      "8": "blocked on OQ5 (plan step 8)",
+      "10": "blocked on OQ8 (plan step 10); the narrow revealIssue fix in 961c14e does not settle it",
+      "11": "blocked on OQ5 (plan step 11)",
+      "12": "blocked on OQ3 (plan step 12)"
+    },
+    "self_validation": {
+      "commands": [
+        "step 1 verify (run at build): npx tsc --noEmit && npx tsx -e \"import('./lib/types.ts')...\" — exit 0",
+        "step 2 verify (run at build): npm run validate:scenarios | awk CD1 PASS and n==193 — exit 0",
+        "step 3 verify (run at build): npx tsc --noEmit && npx tsx -e \"import('./lib/projectBoundary.ts')...\" && export count 2 && grep stakeholder — exit 0",
+        "step 4 verify (run at build): npm run validate:scenarios | awk CD2, CD3 PASS and n==195 — exit 0",
+        "step 9 verify (run at build and re-run after the review fixes in 961c14e): npx tsc --noEmit && npm run audit:a11y && npm run validate:scenarios 2>&1 | grep -E \"^GA1[[:space:]]+PASS\" — exit 0; 195 PASS of 214 scenarios; data/validation.json unchanged by the re-run",
+        "npm run audit:contracts — run after writing this artifact; exit 0"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 3,
+      "findings_open": 1,
+      "verdict": "blocked",
+      "findings": [
+        {
+          "title": "revealIssue resets to the sentinel and hides the row it promised to show",
+          "file": "components/IssueWorkspace.tsx",
+          "severity": "high",
+          "status": "fixed",
+          "commit": "961c14ec309d647c842cc2b860697fb0eca3ff1c",
+          "fix": "When the revealed row fails the current filters, revealIssue now sets filters to {...EMPTY_FILTERS, client: row.issue.client} and says so in the toast; a row carrying no client gets an error toast naming the next action instead of a false 'visible'. Inside the ui workstream; the general Clear and reveal semantics (recorded choice, scoped-All, refusal outside memberProjectIdsFor) remain step 10, blocked on OQ8."
+        },
+        {
+          "title": "data/validation.json is committed but is outside every workstream's owns list",
+          "file": "data/validation.json",
+          "severity": "high",
+          "status": "open",
+          "fix": "Not fixable inside the plan. The file is written by scripts/scenario-validation.ts on every run, so the verify commands of steps 2, 4 and 9 regenerate it, and the scenario-testing skill and proof-orchestrator treat it as the committed baseline diffed against master; dropping it from the commits would contradict that, and adding it to an owns list is widening ownership in place, which build-orchestrator.md forbids. Resolution is the planner's: version 3 of ART-20260905-017 adds data/validation.json to the proof workstream (or records that gate-runner output travels with the change), after which this file entry reads 'proof'. Until then the entry is marked 'unowned' here so the proof-orchestrator's step 1 check sees it rather than a workstream the plan never granted."
+        },
+        {
+          "title": "The UI resting sentinel is persisted into shared saved views before its fate is decided",
+          "file": "lib/workspace.ts",
+          "severity": "medium",
+          "status": "fixed",
+          "commit": "961c14ec309d647c842cc2b860697fb0eca3ff1c",
+          "fix": "onSaveCurrentView in components/IssueWorkspace.tsx refuses to dispatch upsertSavedView while filters.client is NO_CLIENT_CHOSEN, with a toast naming the next action, so the sentinel never reaches state.model.savedViews. This is a guard inside the ui workstream, not the decision step 6 (blocked on OQ8) owns: lib/workspace.ts and lib/savedViews.ts are untouched, and whether the sentinel is excluded on save or defined on apply is still to be fixed there. The stale 'degrade to broader' docblock in lib/savedViews.ts is noted for step 6."
+        }
+      ]
+    },
+    "working_tree_not_included": [
+      "data/discussion.json asAt bump (unstaged, out of scope)",
+      "docs/artifacts/ART-20260905-016.requirement-specification.json status flipped from approved to superseded in the working tree, uncommitted; this change set traces it as history",
+      "untracked: .claude/jobs/, .claude/settings.json, docs/artifacts/ART-20260905-020/021/022.requirement-specification.json"
+    ]
+  }
+}
