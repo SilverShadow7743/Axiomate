@@ -319,6 +319,9 @@ const ok = (s: WorkspaceState, a: Action): WorkspaceState => {
   return r.state
 }
 const rowsOf = (s: WorkspaceState, today = TODAY) => buildTree(s, today)
+// EMPTY_FILTERS rests on the Client facet's sentinel and lists nothing (CD1, ART-20260905-016 BR2).
+// A scenario that means "no filter active" says so by choosing every client.
+const UNFILTERED = { ...EMPTY_FILTERS, client: 'All' }
 const rowFor = (s: WorkspaceState, id: string, today = TODAY) =>
   rowsOf(s, today).find((r) => r.id === id)!
 
@@ -7344,7 +7347,7 @@ scenario(
       decision?.raidKind === 'decision' && decision.decisionOutcome === 'Ship the interim mapping.' &&
       ordinary !== undefined && ordinary.raidKind === null
 
-    const raidOnly = { ...EMPTY_FILTERS, raidOnly: true }
+    const raidOnly = { ...UNFILTERED, raidOnly: true }
     const filterRight =
       matchesFilters(risk!, raidOnly) &&
       matchesFilters(unjudgedRisk!, raidOnly) &&
@@ -7352,7 +7355,7 @@ scenario(
       !matchesFilters(ordinary!, raidOnly) &&
       /* raidOnly changes nothing about who passes when it is off — additive, not a second
          gate everyone must also clear. */
-      matchesFilters(ordinary!, EMPTY_FILTERS)
+      matchesFilters(ordinary!, UNFILTERED)
 
     const good = rowsRight && filterRight
 
@@ -8452,7 +8455,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'CHILD-LOW', parentId: 'PARENT', kind: 'issue', issue: { severity: 'Low' } }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && !shown.some((r) => r.id === 'CHILD-LOW')
 
     return good
@@ -8470,7 +8473,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'CHILD-HIGH', parentId: 'PARENT', kind: 'issue', issue: { severity: 'High' } }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'CHILD-HIGH')
 
     return good
@@ -8488,7 +8491,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'ACT', parentId: 'PARENT', kind: 'activity' }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'ACT')
 
     return good
@@ -8547,7 +8550,7 @@ scenario(
       tvRow({ id: 'CLIENT-B', parentId: null, kind: 'client', name: 'Axiocloud' }),
       tvRow({ id: 'PROJECT-B', parentId: 'CLIENT-B', kind: 'project', name: 'Axio-Finance' }),
     ]
-    const shown = visibleRows(all, EMPTY_FILTERS, new Set())
+    const shown = visibleRows(all, UNFILTERED, new Set())
     const ids = shown.map((r) => r.id)
     const good = ids.includes('CLIENT-B') && ids.includes('PROJECT-B')
 
@@ -9097,7 +9100,7 @@ scenario(
     // Through visibleRows, because that is where attachRollups actually runs — buildTree
     // rows carry no rollup (found by this scenario's own first run, which read the wrong
     // helper and blamed the product).
-    const outcomeRow = visibleRows(rowsOf(s), EMPTY_FILTERS, new Set()).find((r) => r.id === outcomeId)
+    const outcomeRow = visibleRows(rowsOf(s), UNFILTERED, new Set()).find((r) => r.id === outcomeId)
     const rollsUp = outcomeRow?.rollup?.issues === 1 && outcomeRow?.rollup?.open === 1
 
     const good = refusalsHold && inherits && optional && rollsUp
@@ -10067,6 +10070,49 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: "An ordinary draft with no sourceType/lastActivity keys still lands sourceType='' and lastActivity=now, exactly as before; a draft stating both (plus the already-supported raised) lands every one of the three real values.", stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `ordinaryUnaffected=${ordinaryUnaffected} (sourceType=${JSON.stringify(created1.sourceType)} lastActivity=${created1.lastActivity}) historicalHonored=${historicalHonored} (sourceType=${JSON.stringify(created2.sourceType)} raised=${created2.raised} lastActivity=${created2.lastActivity})`, stops: 'at the create arm — either every ordinary issue in the app now carries a stray sourceType/lastActivity default, or the WBS import cannot state its own historical facts', severity: 'P1', impact: 'the WBS import (134 issues) would either be refused the fields it needs, or every other feature that creates an issue through the ordinary path would start seeing unexpected sourceType/lastActivity values' } as const
+  },
+)
+
+/* ================================================================== *
+ * Client filter defaults (ART-20260905-016)
+ * ================================================================== */
+
+/*
+ * The Client facet's resting value is a sentinel, not 'All' — until somebody chooses a client
+ * the Tree lists nothing (BR2), and the sentinel is neither 'All' nor the Discipline facet's
+ * 'None' (BR7). Driven through buildTree, matchesFilters and visibleRows over BASE, the same
+ * path the grid takes, so a consumer that quietly reads the resting value as 'All' again fails
+ * here rather than in the workspace.
+ */
+
+scenario(
+  'CD1',
+  "EMPTY_FILTERS rests on a client sentinel that lists nothing — not 'All', and not the Discipline facet's 'None'",
+  "BR2 and BR7 of ART-20260905-016: with no client chosen, visibleRows keeps no issue row and no structural row, and matchesFilters admits nothing; the same filters with client 'All' list the fixture's three issues under their client exactly as before this change; client 'All' with discipline 'None' still returns the fixture's unclassified issues, so the resting token and the 'unclassified' query are not one token; and EMPTY_FILTERS.client is neither 'All' nor 'None'.",
+  () => {
+    const all = rowsOf(BASE)
+
+    // Resting: nothing through either gate — not an issue, not an empty branch riding along.
+    const resting = visibleRows(all, EMPTY_FILTERS, new Set())
+    const admitted = all.filter((r) => matchesFilters(r, EMPTY_FILTERS))
+    const listsNothing = resting.length === 0 && admitted.length === 0
+
+    // 'All' is a choice, and it still lists the fixture the way it always has.
+    const issueIds = (rows: ScheduleRow[]) => rows.filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const everyClient = visibleRows(all, { ...EMPTY_FILTERS, client: 'All' }, new Set())
+    const asToday = issueIds(everyClient) === 'OAPIL-1,OAPIL-2,OAPIL-3' && everyClient.some((r) => r.kind === 'client')
+
+    // BASE's issues carry no discipline (imports never do), so the real "unclassified" query
+    // keeps every one of them — proof that 'None' is a query and the sentinel is not.
+    const unclassified = visibleRows(all, { ...EMPTY_FILTERS, client: 'All', discipline: 'None' }, new Set())
+    const noneIsAQuery = issueIds(unclassified) === 'OAPIL-1,OAPIL-2,OAPIL-3'
+
+    const distinctToken = EMPTY_FILTERS.client !== 'All' && EMPTY_FILTERS.client !== 'None'
+
+    const good = listsNothing && asToday && noneIsAQuery && distinctToken
+    return good
+      ? { verdict: 'PASS', actual: `EMPTY_FILTERS lists 0 rows through visibleRows and admits 0 through matchesFilters over ${all.length} tree rows; client 'All' lists [${issueIds(everyClient)}] under their client node; client 'All' + discipline 'None' lists [${issueIds(unclassified)}]; EMPTY_FILTERS.client is ${JSON.stringify(EMPTY_FILTERS.client)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `listsNothing=${listsNothing} (visible=[${resting.map((r) => r.id).join(', ')}] admitted=[${admitted.map((r) => r.id).join(', ')}]) asToday=${asToday} (issues=[${issueIds(everyClient)}]) noneIsAQuery=${noneIsAQuery} (issues=[${issueIds(unclassified)}]) distinctToken=${distinctToken} (client=${JSON.stringify(EMPTY_FILTERS.client)})`, stops: 'at matchesFilters/visibleRows — the resting value either lists rows it must not, or has collapsed into \'All\' or \'None\'', severity: 'P1', impact: 'the workspace either opens on every client\'s work for a person who chose none (the fail-open BR2 forbids), or a chosen \'All\' or an "unclassified" query stops meaning what it did' } as const
   },
 )
 

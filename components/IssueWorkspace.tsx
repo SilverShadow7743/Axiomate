@@ -13,7 +13,7 @@ import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
-import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
+import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
   ROOT_SCOPE,
@@ -1736,7 +1736,10 @@ export default function IssueWorkspace({
    */
   const scopeLabel = useMemo(() => {
     const parts: string[] = []
-    if (filters.client !== 'All') parts.push(filters.client)
+    // The resting value is not a client and not 'All'; a report built there must say so
+    // rather than print "All clients" over an empty view (AC13 of ART-20260905-016).
+    if (filters.client === NO_CLIENT_CHOSEN) parts.push('No client chosen')
+    else if (filters.client !== 'All') parts.push(filters.client)
     if (filters.module !== 'All') parts.push(filters.module)
     if (filters.type !== 'All') parts.push(filters.type)
     if (filters.status !== 'All') parts.push(`status ${filters.status}`)
@@ -1776,7 +1779,7 @@ export default function IssueWorkspace({
    */
   const openClientPack = useCallback(
     (kind: 'weekly' | 'monthly') => {
-      if (filters.client === 'All') {
+      if (filters.client === 'All' || filters.client === NO_CLIENT_CHOSEN) {
         notify('Pick one client first — a client pack is for a single client, not the whole workspace.', true)
         return
       }
@@ -2278,6 +2281,7 @@ export default function IssueWorkspace({
         <div className="pane-tree" style={{ width: treeWidth }}>
           <TreeGrid
             rows={rows}
+            noClientChosen={filters.client === NO_CLIENT_CHOSEN}
             columns={orderedCols}
             colWidths={colWidths}
             setColWidths={setColWidths}

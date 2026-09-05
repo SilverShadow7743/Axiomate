@@ -1,5 +1,5 @@
 import type { FilterState, ScheduleRow } from './types'
-import { isGroupRow } from './types'
+import { isGroupRow, NO_CLIENT_CHOSEN } from './types'
 import { disciplineLabel, kindLabel, resolveLabels } from './config'
 import { raidKindOf } from './raid'
 import type { IssueRecord, WorkspaceState } from './workspace'
@@ -384,6 +384,10 @@ export function matchesFilters(row: ScheduleRow, f: FilterState): boolean {
   // Finished work is hidden unless asked for. Checked first because it is the broadest cut
   // and the cheapest — no point testing six facets against a record already excluded.
   if (!f.showCompleted && isTerminal(i.status)) return false
+  // No client chosen lists nothing — deny by default (BR2). Not the same test as 'All', and
+  // not the Discipline facet's 'None' below, which is a real query rather than the absence
+  // of one (BR7).
+  if (f.client === NO_CLIENT_CHOSEN) return false
   if (f.client !== 'All' && i.client !== f.client) return false
   if (f.type !== 'All' && i.type !== f.type) return false
   /*
@@ -466,6 +470,10 @@ export function visibleRows(
   // flag-based test the reducer's inheritance walk uses to derive the `i.client` that
   // `matchesFilters` compares against, so the two walks cannot disagree. A row with no such
   // ancestor at all (above that tier, or the client filter is 'All') is unaffected.
+  //
+  // With no client chosen there is no branch to show, so no empty structural row rides along
+  // either: the resting view is empty by definition (BR2), and an Engagement listed on its own
+  // would read as a client somebody chose.
   const hasIssueDescendant = new Set<string>()
   for (const row of all) {
     if (row.kind !== 'issue') continue
@@ -486,6 +494,7 @@ export function visibleRows(
   for (const row of all) {
     if (row.kind === 'issue' || row.kind === 'activity' || row.kind === 'milestone') continue
     if (hasIssueDescendant.has(row.id)) continue
+    if (filters.client === NO_CLIENT_CHOSEN) continue
     if (filters.client !== 'All') {
       const client = clientOf(row)
       if (client !== null && client !== filters.client) continue

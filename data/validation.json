@@ -2112,6 +2112,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD1",
+      "title": "EMPTY_FILTERS rests on a client sentinel that lists nothing — not 'All', and not the Discipline facet's 'None'",
+      "expected": "BR2 and BR7 of ART-20260905-016: with no client chosen, visibleRows keeps no issue row and no structural row, and matchesFilters admits nothing; the same filters with client 'All' list the fixture's three issues under their client exactly as before this change; client 'All' with discipline 'None' still returns the fixture's unclassified issues, so the resting token and the 'unclassified' query are not one token; and EMPTY_FILTERS.client is neither 'All' nor 'None'.",
+      "verdict": "PASS",
+      "actual": "EMPTY_FILTERS lists 0 rows through visibleRows and admits 0 through matchesFilters over 7 tree rows; client 'All' lists [OAPIL-1,OAPIL-2,OAPIL-3] under their client node; client 'All' + discipline 'None' lists [OAPIL-1,OAPIL-2,OAPIL-3]; EMPTY_FILTERS.client is \"__NO_CLIENT_CHOSEN__\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FilterState, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { WorkspaceView } from '@/lib/viewChoice'
-import { EMPTY_FILTERS } from '@/lib/types'
+import { EMPTY_FILTERS, NO_CLIENT_CHOSEN } from '@/lib/types'
 import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
 import type { Actor } from '@/lib/actor'
@@ -12,6 +12,21 @@ import { liveDisciplines } from '@/lib/config'
 import type { OperatingModel } from '@/lib/config'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
+
+/**
+ * Whether one facet deviates from its resting value.
+ *
+ * Each key needs its own test: most facets rest at 'All', search rests at empty,
+ * `showCompleted`/`raidOnly` rest at false, and the Client facet rests at `NO_CLIENT_CHOSEN` —
+ * a sentinel that is not a choice (BR7 of ART-20260905-016), so it must not arm Clear or
+ * count towards More. Comparing a boolean against 'All' would have made Clear look
+ * permanently armed; comparing the sentinel against 'All' would do the same.
+ */
+function isSet(k: keyof FilterState, v: string | boolean): boolean {
+  if (k === 'search') return v !== ''
+  if (k === 'showCompleted' || k === 'raidOnly') return v === true
+  return v !== 'All' && v !== NO_CLIENT_CHOSEN
+}
 
 /**
  * Declared at module scope on purpose.
@@ -51,7 +66,15 @@ function FilterDropdown({
    * loses: "OAPIL" no longer says which dimension it belongs to. Three things carry that —
    * the accent border the value already gets, a stable position in the row, and the tooltip
    * and accessible name below, which stay the plain dimension name whatever is selected.
+   *
+   * The Client facet alone has a resting state that is not 'All': `NO_CLIENT_CHOSEN`, on
+   * which nothing is listed (BR2, BR7 of ART-20260905-016). It gets its own option, captioned
+   * as an instruction — "Client: choose one" — because the bare sentinel is never shown and
+   * the word "None" is already taken by Discipline's "records with no discipline". 'All'
+   * stays offered beneath it as a choice in its own right. The accent marks a choice made,
+   * so neither resting value takes it.
    */
+  const resting = name === 'client'
   return (
     <div className="field">
       <select
@@ -60,8 +83,9 @@ function FilterDropdown({
         title={label}
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
-        className={value !== 'All' ? 'on' : ''}
+        className={isSet(name, value) ? 'on' : ''}
       >
+        {resting && <option value={NO_CLIENT_CHOSEN}>{label}: choose one</option>}
         <option value="All">{label}: All</option>
         {options.map((o) => {
           const value = typeof o === 'string' ? o : o.value
@@ -189,19 +213,13 @@ export default function FilterBar({
 
   const set = (k: keyof FilterState, v: string) => setFilters({ ...filters, [k]: v })
   /** Set filters that live behind the More button, so it can report them. */
-  const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter(
-    (k) => filters[k] !== 'All',
+  const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter((k) =>
+    isSet(k, filters[k]),
   ).length
 
-  /**
-   * Whether anything deviates from the resting view.
-   *
-   * Each key needs its own test now: the facets rest at 'All', search rests at empty, and
-   * `showCompleted`/`raidOnly` rest at false. Comparing a boolean against 'All' would have made
-   * Clear look permanently armed.
-   */
-  const active = Object.entries(filters).some(([k, v]) =>
-    k === 'search' ? v !== '' : k === 'showCompleted' || k === 'raidOnly' ? v === true : v !== 'All',
+  /** Whether anything deviates from the resting view — see `isSet` for what "resting" means per key. */
+  const active = (Object.entries(filters) as [keyof FilterState, string | boolean][]).some(([k, v]) =>
+    isSet(k, v),
   )
 
   // My work and Portfolio compute their own lists; the record filters do nothing to them,
