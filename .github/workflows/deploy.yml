@@ -116,6 +116,12 @@ jobs:
       - name: Audit — estimation
         run: npm run audit:estimation
 
+      - name: Audit — contracts
+        # Every docs/artifacts/*.json handoff validates against .claude/contracts: envelope,
+        # kind body, traces, producer registry, approval roles, plan ownership. Pure; reads
+        # files. Design: docs/plans/2026-09-05-agentic-operating-model-design.md Part 6.
+        run: npm run audit:contracts
+
       - name: Apply migrations to the CI database
         # The same command the deploy job runs against production, executed here first. If the
         # migration history cannot be applied to an empty database, this is where that is found —

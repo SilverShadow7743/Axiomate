@@ -42,3 +42,10 @@ existing ones do; that is the discipline to maintain, not a migration still to d
 This distinction is also encoded in `.claude/skills/axiomate-domain-analysis`,
 `axiomate-work-model`, `axiomate-project-allocation`, and `axiomate-capacity-planning` — check
 those before implementing anything that touches resourcing.
+
+# How a change travels
+
+Requests become checked artifacts in `docs/artifacts/` (`npm run audit:contracts`), produced by
+the four orchestrator agents in `.claude/agents/` and the `axiomate-change` workflow, with five
+human gates. Read `docs/plans/2026-09-05-agentic-operating-model-design.md` before changing how
+anything is built; the ADR is `docs/adr/0001-agentic-operating-model.md`.

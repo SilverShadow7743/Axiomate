@@ -176,6 +176,16 @@ cycle, as step zero.
 | Per cycle | one P1 from the suite, chosen first |
 | Per quarter | reread the rejections in `docs/plans/` — some of them stop being right |
 
+## The handoff record
+
+Since 5 September 2026 each step of the loop has an artifact: a Requirement Specification for
+the idea, an Architecture Decision when the design is open, an Implementation Plan, a Change
+Set, a Validation Result, a Release Decision, and an Incident Report when production disagrees.
+They are JSON files in `docs/artifacts/`, checked by `npm run audit:contracts` in the standing
+gate, and the agents that produce them and the gates a person holds are in
+`docs/plans/2026-09-05-agentic-operating-model-design.md`. The loop above is unchanged; the
+artifacts are what make each step readable by the next agent instead of by memory.
+
 That last row matters more than it reads. Bitemporality was rejected for versions and is correct
 for timesheets. A rejection is a decision made under the constraints of a particular week, and
 the constraint that justified it can expire without anybody revisiting the conclusion.
