@@ -1,22 +1,28 @@
 {
-  "id": "ART-20260905-004",
+  "id": "ART-20260905-016",
   "kind": "requirement-specification",
-  "version": 1,
-  "status": "superseded",
+  "version": 2,
+  "status": "approved",
   "producer": {
     "agent": "intent-orchestrator",
-    "run": "wf-axiomate-change-intent-20260905-1"
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-oq1"
   },
   "created": "2026-09-05",
   "title": "Client filter defaults: rest at nothing chosen, scope All to the signed-in person's stakeholder projects, remember each person's choice",
   "traces": [],
-  "supersedes": null,
+  "supersedes": "ART-20260905-004",
   "approvals": [
     {
       "role": "product-owner",
       "by": "Nishant Sekhar",
       "date": "2026-09-05",
       "evidence": "Stated by the CEO in the Claude Code session (\"Approved\", 2026-09-05) after the intent-stage summary. The 13 open questions, including OQ1 (the stakeholder definition, which blocks AC2, AC5, AC14-AC16), were not answered at approval; the implementation planner must surface OQ1 before any step that depends on it."
+    },
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-05",
+      "evidence": "OQ1 answered in the Claude Code session: \"stakeholder means live ProjectMember row\" (definition d of OQ1). Version 2 records it as BR8 and retires AC14 and AC16, which were conditional on definitions a and b."
     }
   ],
   "body": {
@@ -123,22 +129,10 @@
         "then": "scopeLabel does not print 'All clients - <org>'; it states the actual scope, and openClientPack refuses 'nothing chosen' with the same teaching message it uses for 'All' today (IssueWorkspace.tsx:1779-1782). Whether position figures count the whole workspace or only the person's projects is OQ9. [E3]"
       },
       {
-        "id": "AC14",
-        "given": "OQ1 lands on definition (a) live Allocation, and an Allocation on P whose endDate is yesterday, one whose startDate is today, one with deletedAt set, and one whose personId is null with only the name matching",
-        "when": "All is chosen today, with 'today' passed as a parameter",
-        "then": "P is out, in, out, and as OQ1 decides for the name-only case respectively; never silent inclusion by a rule different from the codebase's id-first-then-name joins. [conditional on OQ1]"
-      },
-      {
         "id": "AC15",
-        "given": "OQ1 lands on definition (d) ProjectMember, and a ProjectMember row on P with removedAt set and another active row with any projectRoleId",
+        "given": "a ProjectMember row on project P for the signed-in person with removedAt set, and another on project Q with removedAt null",
         "when": "All is chosen",
-        "then": "P is out for the removed row and in for the active row unless OQ1 restricts to particular project roles; the set equals memberProjectIdsFor(state, personId) so the filter and the read gate cannot disagree. [conditional on OQ1]"
-      },
-      {
-        "id": "AC16",
-        "given": "OQ1 lands on definition (b) named on the Engagement, and an Engagement whose engagementLeader string equals the person's directory name while its projectManager string resolves to nobody",
-        "when": "All is chosen by the leader and then by the owner of the non-resolving name",
-        "then": "every project under that engagement node is in the leader's set; nothing is added and nothing errors for the other. This criterion exists to make the name-join cost visible; if OQ1 rejects (b) it is dropped. [conditional on OQ1]"
+        "then": "P is out of the stakeholder set and Q is in, whatever the project role on either row; the same rows the read gate consults produce the same answer here"
       },
       {
         "id": "AC17",
@@ -157,7 +151,8 @@
       "BR7. 'Nothing chosen' on the Client facet is a typed sentinel on FilterState that cannot be confused with the discipline facet's 'None' ('records without a discipline', lib/tree.ts:389-394). Same word to the requester, different meaning; the code must not share the token, and every consumer that today compares to the literal 'All' (FilterDropdown's on-accent, FiltersHeader's activeCount, matchesFilters, visibleRows, scopeLabel, revealIssue) compares to the resting value instead.",
       "BR8. The client-seat boundary (clientView) and the project read gate (redactForReader, projectView, isExempt) are applied before any filter default and are never widened or narrowed by this feature.",
       "BR9. Nothing here changes what a person may do; can(model, actor, key) is untouched. Visibility by stakeholder is a default view, not an authorisation.",
-      "BR10. Allocation stays a capacity fact and ProjectMember stays an access fact (CLAUDE.md resource model). If OQ1 chooses Allocation, the filter reads it and never writes it; choosing one candidate never creates or implies a record of another kind."
+      "BR10. Allocation stays a capacity fact and ProjectMember stays an access fact (CLAUDE.md resource model). If OQ1 chooses Allocation, the filter reads it and never writes it; choosing one candidate never creates or implies a record of another kind.",
+      "BR8 (OQ1 resolved, E1, Nishant Sekhar 2026-09-05). A person is a stakeholder on a project if and only if they hold a live ProjectMember row on it: personId matches, removedAt is null. Project role is not a filter. Allocation, engagement naming and SOW naming do not confer stakeholder status. This is the definition the project read gate already uses (lib/projectBoundary.ts), so \"All shows my projects\" for non-exempt seats reuses it rather than adding a second notion of stakeholder."
     ],
     "domain_entities": [
       "FilterState.client and EMPTY_FILTERS (lib/types.ts:351-393; protected path)",
@@ -172,7 +167,6 @@
       "clientView (lib/clientBoundary.ts) and scenario GA1; SessionUser (lib/session.ts)"
     ],
     "open_questions": [
-      "OQ1 (the requester's own recorded question; blocks AC2, AC5, AC14-AC16). What does 'stakeholder' resolve to? Candidates and their data facts: (a) live Allocation on the project: a capacity commitment, personId optional with name fallback, date-bounded so 'live' needs a rule the code does not define for this purpose, and the resource model in CLAUDE.md keeps it deliberately separate from access; excludes a client sponsor, a PM at 0% and anyone overseeing without a percentage. (b) Named on the Engagement as leader, PM or sponsor: three free-text String @default(\"\") fields with no personId, at the engagement tier not the project tier, so it needs a name-only join (the seam the identity work closed for new paths) or a schema migration to ids, plus a walk down to every project under the engagement. (c) Holds a role scoped to the project: no such permission concept exists; OrgRole grants are global and ScopeOverride carries no roles or people. The only project-scoped role fact is ProjectMember.projectRoleId, which is documented as descriptive only, so (c) collapses into (d). (d) ProjectMember (added 2026-08-24, a week after D1; personId required; removedAt soft-end; ships Sponsor, Customer and Stakeholder project roles): the definition the read gate already uses, so under it part (2) is already true for non-exempt seats; an internal sponsor without an allocation can be recorded here. (e) Named on the SOW, recorded as a candidate in A4: Sow carries no person reference, so it is not computable today. A union is also possible; if so, which members. The recorded counter-example (a client sponsor has no allocation) does not separate the candidates: a client-role sponsor's view is governed by Person.clientScopeId and clientView, and the membership design states nobody is both a client seat and an internal member. The product owner should state the definition with one example person for whom the candidates differ.",
       "OQ2. What does 'None' show: an empty grid until a choice is made (the E3 reading used in AC1), or the person's last choice, with 'nothing chosen' only ever seen on first use? If a choice persists (part 3), parts 1 and 3 are one behaviour, not two.",
       "OQ3. Does scoped-All narrow the Client dropdown's options, the rows, or both? The control is by client and the scoping is by project; a client can have projects the person is on and projects they are not.",
       "OQ4. Does an explicit client selection also get scoped to the person's projects, or is scoping only what 'All' means? (AC5)",

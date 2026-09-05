@@ -104,11 +104,14 @@ for (const { art, file } of artifacts.values()) {
   validate(loadJson(kindSchemaPath), art.body, '$.body', errs)
   errs.forEach((e) => fail(file, 'body', e))
 
-  // Rule 2: traces exist and are not superseded.
+  // Rule 2: traces exist. A live artifact (draft or proposed) may not trace a superseded one —
+  // it should retarget to the successor. A finished one (approved, final, rejected, superseded)
+  // keeps its traces as history; rewriting them would be editing an approved record.
+  const live = art.status === 'draft' || art.status === 'proposed'
   for (const t of art.traces) {
     const target = artifacts.get(t)
     if (!target) fail(file, 'trace', `${t} does not exist`)
-    else if (target.art.status === 'superseded') fail(file, 'trace', `${t} is superseded`)
+    else if (live && target.art.status === 'superseded') fail(file, 'trace', `${t} is superseded; retarget to its successor`)
   }
   if (art.supersedes && !artifacts.has(art.supersedes)) fail(file, 'supersedes', `${art.supersedes} does not exist`)
 

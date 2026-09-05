@@ -3,20 +3,61 @@
   "kind": "implementation-plan",
   "version": 1,
   "status": "proposed",
-  "producer": { "agent": "implementation-planner", "run": "wf-axiomate-change-build-20260905-1" },
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "wf-axiomate-change-build-20260905-1"
+  },
   "created": "2026-09-05",
   "title": "Client filter defaults: the resting sentinel and its consumers now; stakeholder scope, saved-view fate and the per-person choice blocked on OQ1, OQ8 and OQ5",
-  "traces": ["ART-20260905-004", "ART-20260905-006"],
+  "traces": [
+    "ART-20260905-016",
+    "ART-20260905-006"
+  ],
   "supersedes": null,
   "approvals": [],
   "body": {
     "design_ref": "docs/adr/0002-client-filter-stakeholder-scope.md (ART-20260905-006); specification ART-20260905-004, whose 13 open questions were unanswered at its approval. Only steps that depend on no open question are planned to run; every other step is titled BLOCKED ON OQn and is re-planned in version 2 once the product owner answers. Baseline confirmed this session: npx tsc --noEmit clean; npm run validate:scenarios 211 scenarios, 192 PASS; npm run audit:contracts green.",
     "workstreams": [
-      { "name": "filter-logic", "owns": ["lib/types.ts", "lib/tree.ts", "lib/savedViews.ts"] },
-      { "name": "stakeholder-logic", "owns": ["lib/projectBoundary.ts"] },
-      { "name": "preference-storage", "owns": ["lib/workspace.ts", "lib/access.ts", "lib/actionShape.ts", "lib/config.ts", "lib/clientBoundary.ts", "app/api/workspace/route.ts"] },
-      { "name": "ui", "owns": ["components/FilterBar.tsx", "components/FiltersHeader.tsx", "components/TreeGrid.tsx", "components/IssueWorkspace.tsx"] },
-      { "name": "proof", "owns": ["scripts/scenario-validation.ts"] }
+      {
+        "name": "filter-logic",
+        "owns": [
+          "lib/types.ts",
+          "lib/tree.ts",
+          "lib/savedViews.ts"
+        ]
+      },
+      {
+        "name": "stakeholder-logic",
+        "owns": [
+          "lib/projectBoundary.ts"
+        ]
+      },
+      {
+        "name": "preference-storage",
+        "owns": [
+          "lib/workspace.ts",
+          "lib/access.ts",
+          "lib/actionShape.ts",
+          "lib/config.ts",
+          "lib/clientBoundary.ts",
+          "app/api/workspace/route.ts"
+        ]
+      },
+      {
+        "name": "ui",
+        "owns": [
+          "components/FilterBar.tsx",
+          "components/FiltersHeader.tsx",
+          "components/TreeGrid.tsx",
+          "components/IssueWorkspace.tsx"
+        ]
+      },
+      {
+        "name": "proof",
+        "owns": [
+          "scripts/scenario-validation.ts"
+        ]
+      }
     ],
     "steps": [
       {
@@ -116,7 +157,11 @@
         "done": false
       }
     ],
-    "protected_paths_touched": ["lib/types.ts", "lib/workspace.ts", "lib/access.ts"],
+    "protected_paths_touched": [
+      "lib/types.ts",
+      "lib/workspace.ts",
+      "lib/access.ts"
+    ],
     "migration": false,
     "commit_boundaries": [
       "steps 1, 2 and 9 together: the sentinel without its consumers leaves the workspace opening on an empty grid captioned 'No issues match the current filters' with the Filters chip armed - a broken intermediate, not a step",

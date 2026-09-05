@@ -14,7 +14,7 @@ here and the rules in `registry.json`. The design is
 Rules the checker enforces beyond the schemas:
 
 1. Filename matches the envelope's `id` and `kind`.
-2. Every trace id exists and is not `superseded`.
+2. Every trace id exists. A `draft` or `proposed` artifact may not trace a `superseded` one; an approved, final, rejected or superseded artifact keeps its traces as history.
 3. The producer is registered and registered to produce that kind.
 4. Evidence kinds (`change-set`, `validation-result`, `risk-assessment`, `incident-report`) are
    `draft`, `final` or `superseded`, never `approved`.
