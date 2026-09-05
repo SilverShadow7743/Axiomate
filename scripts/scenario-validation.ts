@@ -40,7 +40,7 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
-  wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, type Person,
+  wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -115,7 +115,8 @@ import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
-import { ISSUE_STATUSES, EMPTY_FILTERS, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
+import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
+import { activeFilterCount, clientPackProblem, clientRestingCaption, emptyGridReason, isActiveFilter, scopeLabelFor } from '../lib/filterPresentation'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -10377,6 +10378,111 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `${liveCount} live issues: ${i1} under P1, ${i2} under P2 (both OAPIL), ${i3} under P3 (Rival Ltd), ${ungated} directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [${issueIds(allRows)}] with P2 and P3 absent; facets [${scopedClients}] vs unscoped [${unscopedClients}]; 'OAPIL' lists [${issueIds(chosen)}]. Null person: [${issueIds(noneRows)}], facets [${facetsOf(st, none).clients.join(',')}]. Sam (ROLE_ADMIN, exempt=${isExempt(st.model, sam)}, on P1) over the unredacted state: 'All' lists [${issueIds(samRows)}], 'OAPIL' lists [${issueIds(samChosen)}]. Dev (on nothing): [${issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope))}]. isExempt and can() over ${PERMISSION_KEYS.length} keys read the same before and after for both actors; projectView not called.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
+  },
+)
+
+/*
+ * The Client facet's presentation rules — the resting caption, the Filters chip's count, the
+ * empty grid's prompt, the report's scope label and the client-pack refusal — live in
+ * lib/filterPresentation.ts (step 9 of ART-20260905-024) as pure functions, so the UI half of
+ * AC1 and the sentinel half of AC13 (ART-20260905-023) can be pinned here rather than read off
+ * a component (ART-20260905-019 condition 3). The inputs those rules take from the workspace —
+ * the tier label, the stakeholder counts — come from the real model and the real scope
+ * (resolveLabels, clientFilterScopeFor, facetsOf) over a fixture the reducer built, never from
+ * numbers typed into the scenario.
+ */
+
+/** OAPIL with one project and Priya a live member of it — the smallest view that has a scope. */
+function presentationFixture() {
+  const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+  let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+  const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+  st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Harbour task' }, now: NOW } as Action)
+  const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+  st = ok(st, { t: 'addProjectMember', projectId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+  const scope = clientFilterScopeFor(st, priyaId)
+  const labels = resolveLabels(st.model)
+  return { st, priyaId, projectId, scope, labels }
+}
+
+scenario(
+  'CD5',
+  'At rest the Client control instructs, the grid names the next action, the Filters chip counts nothing, and the counts strip still knows the full total',
+  "AC1's UI half (ART-20260905-023, BR7): clientRestingCaption over the tenant's own tier label reads '<label>: choose one' and contains neither 'All' nor the bare word 'None'; emptyGridReason at EMPTY_FILTERS, for a resolved person with a live project, names the next action ('Choose a … in the Filters row'); activeFilterCount(EMPTY_FILTERS) is 0 while the same filters with client 'Acme' count 1 and with discipline 'None' count 1, so the resting token and the 'unclassified' query are not one; isActiveFilter('client', NO_CLIENT_CHOSEN) is false, so Clear is not armed at rest; and visibleRows at EMPTY_FILTERS is empty while rowsOf still carries every issue — the 'full total' half of AC1 is a count over the tree, not over the filtered rows.",
+  () => {
+    const { st, scope, labels } = presentationFixture()
+    const label = labels.TIER_ORGANIZATION
+
+    /* The resting option: an instruction in the tenant's own words for the tier, never 'All',
+       never the Discipline facet's word. */
+    const caption = clientRestingCaption(label)
+    const captionInstructs = caption === `${label}: choose one` && !/\bAll\b/.test(caption) && !/\bNone\b/.test(caption)
+
+    /* The empty grid: the person resolved and holds a live project, so the only reason nothing
+       is listed is that nothing was chosen — and the prompt says what to do next. */
+    const stakeholderProjects = scope.memberProjectIds.size
+    const reason = emptyGridReason({ filters: EMPTY_FILTERS, personResolved: true, stakeholderProjects, clientLabel: label })
+    const namesNextAction =
+      stakeholderProjects === 1 &&
+      reason !== null && reason.startsWith(`Choose a ${label.toLowerCase()}`) && reason.includes('in the Filters row')
+
+    /* The Filters chip: nothing counts at rest; a chosen client counts; the 'unclassified'
+       query counts — 'None' is a query, the sentinel is not. */
+    const chipAtRest = activeFilterCount(EMPTY_FILTERS)
+    const chipWithClient = activeFilterCount({ ...EMPTY_FILTERS, client: 'Acme' })
+    const chipWithNone = activeFilterCount({ ...EMPTY_FILTERS, discipline: 'None' })
+    const chipCounts = chipAtRest === 0 && chipWithClient === 1 && chipWithNone === 1
+
+    /* Clear: the resting sentinel is not a deviation, so nothing arms it. */
+    const clearUnarmed = isActiveFilter('client', NO_CLIENT_CHOSEN) === false && isActiveFilter('client', 'Acme') === true
+
+    /* The counts strip: the filtered list is empty, the tree is not. */
+    const all = rowsOf(st)
+    const total = all.filter((r) => r.kind === 'issue').length
+    const listed = visibleRows(all, EMPTY_FILTERS, new Set()).length
+    const fullTotal = listed === 0 && total === 4
+
+    const good = captionInstructs && namesNextAction && chipCounts && clearUnarmed && fullTotal
+    return good
+      ? { verdict: 'PASS', actual: `Resting option reads ${JSON.stringify(caption)}; the empty grid says ${JSON.stringify(reason)} for a resolved person on ${stakeholderProjects} project; the Filters chip counts ${chipAtRest} at rest, ${chipWithClient} with client 'Acme', ${chipWithNone} with discipline 'None'; isActiveFilter('client', NO_CLIENT_CHOSEN)=false; visibleRows lists ${listed} rows while the tree carries ${total} issues.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `captionInstructs=${captionInstructs} (caption=${JSON.stringify(caption)}) namesNextAction=${namesNextAction} (reason=${JSON.stringify(reason)}, projects=${stakeholderProjects}) chipCounts=${chipCounts} (rest=${chipAtRest} client=${chipWithClient} none=${chipWithNone}) clearUnarmed=${clearUnarmed} fullTotal=${fullTotal} (listed=${listed} total=${total})`, stops: "at lib/filterPresentation.ts — the resting option reads as 'All' or 'None', the empty grid gives no next action, the chip counts the sentinel (or fails to count a real choice), or the resting sentinel arms Clear", severity: 'P1', impact: "a person opening on the resting state cannot tell why nothing is listed or what to do, sees a filter count for a choice they never made, or finds Clear armed on a view that is already at rest — AC1's teaching state collapses into an ordinary empty grid" } as const
+  },
+)
+
+scenario(
+  'CD6',
+  "A report built at rest says 'No client chosen', one built under All names the person's own projects, and a client pack refuses both",
+  "AC13's sentinel half and BR15 (ART-20260905-023): scopeLabelFor(EMPTY_FILTERS, ctx) starts with 'No client chosen' and never contains 'All clients'; scopeLabelFor with client 'All' names the person's stakeholder project and client counts — read from clientFilterScopeFor and facetsOf over the real fixture — and the organisation, and never 'All clients'; clientPackProblem(NO_CLIENT_CHOSEN) equals clientPackProblem('All'), both non-null with the one teaching message, while clientPackProblem('OAPIL') is null.",
+  () => {
+    const { st, scope } = presentationFixture()
+    const organization = st.model.organization.name
+    const stakeholderProjects = scope.memberProjectIds.size
+    const stakeholderClients = facetsOf(st, scope).clients.length
+    const ctx = { organization, stakeholderProjects, stakeholderClients }
+
+    /* At rest: the report says so, and never prints a wider scope over an empty view. */
+    const atRest = scopeLabelFor(EMPTY_FILTERS, ctx)
+    const restSaysSo = atRest.startsWith('No client chosen') && !atRest.includes('All clients')
+
+    /* Under All: the label names what the rows were computed from — the person's projects,
+       their clients, the organisation — and never 'All clients' (BR15). */
+    const underAll = scopeLabelFor(UNFILTERED, ctx)
+    const namesOwnScope =
+      stakeholderProjects === 1 && stakeholderClients === 1 &&
+      underAll.startsWith('My projects') &&
+      underAll.includes(`${stakeholderProjects} project`) && underAll.includes(`${stakeholderClients} client`) &&
+      underAll.includes(organization) && !underAll.includes('All clients')
+
+    /* A client pack: one client or nothing — the sentinel and 'All' refuse with one message. */
+    const atRestProblem = clientPackProblem(NO_CLIENT_CHOSEN)
+    const allProblem = clientPackProblem('All')
+    const chosenProblem = clientPackProblem('OAPIL')
+    const packRefuses = atRestProblem !== null && atRestProblem === allProblem && chosenProblem === null
+
+    const good = restSaysSo && namesOwnScope && packRefuses
+    return good
+      ? { verdict: 'PASS', actual: `At rest the label reads ${JSON.stringify(atRest)}; under 'All' it reads ${JSON.stringify(underAll)} from a scope of ${stakeholderProjects} project on ${stakeholderClients} client at ${organization}; clientPackProblem is ${JSON.stringify(atRestProblem)} for the sentinel and for 'All' alike, and null for 'OAPIL'.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `restSaysSo=${restSaysSo} (atRest=${JSON.stringify(atRest)}) namesOwnScope=${namesOwnScope} (underAll=${JSON.stringify(underAll)} projects=${stakeholderProjects} clients=${stakeholderClients}) packRefuses=${packRefuses} (sentinel=${JSON.stringify(atRestProblem)} all=${JSON.stringify(allProblem)} chosen=${JSON.stringify(chosenProblem)})`, stops: "at lib/filterPresentation.ts — the scope label prints 'All clients' or no resting part, or the client pack accepts the sentinel, refuses a chosen client, or teaches two different things for the sentinel and 'All'", severity: 'P1', impact: "a Daily IMS would state a scope wider than the rows it was computed from (BR15), or a client pack would be attempted from no client at all — a report nobody should trust, or a refusal nobody can act on" } as const
   },
 )
 
