@@ -2,7 +2,7 @@
   "id": "ART-20260905-007",
   "kind": "implementation-plan",
   "version": 1,
-  "status": "proposed",
+  "status": "superseded",
   "producer": {
     "agent": "implementation-planner",
     "run": "wf-axiomate-change-build-20260905-1"
