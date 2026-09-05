@@ -6,6 +6,12 @@
  * — prints exactly what would be written and nothing more, touches no data. Only once that
  * report has been read and judged safe: `... --commit` to actually write the rows.
  *
+ * NEVER re-run `--commit` against a workspace that already holds membership rows. The rows are
+ * numbered from an iteration counter and upserted by that id, so a second run rewrites the first
+ * run's rows to whoever comes out in the same position today (found 2026-09-05, six rows in
+ * production; ART-20260905-013, ADR 0004). `commitRefusal` in lib/backfillMembers.ts enforces
+ * this until the correction routes the write through the reducer.
+ *
  * Reuses `projectOf` — the same pure walk step 1 built and proved against `scopeChainOf` — so a
  * person's project is resolved identically here and in the live gate. Reimplementing that walk
  * as SQL would risk the two silently disagreeing, which is a worse failure than this script
@@ -28,6 +34,7 @@ import { projectOf } from '../lib/workspace'
 import { projectMemberToRow } from '../lib/db/map'
 import { currentTenantId } from '../lib/tenant'
 import type { ProjectMember } from '../lib/staffing'
+import { commitRefusal } from '../lib/backfillMembers'
 
 const URL = process.env.DATABASE_URL
 if (!URL) {
@@ -47,6 +54,12 @@ function defaultProjectRoleId(roleIds: string[]): string {
 async function main() {
   const tenantId = currentTenantId()
   const { state } = await loadWorkspace(tenantId)
+  const refusal = commitRefusal(Object.keys(state.projectMembers).length, COMMIT)
+  if (refusal) {
+    console.error(refusal)
+    await prisma.$disconnect()
+    process.exit(1)
+  }
   const now = new Date().toISOString()
 
   const projects = Object.values(state.nodes).filter((n) => n.kind === 'project' && !n.deletedAt)
