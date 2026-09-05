@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "axiomate/contracts/change-set",
+  "title": "Change Set body",
+  "type": "object",
+  "required": ["branch", "base", "commits", "files", "plan_ref", "self_validation", "review"],
+  "properties": {
+    "branch": { "type": "string", "pattern": "^feat/ART-[0-9]{8}-[0-9]{3}" },
+    "base": { "type": "string", "minLength": 1 },
+    "commits": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" } },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "workstream"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "workstream": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "plan_ref": { "type": "string", "pattern": "^ART-[0-9]{8}-[0-9]{3}$" },
+    "self_validation": {
+      "type": "object",
+      "required": ["commands", "passed"],
+      "properties": {
+        "commands": { "type": "array", "items": { "type": "string" } },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["findings_confirmed", "findings_open", "verdict"],
+      "properties": {
+        "findings_confirmed": { "type": "integer", "minimum": 0 },
+        "findings_open": { "type": "integer", "minimum": 0 },
+        "verdict": { "type": "string", "enum": ["clean", "fixed", "blocked"] }
+      }
+    }
+  }
+}

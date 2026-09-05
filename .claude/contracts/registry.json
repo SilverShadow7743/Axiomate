@@ -1,0 +1,183 @@
+{
+  "$comment": "Agent registry for the Axiomate operating model. Design: docs/plans/2026-09-05-agentic-operating-model-design.md Parts 3, 8 and 9. Read by scripts/contract-check.mjs.",
+  "gates": {
+    "requirement-specification": ["product-owner"],
+    "architecture-decision": ["architect"],
+    "implementation-plan": ["engineering-lead", "architect"],
+    "release-decision": ["release-approver"]
+  },
+  "evidenceKinds": ["change-set", "validation-result", "risk-assessment", "incident-report"],
+  "protectedPaths": [
+    "lib/workspace.ts",
+    "lib/types.ts",
+    "lib/access.ts",
+    "middleware.ts",
+    "prisma/schema.prisma",
+    "prisma/migrations/",
+    ".github/workflows/"
+  ],
+  "agents": [
+    {
+      "name": "intent-orchestrator",
+      "orchestra": "intent",
+      "level": 2,
+      "implementedBy": ".claude/agents/intent-orchestrator.md",
+      "produces": ["requirement-specification", "risk-assessment"],
+      "consumes": ["incident-report", "validation-result"],
+      "mayWrite": ["docs/artifacts/"]
+    },
+    {
+      "name": "requirement-analyst",
+      "orchestra": "intent",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-requirement-analysis, .claude/skills/axiomate-acceptance-criteria",
+      "produces": [],
+      "consumes": [],
+      "mayWrite": []
+    },
+    {
+      "name": "domain-architecture-analyst",
+      "orchestra": "intent",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-domain-analysis, .claude/skills/axiomate-solution-architecture, .claude/skills/axiomate-work-model, .claude/skills/axiomate-tenant-isolation",
+      "produces": ["architecture-decision"],
+      "consumes": ["requirement-specification"],
+      "mayWrite": ["docs/artifacts/", "docs/adr/"]
+    },
+    {
+      "name": "ux-placement",
+      "orchestra": "intent",
+      "level": 2,
+      "implementedBy": ".claude/agents/ui-ux-architect.md",
+      "produces": [],
+      "consumes": ["requirement-specification"],
+      "mayWrite": []
+    },
+    {
+      "name": "build-orchestrator",
+      "orchestra": "build",
+      "level": 3,
+      "implementedBy": ".claude/agents/build-orchestrator.md",
+      "produces": ["change-set"],
+      "consumes": ["requirement-specification", "architecture-decision", "implementation-plan"],
+      "mayWrite": ["docs/artifacts/", "branches:feat/"]
+    },
+    {
+      "name": "implementation-planner",
+      "orchestra": "build",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-delivery-planning, .claude/skills/axiomate-api-design, .claude/skills/axiomate-estimation",
+      "produces": ["implementation-plan"],
+      "consumes": ["requirement-specification", "architecture-decision"],
+      "mayWrite": ["docs/artifacts/", "docs/plans/"]
+    },
+    {
+      "name": "implementer",
+      "orchestra": "build",
+      "level": 4,
+      "implementedBy": ".claude/skills/axiomate-feature-builder, .claude/skills/axiomate-screen-builder, .claude/skills/axiomate-ui-design, .claude/skills/axiomate-refactoring",
+      "produces": [],
+      "consumes": ["implementation-plan"],
+      "mayWrite": ["branches:feat/ within the workstream's owns list"]
+    },
+    {
+      "name": "adversarial-reviewer",
+      "orchestra": "build",
+      "level": 1,
+      "implementedBy": ".claude/skills/axiomate-code-review, .claude/workflows/axiomate-tms-audits.js",
+      "produces": [],
+      "consumes": ["change-set", "implementation-plan"],
+      "mayWrite": []
+    },
+    {
+      "name": "proof-orchestrator",
+      "orchestra": "proof",
+      "level": 1,
+      "implementedBy": ".claude/agents/proof-orchestrator.md",
+      "produces": ["validation-result", "risk-assessment"],
+      "consumes": ["change-set", "requirement-specification"],
+      "mayWrite": ["docs/artifacts/"]
+    },
+    {
+      "name": "gate-runner",
+      "orchestra": "proof",
+      "level": 5,
+      "implementedBy": "package.json scripts: audit:*, validate:scenarios, tsc --noEmit (deterministic, not an LLM)",
+      "produces": [],
+      "consumes": [],
+      "mayWrite": ["data/validation.json"]
+    },
+    {
+      "name": "scenario-author",
+      "orchestra": "proof",
+      "level": 3,
+      "implementedBy": ".claude/skills/axiomate-scenario-testing",
+      "produces": [],
+      "consumes": ["requirement-specification"],
+      "mayWrite": ["scripts/scenario-validation.ts on the change branch"]
+    },
+    {
+      "name": "security-reviewer",
+      "orchestra": "proof",
+      "level": 1,
+      "implementedBy": ".claude/skills/axiomate-security-review, .claude/skills/axiomate-tenant-isolation",
+      "produces": [],
+      "consumes": ["change-set"],
+      "mayWrite": []
+    },
+    {
+      "name": "deviation-diagnoser",
+      "orchestra": "proof",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-deviation-diagnosis, lib/dataIntegrity.ts, scripts/integrity-audit.ts",
+      "produces": ["incident-report"],
+      "consumes": ["validation-result"],
+      "mayWrite": ["docs/artifacts/"]
+    },
+    {
+      "name": "release-orchestrator",
+      "orchestra": "release",
+      "level": 2,
+      "implementedBy": ".claude/agents/release-orchestrator.md",
+      "produces": ["release-decision"],
+      "consumes": ["validation-result", "risk-assessment", "change-set"],
+      "mayWrite": ["docs/artifacts/", "wiki/resources/platform/release-readiness.md"]
+    },
+    {
+      "name": "readiness-assessor",
+      "orchestra": "release",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-release-readiness",
+      "produces": [],
+      "consumes": ["validation-result"],
+      "mayWrite": ["wiki/resources/platform/release-readiness.md"]
+    },
+    {
+      "name": "deployment-pipeline",
+      "orchestra": "release",
+      "level": 5,
+      "implementedBy": ".github/workflows/deploy.yml (deterministic; runs only after the human environment approval)",
+      "produces": [],
+      "consumes": ["release-decision"],
+      "mayWrite": ["Azure App Service staging slot, then swap"]
+    },
+    {
+      "name": "post-release-watcher",
+      "orchestra": "release",
+      "level": 1,
+      "implementedBy": "docs/scheduled-pass.md, Azure Monitor action group, health check by response body",
+      "produces": ["incident-report"],
+      "consumes": ["release-decision"],
+      "mayWrite": ["docs/artifacts/"]
+    },
+    {
+      "name": "incident-analyst",
+      "orchestra": "release",
+      "level": 2,
+      "implementedBy": ".claude/skills/axiomate-deviation-diagnosis, .claude/skills/axiomate-risk-management",
+      "produces": ["requirement-specification"],
+      "consumes": ["incident-report"],
+      "mayWrite": ["docs/artifacts/"]
+    }
+  ]
+}

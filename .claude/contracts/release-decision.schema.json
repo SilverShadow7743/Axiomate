@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "axiomate/contracts/release-decision",
+  "title": "Release Decision body",
+  "type": "object",
+  "required": ["change_set_refs", "validation_ref", "readiness", "conditions", "deploy_window", "rollback_plan", "approved_via", "post_release_checks", "debt_item_this_cycle"],
+  "properties": {
+    "change_set_refs": { "type": "array", "items": { "type": "string", "pattern": "^ART-[0-9]{8}-[0-9]{3}$" }, "minItems": 1 },
+    "validation_ref": { "type": "string", "pattern": "^ART-[0-9]{8}-[0-9]{3}$" },
+    "readiness": { "type": "string", "enum": ["ready", "ready-with-conditions", "not-ready"] },
+    "conditions": { "type": "array", "items": { "type": "string" } },
+    "deploy_window": { "type": "string", "minLength": 1 },
+    "rollback_plan": { "type": "string", "minLength": 1 },
+    "approved_via": { "type": "string", "enum": ["github-environment", "azure-devops-environment"] },
+    "post_release_checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "debt_item_this_cycle": {
+      "type": "object",
+      "required": ["included", "reference_or_reason"],
+      "properties": {
+        "included": { "type": "boolean" },
+        "reference_or_reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

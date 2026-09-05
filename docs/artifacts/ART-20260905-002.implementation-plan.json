@@ -1,0 +1,36 @@
+{
+  "id": "ART-20260905-002",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": { "agent": "implementation-planner", "run": "manual-backfill-2026-09-05" },
+  "created": "2026-09-05",
+  "title": "Status rollup: pure logic first, then buildTree, then UI",
+  "traces": ["ART-20260905-001"],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-02",
+      "evidence": "docs/plans/2026-09-02-status-rollup-plan.md, committed 0e955ef; lib/types.ts is a protected path so the architect role applies"
+    }
+  ],
+  "body": {
+    "design_ref": "docs/plans/2026-09-02-status-rollup-design.md",
+    "workstreams": [
+      { "name": "logic", "owns": ["lib/schedule.ts", "lib/tree.ts", "lib/types.ts"] },
+      { "name": "ui", "owns": ["lib/columns.ts", "components/DetailPanel.tsx", "components/TreeGrid.tsx"] }
+    ],
+    "steps": [
+      { "n": 1, "title": "leafRollupStatus() in lib/schedule.ts beside TERMINAL_STATUSES/BLOCKED_STATUSES, provable against a hand-built Record<string, IssueRecord>", "workstream": "logic", "verify_command": "npx tsc --noEmit && npx tsx -e \"import('./lib/schedule.ts').then(m=>console.log(typeof m.leafRollupStatus))\"", "risk": "low", "done": false },
+      { "n": 2, "title": "statusRollup on ScheduleRow; blank() sets null; walkIssue() sets it next to row.status", "workstream": "logic", "verify_command": "npx tsc --noEmit && npm run validate:scenarios", "risk": "medium", "done": false },
+      { "n": 3, "title": "DetailPanel Schedule tab row, TreeGrid column case, columns.ts entry in DEFAULT_VISIBLE", "workstream": "ui", "verify_command": "npx tsc --noEmit && npm run audit:a11y", "risk": "low", "done": false }
+    ],
+    "protected_paths_touched": ["lib/types.ts"],
+    "migration": false,
+    "commit_boundaries": ["steps 1 and 2 together: leafRollupStatus un-wired into buildTree has no real proof", "step 3 alone"],
+    "highest_regression_risk_step": 2,
+    "rollback": "Revert the two commits; no schema or data change to undo"
+  }
+}

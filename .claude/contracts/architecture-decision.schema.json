@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "axiomate/contracts/architecture-decision",
+  "title": "Architecture Decision body",
+  "type": "object",
+  "required": ["context", "decision", "alternatives", "consequences", "affects", "principles_checked", "adr_path"],
+  "properties": {
+    "context": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "minLength": 1 },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["option", "rejected_because"],
+        "properties": {
+          "option": { "type": "string", "minLength": 1 },
+          "rejected_because": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "consequences": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "affects": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "principles_checked": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["tenant-isolation", "pure-reducer", "attribution-as-parameter", "derived-never-stored"] }
+    },
+    "adr_path": { "type": "string", "pattern": "^docs/adr/[0-9]{4}-[a-z0-9-]+\\.md$" }
+  }
+}

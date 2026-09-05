@@ -1,0 +1,57 @@
+{
+  "id": "ART-20260905-003",
+  "kind": "architecture-decision",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "domain-architecture-analyst",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp"
+  },
+  "created": "2026-09-05",
+  "title": "Adopt a four-orchestra agentic operating model with file-based contracts",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-05",
+      "evidence": "Stated by the CEO in the Claude Code session that produced the design (\"Approved\", 2026-09-05), after reading the design summary and the ADR"
+    }
+  ],
+  "body": {
+    "context": "Thirty-two axiomate-* skills, two agents and one adversarial-review workflow exist, but nothing sequences them with contracts, records their outputs for the next agent, or states which may act versus recommend. The founder is the only human at every gate. The brief asked for seven orchestras on an ASP.NET stack that is not the one being built.",
+    "decision": "Four orchestras (Intent, Build, Proof, Release) over the existing design → plan → build → proof → gate → deploy loop. Agents exchange artifact ids; artifacts are JSON files under docs/artifacts validated by scripts/contract-check.mjs against .claude/contracts. Five human gates held by role. No agent merges to master, deploys, or approves its own artifact. No new infrastructure in Phase 1.",
+    "alternatives": [
+      {
+        "option": "Seven orchestras as proposed (Product, Architecture, UX, Engineering, Quality, DevOps, Operations)",
+        "rejected_because": "Product, Architecture and UX consume the same evidence and produce one approved specification; three handoffs for a one-owner product. Deployment is a pipeline, not an agent. Continuous improvement as its own orchestra gives debt its own backlog to be ignored in."
+      },
+      {
+        "option": "A message bus and orchestration service from the start",
+        "rejected_because": "Nothing measured yet justifies it; git plus files gives versioning, attribution, diff and a CI-enforceable contract check for free. The bus is Phase 3, carrying artifact ids over the same files."
+      },
+      {
+        "option": "Design for the ASP.NET Core / Azure DevOps stack in the brief",
+        "rejected_because": "AxiomateV1 (C#) has not been pushed since March 2026; the live work is Next.js on GitHub Actions. The design is host-agnostic so the choice can be revisited without redesign."
+      }
+    ],
+    "consequences": [
+      "Every commit on master should trace to an artifact id; the pipeline gains one additive step (audit:contracts)",
+      "Artifacts add ceremony; the risk is that they are written and not read, which the Phase 1 success metric (every commit traces to an artifact) is designed to expose",
+      "All five gates are held by the same person today; the model makes that visible and hands over by config, not by redesign",
+      "The specialists remain the existing skills, so nothing is duplicated and nothing existing is invalidated"
+    ],
+    "affects": [
+      ".claude/agents/",
+      ".claude/contracts/",
+      ".claude/workflows/axiomate-change.js",
+      "docs/artifacts/",
+      "docs/adr/",
+      "scripts/contract-check.mjs",
+      ".github/workflows/deploy.yml"
+    ],
+    "principles_checked": [],
+    "adr_path": "docs/adr/0001-agentic-operating-model.md"
+  }
+}

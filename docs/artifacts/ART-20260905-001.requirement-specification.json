@@ -1,0 +1,49 @@
+{
+  "id": "ART-20260905-001",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": { "agent": "intent-orchestrator", "run": "manual-backfill-2026-09-05" },
+  "created": "2026-09-05",
+  "title": "Status rollup: a computed indicator of what a parent issue's children are doing",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-02",
+      "evidence": "docs/plans/2026-09-02-status-rollup-design.md (Status: approved 2026-09-02, two AskUserQuestion decisions recorded)"
+    }
+  ],
+  "body": {
+    "problem": "Issue.parentId builds a real sub-issue hierarchy (134 issues imported from the OAPIL/SLG WBS) but nothing tells a reader what the children of a parent issue are doing without opening each one. In production one parent (OAPIL-091, In Progress) has its only child already closed.",
+    "source": {
+      "reference": "docs/plans/2026-09-02-status-rollup-design.md; live production data checked 2026-09-02 (29 parent issues)",
+      "evidence_level": "E1"
+    },
+    "request_kind": "feature",
+    "priority": "P2",
+    "scope_in": [
+      "A computed statusRollup value per issue with children: Blocked if any leaf is blocked, In Progress if any leaf is active, Closed if every leaf is terminal, null for structural nodes and leaves",
+      "Recursive over descendants, so a grandchild's Task status is read rather than a stale intermediate Deliverable status",
+      "Shown in the detail panel Schedule tab and as a default-visible TreeGrid column"
+    ],
+    "scope_out": [
+      "Propagating status between parent and child in either direction: Issue.status stays a person-attested fact",
+      "Storing the rollup: it is derived, never persisted"
+    ],
+    "acceptance_criteria": [
+      { "id": "AC1", "given": "a parent issue whose leaves are all in a terminal status", "when": "the tree is built", "then": "the parent's statusRollup is Closed regardless of the parent's own status" },
+      { "id": "AC2", "given": "a parent with at least one leaf in a blocked status", "when": "the tree is built", "then": "statusRollup is Blocked" },
+      { "id": "AC3", "given": "an issue with no children, or a structural node", "when": "the tree is built", "then": "statusRollup is null and nothing is rendered for it" },
+      { "id": "AC4", "given": "a Deliverable whose child Task is Closed while the Deliverable itself is Open", "when": "the tree is built", "then": "the grandparent's rollup reads Closed, proving recursion over leaves not direct children" }
+    ],
+    "business_rules": [
+      "Derived values are never stored as fact: the rollup is computed in buildTree() and never written",
+      "TERMINAL_STATUSES and BLOCKED_STATUSES in lib/schedule.ts are the single source for the status families"
+    ],
+    "domain_entities": ["Issue", "Issue.parentId", "IssueStatus", "ScheduleRow"],
+    "open_questions": []
+  }
+}

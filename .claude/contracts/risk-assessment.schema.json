@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "axiomate/contracts/risk-assessment",
+  "title": "Risk Assessment body",
+  "type": "object",
+  "required": ["subject_ref", "risks", "overall", "requires_human", "reasons"],
+  "properties": {
+    "subject_ref": { "type": "string", "pattern": "^ART-[0-9]{8}-[0-9]{3}$" },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "likelihood", "impact", "mitigation", "owner"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^R[0-9]+$" },
+          "description": { "type": "string", "minLength": 1 },
+          "likelihood": { "type": "string", "enum": ["low", "medium", "high"] },
+          "impact": { "type": "string", "enum": ["low", "medium", "high"] },
+          "mitigation": { "type": "string" },
+          "owner": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "overall": { "type": "string", "enum": ["low", "medium", "high"] },
+    "requires_human": { "type": "boolean" },
+    "reasons": { "type": "array", "items": { "type": "string" } }
+  }
+}

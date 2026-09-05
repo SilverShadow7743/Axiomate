@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "axiomate/contracts/validation-result",
+  "title": "Validation Result body",
+  "type": "object",
+  "required": ["change_set_ref", "gates", "scenarios", "security", "verdict", "conditions"],
+  "properties": {
+    "change_set_ref": { "type": "string", "pattern": "^ART-[0-9]{8}-[0-9]{3}$" },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "command", "result", "evidence"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "command": { "type": "string", "minLength": 1 },
+          "result": { "type": "string", "enum": ["pass", "fail", "skipped"] },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "scenarios": {
+      "type": "object",
+      "required": ["passed", "partial", "not_implemented", "regressed"],
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "not_implemented": { "type": "integer", "minimum": 0 },
+        "regressed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["reviewer", "findings"],
+      "properties": {
+        "reviewer": { "type": "string" },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["severity", "summary", "file"],
+            "properties": {
+              "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "file": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "verdict": { "type": "string", "enum": ["pass", "conditional", "fail"] },
+    "conditions": { "type": "array", "items": { "type": "string" } }
+  }
+}
