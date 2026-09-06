@@ -518,7 +518,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "74 of 74 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-09-01. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "74 of 74 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-09-06. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -598,7 +598,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-09-01: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-09-06: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."
@@ -2241,6 +2241,16 @@
       "actual": "Nina (ROLE_CLIENT_USER): can(evidence.add)={\"allowed\":false,\"reason\":\"Attach evidence is not something Client User can do here.\"}. Priya (ROLE_TECHNICAL) before staffing: can(evidence.add).allowed=true, isStaffedOn(Harbour)=false; after staffing: isStaffedOn(Harbour)=true, recordInboundMail against Harbour's issue → error=none, logged=true. Nina's bare recordInboundMail against Quay's issue (no route, no permission check possible — ACTION_PERMISSIONS.recordInboundMail is null) → error=\"Nina NoAccess is not staffed on this project.\", no InboundMail row written.",
       "stops": "",
       "severity": "P0",
+      "impact": "none"
+    },
+    {
+      "id": "CD14",
+      "title": "A project-less issue (parented directly under a client, skipping project) requires internal.view for recordInboundMail, closing F1 of ART-20260906-034",
+      "expected": "F1 of the proof result ART-20260906-034 against ART-20260906-030. Fixture: an issue created directly under OAPIL (the client node), so canParent('issue','client') holds and projectOf returns null for it -- the exact condition app/api/mail/file/route.ts's new project-less branches (both modes) and the create-mode parent check key off. Lena holds ROLE_CLIENT_LEAD: evidence.add granted (the permission the route's first check already lets through) but internal.view refused -- the ingredient the original bypass needed and the new gate now demands. Priya holds ROLE_TECHNICAL: internal.view granted, so the same project-less issue is not refused for her.",
+      "verdict": "PASS",
+      "actual": "projectOf(looseIssue)=null (true). Lena (ROLE_CLIENT_LEAD): can(evidence.add).allowed=true, can(internal.view).allowed=false -- holds the permission the old route checked, refused by the new one. Priya (ROLE_TECHNICAL): can(internal.view).allowed=true -- the project-less branch does not refuse her.",
+      "stops": "",
+      "severity": "P1",
       "impact": "none"
     }
   ]

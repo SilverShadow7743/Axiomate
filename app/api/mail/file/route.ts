@@ -85,6 +85,20 @@ export async function POST(req: Request) {
   const now = new Date().toISOString()
 
   if (body.mode === 'create') {
+    /* A parent with no project ancestor (the tier chain permits an issue directly under a
+     * client or engagement) has no staffing fact to check `recordInboundMail` against — see
+     * the matching gate below on the attach path. Requiring `internal.view` here keeps a
+     * client seat, who legitimately holds `evidence.add`, from filing mail on a structural
+     * node outside any client's own scope (ART-20260906-030's F1). */
+    if (!projectOf(state, body.parentId ?? '')) {
+      const mayInternal = can(state.model, session.actor, 'internal.view')
+      if (!mayInternal.allowed) {
+        return NextResponse.json(
+          { ok: false, error: 'This scope has no project, so only an internal seat may file mail here.' },
+          { status: 403 },
+        )
+      }
+    }
     const made = await persistActions(tenantId, session.actor, [
       { t: 'create', parentId: body.parentId, kind: 'issue', draft: mapped.createDraft, now } as never as SubmittedAction,
     ])
@@ -110,6 +124,14 @@ export async function POST(req: Request) {
         { status: 403 },
       )
     }
+  } else if (!can(state.model, session.actor, 'internal.view').allowed) {
+    /* No project to check staffing against (ART-20260906-030's F1) -- the same rule as the
+     * create-mode branch above, so a client seat's `evidence.add` grant cannot reach a
+     * structural issue outside any client's own scope. */
+    return NextResponse.json(
+      { ok: false, error: 'This issue has no project, so only an internal seat may file mail on it.' },
+      { status: 403 },
+    )
   }
   const attached = await persistActions(tenantId, session.actor, [
     { t: 'recordInboundMail', ...mapped.inboundMailFields, issueId: target.id, refusalReason: null, now } as never as Action,

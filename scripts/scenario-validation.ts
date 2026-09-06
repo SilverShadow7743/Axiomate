@@ -11093,6 +11093,58 @@ scenario(
   },
 )
 
+/*
+ * ART-20260906-034's F1: the proof-orchestrator that verified CD13 independently re-derived the
+ * fix and found a residual gap CD13's own fixture never exercised, because both its issues sit
+ * under a project. `canParent` permits an issue directly under a client (or engagement), skipping
+ * project entirely — `projectOf` then returns null for it, so neither the route's isStaffedOn
+ * check nor the reducer's projectScopeOf case has anything to check staffing against. Since
+ * ROLE_CLIENT_SPONSOR and ROLE_CLIENT_LEAD both carry evidence.add, a client seat holding it could
+ * reach recordInboundMail on a project-less issue outside any client's own scope — narrower than
+ * the original bypass (evidence.add is required at all now), but the same class of hole. The fix
+ * requires internal.view whenever the resolved project (the parent, for create mode; the target
+ * issue, for attach) is null, mirroring the internal/client boundary the client-filter work
+ * (ART-20260905-023) already established. Route wiring in app/api/mail/file/route.ts is verified
+ * by reading its source; this scenario proves the two conditions that wiring depends on.
+ */
+
+scenario(
+  'CD14',
+  'A project-less issue (parented directly under a client, skipping project) requires internal.view for recordInboundMail, closing F1 of ART-20260906-034',
+  "F1 of the proof result ART-20260906-034 against ART-20260906-030. Fixture: an issue created directly under OAPIL (the client node), so canParent('issue','client') holds and projectOf returns null for it -- the exact condition app/api/mail/file/route.ts's new project-less branches (both modes) and the create-mode parent check key off. Lena holds ROLE_CLIENT_LEAD: evidence.add granted (the permission the route's first check already lets through) but internal.view refused -- the ingredient the original bypass needed and the new gate now demands. Priya holds ROLE_TECHNICAL: internal.view granted, so the same project-less issue is not refused for her.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'issue', draft: { name: 'Structural note' }, now: NOW } as Action)
+    const looseIssueId = Object.values(st.issues).find((i) => i.subject === 'Structural note')!.id
+    const hasNoProject = projectOf(st, looseIssueId) === null
+
+    st = ok(st, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Lena ClientLead', roleIds: ['ROLE_CLIENT_LEAD'], email: 'lena@oapil.example', clientScopeId: oapilId },
+      now: NOW,
+    } as Action)
+    const lenaId = Object.values(st.model.people).find((p) => p.name === 'Lena ClientLead')!.id
+    const lena: Actor = { id: lenaId, name: 'Lena ClientLead' }
+
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    const lenaEvidence = can(st.model, lena, 'evidence.add')
+    const lenaInternal = can(st.model, lena, 'internal.view')
+    const priyaInternal = can(st.model, priya, 'internal.view')
+
+    const hasTheOldBypassIngredient = lenaEvidence.allowed === true
+    const lacksTheNewGate = lenaInternal.allowed === false
+    const internalSeatPasses = priyaInternal.allowed === true
+
+    const good = hasNoProject && hasTheOldBypassIngredient && lacksTheNewGate && internalSeatPasses
+    return good
+      ? { verdict: 'PASS', actual: `projectOf(looseIssue)=null (${hasNoProject}). Lena (ROLE_CLIENT_LEAD): can(evidence.add).allowed=${lenaEvidence.allowed}, can(internal.view).allowed=${lenaInternal.allowed} -- holds the permission the old route checked, refused by the new one. Priya (ROLE_TECHNICAL): can(internal.view).allowed=${priyaInternal.allowed} -- the project-less branch does not refuse her.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `hasNoProject=${hasNoProject} lenaEvidence.allowed=${lenaEvidence.allowed} lenaInternal.allowed=${lenaInternal.allowed} priyaInternal.allowed=${priyaInternal.allowed}`, stops: "canParent('issue','client'), or the internal.view distinction between a client-role and an internal-role actor", severity: 'P1', impact: 'a client seat holding evidence.add could attach fabricated mail to a project-less issue outside any client\'s own scope -- the narrower residual of the bypass this correction closes' } as const
+  },
+)
+
 /* ================================================================== *
  * RD1's async half — the PDF renderers.
  *

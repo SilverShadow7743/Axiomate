@@ -1,0 +1,76 @@
+{
+  "id": "ART-20260906-033",
+  "kind": "change-set",
+  "version": 1,
+  "status": "superseded",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "wf-axiomate-change-security-fix-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "recordInboundMail gated on evidence.add and project staffing on feat/ART-20260906-030 per plan ART-20260906-032; no confirmed findings this pass; verdict clean",
+  "traces": [
+    "ART-20260906-030",
+    "ART-20260906-032"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-030",
+    "base": "2630e91547f821629ee74883668ec49614b847b3",
+    "commits": [
+      "0f85ff4d6bc5850e707355f8ae75fb6493cf2ff8",
+      "9e1d9608180a8d254a8b14d88b2ad4ee6c7ef32c"
+    ],
+    "files": [
+      {
+        "path": "lib/workspace.ts",
+        "workstream": "reducer"
+      },
+      {
+        "path": "app/api/mail/file/route.ts",
+        "workstream": "route"
+      },
+      {
+        "path": "scripts/scenario-validation.ts",
+        "workstream": "proof"
+      },
+      {
+        "path": "data/validation.json",
+        "workstream": "proof"
+      }
+    ],
+    "plan_ref": "ART-20260906-032",
+    "self_validation": {
+      "commands": [
+        "Step 1 (commit 0f85ff4, reducer workstream) verify_command re-run against current HEAD 9e1d960: the plan's literal verify_command was malformed (a no-op tsx -e import joined to validate:scenarios with ';' rather than '&&'); ran the real equivalent instead -- npx tsc --noEmit -- exit 0; grep -n \"case 'recordInboundMail'\" lib/workspace.ts -- present, guarded as `a.issueId ? one(a.issueId) : null` (recordInboundMail.issueId is the one nullable issueId among this group of cases, so the plan's literal `one(a.issueId)` would not compile)",
+        "Step 4 (commit 0f85ff4, proof workstream) verify_command re-run against current HEAD 9e1d960: npx tsc --noEmit -- exit 0; npm run validate:scenarios -- CD13 PASS at P0 ('recordInboundMail is gated on evidence.add and project staffing wherever it is reached, and a correctly-permissioned, correctly-staffed actor is unaffected'), 205 PASS / 17 PARTIAL / 1 NOT IMPLEMENTED / 1 NOT TESTABLE, 224 scenarios total -- identical pass/fail profile to the pre-change baseline plus CD13 newly passing, no regression. The run's write to data/validation.json only touched two unrelated 'recorded <date>' timestamp strings (persistence/idempotency scenarios re-run today) and was reverted with `git checkout -- data/validation.json` afterward so the working tree matches the committed baseline exactly.",
+        "Step 2 (commit 9e1d960, route workstream) verify_command re-run against current HEAD: npx tsc --noEmit -- exit 0; npm run audit:tenancy -- PASS (126 tenant-scoped Prisma calls checked, every one names a tenant; 34 row mappers all stamp tenantId)",
+        "Step 3 (commit 9e1d960, route workstream, same commit boundary as step 2 per the plan) verify_command re-run against current HEAD: npx tsc --noEmit -- exit 0",
+        "npm run audit:contracts -- run after writing this artifact, per instruction: 30 artifact(s) valid before this write"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 0,
+      "findings_open": 0,
+      "verdict": "clean",
+      "findings": [],
+      "notes": [
+        "Input to this review carried an empty CONFIRMED FINDINGS list and all four of plan ART-20260906-032's steps already verified true across the four prior step results (n=1, n=4, n=2, n=3, committed as 0f85ff4 and 9e1d960). Nothing was fixed in this pass because nothing was confirmed as a finding to fix in it.",
+        "The vulnerability this plan exists to close -- recordInboundMail reachable through app/api/mail/file/route.ts with no evidence.add permission check and no project-staffing check on the attach path -- is closed by both a route-level fix (steps 2+3, commit 9e1d960: can(state.model, session.actor, 'evidence.add') gates both modes; isStaffedOn gates the attach branch against the target's own project) and a reducer-level defense-in-depth fix (steps 1+4, commit 0f85ff4: projectScopeOf now resolves a scope for recordInboundMail, so apply() itself refuses an unstaffed actor even if some other, currently nonexistent, call site ever reached this action type without going through the route). CD13 proves all of AC1-AC5: no permission refuses both modes, permission-without-staffing refuses attach, permission-and-staffing succeeds unchanged, and a bare recordInboundMail through apply() with no staffing is refused by projectScopeOf directly.",
+        "The plan's step 1 deviated from its literal wording (`one(a.issueId)`) because recordInboundMail.issueId is typed `string | null` -- the only nullable issueId among the reducer cases this one resembles -- and `one()` takes a `string`; the guard `a.issueId ? one(a.issueId) : null` was necessary for the code to compile at all, not a scope change. This was already recorded and verified in step 1's own result and is restated here rather than treated as a new finding.",
+        "The machine intake path (app/api/intake/route.ts) also calls recordInboundMail with real issueIds under INTAKE_ACTOR; isStaffedOn exempts any 'machine:'-prefixed actor unconditionally (lib/access.ts isExempt/isMachineActor), so the new staffing gate does not regress intake. This was verified in step 1's result and reconfirmed here by re-reading lib/access.ts's exemption logic against the current HEAD -- unchanged.",
+        "Files list matches plan ART-20260906-032's workstream owns lists exactly (reducer: lib/workspace.ts; route: app/api/mail/file/route.ts; proof: scripts/scenario-validation.ts, data/validation.json); no unowned files were committed on this branch's two commits, so no 'unowned' entries are needed in files[] for this change-set, unlike ART-20260906-028's precedent.",
+        "audit:persistence and the live persistence/idempotency Postgres runs recorded in data/validation.json were not re-run in this pass (no service-container database reachable in this environment, consistent with prior change-sets on this repository); this change-set does not stand in for that CI run.",
+        "This change-set artifact file itself was not committed, per instruction. No status was set to 'approved' on any artifact, nothing was merged to master, no production settings were touched, and scripts/backfill-project-members.ts was not run."
+      ]
+    },
+    "working_tree_not_included": [
+      "data/discussion.json (unstaged, out of scope, pre-existing modification present before and after this run)",
+      "data/persistence.json (unstaged, out of scope, pre-existing modification present before and after this run)",
+      "docs/artifacts/ART-20260906-033.change-set.json (this artifact -- not committed, per instruction)",
+      "untracked: .claude/jobs/, .claude/settings.json"
+    ]
+  }
+}
