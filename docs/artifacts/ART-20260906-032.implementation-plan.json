@@ -1,0 +1,92 @@
+{
+  "id": "ART-20260906-032",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-security-fix-1"
+  },
+  "created": "2026-09-06",
+  "title": "Gate recordInboundMail on evidence.add and project staffing",
+  "traces": [
+    "ART-20260906-030"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "Architect approval stated in the Claude Code session (\"Approved\", 2026-09-06), following the plan presentation for the recordInboundMail authorization bypass fix. Touches lib/workspace.ts (protected: adding a case to projectScopeOf, additive only); no migration."
+    }
+  ],
+  "body": {
+    "design_ref": "None -- no open design question; the fix mirrors an existing, working pattern (app/api/documents/route.ts's can() check) rather than introducing a new one.",
+    "workstreams": [
+      {
+        "name": "reducer",
+        "owns": [
+          "lib/workspace.ts"
+        ]
+      },
+      {
+        "name": "route",
+        "owns": [
+          "app/api/mail/file/route.ts"
+        ]
+      },
+      {
+        "name": "proof",
+        "owns": [
+          "scripts/scenario-validation.ts",
+          "data/validation.json"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "Add case 'recordInboundMail': return one(a.issueId) to projectScopeOf in lib/workspace.ts, beside the existing addEvidence/addNote/etc. cases it already resembles (same one-issue-id shape).",
+        "workstream": "reducer",
+        "verify_command": "npx tsc --noEmit && npx tsx -e \"import('./lib/workspace.ts').then(async m=>{const {initWorkspace}=m as any; })\" ; npm run validate:scenarios",
+        "risk": "medium",
+        "done": false
+      },
+      {
+        "n": 2,
+        "title": "In app/api/mail/file/route.ts, after loading state (so state.model is available) and before either mode branch, check can(state.model, session.actor, 'evidence.add'); return 403 with a clear message on refusal. Import can from '@/lib/access'.",
+        "workstream": "route",
+        "verify_command": "npx tsc --noEmit && npm run audit:tenancy",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 3,
+        "title": "In the attach-mode branch (after resolving target and confirming it exists), check the actor is staffed on target's project the same way app/api/workspace/route.ts does (isStaffedOn / the equivalent helper already imported there), returning 403 on refusal, before calling persistActions.",
+        "workstream": "route",
+        "verify_command": "npx tsc --noEmit",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 4,
+        "title": "Add scenario(s) to scripts/scenario-validation.ts (module-level test, following the CD-prefix style already used for the client-filter work, or a new short prefix for this fix) proving AC1-AC5: no permission -> refused on both modes; permission but not staffed -> refused on attach; permission and staffed -> succeeds unchanged; a bare recordInboundMail action through apply() with no staffing -> refused by projectScopeOf directly, independent of the route.",
+        "workstream": "proof",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "medium",
+        "done": false
+      }
+    ],
+    "protected_paths_touched": [
+      "lib/workspace.ts"
+    ],
+    "migration": false,
+    "commit_boundaries": [
+      "Steps 1 and 4 together: the reducer's own staffing gate and the scenario proving it are one unit -- a gate nothing proves is a hope, not a gate.",
+      "Steps 2 and 3 together, as their own commit: the route-level permission and staffing checks. Kept separate from step 1's commit because the route fix alone already closes the vulnerability end to end; the reducer-level gate is defense in depth and reverts independently if it ever needs to."
+    ],
+    "highest_regression_risk_step": 3,
+    "rollback": "Revert the route-level commit (steps 2+3) alone reopens the route to any signed-in user again, so it should only be reverted alongside re-disabling the endpoint entirely, not on its own. Revert the reducer commit (steps 1+4) alone is always safe: it only adds a new refusal path for an action type nothing else currently constructs through a legitimate channel other than this route and the machine intake path (which never carries a human actor and is unaffected)."
+  }
+}

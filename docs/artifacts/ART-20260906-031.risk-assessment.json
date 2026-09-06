@@ -1,0 +1,51 @@
+{
+  "id": "ART-20260906-031",
+  "kind": "risk-assessment",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-security-fix-1"
+  },
+  "created": "2026-09-06",
+  "title": "Risk assessment: recordInboundMail authorization bypass",
+  "traces": [
+    "ART-20260906-030"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "subject_ref": "ART-20260906-030",
+    "risks": [
+      {
+        "id": "R1",
+        "description": "This vulnerability is live in production today (verified against the branch that already merged to master). Every day it remains unfixed, any signed-in user -- including a client seat -- can inject fabricated correspondence onto any issue in the tenant.",
+        "likelihood": "medium",
+        "impact": "high",
+        "mitigation": "Fix on its own branch through the standard plan-build-proof loop, merge to master promptly; note that master merging does not itself deploy (the pipeline's deploy job is manual-dispatch only), so a deliberate deploy step is still needed to actually close the exposure in the running production app.",
+        "owner": "Nishant Sekhar"
+      },
+      {
+        "id": "R2",
+        "description": "The fix touches lib/workspace.ts (a protected path: adding a case to projectScopeOf), which the operating model requires the architect to approve before implementation starts.",
+        "likelihood": "low",
+        "impact": "low",
+        "mitigation": "Present the plan for architect approval before building; the change to projectScopeOf is additive (one new switch case) and cannot affect any other action type's staffing resolution.",
+        "owner": "Nishant Sekhar"
+      },
+      {
+        "id": "R3",
+        "description": "Adding a staffing check to attach mode could refuse a legitimate use the product owner did not anticipate -- e.g. an engagement leader filing mail on a project they lead but hold no explicit ProjectMember row for yet (a gap the automatic-membership work, ART-20260905-010, is designed to close).",
+        "likelihood": "low",
+        "impact": "medium",
+        "mitigation": "AC4 requires no regression for a correctly-staffed actor; if the fix surfaces a real legitimate case that fails, that is itself evidence for prioritising ART-20260905-010, not a reason to leave this route unauthorised.",
+        "owner": "Nishant Sekhar"
+      }
+    ],
+    "overall": "high",
+    "requires_human": true,
+    "reasons": [
+      "The fix touches a protected path and needs the architect gate before implementation starts, per the operating model's own rule."
+    ]
+  }
+}

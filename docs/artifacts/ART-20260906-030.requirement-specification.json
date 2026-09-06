@@ -1,0 +1,86 @@
+{
+  "id": "ART-20260906-030",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-security-fix-1"
+  },
+  "created": "2026-09-06",
+  "title": "Fix: recordInboundMail is reachable by any signed-in person, bypassing permission and project-staffing",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "Stated in the Claude Code session (\"Yes fix it\", 2026-09-06) in direct response to the confirmed high-severity finding from the industry-standard review workflow. Live in production."
+    }
+  ],
+  "body": {
+    "problem": "app/api/mail/file/route.ts's POST handler (mode: 'attach', and the recordInboundMail call in mode: 'create') calls persistActions(tenantId, session.actor, [{t:'recordInboundMail', ...}]) directly. It checks only identityEstablished() && session.verified -- never can(). ACTION_PERMISSIONS.recordInboundMail is null (lib/access.ts:604), documented as safe only because the action was assumed reachable exclusively by a machine actor through app/api/workspace's KINDS allowlist -- a path this route does not use. Separately, lib/workspace.ts's projectScopeOf (the reducer's independent project-staffing gate) has no case for 'recordInboundMail' and falls to the default: return null branch, so the staffing loop in apply() never runs for it either. Both of the app's independent authorization layers are bypassed by the same route, verified directly against the source on 2026-09-06 during the industry-standard review workflow, then independently re-verified line by line before this specification was written.",
+    "source": {
+      "reference": "app/api/mail/file/route.ts:19-104 (no can() call anywhere in the file); lib/access.ts:604 (recordInboundMail: null, with its own comment stating the machine-only assumption); lib/workspace.ts:838-888 (projectScopeOf's switch, no case for recordInboundMail, falls to default: return null); lib/workspace.ts:1941-1949 (the staffing loop, skipped when projectScopeOf returns null); confirmed working comparison at app/api/documents/route.ts:138 (can(state.model, session.actor, 'document.upload')) which this route lacks entirely.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P0",
+    "scope_in": [
+      "app/api/mail/file/route.ts checks can(state.model, session.actor, 'evidence.add') before calling persistActions with recordInboundMail, for both the create and attach modes, returning 403 on refusal",
+      "The route additionally checks the actor is staffed on the target issue's project (isStaffedOn against the resolved project, or via the same convention app/api/workspace/route.ts uses) before attaching to an existing issue in mode: 'attach', returning 403 on refusal",
+      "lib/workspace.ts's projectScopeOf gains a case 'recordInboundMail': return one(a.issueId), so the reducer's own independent staffing gate also covers this action type regardless of which endpoint reaches it -- defense in depth, not a replacement for the route-level check",
+      "A scenario proving: (a) an actor without evidence.add is refused on both create and attach; (b) an actor with evidence.add but not staffed on the target issue's project is refused on attach; (c) a correctly-permissioned, correctly-staffed actor still succeeds exactly as today"
+    ],
+    "scope_out": [
+      "Changing recordInboundMail's ACTION_PERMISSIONS entry itself (stays null; the machine-written intake path is unaffected and continues to reach it without a human permission check, which is correct for that path)",
+      "Any change to the mail-file UI, the create-mode issue-creation permission (already covered by the existing 'create' action's own permission check), or the dedupe-by-internetMessageId logic",
+      "Rate limiting or logging additions (separate findings from the same review, not required to close this vulnerability)"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a signed-in actor who does not hold evidence.add",
+        "when": "they POST /api/mail/file with mode: 'attach' and any issueId",
+        "then": "the request is refused with 403 and no InboundMail row is written"
+      },
+      {
+        "id": "AC2",
+        "given": "a signed-in actor who does not hold evidence.add",
+        "when": "they POST /api/mail/file with mode: 'create'",
+        "then": "the request is refused with 403 before the issue-creation action runs and no InboundMail row is written"
+      },
+      {
+        "id": "AC3",
+        "given": "an actor who holds evidence.add but is not staffed on the target issue's project",
+        "when": "they POST /api/mail/file with mode: 'attach' and that issue's id",
+        "then": "the request is refused with 403 and no InboundMail row is written"
+      },
+      {
+        "id": "AC4",
+        "given": "an actor who holds evidence.add and is staffed on the target issue's project",
+        "when": "they POST /api/mail/file in either mode with a real message from their own connected mailbox",
+        "then": "the mail files exactly as it does today -- no regression"
+      },
+      {
+        "id": "AC5",
+        "given": "any action of type recordInboundMail reaching apply() through any path, not only this route",
+        "when": "the actor is not staffed on the resolved issue's project",
+        "then": "the reducer itself refuses it via projectScopeOf, independent of whichever route called persistActions"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this finding). recordInboundMail reached by a human session must be gated on evidence.add and on project staffing, exactly as every other human-reachable write action is. The machine-written path (intake) is unaffected: it never sets a human session.actor and is unaffected by adding a route-level can() check that only runs when session.verified is true.",
+      "BR2 (E1, this finding). The reducer's project-staffing gate (projectScopeOf) is meant to cover every action type that resolves to a project, per its own module comment ('a second, independent gate ... applies regardless of how capability itself gets decided'); recordInboundMail was an unintentional gap in that switch, not a deliberate exclusion -- unlike updateNote/removeNote, which the same comment names as a deliberate case where need resolves to null but the project gate still applies."
+    ],
+    "domain_entities": [
+      "InboundMail",
+      "Issue",
+      "Actor",
+      "ACTION_PERMISSIONS",
+      "projectScopeOf"
+    ],
+    "open_questions": []
+  }
+}
