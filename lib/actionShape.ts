@@ -616,6 +616,8 @@ const SHAPES = {
     mode: req(oneOf(new Set(NOTIFICATION_MODES))),
     now,
   },
+  /** The arm checks that `clientId` names a client node in this tenant's tree. */
+  setClientChoice: { personId: req(id), clientId: req(id), now },
   markNotificationDelivery: {
     id: req(id),
     delivery: req(oneOf(new Set(['delivered', 'pending', 'failed']))),

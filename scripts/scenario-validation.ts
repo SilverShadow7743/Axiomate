@@ -41,6 +41,7 @@ import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
+  initModel, mergeModel,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -55,7 +56,7 @@ import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGr
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
-import { actionProblem } from '../lib/actionShape'
+import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/assignment'
 import { availabilityFor, redactLeaveReasons } from '../lib/availability'
@@ -10562,6 +10563,110 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `Saved at rest, the view stores client=${JSON.stringify(atRestRec?.filters.client)} and the arm says ${JSON.stringify(atRest.message)}; a payload without a client stores the same; a stored 'All' loads as 'All' and saves without that message; applySavedFilters gives 'Acme' over the at-rest view and 'All' over the old one; client 42 stores the resting value; Sam's rewrite of the at-rest view bounces naming the grant while the admin's lands.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `restStored=${restStored} (client=${JSON.stringify(atRestRec?.filters.client)} message=${JSON.stringify(atRest.message ?? atRest.error)}) absentStored=${absentStored} (client=${JSON.stringify(absentRec?.filters.client)}) legacyLoads=${legacyLoads} (client=${JSON.stringify(legacy?.filters.client)}) allStored=${allStored} (message=${JSON.stringify(savedAll.message ?? savedAll.error)}) applies=${applies} (rest=${JSON.stringify(appliedRest?.client)} all=${JSON.stringify(appliedAll?.client)}) junkStored=${junkStored} (client=${JSON.stringify(junkRec?.filters.client)}) rewriteBounces=${rewriteBounces} (${(rewrite.error ?? '').slice(0, 60)}) adminMay=${adminMay}`, stops: "at lib/savedViews.ts or the upsertSavedView arm — the sentinel, an absent client or junk is stored as something other than the one resting value, the message does not say what was stored, an old 'All' view is rewritten on load, applySavedFilters rests the grid or overrides a stored client, or the ownership rule slipped", severity: 'P1', impact: "a saved view either rests the grid for whoever applies it, silently widens a person's view to All, stores a value nothing can apply, or lets another person rewrite a view they do not own — the write boundary AC12 and BR14 define would exist only in the browser" } as const
+  },
+)
+
+/*
+ * The per-person client choice (step 13 of ART-20260905-024) is a `setClientChoice` arm on the
+ * `notificationPrefs` pattern — self-or-`config.manage`, a node-id value checked against this
+ * tenant's own tree, audited, withheld from client views. CD8 pins it through the real reducer
+ * rather than through the dry construction step 13's own verify command ran against a smaller
+ * fixture (BR13, BR4, BR5, BR6; AC7, AC8 of ART-20260905-023).
+ */
+
+scenario(
+  'CD8',
+  "Priya sets her own client and repeating it changes nothing; Sam's attempt on Priya's choice is refused and the platform operator's lands; an actor the directory cannot resolve, holding no grant, is refused the same way; a bad personId or clientId is refused before the map moves; the read side keeps a foreign-looking id as data and drops junk; and a client view withholds the whole map",
+  "Step 13 of ART-20260905-024 through apply(state, action, actor): setClientChoice writes the map entry and the audit line (field 'client.choice', by the actor) and the message names the person and the client; the same choice again is 'Nothing changed.' with nothing re-audited; Sam (Functional, no admin grant) may not set Priya's choice and the map is untouched, while the platform operator (unresolved, so ADMIN by the tenant's own default) may; an actor the directory resolves to nobody, on a tenant whose default role carries no grant at all, is refused on the identical self-or-admin gate rather than passing the self test by default; a personId absent from model.people is refused before the clientId is even read; a clientId absent from state.nodes and a clientId naming a project (not an externalParty tier) are both refused, the map unchanged either time; mergeModel keeps a stored string as data even when it names no node in this reader's tenant — the node lookup at read time is where that degrades, not this merge — while a non-string entry is dropped; clientView carries no clientChoices content for a client seat while GA1 still passes; and validatedKinds() lists 'setClientChoice' with actionProblem accepting its shape and refusing one missing clientId.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+    /* Real, non-admin roles — as CD7 found, a roleless actor falls back to ADMIN and the
+       ownership rule is never exercised. */
+    let staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    staffed = ok(staffed, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+    const oapilId = Object.values(staffed.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = staffed.nodes[oapilId].name
+
+    /* Priya sets her own choice: the map, the audit line and the message land. */
+    const setOwn = apply(staffed, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, priya)
+    const auditEntry = setOwn.state.audit.find((e) => e.rowId === priyaId && e.field === 'client.choice')
+    const setLands =
+      !setOwn.error && setOwn.state.model.clientChoices[priyaId] === oapilId &&
+      auditEntry != null && auditEntry.from === '' && auditEntry.to === oapilName && auditEntry.by === 'Priya' &&
+      (setOwn.message ?? '').includes('Priya') && (setOwn.message ?? '').includes(oapilName)
+
+    /* Repeating the same choice: nothing to write, nothing new to audit. */
+    const repeat = apply(setOwn.state, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, priya)
+    const repeatNoop = !repeat.error && repeat.message === 'Nothing changed.' && repeat.state === setOwn.state
+
+    /* Every refusal below is run against `setOwn.state`, where Priya already reads OAPIL —
+       so "the map is unchanged" asserts the stored choice survives untouched, not merely that
+       an empty map stayed empty. */
+
+    /* Sam, Functional and un-admin, may not set Priya's choice; the platform operator may. */
+    const samBlocked = apply(setOwn.state, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, sam)
+    const samRefused =
+      Boolean(samBlocked.error) && /Configure the platform/.test(samBlocked.error ?? '') &&
+      samBlocked.state.model.clientChoices[priyaId] === oapilId
+    const adminSets = apply(staffed, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, A)
+    const adminAllowed = !adminSets.error && adminSets.state.model.clientChoices[priyaId] === oapilId
+
+    /* An actor the directory resolves to nobody, on a tenant whose default role carries no
+       grant — so it is the self-or-admin gate refusing here, not a fallback the fixture forgot
+       to close off. */
+    const noDefault = { ...setOwn.state, model: { ...setOwn.state.model, access: { ...setOwn.state.model.access, defaultRoleIds: [] } } }
+    const ghost: Actor = { id: 'ghost', name: 'Ghost' }
+    const ghostBlocked = apply(noDefault, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, ghost)
+    const ghostRefused =
+      Boolean(ghostBlocked.error) && /Configure the platform/.test(ghostBlocked.error ?? '') &&
+      ghostBlocked.state.model.clientChoices[priyaId] === oapilId
+
+    /* A personId the directory holds nobody under: refused before the clientId is even read. */
+    const badPerson = apply(setOwn.state, { t: 'setClientChoice', personId: 'no-such-person', clientId: oapilId, now: NOW } as Action, A)
+    const badPersonRefused =
+      Boolean(badPerson.error) && /resolves to nobody/.test(badPerson.error ?? '') &&
+      !('no-such-person' in badPerson.state.model.clientChoices) &&
+      badPerson.state.model.clientChoices[priyaId] === oapilId
+
+    /* A clientId absent from this tenant's nodes, and one naming a project rather than a
+       client — both refused, Priya's already-stored choice untouched either time. */
+    const withProject = ok(setOwn.state, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const projectId = Object.values(withProject.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    const badClient = apply(withProject, { t: 'setClientChoice', personId: priyaId, clientId: 'no-such-node', now: NOW } as Action, A)
+    const projectClient = apply(withProject, { t: 'setClientChoice', personId: priyaId, clientId: projectId, now: NOW } as Action, A)
+    const wrongTier =
+      Boolean(badClient.error) && /not a client in this workspace/.test(badClient.error ?? '') &&
+      badClient.state.model.clientChoices[priyaId] === oapilId &&
+      Boolean(projectClient.error) && /not a client in this workspace/.test(projectClient.error ?? '') &&
+      projectClient.state.model.clientChoices[priyaId] === oapilId
+
+    /* The read side: mergeModel keeps a stored string as data — even one naming no node in
+       this reader's tenant, which is a node-lookup question for the code that resolves the
+       choice back to a name, not this merge — and drops a non-string entry outright. */
+    const seed = initModel([])
+    const merged = mergeModel(seed, { clientChoices: { [priyaId]: 'C-other-tenant', ghost: 42 } } as Partial<typeof seed>)
+    const mergeOk = merged.clientChoices[priyaId] === 'C-other-tenant' && !('ghost' in merged.clientChoices)
+
+    /* Withheld from a client seat, the same class as projectMembers. */
+    const cv = clientView(setOwn.state, oapilId)
+    const withheld = Object.keys(cv.model.clientChoices ?? {}).length === 0
+
+    /* The shape: the reducer's KINDS list and actionShape's SHAPES table agree, and a shape
+       missing clientId is refused before the reducer ever sees it. */
+    const shapeOk =
+      validatedKinds().includes('setClientChoice') &&
+      actionProblem({ t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW }) === null &&
+      actionProblem({ t: 'setClientChoice', personId: priyaId, now: NOW }) !== null
+
+    const good =
+      setLands && repeatNoop && samRefused && adminAllowed && ghostRefused && badPersonRefused &&
+      wrongTier && mergeOk && withheld && shapeOk
+    return good
+      ? { verdict: 'PASS', actual: `Priya's own choice lands as ${JSON.stringify(setOwn.message)} with clientChoices.${priyaId}=${oapilName} and an audit line by Priya; repeating it is 'Nothing changed.'; Sam's attempt on Priya's id bounces (${JSON.stringify(samBlocked.error)}) while the operator's lands; an unresolved actor with no default grant bounces the same way (${JSON.stringify(ghostBlocked.error)}); an unknown personId bounces (${JSON.stringify(badPerson.error)}); an unknown node and a project node both bounce (${JSON.stringify(badClient.error)} / ${JSON.stringify(projectClient.error)}); mergeModel keeps ${JSON.stringify(merged.clientChoices[priyaId])} and drops the non-string entry; clientView withholds the map; validatedKinds and actionProblem agree on the shape.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `setLands=${setLands} repeatNoop=${repeatNoop} samRefused=${samRefused} (${samBlocked.error}) adminAllowed=${adminAllowed} ghostRefused=${ghostRefused} (${ghostBlocked.error}) badPersonRefused=${badPersonRefused} (${badPerson.error}) wrongTier=${wrongTier} (${badClient.error} / ${projectClient.error}) mergeOk=${mergeOk} (${JSON.stringify(merged.clientChoices)}) withheld=${withheld} shapeOk=${shapeOk}`, stops: "at the setClientChoice arm in lib/workspace.ts, lib/config.ts's clientChoices seed/merge, lib/clientBoundary.ts's clientView, or lib/actionShape.ts's SHAPES entry", severity: 'P0', impact: "a person's client choice could be forged by another actor, written for a person or a client that does not exist, lost across a reload, or leaked into a client's own view of the workspace" } as const
   },
 )
 

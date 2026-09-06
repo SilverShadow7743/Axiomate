@@ -2182,6 +2182,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD8",
+      "title": "Priya sets her own client and repeating it changes nothing; Sam's attempt on Priya's choice is refused and the platform operator's lands; an actor the directory cannot resolve, holding no grant, is refused the same way; a bad personId or clientId is refused before the map moves; the read side keeps a foreign-looking id as data and drops junk; and a client view withholds the whole map",
+      "expected": "Step 13 of ART-20260905-024 through apply(state, action, actor): setClientChoice writes the map entry and the audit line (field 'client.choice', by the actor) and the message names the person and the client; the same choice again is 'Nothing changed.' with nothing re-audited; Sam (Functional, no admin grant) may not set Priya's choice and the map is untouched, while the platform operator (unresolved, so ADMIN by the tenant's own default) may; an actor the directory resolves to nobody, on a tenant whose default role carries no grant at all, is refused on the identical self-or-admin gate rather than passing the self test by default; a personId absent from model.people is refused before the clientId is even read; a clientId absent from state.nodes and a clientId naming a project (not an externalParty tier) are both refused, the map unchanged either time; mergeModel keeps a stored string as data even when it names no node in this reader's tenant — the node lookup at read time is where that degrades, not this merge — while a non-string entry is dropped; clientView carries no clientChoices content for a client seat while GA1 still passes; and validatedKinds() lists 'setClientChoice' with actionProblem accepting its shape and refusing one missing clientId.",
+      "verdict": "PASS",
+      "actual": "Priya's own choice lands as \"Noted — Priya's client is now OAPIL.\" with clientChoices.PERSON_1=OAPIL and an audit line by Priya; repeating it is 'Nothing changed.'; Sam's attempt on Priya's id bounces (\"The client choice is the person's own. Changing Priya's needs “Configure the platform”.\") while the operator's lands; an unresolved actor with no default grant bounces the same way (\"The client choice is the person's own. Changing Priya's needs “Configure the platform”.\"); an unknown personId bounces (\"A client choice belongs to a directory person, and that id resolves to nobody.\"); an unknown node and a project node both bounce (\"That id is not a client in this workspace.\" / \"That id is not a client in this workspace.\"); mergeModel keeps \"C-other-tenant\" and drops the non-string entry; clientView withholds the map; validatedKinds and actionProblem agree on the shape.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
