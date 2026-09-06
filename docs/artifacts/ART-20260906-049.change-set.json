@@ -1,0 +1,70 @@
+{
+  "id": "ART-20260906-049",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-batching-1"
+  },
+  "created": "2026-09-06",
+  "title": "Change set: importWorkspace batching (backend batch 2)",
+  "traces": [
+    "ART-20260906-047",
+    "ART-20260906-048"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-047",
+    "base": "3eb671db9e9828c885c9e48e8872929ca5ff9991",
+    "commits": [
+      "ecf25d5c8f7ab6252aca45106282b46fd8ce3030"
+    ],
+    "files": [
+      {
+        "path": "lib/db/repo.ts",
+        "workstream": "tree-batching"
+      },
+      {
+        "path": "data/persistence.json",
+        "workstream": "tree-batching"
+      }
+    ],
+    "plan_ref": "ART-20260906-048",
+    "self_validation": {
+      "commands": [
+        "npx tsc --noEmit",
+        "npm run audit:tenancy",
+        "npm run audit:attribution",
+        "npm run audit:contracts",
+        "npm run validate:scenarios",
+        "npm run audit:persistence",
+        "npm run audit:rls",
+        "npm run audit:integrity"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 2,
+      "findings_open": 0,
+      "verdict": "fixed",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "low",
+          "summary": "A createMany failure on a dangling foreign key that slipped past a .filter() guard surfaces one generic constraint error for the whole batch, without naming which row was the offender, whereas the old per-row loop failed on the specific offending item.",
+          "file": "lib/db/repo.ts",
+          "disposition": "accepted, not fixed -- both forms roll back the same transaction to the same end state; the debuggability cost is real but marginal, and every .filter() guard is already an exact behavioral match to the loop's own continue it replaced, making a dangling reference reaching createMany a pre-existing data condition, not something this change makes more likely"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "A single createMany statement is capped by Postgres at 65,535 bind parameters; a same-depth bucket of roughly 1,800+ issues in one tenant's seed (Issue has 35+ scalar columns) would approach that ceiling and throw, a failure mode the old per-row loop never had.",
+          "file": "lib/db/repo.ts",
+          "disposition": "accepted, not fixed -- unexercised headroom rather than an active defect at this codebase's stated scale (hundreds of rows per tenant); tracked as a forward-looking limit rather than a blocking finding"
+        }
+      ]
+    }
+  }
+}
