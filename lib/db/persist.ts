@@ -935,10 +935,11 @@ export async function persistSteps(
       return
     }
 
-    // The non-config actions that write the model: a person's own preference and the
-    // team's saved views live in the operating-model document, and either vanishing on
-    // reload would be worse than none.
+    // The non-config actions that write the model: a person's own preferences (notification
+    // and chosen client) and the team's saved views live in the operating-model document,
+    // and any of them vanishing on reload would be worse than none.
     case 'setNotificationPref':
+    case 'setClientChoice':
     case 'upsertSavedView':
     case 'deleteSavedView':
     case 'config':

@@ -1,0 +1,93 @@
+{
+  "id": "ART-20260906-028",
+  "kind": "change-set",
+  "version": 3,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "wf-axiomate-change-fix-f1-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "Client filter on feat/ART-20260905-016: F1 of ART-20260906-026 fixed (Client scope gated on internal.view) and AC6/AC9/AC10 coverage added per plan ART-20260906-027; no confirmed findings this pass; verdict clean",
+  "traces": [
+    "ART-20260905-023",
+    "ART-20260906-027"
+  ],
+  "supersedes": "ART-20260906-025",
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260905-016",
+    "base": "2a297f9f9e0afa461bb15a4a2d9754bb2fb40e67",
+    "commits": [
+      "4cabc5916d3ff4bdac770a053514fd4f6320f7e3",
+      "0bd630b173eccccef42aa74804a8b8b8eba0c3f1",
+      "961c14ec309d647c842cc2b860697fb0eca3ff1c",
+      "0573b6ae08a80198689e63e4ecc8b1dfeb733a12",
+      "84a9c13712e53308cdd6a69f977cef700c44a78a",
+      "45e1a47a92a71d986dbf30fe984d6134d8497c06",
+      "1f91b87b90d92d3b133bfd897e9e712445755faf",
+      "64de4b34d9c1d8c79c95f4b098812dd45f221d8a",
+      "7579142db70c0b932056237e2a8992edf4498ed2",
+      "bbe38b7bc28cdb2a009ca5e1a14b391086cea137",
+      "37c6cf669f043294be4fa7f6a941d8a6b2400d70",
+      "946a253710eaaef5b125b77b99174618632c6e89",
+      "3e72e9c1e37125401a0a63f5ee14e153a1c97825",
+      "e42f4874930fba19683e44ce4a15fe5b28135ccc",
+      "8ed8d0007032248a2d0499f93b25ca8373c9a295",
+      "7c5ec4a70c05911fcf71afbc67dd2b5b718f4f5f"
+    ],
+    "files": [
+      { "path": "lib/types.ts", "workstream": "filter-logic" },
+      { "path": "lib/tree.ts", "workstream": "filter-logic" },
+      { "path": "lib/filterPresentation.ts", "workstream": "filter-logic" },
+      { "path": "lib/projectBoundary.ts", "workstream": "stakeholder-logic" },
+      { "path": "lib/workspace.ts", "workstream": "preference-storage" },
+      { "path": "lib/access.ts", "workstream": "preference-storage" },
+      { "path": "lib/actionShape.ts", "workstream": "preference-storage" },
+      { "path": "lib/config.ts", "workstream": "preference-storage" },
+      { "path": "lib/clientBoundary.ts", "workstream": "preference-storage" },
+      { "path": "lib/savedViews.ts", "workstream": "preference-storage" },
+      { "path": "lib/db/persist.ts", "workstream": "preference-storage" },
+      { "path": "app/api/workspace/route.ts", "workstream": "preference-storage" },
+      { "path": "components/FilterBar.tsx", "workstream": "ui" },
+      { "path": "components/FiltersHeader.tsx", "workstream": "ui" },
+      { "path": "components/TreeGrid.tsx", "workstream": "ui" },
+      { "path": "components/IssueWorkspace.tsx", "workstream": "ui" },
+      { "path": "scripts/scenario-validation.ts", "workstream": "proof" },
+      { "path": "data/validation.json", "workstream": "proof" },
+      { "path": "docs/artifacts/ART-20260905-018.change-set.json", "workstream": "unowned" },
+      { "path": "docs/artifacts/ART-20260905-019.validation-result.json", "workstream": "unowned" },
+      { "path": "docs/artifacts/ART-20260906-025.change-set.json", "workstream": "unowned" },
+      { "path": "docs/artifacts/ART-20260906-026.validation-result.json", "workstream": "unowned" }
+    ],
+    "plan_ref": "ART-20260906-027",
+    "self_validation": {
+      "commands": [
+        "step 1 (commit 8ed8d00, fixes F1 of ART-20260906-026) verify_command re-run against current HEAD 7c5ec4a: npx tsc --noEmit -- exit 0; grep -c \"can(state.model, actor, 'internal.view').allowed\" components/IssueWorkspace.tsx -- 1 (single hoisted isInternal binding, reused for the AppSidebar mayInternal prop); grep -q 'isInternal ? clientFilterScopeFor' components/IssueWorkspace.tsx -- present; npm run validate:scenarios -- CD9 PASS, 201+ PASS -- exit 0",
+        "step 2 (commit 7c5ec4a, closes condition 3 of ART-20260906-026) verify_command re-run against current HEAD: npm run validate:scenarios -- CD10 PASS, CD11 PASS, CD12 PASS, 204 PASS (220 unique ids) -- exit 0",
+        "full re-verification at this proof pass (2026-09-06) against current branch HEAD 7c5ec4a: npx tsc --noEmit -- exit 0; npm run validate:scenarios -- CD1 through CD12 PASS, GA1 PASS, summary PASS 204 / PARTIAL 17 / NOT IMPLEMENTED 1 / NOT TESTABLE 1; data/validation.json after the run is byte-identical to the committed file on the branch (git status --short data/validation.json empty), so the committed baseline is what the suite produces",
+        "npm run audit:contracts -- run after writing this artifact, per instruction"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 0,
+      "findings_open": 0,
+      "verdict": "clean",
+      "findings": [],
+      "notes": [
+        "Input to this review carried an empty CONFIRMED FINDINGS list; nothing was fixed in this pass because nothing was confirmed as a finding to fix in it.",
+        "The one confirmed finding this change-set exists to close, F1 (medium) of ART-20260906-026, was fixed by plan ART-20260906-027 step 1 (commit 8ed8d00): clientFilterScopeFor's construction in components/IssueWorkspace.tsx is now gated on can(state.model, actor, 'internal.view').allowed, so a client/guest seat (whose zeroed projectMembers previously forced an always-empty stakeholder set) gets no scope at all and falls back to clientView's own content-based visibility, per lib/tree.ts's documented undefined-scope behaviour. Scenario CD9 (added in the same commit) proves a client-visible issue nested under a real project-tier node stays visible to that client seat while an internal seat's own member-scoped view is unaffected. F1 is closed, not carried forward.",
+        "ART-20260906-026's 'coverage' gate condition 3 (AC6, AC9, AC10 had built steps but no scenario) is also closed by plan step 2 (commit 7c5ec4a): CD10 (AC6, persistence across reopen), CD11 (AC9, Clear returns to the stored choice, never unscoped All) and CD12 (AC10, revealIssue widens to scope or refuses with a named reason) all pass against real fixtures and the real reducer, not typed-in expectations.",
+        "F2 (low, ART-20260906-026) -- the setClientChoice self-or-admin gate inheriting the pre-existing defaultRoleIds-to-ADMIN fallback -- was recorded as informational and platform-wide, not something this change's scope fixes; it is unchanged by this pass and remains open at the platform level, outside plan ART-20260906-027's two steps.",
+        "Ownership: docs/artifacts/ART-20260905-018.change-set.json, -019.validation-result.json, ART-20260906-025.change-set.json and -026.validation-result.json are committed on the branch (the first two from before ART-20260906-025; the latter two by commit e42f487, before this run started) and sit outside every owns list of plan ART-20260906-027 (ui: components/IssueWorkspace.tsx; proof: scripts/scenario-validation.ts, data/validation.json) and of the plan it supersedes, ART-20260905-024 v3. Listed above as 'unowned', on the precedent ART-20260906-025 set for ART-20260905-018/-019, rather than silently dropped from files[]. This run did not commit any artifact file (per instruction, artifacts are not committed as part of this step) and did not invent a workstream for them.",
+        "audit:persistence remains skipped in this environment (no service-container database reachable), per ART-20260906-026's condition; this change-set does not stand in for the CI persistence run the release decision must still cite."
+      ]
+    },
+    "working_tree_not_included": [
+      "data/discussion.json (unstaged, out of scope, present before and after this run)",
+      "docs/artifacts/ART-20260906-027.implementation-plan.json (untracked, this plan's own artifact -- not committed, per instruction)",
+      "untracked: .claude/jobs/, .claude/settings.json"
+    ]
+  }
+}

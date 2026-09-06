@@ -3,15 +3,29 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FilterState, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { WorkspaceView } from '@/lib/viewChoice'
-import { EMPTY_FILTERS } from '@/lib/types'
+import { EMPTY_FILTERS, NO_CLIENT_CHOSEN } from '@/lib/types'
 import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
 import type { Actor } from '@/lib/actor'
 import { useLabels } from './labels'
 import { liveDisciplines } from '@/lib/config'
 import type { OperatingModel } from '@/lib/config'
+import { isActiveFilter, clientRestingCaption } from '@/lib/filterPresentation'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
+
+/**
+ * Whether one facet deviates from its resting value.
+ *
+ * Each key needs its own test: most facets rest at 'All', search rests at empty,
+ * `showCompleted`/`raidOnly` rest at false, and the Client facet rests at `NO_CLIENT_CHOSEN` —
+ * a sentinel that is not a choice (BR7 of ART-20260905-016), so it must not arm Clear or
+ * count towards More. Delegates to `isActiveFilter` (`lib/filterPresentation.ts`) so this bar
+ * and the scenario harness that pins AC1 agree on one rule rather than two copies of it.
+ */
+function isSet(k: keyof FilterState, v: string | boolean): boolean {
+  return isActiveFilter(k, v)
+}
 
 /**
  * Declared at module scope on purpose.
@@ -26,6 +40,7 @@ function FilterDropdown({
   options,
   value,
   onChange,
+  personResolved,
 }: {
   label: string
   name: keyof FilterState
@@ -38,6 +53,13 @@ function FilterDropdown({
   options: readonly (string | { value: string; label: string })[]
   value: string
   onChange: (k: keyof FilterState, v: string) => void
+  /**
+   * Only meaningful for the Client facet (`name === 'client'`): whether the signed-in actor
+   * resolved to a directory Person. Unset for every other facet. When it is `false` and there
+   * are no clients to offer, the resting option says the account is not in the directory
+   * (BR11 of ART-20260905-023) rather than inviting a choice that would list nothing.
+   */
+  personResolved?: boolean
 }) {
   /**
    * The control labels itself, rather than carrying a caption beside it.
@@ -51,7 +73,17 @@ function FilterDropdown({
    * loses: "OAPIL" no longer says which dimension it belongs to. Three things carry that —
    * the accent border the value already gets, a stable position in the row, and the tooltip
    * and accessible name below, which stay the plain dimension name whatever is selected.
+   *
+   * The Client facet alone has a resting state that is not 'All': `NO_CLIENT_CHOSEN`, on
+   * which nothing is listed (BR2, BR7 of ART-20260905-016). It gets its own option, captioned
+   * as an instruction via `clientRestingCaption` — "Client: choose one" — because the bare
+   * sentinel is never shown and the word "None" is already taken by Discipline's "records with
+   * no discipline". When the person has no clients to choose from because the sign-in itself
+   * did not resolve, the caption says that instead (BR11 of ART-20260905-023) — choosing one
+   * is not the available next step. 'All' stays offered beneath it as a choice in its own
+   * right. The accent marks a choice made, so neither resting value takes it.
    */
+  const resting = name === 'client'
   return (
     <div className="field">
       <select
@@ -60,8 +92,15 @@ function FilterDropdown({
         title={label}
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
-        className={value !== 'All' ? 'on' : ''}
+        className={isSet(name, value) ? 'on' : ''}
       >
+        {resting && (
+          <option value={NO_CLIENT_CHOSEN}>
+            {options.length === 0 && personResolved === false
+              ? `${label}: this account is not in the directory`
+              : clientRestingCaption(label)}
+          </option>
+        )}
         <option value="All">{label}: All</option>
         {options.map((o) => {
           const value = typeof o === 'string' ? o : o.value
@@ -84,6 +123,22 @@ interface Props {
   model: OperatingModel
   filters: FilterState
   setFilters: (f: FilterState) => void
+  /**
+   * Where the Client facet rests for this person (ART-20260905-024 step 17; BR14, AC9): the
+   * stored choice if one exists, else `NO_CLIENT_CHOSEN`. Clear returns the facet here rather
+   * than to the sentinel outright, and being at this value does not arm Clear — a person who
+   * has already chosen a client is not "filtering" by being on it.
+   */
+  restingClient: string
+  /** Whether the signed-in actor resolved to a directory Person — see `FilterDropdown`. */
+  personResolved: boolean
+  /**
+   * The person's explicit act on the Client control alone (ART-20260905-024 step 16, BR13) —
+   * never fired by Clear, a reveal, or applying a saved view, which all go through `setFilters`
+   * directly. Optional because the demo/offline paths that render this bar without a directory
+   * person to record against simply omit it.
+   */
+  onClientChosen?: (client: string) => void
   facets: {
     clients: string[]
     types: string[]
@@ -131,6 +186,9 @@ export default function FilterBar({
   model,
   filters,
   setFilters,
+  restingClient,
+  personResolved,
+  onClientChosen,
   facets,
   zoom,
   setZoom,
@@ -187,21 +245,28 @@ export default function FilterBar({
     return () => window.removeEventListener('mousedown', away)
   }, [moreMenu])
 
-  const set = (k: keyof FilterState, v: string) => setFilters({ ...filters, [k]: v })
+  const set = (k: keyof FilterState, v: string) => {
+    setFilters({ ...filters, [k]: v })
+    // The Client control's own choice, and only that one: every other facet, and every other
+    // path onto the Client facet (Clear, a reveal, applying a saved view), goes through
+    // `setFilters` above and stops there (ART-20260905-024 step 16).
+    if (k === 'client') onClientChosen?.(v)
+  }
   /** Set filters that live behind the More button, so it can report them. */
-  const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter(
-    (k) => filters[k] !== 'All',
+  const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter((k) =>
+    isSet(k, filters[k]),
   ).length
 
   /**
-   * Whether anything deviates from the resting view.
-   *
-   * Each key needs its own test now: the facets rest at 'All', search rests at empty, and
-   * `showCompleted`/`raidOnly` rest at false. Comparing a boolean against 'All' would have made
-   * Clear look permanently armed.
+   * Whether anything deviates from the resting view — see `isSet` for what "resting" means per
+   * key. The Client facet is the one exception: its resting value is per-person (`restingClient`,
+   * ART-20260905-024 step 17), not the sentinel `isSet` tests for, so being at the person's
+   * stored choice does not arm Clear (BR14, AC9) even though the same value counts as an active
+   * filter for the Filters chip (`isActiveFilter` in `lib/filterPresentation.ts`, which has no
+   * notion of "this person's resting client" to compare against).
    */
-  const active = Object.entries(filters).some(([k, v]) =>
-    k === 'search' ? v !== '' : k === 'showCompleted' || k === 'raidOnly' ? v === true : v !== 'All',
+  const active = (Object.entries(filters) as [keyof FilterState, string | boolean][]).some(([k, v]) =>
+    k === 'client' ? v !== restingClient : isSet(k, v),
   )
 
   // My work and Portfolio compute their own lists; the record filters do nothing to them,
@@ -219,7 +284,14 @@ export default function FilterBar({
           sidebar now — navigation left the bar with the clean shell.) */}
       {filtersApply && (
       <>
-      <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
+      <FilterDropdown
+        label={labels.TIER_ORGANIZATION}
+        name="client"
+        options={facets.clients}
+        value={filters.client}
+        onChange={set}
+        personResolved={personResolved}
+      />
       <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
       <FilterDropdown
         label="Discipline"
@@ -283,7 +355,11 @@ export default function FilterBar({
       </button>
 
       {active && (
-        <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)} title="Reset filters to the default view">
+        <button
+          className="btn ghost"
+          onClick={() => setFilters({ ...EMPTY_FILTERS, client: restingClient })}
+          title="Reset filters to the default view"
+        >
           Clear
         </button>
       )}

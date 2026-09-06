@@ -901,6 +901,15 @@ export interface OperatingModel {
    * `setNotificationPref`, whose arm is the gate. See `lib/notifications.ts`.
    */
   notificationPrefs: NotificationPrefs
+  /**
+   * Each person's chosen client in the issue workspace, keyed by directory id: the value is
+   * the chosen client's node id — never a client name, and never 'All', which is session
+   * state and not stored. Absent means nothing chosen, the filter's resting value. Self-served
+   * through `setClientChoice`, whose arm is the gate; withheld from client seats by
+   * `clientView`. The stakeholder set the choice sits over is derived at read, never stored
+   * here. See `docs/adr/0002-client-filter-stakeholder-scope.md`, decision 4.
+   */
+  clientChoices: Record<string, string>
   /** Organisations that can be answerable for an issue. Editable — these are facts about who
    *  you work with, not values anything computes from. */
   parties: string[]
@@ -1294,6 +1303,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     timePolicy: { ...DEFAULT_TIME_POLICY },
     allocationPolicy: { ...DEFAULT_ALLOCATION_POLICY },
     notificationPrefs: {},
+    clientChoices: {},
     parties: [...SEED_PARTIES],
     agents,
     workflows,
@@ -1663,6 +1673,15 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     timePolicy: { ...seed.timePolicy, ...(stored.timePolicy ?? {}) },
     allocationPolicy: { ...seed.allocationPolicy, ...(stored.allocationPolicy ?? {}) },
     notificationPrefs: { ...seed.notificationPrefs, ...(stored.notificationPrefs ?? {}) },
+    // Explicit like `notificationPrefs`, and re-validated per entry: a model stored before this
+    // key existed loads with an empty map, and a value that is not a string (junk from a hand
+    // edit, a stale shape) is dropped so it degrades to nothing chosen rather than crashing the
+    // node lookup that restores the choice.
+    clientChoices: Object.fromEntries(
+      Object.entries({ ...seed.clientChoices, ...(stored.clientChoices ?? {}) }).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
+      ),
+    ),
     access: {
       ...seed.access,
       ...(stored.access ?? {}),

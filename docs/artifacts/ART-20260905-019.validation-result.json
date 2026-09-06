@@ -1,0 +1,120 @@
+{
+  "id": "ART-20260905-019",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "wf-axiomate-change-build-proof-20260905-3"
+  },
+  "created": "2026-09-05",
+  "title": "Proof of ART-20260905-018 on feat/ART-20260905-016: every gate that ran passed, no scenario regressed (192 to 195 PASS), no security finding above low, but data/validation.json sits outside every owns list of plan ART-20260905-017 v2 and four acceptance criteria the built steps claim name no scenario, so the verdict is fail on ownership",
+  "traces": [
+    "ART-20260905-018"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260905-018",
+    "gates": [
+      {
+        "name": "ownership",
+        "command": "git diff --stat master...feat/ART-20260905-016 compared with ART-20260905-017 v2 workstreams[].owns",
+        "result": "fail",
+        "evidence": "Nine files changed on the branch and nine listed in the change set; the lists match, and the three commits 4cabc59, 0bd630b, 961c14e match. Eight files sit inside their workstream's owns list (lib/types.ts, lib/tree.ts: filter-logic; lib/projectBoundary.ts: stakeholder-logic; components/FilterBar.tsx, FiltersHeader.tsx, TreeGrid.tsx, IssueWorkspace.tsx: ui; scripts/scenario-validation.ts: proof). data/validation.json (+30 lines, the CD1-CD3 verdicts) is in no owns list of plan v2 and the change set itself marks it 'unowned'. Per the proof-orchestrator sequence a file outside its workstream's owns list is a fail before any gate runs; the gates below were run anyway so this result carries evidence rather than a bare refusal."
+      },
+      {
+        "name": "tsc",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "exit 0; no output (0 lines)."
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "exit 0; 'Prisma calls checked in lib/db: 126 / PASS - every tenant-scoped model call names a tenant. / Reducer attribution: no ambient identity; the actor is a parameter / Row mappers: 34 - all stamp tenantId'."
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "exit 0; 'Attribution: 3/3 arms follow the actor parameter; no action can override it.' (updateIssue, setDates, config (label) each attributed to Alice Operator / Bob Operator distinctly)."
+      },
+      {
+        "name": "audit:restore",
+        "command": "npm run audit:restore",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Restore: archive is no longer a one-way door, in either mode.'"
+      },
+      {
+        "name": "audit:estimation",
+        "command": "npm run audit:estimation",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Estimation: capacity cannot break a dependency chain, and an agreed number cannot move without a reason.'"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "exit 0 before this artifact was written: 'contract-check: 19 artifact(s) valid'. Re-run after writing this artifact; the re-run's exit code is reported with this result. The 19 include four untracked files in the working tree (ART-20260905-018, -020, -021, -022) and the uncommitted status flip of ART-20260905-016 to superseded; on the committed branch alone the count and the trace graph differ."
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "skipped",
+        "evidence": "skipped: production database, CI runs it against a service container. DATABASE_URL in this environment resolves to the Azure-hosted production host, which the proof orchestrator may not use for a persistence proof. Not run, therefore not passed."
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "exit 0; 'Written to data/validation.json - 214 scenarios.' Summary: PASS 195, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1. CD1 PASS, CD2 PASS, CD3 PASS, GA1 PASS. data/validation.json after the run is byte-identical to the committed file on the branch (git status shows no change), so the committed baseline is what the suite produces."
+      },
+      {
+        "name": "regression",
+        "command": "git show master:data/validation.json compared with data/validation.json on the branch, per scenario id",
+        "result": "pass",
+        "evidence": "master: 211 scenarios, PASS 192, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1 (asAt 2026-08-15). branch: 214 scenarios, PASS 195, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1. No verdict changed on any existing id; no id removed; three added, all PASS: CD1, CD2, CD3. Regressed: none. The asAt field is unchanged at 2026-08-15 on both, which the operating-model design lists as a Quality-domain staleness signal and is not this change's doing."
+      },
+      {
+        "name": "coverage",
+        "command": "acceptance_criteria[].scenario in the traced specification against scenario ids in scripts/scenario-validation.ts, for the criteria steps 1, 2, 3, 4 and 9 claim",
+        "result": "fail",
+        "evidence": "The specification the change set traces (ART-20260905-016, and its successors -020, -021, -022 v5 which are identical on this point) names a scenario on exactly one criterion: AC11 -> GA1, which exists (scripts/scenario-validation.ts:7380) and passes. The built steps claim AC1 (step 9, sentinel half), AC2 definite half (step 4 via CD3), AC13 sentinel half (step 9), AC15 (step 4 via CD2) and BR2/BR7 (steps 1-2 via CD1). CD1 (:10089), CD2 (:10129) and CD3 (:10186) exist and pass, but no acceptance criterion names them, and AC1's UI half (the 'choose one' caption, the empty-grid prompt, the Filters chip not counting the sentinel) and AC13's scopeLabel/openClientPack behaviour have no scenario in the suite at all; step 9's own verify command is tsc, audit:a11y and GA1, none of which exercises them."
+      },
+      {
+        "name": "security-review",
+        "command": "axiomate-security-review and axiomate-tenant-isolation over git diff master...feat/ART-20260905-016",
+        "result": "pass",
+        "evidence": "No new route, no new lib/db function, no new table, no new reducer arm, no secret, no change to can(), isExempt, redactForReader, projectView or clientView. lib/projectBoundary.ts changes a doc comment only; memberProjectIdsFor's body is untouched and audit:tenancy still passes over 126 calls. The one write path touched (onSaveCurrentView -> upsertSavedView) keeps its ownership check and its actor from the sealed session; the new guard only refuses earlier. revealIssue sets filters.client from row.issue.client, a value already in the redacted payload the person received, so nothing widens. Findings: one low (below)."
+      }
+    ],
+    "scenarios": {
+      "passed": 195,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "proof-orchestrator (axiomate-security-review, axiomate-tenant-isolation)",
+      "findings": [
+        {
+          "severity": "low",
+          "summary": "The guard that keeps NO_CLIENT_CHOSEN out of shared saved views lives only in the browser (components/IssueWorkspace.tsx onSaveCurrentView). The reducer arm upsertSavedView (lib/workspace.ts:5746) passes any string through parseSavedFilters (lib/savedViews.ts:28), so a hand-built action stores the sentinel for every colleague; applying such a view rests at the sentinel and lists nothing, which is fail-closed, and a saved view whose stored filters lack a client key now applies the sentinel by the spread of EMPTY_FILTERS. No data is exposed and no authorisation is bypassed; the write boundary is where plan ART-20260905-017 step 6 (blocked on OQ8) decides excluded-on-save or defined-on-apply, and that step should also add the reducer-side refusal.",
+          "file": "components/IssueWorkspace.tsx"
+        }
+      ]
+    },
+    "verdict": "fail",
+    "conditions": [
+      "Ownership: data/validation.json is committed on the branch but is outside every owns list in ART-20260905-017 v2. The implementation planner issues plan v3 that either adds data/validation.json to the proof workstream or records that Gate Runner output travels with the change; the build orchestrator then issues change set v2 reading that file entry as 'proof' instead of 'unowned'. Until that lands the verdict stays fail on ownership alone, whatever the gates say.",
+      "Coverage: the Intent orchestra records acceptance_criteria[].scenario on the next version of the specification for the criteria the branch already proves: AC15 -> CD2, AC2 (definite half under BR8) -> CD3, AC1 (the resting-lists-nothing half) -> CD1. The specification's current versions name only AC11 -> GA1.",
+      "Coverage: the Scenario Author adds, on the branch in a separate run, a scenario for AC1's UI half (Client control captioned 'Client: choose one' at rest, the grid prompt naming the next action, FiltersHeader activeCount and FilterBar's Clear ignoring the sentinel) and a scenario for AC13's sentinel half (scopeLabel says 'No client chosen' and openClientPack refuses the sentinel), then names them on AC1 and AC13. Step 9's verify command (tsc, audit:a11y, GA1) proves none of this.",
+      "Artifact state: the change set traces ART-20260905-016, whose status is 'superseded' only in the uncommitted working tree (HEAD on the branch still says approved), and the successor chain ART-20260905-020 -> -021 -> -022 (v5, approved) is untracked, as is ART-20260905-018 itself. audit:contracts passed here on 19 artifacts because those files are present in the working tree; it would not see the same graph on a clean checkout. Commit the artifact files on the branch (or wherever the operating model files them) before Proof re-runs, and let change set v2 trace the live specification ART-20260905-022.",
+      "Persistence: audit:persistence was skipped because DATABASE_URL reaches the production database. The release decision must cite the CI run of the persistence audit against the service container for the commits on this branch; this result does not stand in for it.",
+      "Security (low, named fix): when plan step 6 is unblocked by OQ8, the upsertSavedView reducer arm refuses or normalises NO_CLIENT_CHOSEN at the write boundary so the browser guard in IssueWorkspace.tsx is not the only line; the stale 'degrade to broader' docblock in lib/savedViews.ts goes with it, as the build review already noted.",
+      "Scope: steps 5, 6, 7, 8, 10, 11 and 12 of the plan are not built (blocked on OQ3, OQ5 and OQ8), so AC3-AC10, AC12 and AC17 are not delivered by this change set. The release decision treats this branch as the sentinel and the stakeholder definition only, not the feature as specified."
+    ]
+  }
+}

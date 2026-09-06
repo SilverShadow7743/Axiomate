@@ -2112,6 +2112,126 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD1",
+      "title": "EMPTY_FILTERS rests on a client sentinel that lists nothing — not 'All', and not the Discipline facet's 'None'",
+      "expected": "BR2 and BR7 of ART-20260905-016: with no client chosen, visibleRows keeps no issue row and no structural row, and matchesFilters admits nothing; the same filters with client 'All' list the fixture's three issues under their client exactly as before this change; client 'All' with discipline 'None' still returns the fixture's unclassified issues, so the resting token and the 'unclassified' query are not one token; and EMPTY_FILTERS.client is neither 'All' nor 'None'.",
+      "verdict": "PASS",
+      "actual": "EMPTY_FILTERS lists 0 rows through visibleRows and admits 0 through matchesFilters over 7 tree rows; client 'All' lists [OAPIL-1,OAPIL-2,OAPIL-3] under their client node; client 'All' + discipline 'None' lists [OAPIL-1,OAPIL-2,OAPIL-3]; EMPTY_FILTERS.client is \"__NO_CLIENT_CHOSEN__\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD2",
+      "title": "A stakeholder is a live ProjectMember row — removedAt ends it, the project role never enters",
+      "expected": "AC15 of ART-20260905-016: with the signed-in person on project P (removedAt set, Sponsor) and on project Q (removedAt null, Customer), memberProjectIdsFor is exactly {Q}; changing the project role on either row changes nothing; clearing P's removedAt puts P back; a null personId is the empty set (BR2); and projectView over the same rows keeps Q and drops P, so the read gate and the filter answer from one definition.",
+      "verdict": "PASS",
+      "actual": "memberProjectIdsFor = {project:3} (Q only); Sponsor/Customer swapped on either row → still {project:3}; P's removedAt cleared → {project:2,project:3}; null personId → 0 projects; projectView keeps Q=true and P=false.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD3",
+      "title": "For a non-exempt seat, the read gate and the Client facets agree on one stakeholder set",
+      "expected": "The definite half of AC2 and BR8 of ART-20260905-016 under definition (d) ProjectMember: over a fixture whose live issues all sit under a project-tier node (so the ungated no-project-ancestor case OQ11 still owns does not enter), projectView(state, memberProjectIdsFor(state, p)) drops every issue whose project is P2 and keeps every issue under P1 — including one two tiers down, through projectOf's ancestor walk — and facetsOf over that redacted state lists exactly the client names of the projects p is live on, so the filter agrees with the payload rather than computing a second set. Asserts what the read gate already does; step 5's callers are unchanged.",
+      "verdict": "PASS",
+      "actual": "3 live issues, all under a project (P1: 2, P2: 1); a Technical seat is exempt=false; projectView keeps [OAPIL-004, OAPIL-005] and drops [RIVALLTD-001]; facetsOf over the redacted state lists clients [OAPIL], the unredacted state [OAPIL,Rival Ltd] — the filter's options and the payload come from the one set {project:3}.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD4",
+      "title": "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
+      "expected": "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
+      "verdict": "PASS",
+      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 45 keys read the same before and after for both actors; projectView not called.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD5",
+      "title": "At rest the Client control instructs, the grid names the next action, the Filters chip counts nothing, and the counts strip still knows the full total",
+      "expected": "AC1's UI half (ART-20260905-023, BR7): clientRestingCaption over the tenant's own tier label reads '<label>: choose one' and contains neither 'All' nor the bare word 'None'; emptyGridReason at EMPTY_FILTERS, for a resolved person with a live project, names the next action ('Choose a … in the Filters row'); activeFilterCount(EMPTY_FILTERS) is 0 while the same filters with client 'Acme' count 1 and with discipline 'None' count 1, so the resting token and the 'unclassified' query are not one; isActiveFilter('client', NO_CLIENT_CHOSEN) is false, so Clear is not armed at rest; and visibleRows at EMPTY_FILTERS is empty while rowsOf still carries every issue — the 'full total' half of AC1 is a count over the tree, not over the filtered rows.",
+      "verdict": "PASS",
+      "actual": "Resting option reads \"Client: choose one\"; the empty grid says \"Choose a client in the Filters row to list its issues.\" for a resolved person on 1 project; the Filters chip counts 0 at rest, 1 with client 'Acme', 1 with discipline 'None'; isActiveFilter('client', NO_CLIENT_CHOSEN)=false; visibleRows lists 0 rows while the tree carries 4 issues.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD6",
+      "title": "A report built at rest says 'No client chosen', one built under All names the person's own projects, and a client pack refuses both",
+      "expected": "AC13's sentinel half and BR15 (ART-20260905-023): scopeLabelFor(EMPTY_FILTERS, ctx) starts with 'No client chosen' and never contains 'All clients'; scopeLabelFor with client 'All' names the person's stakeholder project and client counts — read from clientFilterScopeFor and facetsOf over the real fixture — and the organisation, and never 'All clients'; clientPackProblem(NO_CLIENT_CHOSEN) equals clientPackProblem('All'), both non-null with the one teaching message, while clientPackProblem('OAPIL') is null.",
+      "verdict": "PASS",
+      "actual": "At rest the label reads \"No client chosen (completed hidden in the view; counted here)\"; under 'All' it reads \"My projects — 1 project on 1 client, Axiocloud Solutions (completed hidden in the view; counted here)\" from a scope of 1 project on 1 client at Axiocloud Solutions; clientPackProblem is \"Pick one client first — a client pack is for a single client, not the whole workspace.\" for the sentinel and for 'All' alike, and null for 'OAPIL'.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD7",
+      "title": "A view saved at rest stores no client and says so; applying it keeps the person's own; an old 'All' view loads intact; junk lands on the resting value; ownership still holds",
+      "expected": "Step 11 of ART-20260905-024 through the real reducer (BR14, AC12 of ART-20260905-023): an upsertSavedView whose filters carry NO_CLIENT_CHOSEN is accepted, stores filters.client as the sentinel — the one canonical 'no client stored' — and returns the message naming that it keeps each person's own client; an action whose filters omit client stores the same value with the same message; a record stored before this change with client 'All' loads through parseSavedView (the loader lib/config.ts's mergeModel runs) with 'All' intact, and the arm saving 'All' today does not claim it keeps each person's own; applySavedFilters over the at-rest view with 'Acme' yields 'Acme' and over the 'All' view yields 'All', with the other keys carried, so applying either leaves the person's choice in place; a hand-built filters object with client 42 stores the resting value, not a number; and SV1's ownership rule holds on the at-rest view — another person's rewrite bounces naming the grant, an admin's lands.",
+      "verdict": "PASS",
+      "actual": "Saved at rest, the view stores client=\"__NO_CLIENT_CHOSEN__\" and the arm says \"View “Open work” saved for everyone; it keeps each person's own client.\"; a payload without a client stores the same; a stored 'All' loads as 'All' and saves without that message; applySavedFilters gives 'Acme' over the at-rest view and 'All' over the old one; client 42 stores the resting value; Sam's rewrite of the at-rest view bounces naming the grant while the admin's lands.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD8",
+      "title": "Priya sets her own client and repeating it changes nothing; Sam's attempt on Priya's choice is refused and the platform operator's lands; an actor the directory cannot resolve, holding no grant, is refused the same way; a bad personId or clientId is refused before the map moves; the read side keeps a foreign-looking id as data and drops junk; and a client view withholds the whole map",
+      "expected": "Step 13 of ART-20260905-024 through apply(state, action, actor): setClientChoice writes the map entry and the audit line (field 'client.choice', by the actor) and the message names the person and the client; the same choice again is 'Nothing changed.' with nothing re-audited; Sam (Functional, no admin grant) may not set Priya's choice and the map is untouched, while the platform operator (unresolved, so ADMIN by the tenant's own default) may; an actor the directory resolves to nobody, on a tenant whose default role carries no grant at all, is refused on the identical self-or-admin gate rather than passing the self test by default; a personId absent from model.people is refused before the clientId is even read; a clientId absent from state.nodes and a clientId naming a project (not an externalParty tier) are both refused, the map unchanged either time; mergeModel keeps a stored string as data even when it names no node in this reader's tenant — the node lookup at read time is where that degrades, not this merge — while a non-string entry is dropped; clientView carries no clientChoices content for a client seat while GA1 still passes; and validatedKinds() lists 'setClientChoice' with actionProblem accepting its shape and refusing one missing clientId.",
+      "verdict": "PASS",
+      "actual": "Priya's own choice lands as \"Noted — Priya's client is now OAPIL.\" with clientChoices.PERSON_1=OAPIL and an audit line by Priya; repeating it is 'Nothing changed.'; Sam's attempt on Priya's id bounces (\"The client choice is the person's own. Changing Priya's needs “Configure the platform”.\") while the operator's lands; an unresolved actor with no default grant bounces the same way (\"The client choice is the person's own. Changing Priya's needs “Configure the platform”.\"); an unknown personId bounces (\"A client choice belongs to a directory person, and that id resolves to nobody.\"); an unknown node and a project node both bounce (\"That id is not a client in this workspace.\" / \"That id is not a client in this workspace.\"); mergeModel keeps \"C-other-tenant\" and drops the non-string entry; clientView withholds the map; validatedKinds and actionProblem agree on the shape.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD9",
+      "title": "Gating the Client filter's scope on internal.view keeps a client-visible issue under a real project visible to the client who owns it, while an internal seat keeps its own narrowed, member-scoped view",
+      "expected": "The CD4 fixture shape — a client, two projects under it, an issue under each — but with both issues marked clientVisible (unlike GA1's only clientVisible fixture record, which has no project ancestor and so never exercises F1). Read through clientView, the same boundary redactForReader applies for a reader without internal.view (lib/db/boot.ts): both client-visible issues survive clientView itself, and once the scope this fix gates is skipped for that non-internal actor, visibleRows keeps both under 'All' and facetsOf keeps their client on the dropdown — closing F1. Run unconditionally, the way the code read before this fix, clientFilterScopeFor over that same client-seat state finds an empty memberProjectIds (clientView's zeroed projectMembers), and both issues — each with a real project ancestor — fail withinScope and vanish from visibleRows and facetsOf alike, which is the exact regression this closes. Priya, an internal seat live on only one of the two projects, is unaffected: isInternal is true for her, so her scope is built exactly as before and admits only her own project's issue (CD4's own proof, replayed here).",
+      "verdict": "PASS",
+      "actual": "clientView(oapilId) keeps both OAPIL-004 and OAPIL-005 (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=false; the unconditional scope this fix removes finds memberProjectIds.size=0, visibleRows lists [(none)] and facetsOf lists [(none)]; gated on internal.view, scope is undefined, visibleRows lists [OAPIL-004,OAPIL-005] and facetsOf lists [OAPIL]. Priya (Technical, on Harbour only): internal.view=true, scope built as before, visibleRows lists [OAPIL-004] — Quay's issue absent.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD10",
+      "title": "A stored client choice survives reopen and reseeds the Client control on it; a person who never chose still opens on the sentinel",
+      "expected": "AC6 of ART-20260905-023, step 16 of ART-20260905-024: setClientChoice's write through the real reducer lands in state.model.clientChoices; merging that persisted model into a fresh initModel() — the same reload lib/autosave.ts runs on a stored mirror (its own `mergeModel(seed.model, parsed.model)`), and CD8's own isolated pin of the clientChoices half of that merge — and re-deriving the choice with resolveClientChoice's own logic (resolveStoredClient here) on the rebuilt state names the same client, so the Client control's seed (`resolveClientChoice(...) ?? NO_CLIENT_CHOSEN`, IssueWorkspace.tsx ~654-662) opens on it without the person choosing again; a person with no stored entry resolves to null on the same rebuilt state and so opens on NO_CLIENT_CHOSEN (BR16) — proving persistence and proving its absence, from one reopen.",
+      "verdict": "PASS",
+      "actual": "setClientChoice writes clientChoices.PERSON_1=client:OAPIL; merged into a fresh initModel() the way lib/autosave.ts reloads a mirror, clientChoices.PERSON_1 is still \"client:OAPIL\"; resolveClientChoice's own logic on the rebuilt state names \"OAPIL\", so the Client control reseeds on \"OAPIL\". Sam, who never stored a choice, resolves to null on the same rebuilt state and reseeds on \"__NO_CLIENT_CHOSEN__\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD11",
+      "title": "Clear always returns filters.client to the person's stored choice, never to unscoped 'All' — whichever way the session drifted off it — and returns a person with no stored choice to the sentinel",
+      "expected": "AC9 and BR14 of ART-20260905-023 (step 17 of ART-20260905-024): with Priya's choice stored as OAPIL through the real setClientChoice write, Clear's own contract (`{ ...EMPTY_FILTERS, client: restingClient }`) is run against a filters value drifted off the stored choice by an unrelated facet edit (status set to 'Open', client left at a legacy 'All' a saved view could have applied) and against one drifted by choosing a different client outright ('Acme'); both land on client=OAPIL — never 'All', never 'Acme' — with every other facet back at EMPTY_FILTERS's default, proving neither drift survives the click and neither lands on unscoped All. The same contract for Sam, who never stored a choice, returns client to NO_CLIENT_CHOSEN rather than to whatever he had picked.",
+      "verdict": "PASS",
+      "actual": "Priya's stored choice resolves to \"OAPIL\". Drifted by an unrelated facet edit (client=\"All\", status=\"Open\"), Clear yields client=\"OAPIL\", status=\"All\". Drifted by choosing 'Acme' outright, Clear yields client=\"OAPIL\". Sam, unstored, is returned to \"__NO_CLIENT_CHOSEN__\" rather than kept on \"Beta Corp\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD12",
+      "title": "Revealing an issue inside the person's own stakeholder scope widens filters to its client and the issue is present after the widen; revealing one outside the scope leaves filters untouched and names why, never resetting to EMPTY_FILTERS",
+      "expected": "AC10 of ART-20260905-023 (step 17 of ART-20260905-024): Priya, Technical and a live member of Harbour only, reveals an issue under Harbour (inside memberProjectIdsFor) from a rest position — revealIssue's own decision (matchesFilters fails at rest, so it tries `{ ...EMPTY_FILTERS, client: row.issue.client }`, which now passes scope) widens filters to client=OAPIL, and visibleRows over the widened filters lists the Harbour issue. Revealing an issue under Quay (outside memberProjectIdsFor) from a non-empty, mid-session filters value — the widened candidate still fails the same scope check, so revealIssue leaves filters exactly as they were (not reset to EMPTY_FILTERS, which would hide the whole grid the way the pre-BR14 behaviour did) and returns a refusal reason naming the project-membership cause; the Quay issue is absent from visibleRows either way.",
+      "verdict": "PASS",
+      "actual": "Revealing OAPIL-004 (Harbour, in Priya's scope) from rest widens filters to client=\"OAPIL\" with no refusal, and it is present in visibleRows afterward. Revealing OAPIL-005 (Quay, outside Priya's scope) from client=\"OAPIL\"/status=\"Open\" leaves filters at client=\"OAPIL\"/status=\"Open\" — untouched — with refusal \"OAPIL-005 is on a project you are not a member of, so it cannot be listed here.\", and it stays absent from visibleRows.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

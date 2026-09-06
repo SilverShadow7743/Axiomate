@@ -13,7 +13,7 @@ import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
-import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow } from '@/lib/types'
+import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
   ROOT_SCOPE,
@@ -45,6 +45,9 @@ import {
 } from '@/lib/workspace'
 import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
+import { clientFilterScopeFor } from '@/lib/projectBoundary'
+import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
+import { applySavedFilters } from '@/lib/savedViews'
 import { sortTree } from '@/lib/sort'
 import { availabilityForAssignment, refusesAssignment } from '@/lib/assignment'
 import UserMenu from './UserMenu'
@@ -121,6 +124,28 @@ import type { ConfigOp } from '@/lib/workspace'
  * back to the Tree reopens the record that was open, rather than silently forgetting it.
  */
 const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
+
+/**
+ * Resolves a stored client choice (`OperatingModel.clientChoices`, ART-20260905-024 step 13) to
+ * the client node's name — the value `filters.client` carries, not the id the map stores.
+ *
+ * Degrades to `null`, never throws and never applies another tenant's node: an unresolved
+ * person, an absent entry, an id this tenant's `state.nodes` does not have, or a node whose kind
+ * is not on an externalParty tier all read as "nothing chosen" (AC8, BR16). Shared by the initial
+ * `filters` seed and `storedClient`, so a reload and Clear agree on the same resolution.
+ */
+function resolveClientChoice(
+  model: WorkspaceState['model'],
+  nodes: WorkspaceState['nodes'],
+  personId: string | null,
+): string | null {
+  if (!personId) return null
+  const clientId = model.clientChoices[personId]
+  if (!clientId) return null
+  const node = nodes[clientId]
+  if (!node || node.deletedAt) return null
+  return externalPartyKinds(tiersOf(model)).has(node.kind) ? node.name : null
+}
 
 interface Props {
   issues: SeedIssueInput[]
@@ -618,7 +643,23 @@ export default function IssueWorkspace({
   )
 
   /* ---------------- view state ---------------- */
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
+  /**
+   * Seeded from the person's stored choice (ART-20260905-024 step 16, BR16), not from
+   * `EMPTY_FILTERS` outright: first use is genuinely nothing chosen (`resolveClientChoice`
+   * returns `null` when the map has no entry), and every later visit opens on what they chose
+   * last, resolved fresh against this tenant's nodes so a stale or foreign id degrades to the
+   * sentinel rather than being applied. A null `personId` (BR5: an unresolved sign-in) never
+   * reads the map at all — `resolveClientChoice` returns `null` for it directly.
+   */
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...EMPTY_FILTERS,
+    client:
+      resolveClientChoice(
+        state.model,
+        state.nodes,
+        directoryPersonFor(state.model, actor)?.id ?? null,
+      ) ?? NO_CLIENT_CHOSEN,
+  }))
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -743,10 +784,45 @@ export default function IssueWorkspace({
    * queue nobody opens.
    */
   const myWorkCount = useMemo(() => myWork(state, actor, today).items.length, [state, actor, today])
+  /** The directory Person the signed-in actor resolves to, or null when the sign-in matches
+   *  nobody (BR11 of ART-20260905-023) — the one resolution the Client filter's scope, its
+   *  empty-grid reason and the dropdown's resting caption all read, rather than each calling
+   *  `directoryPersonFor` its own way. */
+  const personId = useMemo(
+    () => directoryPersonFor(state.model, actor)?.id ?? null,
+    [state.model, actor],
+  )
+  /** Whether this actor is internal (`lib/access.ts`'s established boundary between an internal
+   *  seat and a client seat) — computed once here and reused at the `mayInternal` prop below,
+   *  rather than read twice. */
+  const isInternal = can(state.model, actor, 'internal.view').allowed
+  /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
+   *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
+   *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
+   *  the payload the read gate already computed rather than a second set (`clientFilterScopeFor`,
+   *  `lib/projectBoundary.ts`). Built from the person, never from `isExempt` — an exempt seat
+   *  gets the same scope (BR12). Undefined for a client/guest seat (F1 of ART-20260906-026): a
+   *  client's stakeholder set is always empty (`clientView` zeroes `projectMembers`), so building
+   *  a scope for one silently dropped any client-visible issue nested under a real project-tier
+   *  node — `withinScope` in `lib/tree.ts` treats no scope as today's unchanged, content-only
+   *  visibility, which is what a client or guest seat must get. */
+  const scope = useMemo(
+    () => (isInternal ? clientFilterScopeFor(state, personId) : undefined),
+    [state, personId, isInternal],
+  )
+  /** The person's stored client choice, resolved to its current name (ART-20260905-024 step 16;
+   *  `null` when nothing is stored or it no longer resolves) — the value step 17's Clear and
+   *  saved-view apply return to, rather than to unscoped All (BR14). Kept separate from
+   *  `filters.client`, which the person can move away from in the same session without losing
+   *  what is stored. */
+  const storedClient = useMemo(
+    () => resolveClientChoice(state.model, state.nodes, personId),
+    [state.model, state.nodes, personId],
+  )
   /** The retired toolbar bell's number, now the sidebar Notifications badge. */
   const notificationsUnread = useMemo(
-    () => unreadCount(state.notifications, actor.name, directoryPersonFor(state.model, actor)?.id ?? null),
-    [state.notifications, state.model, actor],
+    () => unreadCount(state.notifications, actor.name, personId),
+    [state.notifications, actor.name, personId],
   )
 
   const sortedRows = useMemo(
@@ -755,16 +831,16 @@ export default function IssueWorkspace({
   )
 
   const rows = useMemo(
-    () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model))),
-    [sortedRows, filters, collapsed, state.model],
+    () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model)), scope),
+    [sortedRows, filters, collapsed, state.model, scope],
   )
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
-  const facets = useMemo(() => facetsOf(state), [state])
+  const facets = useMemo(() => facetsOf(state, scope), [state, scope])
 
   const counts = useMemo(() => {
     const issueRows = sortedRows.filter((r) => r.kind === 'issue')
-    const shown = issueRows.filter((r) => matchesFilters(r, filters))
+    const shown = issueRows.filter((r) => matchesFilters(r, filters, scope))
     const tally = (h: string) => shown.filter((r) => r.scheduleHealth === h).length
     /**
      * "Done" is counted against the facets but not against the completed toggle.
@@ -775,7 +851,7 @@ export default function IssueWorkspace({
      * completed* because completed things are hidden is worse than not showing the figure.
      */
     const completed = issueRows.filter(
-      (r) => matchesFilters(r, { ...filters, showCompleted: true }) && r.scheduleHealth === 'Completed',
+      (r) => matchesFilters(r, { ...filters, showCompleted: true }, scope) && r.scheduleHealth === 'Completed',
     ).length
     return {
       total: issueRows.length,
@@ -786,7 +862,7 @@ export default function IssueWorkspace({
       completed,
       unscheduled: tally('Unscheduled'),
     }
-  }, [sortedRows, filters])
+  }, [sortedRows, filters, scope])
 
   /**
    * Archived records, counted so the entry point can hide itself.
@@ -988,13 +1064,33 @@ export default function IssueWorkspace({
         }
         return next
       })
-      if (!matchesFilters(row, filters)) {
-        setFilters(EMPTY_FILTERS)
-        notify(`Filters cleared so ${id} is visible.`)
+      if (!matchesFilters(row, filters, scope)) {
+        // EMPTY_FILTERS rests the Client facet at NO_CLIENT_CHOSEN, under which matchesFilters
+        // admits nothing (BR2) — so a bare reset would hide the very row this promised to show,
+        // and the reveal effect below would find no index and give up. Choose the revealed
+        // record's own client instead: the row carries it (BR14's reveal rule).
+        const client = row.issue?.client
+        if (!client) {
+          setFilters(EMPTY_FILTERS)
+          notify(`Filters cleared, but ${id} carries no client — choose one in the Filters row to list it.`, true)
+          setRevealTarget(id)
+          return
+        }
+        const candidate = { ...EMPTY_FILTERS, client }
+        if (!matchesFilters(row, candidate, scope)) {
+          // The row's own client still does not admit it: its project sits outside the
+          // person's stakeholder set (an exempt seat's payload can hold such a row). Resetting
+          // to a state that hides everything would trade one empty grid for another, so the
+          // row is left unrevealed and the notice says why instead (AC10).
+          notify(`${id} is on a project you are not a member of, so it cannot be listed here.`, true)
+          return
+        }
+        setFilters(candidate)
+        notify(`Filters cleared and Client set to ${client} so ${id} is visible.`)
       }
       setRevealTarget(id)
     },
-    [allRows, filters, notify, requestSelect, view, setView],
+    [allRows, filters, scope, notify, requestSelect, view, setView],
   )
 
   useEffect(() => {
@@ -1732,22 +1828,26 @@ export default function IssueWorkspace({
    *
    * The report prints this at the top. A status report whose scope is implicit is one people
    * misread once and stop trusting afterwards — and "everything" is itself a scope worth
-   * stating rather than leaving blank.
+   * stating rather than leaving blank. `scopeLabelFor` (`lib/filterPresentation.ts`, step 9)
+   * holds the rule so the scenario harness can pin it: at 'All' it names the person's own
+   * scope — how many stakeholder projects on how many clients — rather than naming every
+   * client in the tenant, because under scoped-All the rows were computed from the person's
+   * projects only and a report must never state a scope wider than that (BR15 of
+   * ART-20260905-023).
    */
-  const scopeLabel = useMemo(() => {
-    const parts: string[] = []
-    if (filters.client !== 'All') parts.push(filters.client)
-    if (filters.module !== 'All') parts.push(filters.module)
-    if (filters.type !== 'All') parts.push(filters.type)
-    if (filters.status !== 'All') parts.push(`status ${filters.status}`)
-    if (filters.severity !== 'All') parts.push(`severity ${filters.severity}`)
-    if (filters.owner !== 'All') parts.push(`owner ${filters.owner}`)
-    if (filters.accountable !== 'All') parts.push(`accountable ${filters.accountable}`)
-    if (filters.health !== 'All') parts.push(filters.health)
-    if (filters.search.trim()) parts.push(`matching “${filters.search.trim()}”`)
-    const base = parts.length ? parts.join(' · ') : `All clients — ${state.model.organization.name}`
-    return filters.showCompleted ? base : `${base} (completed hidden in the view; counted here)`
-  }, [filters, state.model.organization.name])
+  const scopeLabel = useMemo(
+    () =>
+      scopeLabelFor(filters, {
+        organization: state.model.organization.name,
+        // `scope` is undefined for a client/guest seat (no stakeholder scope is built for one,
+        // per the gate above); its stakeholder set was already empty pre-fix (`clientView`
+        // zeroes `projectMembers`), so `?? 0` reproduces that seat's existing count exactly —
+        // this label's number is unchanged by the fix, only the row-level scoping is.
+        stakeholderProjects: scope?.memberProjectIds.size ?? 0,
+        stakeholderClients: facets.clients.length,
+      }),
+    [filters, state.model.organization.name, scope, facets.clients.length],
+  )
 
   /**
    * Daily IMS.
@@ -1759,7 +1859,7 @@ export default function IssueWorkspace({
    */
   const exportDailyIms = useCallback(() => {
     const inScope = sortedRows.filter(
-      (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }),
+      (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }, scope),
     )
     const report = buildDailyIms(state, inScope, today, scopeLabel)
     download(`daily-ims-${today}.txt`, renderImsText(report, state.model.organization.name), 'text/plain')
@@ -1767,17 +1867,20 @@ export default function IssueWorkspace({
     notify(
       `Daily IMS exported — ${report.position.open} open of ${report.position.total}, ${report.sections.length} section(s) needing attention.`,
     )
-  }, [state, sortedRows, filters, today, scopeLabel, download, notify])
+  }, [state, sortedRows, filters, scope, today, scopeLabel, download, notify])
 
   /**
    * A client pack is for exactly one client — the same precondition `clientView` itself has —
    * so this refuses before building anything when the screen isn't scoped to one, rather than
-   * silently picking a client or building against an ambiguous filter.
+   * silently picking a client or building against an ambiguous filter. `clientPackProblem`
+   * (`lib/filterPresentation.ts`) holds the rule so the scenario harness can pin AC13's
+   * sentinel half alongside 'All'.
    */
   const openClientPack = useCallback(
     (kind: 'weekly' | 'monthly') => {
-      if (filters.client === 'All') {
-        notify('Pick one client first — a client pack is for a single client, not the whole workspace.', true)
+      const problem = clientPackProblem(filters.client)
+      if (problem) {
+        notify(problem, true)
         return
       }
       const scopeId = clientScopeIdFor(state, filters.client)
@@ -1804,11 +1907,13 @@ export default function IssueWorkspace({
   const slaPlan = useMemo(
     () =>
       planSlaDates(
-        sortedRows.filter((r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true })),
+        sortedRows.filter(
+          (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }, scope),
+        ),
         sla,
         today,
       ),
-    [sortedRows, filters, sla, today],
+    [sortedRows, filters, scope, sla, today],
   )
 
   /**
@@ -1903,7 +2008,8 @@ export default function IssueWorkspace({
             header deliberately: the firm is the one running the product and does not need
             telling, and the tree itself is the page — labelling it competes with the row that
             is actually selected. The organisation name is still configured and still used
-            wherever it disambiguates, such as the filter summary for "All clients". */}
+            wherever it disambiguates, such as the resting filter summary's own-projects
+            wording (`scopeLabel`, `scopeLabelFor`). */}
 
         <div className="search">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -2074,7 +2180,7 @@ export default function IssueWorkspace({
       <AppSidebar
         view={view}
         setView={setView}
-        mayInternal={can(state.model, actor, 'internal.view').allowed}
+        mayInternal={isInternal}
         myWorkCount={myWorkCount}
         timesheetQueue={
           can(state.model, actor, 'time.approve').allowed
@@ -2084,19 +2190,30 @@ export default function IssueWorkspace({
         notificationsUnread={notificationsUnread}
         savedViews={state.model.savedViews}
         onApplySavedView={(v) => {
-          setFilters(v.filters)
+          // A view stored at rest (BR14) carries no client of its own; applying it leaves the
+          // person's current client in place — the stored choice if there is one, else
+          // whatever the facet is set to right now (which may be session-only 'All', never
+          // written back) — rather than resetting it, so the shared view and the person's
+          // preference never fight (AC12). Any other stored client, including 'All', applies
+          // as-is. Distinct from `restingClient` below: Clear must never land on unscoped All
+          // (AC9), but applying a view must not silently empty a grid someone is looking at.
+          setFilters(applySavedFilters(v.filters, storedClient ?? filters.client))
           setView(v.view)
         }}
         onDeleteSavedView={(id) =>
           dispatch({ t: 'deleteSavedView', id, now: new Date().toISOString() })
         }
-        onSaveCurrentView={(name) =>
+        onSaveCurrentView={(name) => {
+          // Saving at rest is legitimate now (BR14): parseSavedFilters (lib/savedViews.ts)
+          // stores the sentinel as "no client stored" and applySavedFilters defines what that
+          // means on apply, so the browser no longer needs to refuse it — the reducer arm is
+          // the one line, and its message is the toast `dispatch` already raises on success.
           dispatch({
             t: 'upsertSavedView',
             view: { name, filters, view },
             now: new Date().toISOString(),
           })
-        }
+        }}
         onOpenConfig={() => setConfigOpen(true)}
         archivedCount={archivedCount}
         onOpenArchive={() => setArchiveOpen(true)}
@@ -2115,6 +2232,18 @@ export default function IssueWorkspace({
         model={state.model}
         filters={filters}
         setFilters={setFilters}
+        restingClient={storedClient ?? NO_CLIENT_CHOSEN}
+        personResolved={personId !== null}
+        onClientChosen={(client) => {
+          // The person's explicit act on the control, the one path that records
+          // (ART-20260905-024 step 16, BR13, BR5). 'All' and the resting sentinel are session
+          // state, not a stored choice (assumption A1) — neither ever reaches here, but the
+          // literal checks stay as the record of that decision rather than trusting the caller.
+          if (client === 'All' || client === NO_CLIENT_CHOSEN || personId === null) return
+          const clientId = clientScopeIdFor(state, client)
+          if (!clientId) return
+          dispatch({ t: 'setClientChoice', personId, clientId, now: new Date().toISOString() })
+        }}
         facets={facets}
         zoom={zoom}
         setZoom={setZoom}
@@ -2278,6 +2407,16 @@ export default function IssueWorkspace({
         <div className="pane-tree" style={{ width: treeWidth }}>
           <TreeGrid
             rows={rows}
+            emptyReason={emptyGridReason({
+              filters,
+              personResolved: personId !== null,
+              // `scope` is undefined for a client/guest seat (no stakeholder scope is built for
+              // one, per the gate above); its stakeholder set was already empty pre-fix
+              // (`clientView` zeroes `projectMembers`), so `?? 0` reproduces that seat's
+              // existing count exactly — unchanged by the fix, only the row-level scoping is.
+              stakeholderProjects: scope?.memberProjectIds.size ?? 0,
+              clientLabel: orgLabels.TIER_ORGANIZATION,
+            })}
             columns={orderedCols}
             colWidths={colWidths}
             setColWidths={setColWidths}

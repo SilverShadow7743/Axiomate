@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import type { FilterState } from '@/lib/types'
+import { activeFilterCount } from '@/lib/filterPresentation'
 
 /**
  * The chip that owns the filter row (docs/plans/2026-08-31-clean-shell-design.md): mounted
@@ -9,10 +10,13 @@ import type { FilterState } from '@/lib/types'
  * filtered rows), it collapses the EXISTING FilterBar behind a count of what is set, so the
  * resting state costs one slim row instead of a bar of eleven controls.
  *
- * The count excludes `search` — the search box lives in the top bar, globally — and counts
- * `showCompleted` the same way FilterBar's own Clear affordance does: any deviation from
- * the resting view. Starts expanded exactly when something IS set, because a hidden active
- * filter is the one thing this must never create.
+ * The count is `activeFilterCount` (`lib/filterPresentation.ts`), the same rule FilterBar's own
+ * Clear affordance uses, so the chip and Clear never disagree about what "resting" means.
+ * It excludes `search` — the search box lives in the top bar, globally — and the Client facet
+ * rests at `NO_CLIENT_CHOSEN`, which is the absence of a choice rather than a filter (BR7 of
+ * ART-20260905-016), so it does not count either — the chip reads "Filters" at rest even
+ * though the grid below it lists nothing. Starts expanded exactly when something IS set,
+ * because a hidden active filter is the one thing this must never create.
  */
 export default function FiltersHeader({
   filters,
@@ -26,9 +30,7 @@ export default function FiltersHeader({
   total: number
   children: ReactNode
 }) {
-  const activeCount = Object.entries(filters).filter(([k, v]) =>
-    k === 'search' ? false : k === 'showCompleted' ? v === true : v !== 'All',
-  ).length
+  const activeCount = activeFilterCount(filters)
   const [open, setOpen] = useState(() => activeCount > 0)
 
   return (

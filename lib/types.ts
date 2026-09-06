@@ -360,6 +360,11 @@ export interface FilterState {
    * reporting the full total beside the shown one, and every rollup still counts them.
    */
   showCompleted: boolean
+  /**
+   * A client name, 'All', or `NO_CLIENT_CHOSEN` — the resting value, on which nothing is
+   * listed. Stays `string` because the names are open-ended; the sentinel is the one value
+   * consumers must test for by constant, never by literal.
+   */
   client: string
   /** Work type — the discriminator that keeps issues and change requests in one table. */
   type: string
@@ -378,10 +383,27 @@ export interface FilterState {
   raidOnly: boolean
 }
 
+/**
+ * The Client facet's resting value: no client chosen yet.
+ *
+ * A typed sentinel rather than a reuse of 'All' or of the Discipline facet's 'None', because
+ * the three mean different things and two of them already have consumers. 'All' is a choice —
+ * every client — and after the scoped-All step it becomes the person-relative every-client.
+ * 'None' on Discipline means "records that carry no discipline", a real query. This value
+ * means neither: nothing has been chosen, and until something is the view lists nothing
+ * (deny by default, BR2). `matchesFilters` and `visibleRows` in `lib/tree.ts` read it; every
+ * consumer that compares `filters.client` to the literal 'All' has to compare to this as well
+ * (BR7), which is why it is exported and typed rather than an inline string. The bracketed
+ * form cannot collide with a client node's name and is never shown to a person as-is — the
+ * dropdown captions it.
+ */
+export const NO_CLIENT_CHOSEN = '__NO_CLIENT_CHOSEN__' as const
+export type NoClientChosen = typeof NO_CLIENT_CHOSEN
+
 export const EMPTY_FILTERS: FilterState = {
   search: '',
   showCompleted: false,
-  client: 'All',
+  client: NO_CLIENT_CHOSEN,
   type: 'All',
   discipline: 'All',
   module: 'All',

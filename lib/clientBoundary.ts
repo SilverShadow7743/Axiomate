@@ -122,6 +122,11 @@ export function clientView(
     // Who is staffed on a project is internal machinery, the same class as rates and
     // allocations above — withheld wholesale from every client view regardless of flags.
     projectMembers: {},
+    // The model is otherwise carried whole. Each person's chosen client (written by the
+    // setClientChoice arm) is the one entry withheld: it says who is looking at whom, the same
+    // class as project membership above, and a client seat must not learn it (AC7 of
+    // ART-20260905-023).
+    model: { ...state.model, clientChoices: {} },
     // Nobody's private calendar belongs in a client view — the same absolute rule as
     // `redactForReader`'s own filter, applied here too since clientView can be called
     // independently of boot()'s internal.view branch.

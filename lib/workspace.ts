@@ -35,7 +35,7 @@ import type {
   Severity,
   SlaPolicy,
 } from './types'
-import { ACTIVITY_PHASES } from './types'
+import { ACTIVITY_PHASES, NO_CLIENT_CHOSEN } from './types'
 
 /**
  * Re-exported so the many callers that reach for `NodeKind` from the workspace keep working.
@@ -1181,6 +1181,12 @@ export type Action =
     }
   | { t: 'markNotificationRead'; id: string; now: string }
   | { t: 'setNotificationPref'; personId: string; kind: NotificationKind; mode: NotificationMode; now: string }
+  /**
+   * A person's chosen client in the issue workspace — self-or-admin, in `setNotificationPref`'s
+   * shape. `clientId` is a node id on an externalParty tier, never a name; 'All' is session
+   * state and never arrives here. See `docs/adr/0002-client-filter-stakeholder-scope.md`.
+   */
+  | { t: 'setClientChoice'; personId: string; clientId: string; now: string }
   /** Save or update a shared view — filters + tab under a name. See `lib/savedViews.ts`. */
   | { t: 'upsertSavedView'; view: { id?: string | null; name: string; filters: unknown; view: unknown }; now: string }
   | { t: 'deleteSavedView'; id: string; now: string }
@@ -5755,6 +5761,13 @@ Question: ${review.question}`),
       if (existing && existing.createdBy !== by && !can(state.model, actor, 'config.manage').allowed) {
         return { state, error: `“${existing.name}” was saved by ${existing.createdBy}. Changing it needs “Configure the platform”.` }
       }
+      /*
+       * The write boundary for a view's client (BR14, AC12): parseSavedFilters lands the
+       * sentinel, an absent client, or junk on the one canonical resting value, which for a
+       * saved view means "no client stored — keep each person's own" (applySavedFilters puts
+       * it back on apply). Nothing is refused: saving at rest is legitimate, and the message
+       * says what was stored so the browser guard is not the only line.
+       */
       const filters = parseSavedFilters(a.view.filters)
       const viewTab = parseWorkspaceView(a.view.view)
       const seq = existing ? state.seq : state.seq + 1
@@ -5780,7 +5793,10 @@ Question: ${review.question}`),
             by,
           }),
         },
-        message: `View “${name}” saved for everyone.`,
+        message:
+          filters.client === NO_CLIENT_CHOSEN
+            ? `View “${name}” saved for everyone; it keeps each person's own client.`
+            : `View “${name}” saved for everyone.`,
       }
     }
 
@@ -5851,6 +5867,57 @@ Question: ${review.question}`),
           }),
         },
         message: `Noted — ${a.kind} is now ${a.mode} for ${person.name}.`,
+      }
+    }
+
+    case 'setClientChoice': {
+      const person = state.model.people[a.personId]
+      if (!person) {
+        return { state, error: 'A client choice belongs to a directory person, and that id resolves to nobody.' }
+      }
+      /*
+       * The same gate as `setNotificationPref` just above: self-service, with the platform
+       * operator as the one exception. The actor is the reducer's parameter from the sealed
+       * session, never a body field, so "self" is decided here and nowhere else.
+       */
+      const self = directoryPersonFor(state.model, actor)?.id === a.personId
+      if (!self && !can(state.model, actor, 'config.manage').allowed) {
+        return {
+          state,
+          error: `The client choice is the person's own. Changing ${person.name}'s needs “Configure the platform”.`,
+        }
+      }
+      /*
+       * The value is a node id on one of THIS organisation's externalParty tiers, checked
+       * against this tenant's tree — `state` is the tenant's, so an id from another tenant
+       * fails here rather than being stored and later degrading. A name, a project id or a
+       * typo is refused for the same reason the client-scope check on upsertPerson refuses
+       * it: a choice nothing resolves would silently rest the filter at nothing chosen.
+       */
+      const node = state.nodes[a.clientId]
+      if (!node || node.deletedAt || !externalPartyKinds(tiersOf(state.model)).has(node.kind)) {
+        return { state, error: 'That id is not a client in this workspace.' }
+      }
+      const currentId = state.model.clientChoices[a.personId]
+      if (currentId === a.clientId) return { state, message: 'Nothing changed.' }
+      const previous = currentId ? state.nodes[currentId] : undefined
+      return {
+        state: {
+          ...state,
+          model: {
+            ...state.model,
+            clientChoices: { ...state.model.clientChoices, [a.personId]: a.clientId },
+          },
+          audit: log(actor, state, {
+            rowId: a.personId,
+            field: 'client.choice',
+            from: previous?.name ?? '',
+            to: node.name,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `Noted — ${person.name}'s client is now ${node.name}.`,
       }
     }
 

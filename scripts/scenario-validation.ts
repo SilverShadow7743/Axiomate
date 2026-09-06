@@ -40,14 +40,15 @@ import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/rai
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
-  wouldCreateManagerCycle, directReportsOf, holidaySetOf, type Person,
+  wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
+  initModel, mergeModel,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
-import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, type PermissionKey } from '../lib/access'
-import { projectView, memberProjectIdsFor } from '../lib/projectBoundary'
+import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
+import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
@@ -55,7 +56,7 @@ import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGr
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
-import { actionProblem } from '../lib/actionShape'
+import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/assignment'
 import { availabilityFor, redactLeaveReasons } from '../lib/availability'
@@ -104,7 +105,7 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, matchesFilters, visibleRows } from '../lib/tree'
+import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
@@ -115,7 +116,9 @@ import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
-import { ISSUE_STATUSES, EMPTY_FILTERS, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
+import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail, type FilterState } from '../lib/types'
+import { activeFilterCount, clientPackProblem, clientRestingCaption, emptyGridReason, isActiveFilter, scopeLabelFor } from '../lib/filterPresentation'
+import { applySavedFilters, parseSavedView } from '../lib/savedViews'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
@@ -319,6 +322,9 @@ const ok = (s: WorkspaceState, a: Action): WorkspaceState => {
   return r.state
 }
 const rowsOf = (s: WorkspaceState, today = TODAY) => buildTree(s, today)
+// EMPTY_FILTERS rests on the Client facet's sentinel and lists nothing (CD1, ART-20260905-016 BR2).
+// A scenario that means "no filter active" says so by choosing every client.
+const UNFILTERED = { ...EMPTY_FILTERS, client: 'All' }
 const rowFor = (s: WorkspaceState, id: string, today = TODAY) =>
   rowsOf(s, today).find((r) => r.id === id)!
 
@@ -7344,7 +7350,7 @@ scenario(
       decision?.raidKind === 'decision' && decision.decisionOutcome === 'Ship the interim mapping.' &&
       ordinary !== undefined && ordinary.raidKind === null
 
-    const raidOnly = { ...EMPTY_FILTERS, raidOnly: true }
+    const raidOnly = { ...UNFILTERED, raidOnly: true }
     const filterRight =
       matchesFilters(risk!, raidOnly) &&
       matchesFilters(unjudgedRisk!, raidOnly) &&
@@ -7352,7 +7358,7 @@ scenario(
       !matchesFilters(ordinary!, raidOnly) &&
       /* raidOnly changes nothing about who passes when it is off — additive, not a second
          gate everyone must also clear. */
-      matchesFilters(ordinary!, EMPTY_FILTERS)
+      matchesFilters(ordinary!, UNFILTERED)
 
     const good = rowsRight && filterRight
 
@@ -8452,7 +8458,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'CHILD-LOW', parentId: 'PARENT', kind: 'issue', issue: { severity: 'Low' } }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && !shown.some((r) => r.id === 'CHILD-LOW')
 
     return good
@@ -8470,7 +8476,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'CHILD-HIGH', parentId: 'PARENT', kind: 'issue', issue: { severity: 'High' } }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'CHILD-HIGH')
 
     return good
@@ -8488,7 +8494,7 @@ scenario(
       tvRow({ id: 'PARENT', parentId: null, kind: 'issue', issue: { severity: 'High' } }),
       tvRow({ id: 'ACT', parentId: 'PARENT', kind: 'activity' }),
     ]
-    const shown = visibleRows(all, { ...EMPTY_FILTERS, severity: 'High' }, new Set())
+    const shown = visibleRows(all, { ...UNFILTERED, severity: 'High' }, new Set())
     const good = shown.some((r) => r.id === 'PARENT') && shown.some((r) => r.id === 'ACT')
 
     return good
@@ -8547,7 +8553,7 @@ scenario(
       tvRow({ id: 'CLIENT-B', parentId: null, kind: 'client', name: 'Axiocloud' }),
       tvRow({ id: 'PROJECT-B', parentId: 'CLIENT-B', kind: 'project', name: 'Axio-Finance' }),
     ]
-    const shown = visibleRows(all, EMPTY_FILTERS, new Set())
+    const shown = visibleRows(all, UNFILTERED, new Set())
     const ids = shown.map((r) => r.id)
     const good = ids.includes('CLIENT-B') && ids.includes('PROJECT-B')
 
@@ -9097,7 +9103,7 @@ scenario(
     // Through visibleRows, because that is where attachRollups actually runs — buildTree
     // rows carry no rollup (found by this scenario's own first run, which read the wrong
     // helper and blamed the product).
-    const outcomeRow = visibleRows(rowsOf(s), EMPTY_FILTERS, new Set()).find((r) => r.id === outcomeId)
+    const outcomeRow = visibleRows(rowsOf(s), UNFILTERED, new Set()).find((r) => r.id === outcomeId)
     const rollsUp = outcomeRow?.rollup?.issues === 1 && outcomeRow?.rollup?.open === 1
 
     const good = refusalsHold && inherits && optional && rollsUp
@@ -10067,6 +10073,919 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: "An ordinary draft with no sourceType/lastActivity keys still lands sourceType='' and lastActivity=now, exactly as before; a draft stating both (plus the already-supported raised) lands every one of the three real values.", stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `ordinaryUnaffected=${ordinaryUnaffected} (sourceType=${JSON.stringify(created1.sourceType)} lastActivity=${created1.lastActivity}) historicalHonored=${historicalHonored} (sourceType=${JSON.stringify(created2.sourceType)} raised=${created2.raised} lastActivity=${created2.lastActivity})`, stops: 'at the create arm — either every ordinary issue in the app now carries a stray sourceType/lastActivity default, or the WBS import cannot state its own historical facts', severity: 'P1', impact: 'the WBS import (134 issues) would either be refused the fields it needs, or every other feature that creates an issue through the ordinary path would start seeing unexpected sourceType/lastActivity values' } as const
+  },
+)
+
+/* ================================================================== *
+ * Client filter defaults (ART-20260905-016)
+ * ================================================================== */
+
+/*
+ * The Client facet's resting value is a sentinel, not 'All' — until somebody chooses a client
+ * the Tree lists nothing (BR2), and the sentinel is neither 'All' nor the Discipline facet's
+ * 'None' (BR7). Driven through buildTree, matchesFilters and visibleRows over BASE, the same
+ * path the grid takes, so a consumer that quietly reads the resting value as 'All' again fails
+ * here rather than in the workspace.
+ */
+
+scenario(
+  'CD1',
+  "EMPTY_FILTERS rests on a client sentinel that lists nothing — not 'All', and not the Discipline facet's 'None'",
+  "BR2 and BR7 of ART-20260905-016: with no client chosen, visibleRows keeps no issue row and no structural row, and matchesFilters admits nothing; the same filters with client 'All' list the fixture's three issues under their client exactly as before this change; client 'All' with discipline 'None' still returns the fixture's unclassified issues, so the resting token and the 'unclassified' query are not one token; and EMPTY_FILTERS.client is neither 'All' nor 'None'.",
+  () => {
+    const all = rowsOf(BASE)
+
+    // Resting: nothing through either gate — not an issue, not an empty branch riding along.
+    const resting = visibleRows(all, EMPTY_FILTERS, new Set())
+    const admitted = all.filter((r) => matchesFilters(r, EMPTY_FILTERS))
+    const listsNothing = resting.length === 0 && admitted.length === 0
+
+    // 'All' is a choice, and it still lists the fixture the way it always has.
+    const issueIds = (rows: ScheduleRow[]) => rows.filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const everyClient = visibleRows(all, { ...EMPTY_FILTERS, client: 'All' }, new Set())
+    const asToday = issueIds(everyClient) === 'OAPIL-1,OAPIL-2,OAPIL-3' && everyClient.some((r) => r.kind === 'client')
+
+    // BASE's issues carry no discipline (imports never do), so the real "unclassified" query
+    // keeps every one of them — proof that 'None' is a query and the sentinel is not.
+    const unclassified = visibleRows(all, { ...EMPTY_FILTERS, client: 'All', discipline: 'None' }, new Set())
+    const noneIsAQuery = issueIds(unclassified) === 'OAPIL-1,OAPIL-2,OAPIL-3'
+
+    const distinctToken = EMPTY_FILTERS.client !== 'All' && EMPTY_FILTERS.client !== 'None'
+
+    const good = listsNothing && asToday && noneIsAQuery && distinctToken
+    return good
+      ? { verdict: 'PASS', actual: `EMPTY_FILTERS lists 0 rows through visibleRows and admits 0 through matchesFilters over ${all.length} tree rows; client 'All' lists [${issueIds(everyClient)}] under their client node; client 'All' + discipline 'None' lists [${issueIds(unclassified)}]; EMPTY_FILTERS.client is ${JSON.stringify(EMPTY_FILTERS.client)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `listsNothing=${listsNothing} (visible=[${resting.map((r) => r.id).join(', ')}] admitted=[${admitted.map((r) => r.id).join(', ')}]) asToday=${asToday} (issues=[${issueIds(everyClient)}]) noneIsAQuery=${noneIsAQuery} (issues=[${issueIds(unclassified)}]) distinctToken=${distinctToken} (client=${JSON.stringify(EMPTY_FILTERS.client)})`, stops: 'at matchesFilters/visibleRows — the resting value either lists rows it must not, or has collapsed into \'All\' or \'None\'', severity: 'P1', impact: 'the workspace either opens on every client\'s work for a person who chose none (the fail-open BR2 forbids), or a chosen \'All\' or an "unclassified" query stops meaning what it did' } as const
+  },
+)
+
+/*
+ * The stakeholder function the Client filter reads is memberProjectIdsFor, and nothing beside it
+ * (ART-20260905-016 BR1, BR8; ADR 0002 decision 2): a live ProjectMember row — personId matches,
+ * removedAt null — and the project role on the row confers nothing. CD2 pins the definition on
+ * the function itself; CD3 pins that the read gate and the filter's facets, both reading that one
+ * set, agree — the proof AC2 asks for under definition (d), not a claim that the filter's callers
+ * (step 5, still blocked on OQ3) have changed.
+ */
+
+scenario(
+  'CD2',
+  'A stakeholder is a live ProjectMember row — removedAt ends it, the project role never enters',
+  "AC15 of ART-20260905-016: with the signed-in person on project P (removedAt set, Sponsor) and on project Q (removedAt null, Customer), memberProjectIdsFor is exactly {Q}; changing the project role on either row changes nothing; clearing P's removedAt puts P back; a null personId is the empty set (BR2); and projectView over the same rows keeps Q and drops P, so the read gate and the filter answer from one definition.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const pId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const qId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+
+    /* Two roles the spec names, so the role really is present on the rows and really is ignored. */
+    st = ok(st, { t: 'addProjectMember', projectId: pId, person: 'Priya', projectRoleId: 'PROJROLE_SPONSOR', now: NOW } as Action)
+    const pRowId = Object.values(st.projectMembers).find((m) => m.projectId === pId && m.personId === priyaId)!.id
+    st = ok(st, { t: 'addProjectMember', projectId: qId, person: 'Priya', projectRoleId: 'PROJROLE_CUSTOMER', now: NOW } as Action)
+    const qRowId = Object.values(st.projectMembers).find((m) => m.projectId === qId && m.personId === priyaId)!.id
+    st = ok(st, { t: 'removeProjectMember', id: pRowId, now: NOW } as Action)
+
+    const setOf = (s: Set<string>) => [...s].sort().join(',')
+    const stakeholders = memberProjectIdsFor(st, priyaId)
+    const exactlyQ = setOf(stakeholders) === qId
+
+    /* The live row's role changes through the reducer; the removed row refuses an update (its
+       own arm says so), so its role is varied on the state directly — the function's input is
+       the rows, and the rows are what BR8 says it ignores. */
+    const reroledLive = ok(st, { t: 'updateProjectMember', id: qRowId, projectRoleId: 'PROJROLE_SPONSOR', now: NOW } as Action)
+    const reroledGone: WorkspaceState = {
+      ...st,
+      projectMembers: { ...st.projectMembers, [pRowId]: { ...st.projectMembers[pRowId], projectRoleId: 'PROJROLE_CUSTOMER' } },
+    }
+    const roleIgnored =
+      setOf(memberProjectIdsFor(reroledLive, priyaId)) === qId &&
+      setOf(memberProjectIdsFor(reroledGone, priyaId)) === qId
+
+    /* Only removedAt decides: clear it and P is a stakeholder project again. */
+    const restored: WorkspaceState = {
+      ...st,
+      projectMembers: { ...st.projectMembers, [pRowId]: { ...st.projectMembers[pRowId], removedAt: null } },
+    }
+    const removedAtDecides = setOf(memberProjectIdsFor(restored, priyaId)) === [pId, qId].sort().join(',')
+
+    const unresolvedIsEmpty = memberProjectIdsFor(st, null).size === 0
+
+    /* The same rows the read gate consults produce the same answer: the gate keeps Q and drops P. */
+    const view = projectView(st, stakeholders)
+    const gateAgrees = Boolean(view.nodes[qId]) && !view.nodes[pId]
+
+    const good = exactlyQ && roleIgnored && removedAtDecides && unresolvedIsEmpty && gateAgrees
+    return good
+      ? { verdict: 'PASS', actual: `memberProjectIdsFor = {${setOf(stakeholders)}} (Q only); Sponsor/Customer swapped on either row → still {${setOf(memberProjectIdsFor(reroledLive, priyaId))}}; P's removedAt cleared → {${setOf(memberProjectIdsFor(restored, priyaId))}}; null personId → ${memberProjectIdsFor(st, null).size} projects; projectView keeps Q=${Boolean(view.nodes[qId])} and P=${Boolean(view.nodes[pId])}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `exactlyQ=${exactlyQ} (got {${setOf(stakeholders)}}, P=${pId}, Q=${qId}) roleIgnored=${roleIgnored} removedAtDecides=${removedAtDecides} (got {${setOf(memberProjectIdsFor(restored, priyaId))}}) unresolvedIsEmpty=${unresolvedIsEmpty} gateAgrees=${gateAgrees}`, stops: 'at memberProjectIdsFor — the stakeholder set either reads a removed row, reads the project role, or disagrees with the read gate over the same rows', severity: 'P0', impact: 'the Client filter would show a person projects they were removed from, hide ones they are on, or answer differently from the payload the read gate already scoped' } as const
+  },
+)
+
+scenario(
+  'CD3',
+  'For a non-exempt seat, the read gate and the Client facets agree on one stakeholder set',
+  "The definite half of AC2 and BR8 of ART-20260905-016 under definition (d) ProjectMember: over a fixture whose live issues all sit under a project-tier node (so the ungated no-project-ancestor case OQ11 still owns does not enter), projectView(state, memberProjectIdsFor(state, p)) drops every issue whose project is P2 and keeps every issue under P1 — including one two tiers down, through projectOf's ancestor walk — and facetsOf over that redacted state lists exactly the client names of the projects p is live on, so the filter agrees with the payload rather than computing a second set. Asserts what the read gate already does; step 5's callers are unchanged.",
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    /* Two clients, a project under each, and every live issue under one of the two projects.
+       BASE's seeded issues sit under a module with no project — the ungated case — so they are
+       archived out of the fixture rather than left to enter the facets by the ALLOW default. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = Object.values(st.nodes).find((n) => n.kind === 'client' && n.name === 'Rival Ltd')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const p1 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Alpha')!.id
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const p2 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Beta')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'module', draft: { name: 'Billing' }, now: NOW } as Action)
+    const billingId = Object.values(st.nodes).find((n) => n.kind === 'module' && n.name === 'Billing')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: billingId, kind: 'issue', draft: { name: 'Alpha billing task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+
+    const live = Object.values(st.issues).filter((i) => !i.deletedAt)
+    const underP1 = live.filter((i) => projectOf(st, i.id) === p1).map((i) => i.id)
+    const underP2 = live.filter((i) => projectOf(st, i.id) === p2).map((i) => i.id)
+    const allProjectScoped = live.length === 3 && underP1.length === 2 && underP2.length === 1
+
+    /* A Technical seat: not exempt from the read gate, so projectView is what boot() applies. */
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const nonExempt = !isExempt(st.model, priya)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const stakeholders = memberProjectIdsFor(st, priyaId)
+    const view = projectView(st, stakeholders)
+    const keepsP1 = underP1.every((id) => Boolean(view.issues[id]))
+    const dropsP2 = underP2.every((id) => !view.issues[id])
+
+    /* The clients the person is a stakeholder of, derived from the stakeholder set itself by
+       the same walk the create arm uses — the externalParty tier, not the literal kind. */
+    const external = externalPartyKinds(tiersOf(st.model))
+    const clientOfProject = (projectId: string): string =>
+      scopeChainOf(st, projectId).map((id) => st.nodes[id]).find((n) => n && external.has(n.kind))?.name ?? ''
+    const expected = [...new Set([...stakeholders].map(clientOfProject))].sort().join(',')
+    const facets = facetsOf(view).clients.join(',')
+    const facetsAgree = facets === expected && expected === 'OAPIL'
+    /* And the narrowing is the redaction's doing: the unredacted state still offers both. */
+    const unredacted = facetsOf(st).clients.join(',')
+    const bothBefore = unredacted === 'OAPIL,Rival Ltd'
+
+    const good = allProjectScoped && nonExempt && keepsP1 && dropsP2 && facetsAgree && bothBefore
+    return good
+      ? { verdict: 'PASS', actual: `${live.length} live issues, all under a project (P1: ${underP1.length}, P2: ${underP2.length}); a Technical seat is exempt=${!nonExempt}; projectView keeps [${underP1.join(', ')}] and drops [${underP2.join(', ')}]; facetsOf over the redacted state lists clients [${facets}], the unredacted state [${unredacted}] — the filter's options and the payload come from the one set {${[...stakeholders].join(',')}}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `allProjectScoped=${allProjectScoped} (live=${live.length}, P1=${underP1.length}, P2=${underP2.length}) nonExempt=${nonExempt} keepsP1=${keepsP1} dropsP2=${dropsP2} facetsAgree=${facetsAgree} (facets=[${facets}] expected=[${expected}]) bothBefore=${bothBefore} (unredacted=[${unredacted}])`, stops: "at projectView or facetsOf — either the read gate keeps a non-stakeholder project's issue, drops a stakeholder project's, or the Client facets over the scoped payload name a client the person has no live project under", severity: 'P0', impact: 'the Client dropdown would offer a client whose work the person cannot see, or the payload would leak a project they are not staffed on — two stakeholder sets instead of one' } as const
+  },
+)
+
+/*
+ * The scope steps 6 and 7 of ART-20260905-024 add is the person's view handed to the filter as
+ * data — never a second stakeholder set, never a change to the read gate. CD4 pins BR9-BR12 of
+ * ART-20260905-023 on a fixture the real reducer built, through clientFilterScopeFor (the one
+ * constructor, delegating to memberProjectIdsFor and projectOf) and the three filter functions
+ * in lib/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
+ * projectView never called on the path.
+ */
+
+scenario(
+  'CD4',
+  "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
+  "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const nodeId = (s: WorkspaceState, kind: string, name: string) =>
+      Object.values(s.nodes).find((n) => n.kind === kind && n.name === name)!.id
+    const issueId = (s: WorkspaceState, subject: string) =>
+      Object.values(s.issues).find((i) => i.subject === subject && !i.deletedAt)!.id
+
+    /* BASE's seeded issues are ungated too (a module with no project above it). They are archived
+       out so the fixture's one no-project issue is the only ungated record and every list below
+       can be asserted exactly — the same trim CD3 makes. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = nodeId(st, 'client', 'Rival Ltd')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Alpha' }, now: NOW } as Action)
+    const p1 = nodeId(st, 'project', 'Alpha')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Beta' }, now: NOW } as Action)
+    const p2 = nodeId(st, 'project', 'Beta')
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'project', draft: { name: 'Gamma' }, now: NOW } as Action)
+    const p3 = nodeId(st, 'project', 'Gamma')
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Alpha task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Beta task' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p3, kind: 'issue', draft: { name: 'Gamma task' }, now: NOW } as Action)
+    /* Directly under the client node: canParent permits it, and projectOf answers null. */
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'issue', draft: { name: 'Rival note' }, now: NOW } as Action)
+    const i1 = issueId(st, 'Alpha task')
+    const i2 = issueId(st, 'Beta task')
+    const i3 = issueId(st, 'Gamma task')
+    const ungated = issueId(st, 'Rival note')
+    const liveCount = Object.values(st.issues).filter((i) => !i.deletedAt).length
+    const fixtureHolds =
+      liveCount === 4 &&
+      projectOf(st, i1) === p1 && projectOf(st, i2) === p2 && projectOf(st, i3) === p3 && projectOf(st, ungated) === null
+
+    /* Priya: a Technical seat, not exempt, live on P1 only. Sam: ROLE_ADMIN, exempt, live on P1
+       only. Dev: a Technical seat on no project at all — resolved, but a member of nothing. */
+    const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+    const samId = Object.values(st.model.people).find((pp) => pp.name === 'Sam')!.id
+    const devId = 'PERSON_CD4_DEV'
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: [ADMIN_ROLE_ID] }, now: NOW } as Action)
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: devId, name: 'Dev', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Sam', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+    const seats =
+      !isExempt(st.model, priya) &&
+      rolesFor(st.model, sam).includes(ADMIN_ROLE_ID) && isExempt(st.model, sam) &&
+      memberProjectIdsFor(st, devId).size === 0
+
+    /* (g) The access answers, read before any scope exists. */
+    const access = (actor: Actor) => `${isExempt(st.model, actor)}|${PERMISSION_KEYS.map((k) => can(st.model, actor, k).allowed).join(',')}`
+    const samBefore = access(sam)
+    const priyaBefore = access(priya)
+
+    const all = rowsOf(st)
+    const external = externalPartyKinds(tiersOf(st.model))
+    const issueIds = (rows: ScheduleRow[]) => rows.filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const ids = (rows: ScheduleRow[]) => new Set(rows.map((r) => r.id))
+    const clientsOf = (rows: ScheduleRow[]) => [...new Set(rows.filter((r) => r.kind === 'issue').map((r) => r.issue!.client))].sort().join(',')
+    const CHOSE_OAPIL = { ...EMPTY_FILTERS, client: 'OAPIL' }
+    const twoRows = [i1, ungated].sort().join(',')
+
+    /* (a) BR9 rows: the member's 'All' is P1's issue and the ungated one — P2 and P3 gone, not
+       even as empty branches; P1 and the ungated issue's client node stay as the ancestors. */
+    const scope = clientFilterScopeFor(st, priyaId)
+    const allRows = visibleRows(all, UNFILTERED, new Set(), external, scope)
+    const a = issueIds(allRows) === twoRows && !ids(allRows).has(p2) && !ids(allRows).has(p3) && ids(allRows).has(p1) && ids(allRows).has(rivalId)
+
+    /* (b) BR9 dropdown: exactly the clients of those two rows; without the scope, both clients
+       as today. */
+    const scopedClients = facetsOf(st, scope).clients.join(',')
+    const unscopedClients = facetsOf(st).clients.join(',')
+    const b = scopedClients === clientsOf(allRows) && scopedClients === 'OAPIL,Rival Ltd' && unscopedClients === 'OAPIL,Rival Ltd'
+
+    /* (c) BR10: an explicit client is scoped too — P2's issue is OAPIL's and is still out, and it
+       is the scope that removes it, not the name test. */
+    const chosen = visibleRows(all, CHOSE_OAPIL, new Set(), external, scope)
+    const betaRow = all.find((r) => r.id === i2)!
+    const c = issueIds(chosen) === i1 && !ids(chosen).has(p2) && matchesFilters(betaRow, CHOSE_OAPIL) && !matchesFilters(betaRow, CHOSE_OAPIL, scope)
+
+    /* (d) BR11: an actor the directory cannot resolve is an empty set, not the absence of a
+       scope — nothing under any project, only the ungated record and its client. */
+    const none = clientFilterScopeFor(st, null)
+    const noneRows = visibleRows(all, UNFILTERED, new Set(), external, none)
+    const d =
+      none.memberProjectIds.size === 0 &&
+      issueIds(noneRows) === ungated &&
+      ![p1, p2, p3].some((p) => ids(noneRows).has(p)) &&
+      facetsOf(st, none).clients.join(',') === 'Rival Ltd'
+
+    /* (e) BR12 exempt seat: Sam is exempt from the read gate and sees the whole firm in the
+       payload — and this unredacted state is what the filter is run over here, so his rows and
+       facets narrow exactly as Priya's do. projectView is never called on this path. */
+    const samScope = clientFilterScopeFor(st, samId)
+    const samRows = visibleRows(all, UNFILTERED, new Set(), external, samScope)
+    const samChosen = visibleRows(all, CHOSE_OAPIL, new Set(), external, samScope)
+    const e =
+      issueIds(samRows) === twoRows && !ids(samRows).has(p2) && !ids(samRows).has(p3) &&
+      facetsOf(st, samScope).clients.join(',') === scopedClients &&
+      issueIds(samChosen) === i1
+
+    /* (f) BR12 ungated: the no-project issue is in under 'All' for the member, the non-member and
+       the null person alike. */
+    const devScope = clientFilterScopeFor(st, devId)
+    const ungatedRow = all.find((r) => r.id === ungated)!
+    const f =
+      matchesFilters(ungatedRow, UNFILTERED, scope) &&
+      matchesFilters(ungatedRow, UNFILTERED, devScope) &&
+      matchesFilters(ungatedRow, UNFILTERED, none) &&
+      issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope)) === ungated
+
+    /* (g) BR12 access: building and applying the scope changed nobody's authority. */
+    const g = access(sam) === samBefore && access(priya) === priyaBefore && samBefore.startsWith('true|') && priyaBefore.startsWith('false|')
+
+    const good = fixtureHolds && seats && a && b && c && d && e && f && g
+    return good
+      ? { verdict: 'PASS', actual: `${liveCount} live issues: ${i1} under P1, ${i2} under P2 (both OAPIL), ${i3} under P3 (Rival Ltd), ${ungated} directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [${issueIds(allRows)}] with P2 and P3 absent; facets [${scopedClients}] vs unscoped [${unscopedClients}]; 'OAPIL' lists [${issueIds(chosen)}]. Null person: [${issueIds(noneRows)}], facets [${facetsOf(st, none).clients.join(',')}]. Sam (ROLE_ADMIN, exempt=${isExempt(st.model, sam)}, on P1) over the unredacted state: 'All' lists [${issueIds(samRows)}], 'OAPIL' lists [${issueIds(samChosen)}]. Dev (on nothing): [${issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope))}]. isExempt and can() over ${PERMISSION_KEYS.length} keys read the same before and after for both actors; projectView not called.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
+  },
+)
+
+/*
+ * The Client facet's presentation rules — the resting caption, the Filters chip's count, the
+ * empty grid's prompt, the report's scope label and the client-pack refusal — live in
+ * lib/filterPresentation.ts (step 9 of ART-20260905-024) as pure functions, so the UI half of
+ * AC1 and the sentinel half of AC13 (ART-20260905-023) can be pinned here rather than read off
+ * a component (ART-20260905-019 condition 3). The inputs those rules take from the workspace —
+ * the tier label, the stakeholder counts — come from the real model and the real scope
+ * (resolveLabels, clientFilterScopeFor, facetsOf) over a fixture the reducer built, never from
+ * numbers typed into the scenario.
+ */
+
+/** OAPIL with one project and Priya a live member of it — the smallest view that has a scope. */
+function presentationFixture() {
+  const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+  let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+  const projectId = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+  st = ok(st, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Harbour task' }, now: NOW } as Action)
+  const priyaId = Object.values(st.model.people).find((pp) => pp.name === 'Priya')!.id
+  st = ok(st, { t: 'addProjectMember', projectId, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+  const scope = clientFilterScopeFor(st, priyaId)
+  const labels = resolveLabels(st.model)
+  return { st, priyaId, projectId, scope, labels }
+}
+
+scenario(
+  'CD5',
+  'At rest the Client control instructs, the grid names the next action, the Filters chip counts nothing, and the counts strip still knows the full total',
+  "AC1's UI half (ART-20260905-023, BR7): clientRestingCaption over the tenant's own tier label reads '<label>: choose one' and contains neither 'All' nor the bare word 'None'; emptyGridReason at EMPTY_FILTERS, for a resolved person with a live project, names the next action ('Choose a … in the Filters row'); activeFilterCount(EMPTY_FILTERS) is 0 while the same filters with client 'Acme' count 1 and with discipline 'None' count 1, so the resting token and the 'unclassified' query are not one; isActiveFilter('client', NO_CLIENT_CHOSEN) is false, so Clear is not armed at rest; and visibleRows at EMPTY_FILTERS is empty while rowsOf still carries every issue — the 'full total' half of AC1 is a count over the tree, not over the filtered rows.",
+  () => {
+    const { st, scope, labels } = presentationFixture()
+    const label = labels.TIER_ORGANIZATION
+
+    /* The resting option: an instruction in the tenant's own words for the tier, never 'All',
+       never the Discipline facet's word. */
+    const caption = clientRestingCaption(label)
+    const captionInstructs = caption === `${label}: choose one` && !/\bAll\b/.test(caption) && !/\bNone\b/.test(caption)
+
+    /* The empty grid: the person resolved and holds a live project, so the only reason nothing
+       is listed is that nothing was chosen — and the prompt says what to do next. */
+    const stakeholderProjects = scope.memberProjectIds.size
+    const reason = emptyGridReason({ filters: EMPTY_FILTERS, personResolved: true, stakeholderProjects, clientLabel: label })
+    const namesNextAction =
+      stakeholderProjects === 1 &&
+      reason !== null && reason.startsWith(`Choose a ${label.toLowerCase()}`) && reason.includes('in the Filters row')
+
+    /* The Filters chip: nothing counts at rest; a chosen client counts; the 'unclassified'
+       query counts — 'None' is a query, the sentinel is not. */
+    const chipAtRest = activeFilterCount(EMPTY_FILTERS)
+    const chipWithClient = activeFilterCount({ ...EMPTY_FILTERS, client: 'Acme' })
+    const chipWithNone = activeFilterCount({ ...EMPTY_FILTERS, discipline: 'None' })
+    const chipCounts = chipAtRest === 0 && chipWithClient === 1 && chipWithNone === 1
+
+    /* Clear: the resting sentinel is not a deviation, so nothing arms it. */
+    const clearUnarmed = isActiveFilter('client', NO_CLIENT_CHOSEN) === false && isActiveFilter('client', 'Acme') === true
+
+    /* The counts strip: the filtered list is empty, the tree is not. */
+    const all = rowsOf(st)
+    const total = all.filter((r) => r.kind === 'issue').length
+    const listed = visibleRows(all, EMPTY_FILTERS, new Set()).length
+    const fullTotal = listed === 0 && total === 4
+
+    const good = captionInstructs && namesNextAction && chipCounts && clearUnarmed && fullTotal
+    return good
+      ? { verdict: 'PASS', actual: `Resting option reads ${JSON.stringify(caption)}; the empty grid says ${JSON.stringify(reason)} for a resolved person on ${stakeholderProjects} project; the Filters chip counts ${chipAtRest} at rest, ${chipWithClient} with client 'Acme', ${chipWithNone} with discipline 'None'; isActiveFilter('client', NO_CLIENT_CHOSEN)=false; visibleRows lists ${listed} rows while the tree carries ${total} issues.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `captionInstructs=${captionInstructs} (caption=${JSON.stringify(caption)}) namesNextAction=${namesNextAction} (reason=${JSON.stringify(reason)}, projects=${stakeholderProjects}) chipCounts=${chipCounts} (rest=${chipAtRest} client=${chipWithClient} none=${chipWithNone}) clearUnarmed=${clearUnarmed} fullTotal=${fullTotal} (listed=${listed} total=${total})`, stops: "at lib/filterPresentation.ts — the resting option reads as 'All' or 'None', the empty grid gives no next action, the chip counts the sentinel (or fails to count a real choice), or the resting sentinel arms Clear", severity: 'P1', impact: "a person opening on the resting state cannot tell why nothing is listed or what to do, sees a filter count for a choice they never made, or finds Clear armed on a view that is already at rest — AC1's teaching state collapses into an ordinary empty grid" } as const
+  },
+)
+
+scenario(
+  'CD6',
+  "A report built at rest says 'No client chosen', one built under All names the person's own projects, and a client pack refuses both",
+  "AC13's sentinel half and BR15 (ART-20260905-023): scopeLabelFor(EMPTY_FILTERS, ctx) starts with 'No client chosen' and never contains 'All clients'; scopeLabelFor with client 'All' names the person's stakeholder project and client counts — read from clientFilterScopeFor and facetsOf over the real fixture — and the organisation, and never 'All clients'; clientPackProblem(NO_CLIENT_CHOSEN) equals clientPackProblem('All'), both non-null with the one teaching message, while clientPackProblem('OAPIL') is null.",
+  () => {
+    const { st, scope } = presentationFixture()
+    const organization = st.model.organization.name
+    const stakeholderProjects = scope.memberProjectIds.size
+    const stakeholderClients = facetsOf(st, scope).clients.length
+    const ctx = { organization, stakeholderProjects, stakeholderClients }
+
+    /* At rest: the report says so, and never prints a wider scope over an empty view. */
+    const atRest = scopeLabelFor(EMPTY_FILTERS, ctx)
+    const restSaysSo = atRest.startsWith('No client chosen') && !atRest.includes('All clients')
+
+    /* Under All: the label names what the rows were computed from — the person's projects,
+       their clients, the organisation — and never 'All clients' (BR15). */
+    const underAll = scopeLabelFor(UNFILTERED, ctx)
+    const namesOwnScope =
+      stakeholderProjects === 1 && stakeholderClients === 1 &&
+      underAll.startsWith('My projects') &&
+      underAll.includes(`${stakeholderProjects} project`) && underAll.includes(`${stakeholderClients} client`) &&
+      underAll.includes(organization) && !underAll.includes('All clients')
+
+    /* A client pack: one client or nothing — the sentinel and 'All' refuse with one message. */
+    const atRestProblem = clientPackProblem(NO_CLIENT_CHOSEN)
+    const allProblem = clientPackProblem('All')
+    const chosenProblem = clientPackProblem('OAPIL')
+    const packRefuses = atRestProblem !== null && atRestProblem === allProblem && chosenProblem === null
+
+    const good = restSaysSo && namesOwnScope && packRefuses
+    return good
+      ? { verdict: 'PASS', actual: `At rest the label reads ${JSON.stringify(atRest)}; under 'All' it reads ${JSON.stringify(underAll)} from a scope of ${stakeholderProjects} project on ${stakeholderClients} client at ${organization}; clientPackProblem is ${JSON.stringify(atRestProblem)} for the sentinel and for 'All' alike, and null for 'OAPIL'.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `restSaysSo=${restSaysSo} (atRest=${JSON.stringify(atRest)}) namesOwnScope=${namesOwnScope} (underAll=${JSON.stringify(underAll)} projects=${stakeholderProjects} clients=${stakeholderClients}) packRefuses=${packRefuses} (sentinel=${JSON.stringify(atRestProblem)} all=${JSON.stringify(allProblem)} chosen=${JSON.stringify(chosenProblem)})`, stops: "at lib/filterPresentation.ts — the scope label prints 'All clients' or no resting part, or the client pack accepts the sentinel, refuses a chosen client, or teaches two different things for the sentinel and 'All'", severity: 'P1', impact: "a Daily IMS would state a scope wider than the rows it was computed from (BR15), or a client pack would be attempted from no client at all — a report nobody should trust, or a refusal nobody can act on" } as const
+  },
+)
+
+scenario(
+  'CD7',
+  "A view saved at rest stores no client and says so; applying it keeps the person's own; an old 'All' view loads intact; junk lands on the resting value; ownership still holds",
+  "Step 11 of ART-20260905-024 through the real reducer (BR14, AC12 of ART-20260905-023): an upsertSavedView whose filters carry NO_CLIENT_CHOSEN is accepted, stores filters.client as the sentinel — the one canonical 'no client stored' — and returns the message naming that it keeps each person's own client; an action whose filters omit client stores the same value with the same message; a record stored before this change with client 'All' loads through parseSavedView (the loader lib/config.ts's mergeModel runs) with 'All' intact, and the arm saving 'All' today does not claim it keeps each person's own; applySavedFilters over the at-rest view with 'Acme' yields 'Acme' and over the 'All' view yields 'All', with the other keys carried, so applying either leaves the person's choice in place; a hand-built filters object with client 42 stores the resting value, not a number; and SV1's ownership rule holds on the at-rest view — another person's rewrite bounces naming the grant, an admin's lands.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')?.id ?? 'P?'
+    const samId0 = Object.values(BASE.model.people).find((p) => p.name === 'Sam')?.id ?? 'S?'
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId0, name: 'Sam' }
+    /* Real roles, as SV1: a roleless actor falls back to ADMIN and the ownership rule would
+       never be exercised. */
+    let staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    staffed = ok(staffed, { t: 'config', op: { k: 'upsertPerson', id: samId0, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const keepsOwn = /keeps each person's own client/
+
+    /* Saved at rest: the sentinel goes in as the browser would send it, and comes out as the
+       one canonical resting value — nothing refused, and the message says what was stored. */
+    const atRest = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Open work', filters: { ...EMPTY_FILTERS, status: 'Open' }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const atRestRec = atRest.state.model.savedViews[0]
+    const restStored =
+      !atRest.error && atRestRec != null && atRestRec.filters.client === NO_CLIENT_CHOSEN &&
+      atRestRec.filters.status === 'Open' && keepsOwn.test(atRest.message ?? '')
+
+    /* Client omitted altogether: the same canonical value, the same message. */
+    const absent = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'No client key', filters: { status: 'Open' }, view: 'board' }, now: NOW,
+    } as Action, priya)
+    const absentRec = absent.state.model.savedViews[0]
+    const absentStored =
+      !absent.error && absentRec != null && absentRec.filters.client === NO_CLIENT_CHOSEN &&
+      absentRec.filters.status === 'Open' && keepsOwn.test(absent.message ?? '')
+
+    /* A record from before this change, as it sits in the OperatingModel JSON: 'All' is a
+       stored value, not the sentinel, and loads as itself. */
+    const legacy = parseSavedView({ id: 'view-1', name: 'Everything', filters: { client: 'All', status: 'Open' }, view: 'tree', createdBy: 'Priya', createdAt: NOW })
+    const legacyLoads = legacy !== null && legacy.filters.client === 'All' && legacy.filters.status === 'Open'
+    const savedAll = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Everything', filters: { ...EMPTY_FILTERS, client: 'All' }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const allStored =
+      !savedAll.error && savedAll.state.model.savedViews[0]?.filters.client === 'All' && !keepsOwn.test(savedAll.message ?? '')
+
+    /* Apply: the at-rest view takes the person's own client; the 'All' view applies 'All';
+       the other keys travel either way. */
+    const appliedRest = atRestRec ? applySavedFilters(atRestRec.filters, 'Acme') : null
+    const appliedAll = legacy ? applySavedFilters(legacy.filters, 'Acme') : null
+    const applies =
+      appliedRest !== null && appliedRest.client === 'Acme' && appliedRest.status === 'Open' &&
+      appliedAll !== null && appliedAll.client === 'All' && appliedAll.status === 'Open'
+
+    /* Junk: a number where a name should be lands on the resting value, never on the number. */
+    const junk = apply(staffed, {
+      t: 'upsertSavedView', view: { name: 'Junk', filters: { client: 42 }, view: 'tree' }, now: NOW,
+    } as Action, priya)
+    const junkRec = junk.state.model.savedViews[0]
+    const junkStored = !junk.error && junkRec != null && typeof junkRec.filters.client === 'string' && junkRec.filters.client === NO_CLIENT_CHOSEN
+
+    /* Ownership on the at-rest view: SV1's rule, unchanged by the write boundary. */
+    const rewrite = apply(atRest.state, {
+      t: 'upsertSavedView', view: { id: atRestRec?.id, name: 'Hijacked', filters: { ...EMPTY_FILTERS }, view: 'tree' }, now: NOW,
+    } as Action, sam)
+    const rewriteBounces = Boolean(rewrite.error) && /Configure the platform/.test(rewrite.error ?? '')
+    const adminRewrite = apply(atRest.state, {
+      t: 'upsertSavedView', view: { id: atRestRec?.id, name: 'Renamed by admin', filters: { ...EMPTY_FILTERS }, view: 'tree' }, now: NOW,
+    } as Action, A)
+    const adminMay =
+      !adminRewrite.error && adminRewrite.state.model.savedViews[0]?.name === 'Renamed by admin' &&
+      adminRewrite.state.model.savedViews[0]?.filters.client === NO_CLIENT_CHOSEN
+
+    const good = restStored && absentStored && legacyLoads && allStored && applies && junkStored && rewriteBounces && adminMay
+    return good
+      ? { verdict: 'PASS', actual: `Saved at rest, the view stores client=${JSON.stringify(atRestRec?.filters.client)} and the arm says ${JSON.stringify(atRest.message)}; a payload without a client stores the same; a stored 'All' loads as 'All' and saves without that message; applySavedFilters gives 'Acme' over the at-rest view and 'All' over the old one; client 42 stores the resting value; Sam's rewrite of the at-rest view bounces naming the grant while the admin's lands.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `restStored=${restStored} (client=${JSON.stringify(atRestRec?.filters.client)} message=${JSON.stringify(atRest.message ?? atRest.error)}) absentStored=${absentStored} (client=${JSON.stringify(absentRec?.filters.client)}) legacyLoads=${legacyLoads} (client=${JSON.stringify(legacy?.filters.client)}) allStored=${allStored} (message=${JSON.stringify(savedAll.message ?? savedAll.error)}) applies=${applies} (rest=${JSON.stringify(appliedRest?.client)} all=${JSON.stringify(appliedAll?.client)}) junkStored=${junkStored} (client=${JSON.stringify(junkRec?.filters.client)}) rewriteBounces=${rewriteBounces} (${(rewrite.error ?? '').slice(0, 60)}) adminMay=${adminMay}`, stops: "at lib/savedViews.ts or the upsertSavedView arm — the sentinel, an absent client or junk is stored as something other than the one resting value, the message does not say what was stored, an old 'All' view is rewritten on load, applySavedFilters rests the grid or overrides a stored client, or the ownership rule slipped", severity: 'P1', impact: "a saved view either rests the grid for whoever applies it, silently widens a person's view to All, stores a value nothing can apply, or lets another person rewrite a view they do not own — the write boundary AC12 and BR14 define would exist only in the browser" } as const
+  },
+)
+
+/*
+ * The per-person client choice (step 13 of ART-20260905-024) is a `setClientChoice` arm on the
+ * `notificationPrefs` pattern — self-or-`config.manage`, a node-id value checked against this
+ * tenant's own tree, audited, withheld from client views. CD8 pins it through the real reducer
+ * rather than through the dry construction step 13's own verify command ran against a smaller
+ * fixture (BR13, BR4, BR5, BR6; AC7, AC8 of ART-20260905-023).
+ */
+
+scenario(
+  'CD8',
+  "Priya sets her own client and repeating it changes nothing; Sam's attempt on Priya's choice is refused and the platform operator's lands; an actor the directory cannot resolve, holding no grant, is refused the same way; a bad personId or clientId is refused before the map moves; the read side keeps a foreign-looking id as data and drops junk; and a client view withholds the whole map",
+  "Step 13 of ART-20260905-024 through apply(state, action, actor): setClientChoice writes the map entry and the audit line (field 'client.choice', by the actor) and the message names the person and the client; the same choice again is 'Nothing changed.' with nothing re-audited; Sam (Functional, no admin grant) may not set Priya's choice and the map is untouched, while the platform operator (unresolved, so ADMIN by the tenant's own default) may; an actor the directory resolves to nobody, on a tenant whose default role carries no grant at all, is refused on the identical self-or-admin gate rather than passing the self test by default; a personId absent from model.people is refused before the clientId is even read; a clientId absent from state.nodes and a clientId naming a project (not an externalParty tier) are both refused, the map unchanged either time; mergeModel keeps a stored string as data even when it names no node in this reader's tenant — the node lookup at read time is where that degrades, not this merge — while a non-string entry is dropped; clientView carries no clientChoices content for a client seat while GA1 still passes; and validatedKinds() lists 'setClientChoice' with actionProblem accepting its shape and refusing one missing clientId.",
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+    /* Real, non-admin roles — as CD7 found, a roleless actor falls back to ADMIN and the
+       ownership rule is never exercised. */
+    let staffed = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    staffed = ok(staffed, { t: 'config', op: { k: 'upsertPerson', id: samId, name: 'Sam', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+    const sam: Actor = { id: samId, name: 'Sam' }
+    const oapilId = Object.values(staffed.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = staffed.nodes[oapilId].name
+
+    /* Priya sets her own choice: the map, the audit line and the message land. */
+    const setOwn = apply(staffed, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, priya)
+    const auditEntry = setOwn.state.audit.find((e) => e.rowId === priyaId && e.field === 'client.choice')
+    const setLands =
+      !setOwn.error && setOwn.state.model.clientChoices[priyaId] === oapilId &&
+      auditEntry != null && auditEntry.from === '' && auditEntry.to === oapilName && auditEntry.by === 'Priya' &&
+      (setOwn.message ?? '').includes('Priya') && (setOwn.message ?? '').includes(oapilName)
+
+    /* Repeating the same choice: nothing to write, nothing new to audit. */
+    const repeat = apply(setOwn.state, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, priya)
+    const repeatNoop = !repeat.error && repeat.message === 'Nothing changed.' && repeat.state === setOwn.state
+
+    /* Every refusal below is run against `setOwn.state`, where Priya already reads OAPIL —
+       so "the map is unchanged" asserts the stored choice survives untouched, not merely that
+       an empty map stayed empty. */
+
+    /* Sam, Functional and un-admin, may not set Priya's choice; the platform operator may. */
+    const samBlocked = apply(setOwn.state, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, sam)
+    const samRefused =
+      Boolean(samBlocked.error) && /Configure the platform/.test(samBlocked.error ?? '') &&
+      samBlocked.state.model.clientChoices[priyaId] === oapilId
+    const adminSets = apply(staffed, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, A)
+    const adminAllowed = !adminSets.error && adminSets.state.model.clientChoices[priyaId] === oapilId
+
+    /* An actor the directory resolves to nobody, on a tenant whose default role carries no
+       grant — so it is the self-or-admin gate refusing here, not a fallback the fixture forgot
+       to close off. */
+    const noDefault = { ...setOwn.state, model: { ...setOwn.state.model, access: { ...setOwn.state.model.access, defaultRoleIds: [] } } }
+    const ghost: Actor = { id: 'ghost', name: 'Ghost' }
+    const ghostBlocked = apply(noDefault, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action, ghost)
+    const ghostRefused =
+      Boolean(ghostBlocked.error) && /Configure the platform/.test(ghostBlocked.error ?? '') &&
+      ghostBlocked.state.model.clientChoices[priyaId] === oapilId
+
+    /* A personId the directory holds nobody under: refused before the clientId is even read. */
+    const badPerson = apply(setOwn.state, { t: 'setClientChoice', personId: 'no-such-person', clientId: oapilId, now: NOW } as Action, A)
+    const badPersonRefused =
+      Boolean(badPerson.error) && /resolves to nobody/.test(badPerson.error ?? '') &&
+      !('no-such-person' in badPerson.state.model.clientChoices) &&
+      badPerson.state.model.clientChoices[priyaId] === oapilId
+
+    /* A clientId absent from this tenant's nodes, and one naming a project rather than a
+       client — both refused, Priya's already-stored choice untouched either time. */
+    const withProject = ok(setOwn.state, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const projectId = Object.values(withProject.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    const badClient = apply(withProject, { t: 'setClientChoice', personId: priyaId, clientId: 'no-such-node', now: NOW } as Action, A)
+    const projectClient = apply(withProject, { t: 'setClientChoice', personId: priyaId, clientId: projectId, now: NOW } as Action, A)
+    const wrongTier =
+      Boolean(badClient.error) && /not a client in this workspace/.test(badClient.error ?? '') &&
+      badClient.state.model.clientChoices[priyaId] === oapilId &&
+      Boolean(projectClient.error) && /not a client in this workspace/.test(projectClient.error ?? '') &&
+      projectClient.state.model.clientChoices[priyaId] === oapilId
+
+    /* The read side: mergeModel keeps a stored string as data — even one naming no node in
+       this reader's tenant, which is a node-lookup question for the code that resolves the
+       choice back to a name, not this merge — and drops a non-string entry outright. */
+    const seed = initModel([])
+    const merged = mergeModel(seed, { clientChoices: { [priyaId]: 'C-other-tenant', ghost: 42 } } as Partial<typeof seed>)
+    const mergeOk = merged.clientChoices[priyaId] === 'C-other-tenant' && !('ghost' in merged.clientChoices)
+
+    /* Withheld from a client seat, the same class as projectMembers. */
+    const cv = clientView(setOwn.state, oapilId)
+    const withheld = Object.keys(cv.model.clientChoices ?? {}).length === 0
+
+    /* The shape: the reducer's KINDS list and actionShape's SHAPES table agree, and a shape
+       missing clientId is refused before the reducer ever sees it. */
+    const shapeOk =
+      validatedKinds().includes('setClientChoice') &&
+      actionProblem({ t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW }) === null &&
+      actionProblem({ t: 'setClientChoice', personId: priyaId, now: NOW }) !== null
+
+    const good =
+      setLands && repeatNoop && samRefused && adminAllowed && ghostRefused && badPersonRefused &&
+      wrongTier && mergeOk && withheld && shapeOk
+    return good
+      ? { verdict: 'PASS', actual: `Priya's own choice lands as ${JSON.stringify(setOwn.message)} with clientChoices.${priyaId}=${oapilName} and an audit line by Priya; repeating it is 'Nothing changed.'; Sam's attempt on Priya's id bounces (${JSON.stringify(samBlocked.error)}) while the operator's lands; an unresolved actor with no default grant bounces the same way (${JSON.stringify(ghostBlocked.error)}); an unknown personId bounces (${JSON.stringify(badPerson.error)}); an unknown node and a project node both bounce (${JSON.stringify(badClient.error)} / ${JSON.stringify(projectClient.error)}); mergeModel keeps ${JSON.stringify(merged.clientChoices[priyaId])} and drops the non-string entry; clientView withholds the map; validatedKinds and actionProblem agree on the shape.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `setLands=${setLands} repeatNoop=${repeatNoop} samRefused=${samRefused} (${samBlocked.error}) adminAllowed=${adminAllowed} ghostRefused=${ghostRefused} (${ghostBlocked.error}) badPersonRefused=${badPersonRefused} (${badPerson.error}) wrongTier=${wrongTier} (${badClient.error} / ${projectClient.error}) mergeOk=${mergeOk} (${JSON.stringify(merged.clientChoices)}) withheld=${withheld} shapeOk=${shapeOk}`, stops: "at the setClientChoice arm in lib/workspace.ts, lib/config.ts's clientChoices seed/merge, lib/clientBoundary.ts's clientView, or lib/actionShape.ts's SHAPES entry", severity: 'P0', impact: "a person's client choice could be forged by another actor, written for a person or a client that does not exist, lost across a reload, or leaked into a client's own view of the workspace" } as const
+  },
+)
+
+/*
+ * F1 of ART-20260906-026 (medium, confirmed): components/IssueWorkspace.tsx built the Client
+ * filter's scope (clientFilterScopeFor) for every reader, internal or not. clientView zeroes
+ * projectMembers for a client/guest seat (CD8's own 'withheld' above), so that seat's
+ * stakeholder set — and its scope — was always empty, and withinScope in lib/tree.ts then
+ * silently dropped any client-visible issue sitting under a real project-tier node from that
+ * client's own already-authorised view (BR8 forbids narrowing a client's own view this way).
+ * The fix gates scope construction on internal.view, the same boundary redactForReader itself
+ * branches on (lib/db/boot.ts) before ever reaching clientView. CD9 drives both sides of that
+ * gate over one fixture, rather than asserting the component's conditional by inspection.
+ */
+
+scenario(
+  'CD9',
+  "Gating the Client filter's scope on internal.view keeps a client-visible issue under a real project visible to the client who owns it, while an internal seat keeps its own narrowed, member-scoped view",
+  "The CD4 fixture shape — a client, two projects under it, an issue under each — but with both issues marked clientVisible (unlike GA1's only clientVisible fixture record, which has no project ancestor and so never exercises F1). Read through clientView, the same boundary redactForReader applies for a reader without internal.view (lib/db/boot.ts): both client-visible issues survive clientView itself, and once the scope this fix gates is skipped for that non-internal actor, visibleRows keeps both under 'All' and facetsOf keeps their client on the dropdown — closing F1. Run unconditionally, the way the code read before this fix, clientFilterScopeFor over that same client-seat state finds an empty memberProjectIds (clientView's zeroed projectMembers), and both issues — each with a real project ancestor — fail withinScope and vanish from visibleRows and facetsOf alike, which is the exact regression this closes. Priya, an internal seat live on only one of the two projects, is unaffected: isInternal is true for her, so her scope is built exactly as before and admits only her own project's issue (CD4's own proof, replayed here).",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const nodeId = (s: WorkspaceState, kind: string, name: string) =>
+      Object.values(s.nodes).find((n) => n.kind === kind && n.name === name)!.id
+    const issueId = (s: WorkspaceState, subject: string) =>
+      Object.values(s.issues).find((i) => i.subject === subject && !i.deletedAt)!.id
+
+    /* BASE's seeded issues carry no project ancestor at all — archived out so the fixture's two
+       project-nested, client-visible issues are the only live ones and every list below can be
+       asserted exactly, the same trim CD3 and CD4 make. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const p1 = nodeId(st, 'project', 'Harbour')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const p2 = nodeId(st, 'project', 'Quay')
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Harbour ticket' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Quay ticket' }, now: NOW } as Action)
+    const i1 = issueId(st, 'Harbour ticket')
+    const i2 = issueId(st, 'Quay ticket')
+    st = ok(st, { t: 'updateIssue', id: i1, patch: { clientVisible: true }, now: NOW } as Action)
+    st = ok(st, { t: 'updateIssue', id: i2, patch: { clientVisible: true }, now: NOW } as Action)
+
+    /* Priya: an internal, Technical seat, live on Harbour only — CD4's own seat and shape,
+       replayed over this fixture rather than assumed to still hold. */
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    /* A client seat scoped to OAPIL — a ROLE_CLIENT_* role, refused internal.view structurally
+       (accessProblems; GA2), never a member of either project. */
+    st = ok(st, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Casey Client', roleIds: ['ROLE_CLIENT_USER'], email: 'casey@oapil.example', clientScopeId: oapilId },
+      now: NOW,
+    } as Action)
+    const caseyId = Object.values(st.model.people).find((p) => p.name === 'Casey Client')!.id
+    const casey: Actor = { id: caseyId, name: 'Casey Client' }
+
+    /* The state a client seat actually receives — clientView, the boundary redactForReader
+       applies for a reader whose internal.view does not resolve (lib/db/boot.ts) — zeroes
+       projectMembers (F1's cause) but keeps both client-visible issues and their project
+       ancestors, since visibility there is about content, not project membership. */
+    const asClient = clientView(st, oapilId)
+    const bothSurviveClientView = Boolean(asClient.issues[i1]) && Boolean(asClient.issues[i2])
+    const clientRows = rowsOf(asClient)
+    const clientExternal = externalPartyKinds(tiersOf(asClient.model))
+    const isInternalCasey = can(asClient.model, casey, 'internal.view').allowed
+
+    /* The fix: no scope at all for a non-internal actor, so withinScope's undefined-scope
+       branch applies and clientView's own content-based visibility is the only gate. */
+    const fixedScope = isInternalCasey ? clientFilterScopeFor(asClient, caseyId) : undefined
+    const fixedIds = visibleRows(clientRows, UNFILTERED, new Set(), clientExternal, fixedScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const fixedClients = facetsOf(asClient, fixedScope).clients.join(',')
+
+    /* The regression this closes: the unconditional scope the fix removes, run over the exact
+       same client-seat state, finds an empty stakeholder set (clientView zeroed projectMembers)
+       and drops both issues — each fails withinScope because it has a real project ancestor the
+       empty set does not contain — and the dropdown empties out with them. */
+    const regressedScope = clientFilterScopeFor(asClient, caseyId)
+    const regressedIds = visibleRows(clientRows, UNFILTERED, new Set(), clientExternal, regressedScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const regressedClients = facetsOf(asClient, regressedScope).clients.join(',')
+
+    const closesF1 =
+      bothSurviveClientView &&
+      !isInternalCasey &&
+      regressedScope.memberProjectIds.size === 0 &&
+      regressedIds === '' &&
+      regressedClients === '' &&
+      fixedIds === [i1, i2].sort().join(',') &&
+      fixedClients === 'OAPIL'
+
+    /* Priya, internal, keeps her own narrowed, member-scoped view — only Harbour's issue, never
+       Quay's — because isInternal is true for her and her scope is built exactly as it is
+       today; the fix changes nothing for her (BR9-BR12, CD4). */
+    const isInternalPriya = can(st.model, priya, 'internal.view').allowed
+    const priyaScope = isInternalPriya ? clientFilterScopeFor(st, priyaId) : undefined
+    const priyaIds = visibleRows(rowsOf(st), UNFILTERED, new Set(), externalPartyKinds(tiersOf(st.model)), priyaScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const internalSeatUnaffected = isInternalPriya && priyaIds === i1
+
+    const good = closesF1 && internalSeatUnaffected
+    return good
+      ? { verdict: 'PASS', actual: `clientView(oapilId) keeps both ${i1} and ${i2} (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=${isInternalCasey}; the unconditional scope this fix removes finds memberProjectIds.size=${regressedScope.memberProjectIds.size}, visibleRows lists [${regressedIds || '(none)'}] and facetsOf lists [${regressedClients || '(none)'}]; gated on internal.view, scope is undefined, visibleRows lists [${fixedIds}] and facetsOf lists [${fixedClients}]. Priya (Technical, on Harbour only): internal.view=${isInternalPriya}, scope built as before, visibleRows lists [${priyaIds}] — Quay's issue absent.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
+  },
+)
+
+/*
+ * Condition 3 of ART-20260906-026: AC6, AC9 and AC10 of ART-20260905-023 v6 have built steps
+ * (16, 17, 17 of ART-20260905-024 v3) but no scenario proved any of them. CD10-CD12 close that
+ * gap. All three touch component-local logic in `components/IssueWorkspace.tsx` and
+ * `components/FilterBar.tsx` — neither on the proof workstream's owns list, and neither
+ * importable here anyway (React hooks, not pure functions) — so each reimplements the one
+ * small, already-quoted contract it pins, verbatim from the source comment or line cited, and
+ * drives it with the real reducer and the real `lib/tree.ts`/`lib/projectBoundary.ts`
+ * derivations exactly as CD1-CD9 do. A change to the quoted contract without a matching change
+ * here is exactly the drift `absent()` guards against for a NOT IMPLEMENTED verdict elsewhere in
+ * this file — nothing enforces it for these three beyond the citation, so keep the mirrored
+ * logic and the cited line current together.
+ */
+
+/**
+ * Mirrors `components/IssueWorkspace.tsx`'s unexported `resolveClientChoice` (line ~137)
+ * exactly: a stored choice resolves to the client node's current name, or `null` when the
+ * person is unresolved, nothing is stored, the id names no live node in this tenant, or the
+ * node is not on an externalParty tier (AC8, BR16). CD10 and CD11 both need it.
+ */
+function resolveStoredClient(
+  model: WorkspaceState['model'],
+  nodes: WorkspaceState['nodes'],
+  personId: string | null,
+): string | null {
+  if (!personId) return null
+  const clientId = model.clientChoices[personId]
+  if (!clientId) return null
+  const node = nodes[clientId]
+  if (!node || node.deletedAt) return null
+  return externalPartyKinds(tiersOf(model)).has(node.kind) ? node.name : null
+}
+
+scenario(
+  'CD10',
+  "A stored client choice survives reopen and reseeds the Client control on it; a person who never chose still opens on the sentinel",
+  "AC6 of ART-20260905-023, step 16 of ART-20260905-024: setClientChoice's write through the real reducer lands in state.model.clientChoices; merging that persisted model into a fresh initModel() — the same reload lib/autosave.ts runs on a stored mirror (its own `mergeModel(seed.model, parsed.model)`), and CD8's own isolated pin of the clientChoices half of that merge — and re-deriving the choice with resolveClientChoice's own logic (resolveStoredClient here) on the rebuilt state names the same client, so the Client control's seed (`resolveClientChoice(...) ?? NO_CLIENT_CHOSEN`, IssueWorkspace.tsx ~654-662) opens on it without the person choosing again; a person with no stored entry resolves to null on the same rebuilt state and so opens on NO_CLIENT_CHOSEN (BR16) — proving persistence and proving its absence, from one reopen.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = BASE.nodes[oapilId].name
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+
+    /* The real write, through apply — the same arm CD8 pins in isolation. */
+    const written = ok(BASE, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action)
+    const persistedModel = written.model
+
+    /* A fresh reopen: a brand-new seed model merged with what was persisted. mergeModel is the
+       exact function lib/autosave.ts's loader runs on a stored mirror; this drives the same
+       merge on a state a real write produced rather than a hand-built map. Nodes are not part
+       of the model and are carried over unchanged, as a real reopen's would be — they persist
+       through the database rows, not the mirrored model. */
+    const reopened = mergeModel(initModel([]), persistedModel)
+    const stillStored = reopened.clientChoices[priyaId] === oapilId
+
+    const resolvedOnReopen = resolveStoredClient(reopened, written.nodes, priyaId)
+    const seededChoice = resolvedOnReopen ?? NO_CLIENT_CHOSEN
+    const persists = stillStored && resolvedOnReopen === oapilName && seededChoice === oapilName
+
+    /* Sam never stored a choice: the same rebuilt state resolves him to null, so his own
+       Client control opens on the sentinel — not on Priya's client, not on 'All'. */
+    const samResolved = resolveStoredClient(reopened, written.nodes, samId)
+    const samSeed = samResolved ?? NO_CLIENT_CHOSEN
+    const absenceHolds = samResolved === null && samSeed === NO_CLIENT_CHOSEN
+
+    const good = persists && absenceHolds
+    return good
+      ? { verdict: 'PASS', actual: `setClientChoice writes clientChoices.${priyaId}=${oapilId}; merged into a fresh initModel() the way lib/autosave.ts reloads a mirror, clientChoices.${priyaId} is still ${JSON.stringify(reopened.clientChoices[priyaId])}; resolveClientChoice's own logic on the rebuilt state names ${JSON.stringify(resolvedOnReopen)}, so the Client control reseeds on ${JSON.stringify(seededChoice)}. Sam, who never stored a choice, resolves to ${JSON.stringify(samResolved)} on the same rebuilt state and reseeds on ${JSON.stringify(samSeed)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `persists=${persists} (stillStored=${stillStored}, resolvedOnReopen=${JSON.stringify(resolvedOnReopen)}, seededChoice=${JSON.stringify(seededChoice)}) absenceHolds=${absenceHolds} (samResolved=${JSON.stringify(samResolved)}, samSeed=${JSON.stringify(samSeed)})`, stops: "at OperatingModel.clientChoices, mergeModel's clientChoices merge, or resolveClientChoice's node lookup — the stored choice does not survive a reload, or a person who never chose resolves to something other than the sentinel", severity: 'P1', impact: 'a person would have to re-choose their client every time they reopen the workspace, or would open on a stale or a foreign client id that no longer resolves' } as const
+  },
+)
+
+/*
+ * `components/FilterBar.tsx`'s Clear button (line ~360) is one line: `setFilters({ ...
+ * EMPTY_FILTERS, client: restingClient })`, where `restingClient` is `storedClient ??
+ * NO_CLIENT_CHOSEN` computed in IssueWorkspace.tsx (~818, ~2235) from resolveStoredClient
+ * above. It takes no notice of whatever `filters` held before the click — CD11 drives that
+ * one-line contract directly, over two different ways a person's session can have drifted
+ * `filters.client` away from what is stored, plus the no-stored-choice case.
+ */
+
+scenario(
+  'CD11',
+  "Clear always returns filters.client to the person's stored choice, never to unscoped 'All' — whichever way the session drifted off it — and returns a person with no stored choice to the sentinel",
+  "AC9 and BR14 of ART-20260905-023 (step 17 of ART-20260905-024): with Priya's choice stored as OAPIL through the real setClientChoice write, Clear's own contract (`{ ...EMPTY_FILTERS, client: restingClient }`) is run against a filters value drifted off the stored choice by an unrelated facet edit (status set to 'Open', client left at a legacy 'All' a saved view could have applied) and against one drifted by choosing a different client outright ('Acme'); both land on client=OAPIL — never 'All', never 'Acme' — with every other facet back at EMPTY_FILTERS's default, proving neither drift survives the click and neither lands on unscoped All. The same contract for Sam, who never stored a choice, returns client to NO_CLIENT_CHOSEN rather than to whatever he had picked.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = BASE.nodes[oapilId].name
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+
+    const written = ok(BASE, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action)
+    const storedClient = resolveStoredClient(written.model, written.nodes, priyaId)
+
+    /* Clear's own contract, verbatim from FilterBar.tsx's onClick — reimplemented here because
+       that file is not on the proof workstream's owns list, and takes only restingClient. */
+    const clear = (restingClient: string): FilterState => ({ ...EMPTY_FILTERS, client: restingClient })
+
+    /* Drift 1: an unrelated facet edit, with client left at a legacy 'All' — the shape CD7's
+       own pre-BR14 saved views could leave a session in. */
+    const driftedByFacet: FilterState = { ...EMPTY_FILTERS, client: 'All', status: 'Open' }
+    const clearedFromFacetDrift = clear(storedClient ?? NO_CLIENT_CHOSEN)
+    const facetDriftReturns =
+      driftedByFacet.client === 'All' &&
+      clearedFromFacetDrift.client === oapilName && clearedFromFacetDrift.client !== 'All' &&
+      clearedFromFacetDrift.status === EMPTY_FILTERS.status
+
+    /* Drift 2: choosing a different client outright. */
+    const driftedByChoice: FilterState = { ...EMPTY_FILTERS, client: 'Acme' }
+    const clearedFromChoiceDrift = clear(storedClient ?? NO_CLIENT_CHOSEN)
+    const choiceDriftReturns =
+      driftedByChoice.client === 'Acme' &&
+      clearedFromChoiceDrift.client === oapilName && clearedFromChoiceDrift.client !== 'Acme'
+
+    /* Sam: no stored choice, so Clear returns him to the sentinel, never to whatever he had. */
+    const samStored = resolveStoredClient(written.model, written.nodes, samId)
+    const samDrifted: FilterState = { ...EMPTY_FILTERS, client: 'Beta Corp' }
+    const samCleared = clear(samStored ?? NO_CLIENT_CHOSEN)
+    const samReturns = samStored === null && samDrifted.client === 'Beta Corp' && samCleared.client === NO_CLIENT_CHOSEN
+
+    const good = facetDriftReturns && choiceDriftReturns && samReturns
+    return good
+      ? { verdict: 'PASS', actual: `Priya's stored choice resolves to ${JSON.stringify(storedClient)}. Drifted by an unrelated facet edit (client=${JSON.stringify(driftedByFacet.client)}, status=${JSON.stringify(driftedByFacet.status)}), Clear yields client=${JSON.stringify(clearedFromFacetDrift.client)}, status=${JSON.stringify(clearedFromFacetDrift.status)}. Drifted by choosing 'Acme' outright, Clear yields client=${JSON.stringify(clearedFromChoiceDrift.client)}. Sam, unstored, is returned to ${JSON.stringify(samCleared.client)} rather than kept on ${JSON.stringify(samDrifted.client)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `facetDriftReturns=${facetDriftReturns} (cleared=${JSON.stringify(clearedFromFacetDrift)}) choiceDriftReturns=${choiceDriftReturns} (cleared client=${JSON.stringify(clearedFromChoiceDrift.client)}) samReturns=${samReturns} (samStored=${JSON.stringify(samStored)}, samCleared client=${JSON.stringify(samCleared.client)})`, stops: "at FilterBar.tsx's Clear handler or at storedClient's computation in IssueWorkspace.tsx — Clear is landing on 'All', on whatever client the session drifted to, or on something other than the sentinel for a person with nothing stored", severity: 'P1', impact: "Clear would either widen a person's own view to every client's work (BR14 forbids it) or leave them stuck on a client they had only switched to for one look, and a person with no stored choice would be dropped on someone else's or on 'All' instead of the sentinel" } as const
+  },
+)
+
+/*
+ * `components/IssueWorkspace.tsx`'s revealIssue (line ~1036-1094) widens the filters to the
+ * revealed row's own client only when that also satisfies the person's own Client-filter scope
+ * (`clientFilterScopeFor`, BR9-BR12) — otherwise it leaves `filters` exactly as it found them
+ * and names why, rather than resetting to EMPTY_FILTERS and hiding the whole grid the way the
+ * pre-BR14 behaviour did. CD12 reimplements that decision (excluding the UI-only selection,
+ * view-switch and scroll mechanics AC10 does not concern) and drives it with a real internal
+ * seat's own scope, not the client/guest boundary CD9 pins.
+ */
+
+scenario(
+  'CD12',
+  "Revealing an issue inside the person's own stakeholder scope widens filters to its client and the issue is present after the widen; revealing one outside the scope leaves filters untouched and names why, never resetting to EMPTY_FILTERS",
+  "AC10 of ART-20260905-023 (step 17 of ART-20260905-024): Priya, Technical and a live member of Harbour only, reveals an issue under Harbour (inside memberProjectIdsFor) from a rest position — revealIssue's own decision (matchesFilters fails at rest, so it tries `{ ...EMPTY_FILTERS, client: row.issue.client }`, which now passes scope) widens filters to client=OAPIL, and visibleRows over the widened filters lists the Harbour issue. Revealing an issue under Quay (outside memberProjectIdsFor) from a non-empty, mid-session filters value — the widened candidate still fails the same scope check, so revealIssue leaves filters exactly as they were (not reset to EMPTY_FILTERS, which would hide the whole grid the way the pre-BR14 behaviour did) and returns a refusal reason naming the project-membership cause; the Quay issue is absent from visibleRows either way.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    /* Trim BASE's own ungated (no project ancestor) issues, the same way CD3/CD4/CD9 do, so
+       every list below is exact. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const p1 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const p2 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Harbour ticket' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Quay ticket' }, now: NOW } as Action)
+
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const scope = clientFilterScopeFor(st, priyaId)
+    const externalKinds = externalPartyKinds(tiersOf(st.model))
+    const rows = rowsOf(st)
+    const harbourRow = rows.find((r) => r.name === 'Harbour ticket')!
+    const quayRow = rows.find((r) => r.name === 'Quay ticket')!
+
+    /** revealIssue's own decision, minus the UI-only selection/view/scroll side effects AC10
+     *  does not concern — verbatim from the two branches at IssueWorkspace.tsx ~1067-1091. */
+    const revealDecision = (
+      row: ScheduleRow,
+      filters: FilterState,
+    ): { filters: FilterState; refusal: string | null } => {
+      if (matchesFilters(row, filters, scope)) return { filters, refusal: null }
+      const client = row.issue?.client
+      if (!client) {
+        return {
+          filters: EMPTY_FILTERS,
+          refusal: `Filters cleared, but ${row.id} carries no client — choose one in the Filters row to list it.`,
+        }
+      }
+      const candidate: FilterState = { ...EMPTY_FILTERS, client }
+      if (!matchesFilters(row, candidate, scope)) {
+        return { filters, refusal: `${row.id} is on a project you are not a member of, so it cannot be listed here.` }
+      }
+      return { filters: candidate, refusal: null }
+    }
+
+    /* Inside scope: revealed from rest, where nothing matches (BR2) — the widen branch fires. */
+    const widened = revealDecision(harbourRow, EMPTY_FILTERS)
+    const afterWiden = visibleRows(rows, widened.filters, new Set(), externalKinds, scope)
+    const widenSucceeds =
+      widened.refusal === null && widened.filters.client === 'OAPIL' &&
+      afterWiden.some((r) => r.id === harbourRow.id)
+
+    /* Outside scope: revealed from a distinctive, non-empty mid-session filters value, so
+       "unchanged" and "reset to EMPTY_FILTERS" are different, checkable outcomes. */
+    const midSession: FilterState = { ...EMPTY_FILTERS, client: 'OAPIL', status: 'Open' }
+    const startsHidden = !matchesFilters(quayRow, midSession, scope)
+    const refused = revealDecision(quayRow, midSession)
+    const afterRefusal = visibleRows(rows, refused.filters, new Set(), externalKinds, scope)
+    const refusalHolds =
+      startsHidden &&
+      refused.refusal !== null && /not a member/.test(refused.refusal ?? '') &&
+      refused.filters.client === midSession.client && refused.filters.status === midSession.status &&
+      refused.filters.client !== NO_CLIENT_CHOSEN &&
+      !afterRefusal.some((r) => r.id === quayRow.id)
+
+    const good = widenSucceeds && refusalHolds
+    return good
+      ? { verdict: 'PASS', actual: `Revealing ${harbourRow.id} (Harbour, in Priya's scope) from rest widens filters to client=${JSON.stringify(widened.filters.client)} with no refusal, and it is present in visibleRows afterward. Revealing ${quayRow.id} (Quay, outside Priya's scope) from client=${JSON.stringify(midSession.client)}/status=${JSON.stringify(midSession.status)} leaves filters at client=${JSON.stringify(refused.filters.client)}/status=${JSON.stringify(refused.filters.status)} — untouched — with refusal ${JSON.stringify(refused.refusal)}, and it stays absent from visibleRows.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `widenSucceeds=${widenSucceeds} (refusal=${JSON.stringify(widened.refusal)}, filters=${JSON.stringify(widened.filters)}) refusalHolds=${refusalHolds} (startsHidden=${startsHidden}, refusal=${JSON.stringify(refused.refusal)}, filters=${JSON.stringify(refused.filters)})`, stops: 'at revealIssue in components/IssueWorkspace.tsx — a reveal inside scope fails to widen or does not surface the row, or a reveal outside scope resets filters to EMPTY_FILTERS (hiding the whole grid) instead of leaving them and naming the cause', severity: 'P1', impact: "revealing a row from My Work, a mention or the assistant would either fail to show a row the person is entitled to see, or would blank a mid-session filtered view the moment it hit a row on a project they are not staffed on" } as const
   },
 )
 

@@ -16,6 +16,15 @@ import QuickEditPopover from './QuickEditPopover'
 
 interface Props {
   rows: ScheduleRow[]
+  /**
+   * Why `rows` is empty, in words — or `null` when it is a genuine filter miss. Computed by
+   * `emptyGridReason` (`lib/filterPresentation.ts`) from the person's resolution, their
+   * stakeholder scope and the Client facet: an unresolved actor, a resolved person on no
+   * project, and the resting `NO_CLIENT_CHOSEN` sentinel each name the next action instead of
+   * reporting a non-match — every one of those states looks identical to a filter miss from
+   * the rows alone, and the wrong caption teaches people the filters are broken.
+   */
+  emptyReason: string | null
   columns: ColumnDef[]
   colWidths: Record<string, number>
   setColWidths: (fn: (prev: Record<string, number>) => Record<string, number>) => void
@@ -55,6 +64,7 @@ interface Props {
 
 export default function TreeGrid({
   rows,
+  emptyReason,
   columns,
   colWidths,
   setColWidths,
@@ -475,7 +485,7 @@ export default function TreeGrid({
       {/* body */}
       <div className="scroll-body" ref={bodyRef} onScroll={onScroll}>
         {rows.length === 0 ? (
-          <div className="empty">No issues match the current filters.</div>
+          <div className="empty">{emptyReason ?? 'No issues match the current filters.'}</div>
         ) : (
           <div
             style={{ width: totalWidth }}
