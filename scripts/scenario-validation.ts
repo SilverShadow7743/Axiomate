@@ -105,7 +105,7 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, facetsOf, matchesFilters, visibleRows } from '../lib/tree'
+import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/tree'
 import { boardLanes, dropOutcome } from '../lib/board'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
@@ -116,7 +116,7 @@ import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
 import { INTAKE_ACTOR } from '../lib/actor'
-import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail } from '../lib/types'
+import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail, type FilterState } from '../lib/types'
 import { activeFilterCount, clientPackProblem, clientRestingCaption, emptyGridReason, isActiveFilter, scopeLabelFor } from '../lib/filterPresentation'
 import { applySavedFilters, parseSavedView } from '../lib/savedViews'
 import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
@@ -10774,6 +10774,218 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `clientView(oapilId) keeps both ${i1} and ${i2} (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=${isInternalCasey}; the unconditional scope this fix removes finds memberProjectIds.size=${regressedScope.memberProjectIds.size}, visibleRows lists [${regressedIds || '(none)'}] and facetsOf lists [${regressedClients || '(none)'}]; gated on internal.view, scope is undefined, visibleRows lists [${fixedIds}] and facetsOf lists [${fixedClients}]. Priya (Technical, on Harbour only): internal.view=${isInternalPriya}, scope built as before, visibleRows lists [${priyaIds}] — Quay's issue absent.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
+  },
+)
+
+/*
+ * Condition 3 of ART-20260906-026: AC6, AC9 and AC10 of ART-20260905-023 v6 have built steps
+ * (16, 17, 17 of ART-20260905-024 v3) but no scenario proved any of them. CD10-CD12 close that
+ * gap. All three touch component-local logic in `components/IssueWorkspace.tsx` and
+ * `components/FilterBar.tsx` — neither on the proof workstream's owns list, and neither
+ * importable here anyway (React hooks, not pure functions) — so each reimplements the one
+ * small, already-quoted contract it pins, verbatim from the source comment or line cited, and
+ * drives it with the real reducer and the real `lib/tree.ts`/`lib/projectBoundary.ts`
+ * derivations exactly as CD1-CD9 do. A change to the quoted contract without a matching change
+ * here is exactly the drift `absent()` guards against for a NOT IMPLEMENTED verdict elsewhere in
+ * this file — nothing enforces it for these three beyond the citation, so keep the mirrored
+ * logic and the cited line current together.
+ */
+
+/**
+ * Mirrors `components/IssueWorkspace.tsx`'s unexported `resolveClientChoice` (line ~137)
+ * exactly: a stored choice resolves to the client node's current name, or `null` when the
+ * person is unresolved, nothing is stored, the id names no live node in this tenant, or the
+ * node is not on an externalParty tier (AC8, BR16). CD10 and CD11 both need it.
+ */
+function resolveStoredClient(
+  model: WorkspaceState['model'],
+  nodes: WorkspaceState['nodes'],
+  personId: string | null,
+): string | null {
+  if (!personId) return null
+  const clientId = model.clientChoices[personId]
+  if (!clientId) return null
+  const node = nodes[clientId]
+  if (!node || node.deletedAt) return null
+  return externalPartyKinds(tiersOf(model)).has(node.kind) ? node.name : null
+}
+
+scenario(
+  'CD10',
+  "A stored client choice survives reopen and reseeds the Client control on it; a person who never chose still opens on the sentinel",
+  "AC6 of ART-20260905-023, step 16 of ART-20260905-024: setClientChoice's write through the real reducer lands in state.model.clientChoices; merging that persisted model into a fresh initModel() — the same reload lib/autosave.ts runs on a stored mirror (its own `mergeModel(seed.model, parsed.model)`), and CD8's own isolated pin of the clientChoices half of that merge — and re-deriving the choice with resolveClientChoice's own logic (resolveStoredClient here) on the rebuilt state names the same client, so the Client control's seed (`resolveClientChoice(...) ?? NO_CLIENT_CHOSEN`, IssueWorkspace.tsx ~654-662) opens on it without the person choosing again; a person with no stored entry resolves to null on the same rebuilt state and so opens on NO_CLIENT_CHOSEN (BR16) — proving persistence and proving its absence, from one reopen.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = BASE.nodes[oapilId].name
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+
+    /* The real write, through apply — the same arm CD8 pins in isolation. */
+    const written = ok(BASE, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action)
+    const persistedModel = written.model
+
+    /* A fresh reopen: a brand-new seed model merged with what was persisted. mergeModel is the
+       exact function lib/autosave.ts's loader runs on a stored mirror; this drives the same
+       merge on a state a real write produced rather than a hand-built map. Nodes are not part
+       of the model and are carried over unchanged, as a real reopen's would be — they persist
+       through the database rows, not the mirrored model. */
+    const reopened = mergeModel(initModel([]), persistedModel)
+    const stillStored = reopened.clientChoices[priyaId] === oapilId
+
+    const resolvedOnReopen = resolveStoredClient(reopened, written.nodes, priyaId)
+    const seededChoice = resolvedOnReopen ?? NO_CLIENT_CHOSEN
+    const persists = stillStored && resolvedOnReopen === oapilName && seededChoice === oapilName
+
+    /* Sam never stored a choice: the same rebuilt state resolves him to null, so his own
+       Client control opens on the sentinel — not on Priya's client, not on 'All'. */
+    const samResolved = resolveStoredClient(reopened, written.nodes, samId)
+    const samSeed = samResolved ?? NO_CLIENT_CHOSEN
+    const absenceHolds = samResolved === null && samSeed === NO_CLIENT_CHOSEN
+
+    const good = persists && absenceHolds
+    return good
+      ? { verdict: 'PASS', actual: `setClientChoice writes clientChoices.${priyaId}=${oapilId}; merged into a fresh initModel() the way lib/autosave.ts reloads a mirror, clientChoices.${priyaId} is still ${JSON.stringify(reopened.clientChoices[priyaId])}; resolveClientChoice's own logic on the rebuilt state names ${JSON.stringify(resolvedOnReopen)}, so the Client control reseeds on ${JSON.stringify(seededChoice)}. Sam, who never stored a choice, resolves to ${JSON.stringify(samResolved)} on the same rebuilt state and reseeds on ${JSON.stringify(samSeed)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `persists=${persists} (stillStored=${stillStored}, resolvedOnReopen=${JSON.stringify(resolvedOnReopen)}, seededChoice=${JSON.stringify(seededChoice)}) absenceHolds=${absenceHolds} (samResolved=${JSON.stringify(samResolved)}, samSeed=${JSON.stringify(samSeed)})`, stops: "at OperatingModel.clientChoices, mergeModel's clientChoices merge, or resolveClientChoice's node lookup — the stored choice does not survive a reload, or a person who never chose resolves to something other than the sentinel", severity: 'P1', impact: 'a person would have to re-choose their client every time they reopen the workspace, or would open on a stale or a foreign client id that no longer resolves' } as const
+  },
+)
+
+/*
+ * `components/FilterBar.tsx`'s Clear button (line ~360) is one line: `setFilters({ ...
+ * EMPTY_FILTERS, client: restingClient })`, where `restingClient` is `storedClient ??
+ * NO_CLIENT_CHOSEN` computed in IssueWorkspace.tsx (~818, ~2235) from resolveStoredClient
+ * above. It takes no notice of whatever `filters` held before the click — CD11 drives that
+ * one-line contract directly, over two different ways a person's session can have drifted
+ * `filters.client` away from what is stored, plus the no-stored-choice case.
+ */
+
+scenario(
+  'CD11',
+  "Clear always returns filters.client to the person's stored choice, never to unscoped 'All' — whichever way the session drifted off it — and returns a person with no stored choice to the sentinel",
+  "AC9 and BR14 of ART-20260905-023 (step 17 of ART-20260905-024): with Priya's choice stored as OAPIL through the real setClientChoice write, Clear's own contract (`{ ...EMPTY_FILTERS, client: restingClient }`) is run against a filters value drifted off the stored choice by an unrelated facet edit (status set to 'Open', client left at a legacy 'All' a saved view could have applied) and against one drifted by choosing a different client outright ('Acme'); both land on client=OAPIL — never 'All', never 'Acme' — with every other facet back at EMPTY_FILTERS's default, proving neither drift survives the click and neither lands on unscoped All. The same contract for Sam, who never stored a choice, returns client to NO_CLIENT_CHOSEN rather than to whatever he had picked.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const oapilName = BASE.nodes[oapilId].name
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+
+    const written = ok(BASE, { t: 'setClientChoice', personId: priyaId, clientId: oapilId, now: NOW } as Action)
+    const storedClient = resolveStoredClient(written.model, written.nodes, priyaId)
+
+    /* Clear's own contract, verbatim from FilterBar.tsx's onClick — reimplemented here because
+       that file is not on the proof workstream's owns list, and takes only restingClient. */
+    const clear = (restingClient: string): FilterState => ({ ...EMPTY_FILTERS, client: restingClient })
+
+    /* Drift 1: an unrelated facet edit, with client left at a legacy 'All' — the shape CD7's
+       own pre-BR14 saved views could leave a session in. */
+    const driftedByFacet: FilterState = { ...EMPTY_FILTERS, client: 'All', status: 'Open' }
+    const clearedFromFacetDrift = clear(storedClient ?? NO_CLIENT_CHOSEN)
+    const facetDriftReturns =
+      driftedByFacet.client === 'All' &&
+      clearedFromFacetDrift.client === oapilName && clearedFromFacetDrift.client !== 'All' &&
+      clearedFromFacetDrift.status === EMPTY_FILTERS.status
+
+    /* Drift 2: choosing a different client outright. */
+    const driftedByChoice: FilterState = { ...EMPTY_FILTERS, client: 'Acme' }
+    const clearedFromChoiceDrift = clear(storedClient ?? NO_CLIENT_CHOSEN)
+    const choiceDriftReturns =
+      driftedByChoice.client === 'Acme' &&
+      clearedFromChoiceDrift.client === oapilName && clearedFromChoiceDrift.client !== 'Acme'
+
+    /* Sam: no stored choice, so Clear returns him to the sentinel, never to whatever he had. */
+    const samStored = resolveStoredClient(written.model, written.nodes, samId)
+    const samDrifted: FilterState = { ...EMPTY_FILTERS, client: 'Beta Corp' }
+    const samCleared = clear(samStored ?? NO_CLIENT_CHOSEN)
+    const samReturns = samStored === null && samDrifted.client === 'Beta Corp' && samCleared.client === NO_CLIENT_CHOSEN
+
+    const good = facetDriftReturns && choiceDriftReturns && samReturns
+    return good
+      ? { verdict: 'PASS', actual: `Priya's stored choice resolves to ${JSON.stringify(storedClient)}. Drifted by an unrelated facet edit (client=${JSON.stringify(driftedByFacet.client)}, status=${JSON.stringify(driftedByFacet.status)}), Clear yields client=${JSON.stringify(clearedFromFacetDrift.client)}, status=${JSON.stringify(clearedFromFacetDrift.status)}. Drifted by choosing 'Acme' outright, Clear yields client=${JSON.stringify(clearedFromChoiceDrift.client)}. Sam, unstored, is returned to ${JSON.stringify(samCleared.client)} rather than kept on ${JSON.stringify(samDrifted.client)}.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `facetDriftReturns=${facetDriftReturns} (cleared=${JSON.stringify(clearedFromFacetDrift)}) choiceDriftReturns=${choiceDriftReturns} (cleared client=${JSON.stringify(clearedFromChoiceDrift.client)}) samReturns=${samReturns} (samStored=${JSON.stringify(samStored)}, samCleared client=${JSON.stringify(samCleared.client)})`, stops: "at FilterBar.tsx's Clear handler or at storedClient's computation in IssueWorkspace.tsx — Clear is landing on 'All', on whatever client the session drifted to, or on something other than the sentinel for a person with nothing stored", severity: 'P1', impact: "Clear would either widen a person's own view to every client's work (BR14 forbids it) or leave them stuck on a client they had only switched to for one look, and a person with no stored choice would be dropped on someone else's or on 'All' instead of the sentinel" } as const
+  },
+)
+
+/*
+ * `components/IssueWorkspace.tsx`'s revealIssue (line ~1036-1094) widens the filters to the
+ * revealed row's own client only when that also satisfies the person's own Client-filter scope
+ * (`clientFilterScopeFor`, BR9-BR12) — otherwise it leaves `filters` exactly as it found them
+ * and names why, rather than resetting to EMPTY_FILTERS and hiding the whole grid the way the
+ * pre-BR14 behaviour did. CD12 reimplements that decision (excluding the UI-only selection,
+ * view-switch and scroll mechanics AC10 does not concern) and drives it with a real internal
+ * seat's own scope, not the client/guest boundary CD9 pins.
+ */
+
+scenario(
+  'CD12',
+  "Revealing an issue inside the person's own stakeholder scope widens filters to its client and the issue is present after the widen; revealing one outside the scope leaves filters untouched and names why, never resetting to EMPTY_FILTERS",
+  "AC10 of ART-20260905-023 (step 17 of ART-20260905-024): Priya, Technical and a live member of Harbour only, reveals an issue under Harbour (inside memberProjectIdsFor) from a rest position — revealIssue's own decision (matchesFilters fails at rest, so it tries `{ ...EMPTY_FILTERS, client: row.issue.client }`, which now passes scope) widens filters to client=OAPIL, and visibleRows over the widened filters lists the Harbour issue. Revealing an issue under Quay (outside memberProjectIdsFor) from a non-empty, mid-session filters value — the widened candidate still fails the same scope check, so revealIssue leaves filters exactly as they were (not reset to EMPTY_FILTERS, which would hide the whole grid the way the pre-BR14 behaviour did) and returns a refusal reason naming the project-membership cause; the Quay issue is absent from visibleRows either way.",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    /* Trim BASE's own ungated (no project ancestor) issues, the same way CD3/CD4/CD9 do, so
+       every list below is exact. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const p1 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const p2 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Harbour ticket' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Quay ticket' }, now: NOW } as Action)
+
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+
+    const scope = clientFilterScopeFor(st, priyaId)
+    const externalKinds = externalPartyKinds(tiersOf(st.model))
+    const rows = rowsOf(st)
+    const harbourRow = rows.find((r) => r.name === 'Harbour ticket')!
+    const quayRow = rows.find((r) => r.name === 'Quay ticket')!
+
+    /** revealIssue's own decision, minus the UI-only selection/view/scroll side effects AC10
+     *  does not concern — verbatim from the two branches at IssueWorkspace.tsx ~1067-1091. */
+    const revealDecision = (
+      row: ScheduleRow,
+      filters: FilterState,
+    ): { filters: FilterState; refusal: string | null } => {
+      if (matchesFilters(row, filters, scope)) return { filters, refusal: null }
+      const client = row.issue?.client
+      if (!client) {
+        return {
+          filters: EMPTY_FILTERS,
+          refusal: `Filters cleared, but ${row.id} carries no client — choose one in the Filters row to list it.`,
+        }
+      }
+      const candidate: FilterState = { ...EMPTY_FILTERS, client }
+      if (!matchesFilters(row, candidate, scope)) {
+        return { filters, refusal: `${row.id} is on a project you are not a member of, so it cannot be listed here.` }
+      }
+      return { filters: candidate, refusal: null }
+    }
+
+    /* Inside scope: revealed from rest, where nothing matches (BR2) — the widen branch fires. */
+    const widened = revealDecision(harbourRow, EMPTY_FILTERS)
+    const afterWiden = visibleRows(rows, widened.filters, new Set(), externalKinds, scope)
+    const widenSucceeds =
+      widened.refusal === null && widened.filters.client === 'OAPIL' &&
+      afterWiden.some((r) => r.id === harbourRow.id)
+
+    /* Outside scope: revealed from a distinctive, non-empty mid-session filters value, so
+       "unchanged" and "reset to EMPTY_FILTERS" are different, checkable outcomes. */
+    const midSession: FilterState = { ...EMPTY_FILTERS, client: 'OAPIL', status: 'Open' }
+    const startsHidden = !matchesFilters(quayRow, midSession, scope)
+    const refused = revealDecision(quayRow, midSession)
+    const afterRefusal = visibleRows(rows, refused.filters, new Set(), externalKinds, scope)
+    const refusalHolds =
+      startsHidden &&
+      refused.refusal !== null && /not a member/.test(refused.refusal ?? '') &&
+      refused.filters.client === midSession.client && refused.filters.status === midSession.status &&
+      refused.filters.client !== NO_CLIENT_CHOSEN &&
+      !afterRefusal.some((r) => r.id === quayRow.id)
+
+    const good = widenSucceeds && refusalHolds
+    return good
+      ? { verdict: 'PASS', actual: `Revealing ${harbourRow.id} (Harbour, in Priya's scope) from rest widens filters to client=${JSON.stringify(widened.filters.client)} with no refusal, and it is present in visibleRows afterward. Revealing ${quayRow.id} (Quay, outside Priya's scope) from client=${JSON.stringify(midSession.client)}/status=${JSON.stringify(midSession.status)} leaves filters at client=${JSON.stringify(refused.filters.client)}/status=${JSON.stringify(refused.filters.status)} — untouched — with refusal ${JSON.stringify(refused.refusal)}, and it stays absent from visibleRows.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `widenSucceeds=${widenSucceeds} (refusal=${JSON.stringify(widened.refusal)}, filters=${JSON.stringify(widened.filters)}) refusalHolds=${refusalHolds} (startsHidden=${startsHidden}, refusal=${JSON.stringify(refused.refusal)}, filters=${JSON.stringify(refused.filters)})`, stops: 'at revealIssue in components/IssueWorkspace.tsx — a reveal inside scope fails to widen or does not surface the row, or a reveal outside scope resets filters to EMPTY_FILTERS (hiding the whole grid) instead of leaving them and naming the cause', severity: 'P1', impact: "revealing a row from My Work, a mention or the assistant would either fail to show a row the person is entitled to see, or would blank a mid-session filtered view the moment it hit a row on a project they are not staffed on" } as const
   },
 )
 

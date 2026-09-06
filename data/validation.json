@@ -2202,6 +2202,36 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD10",
+      "title": "A stored client choice survives reopen and reseeds the Client control on it; a person who never chose still opens on the sentinel",
+      "expected": "AC6 of ART-20260905-023, step 16 of ART-20260905-024: setClientChoice's write through the real reducer lands in state.model.clientChoices; merging that persisted model into a fresh initModel() — the same reload lib/autosave.ts runs on a stored mirror (its own `mergeModel(seed.model, parsed.model)`), and CD8's own isolated pin of the clientChoices half of that merge — and re-deriving the choice with resolveClientChoice's own logic (resolveStoredClient here) on the rebuilt state names the same client, so the Client control's seed (`resolveClientChoice(...) ?? NO_CLIENT_CHOSEN`, IssueWorkspace.tsx ~654-662) opens on it without the person choosing again; a person with no stored entry resolves to null on the same rebuilt state and so opens on NO_CLIENT_CHOSEN (BR16) — proving persistence and proving its absence, from one reopen.",
+      "verdict": "PASS",
+      "actual": "setClientChoice writes clientChoices.PERSON_1=client:OAPIL; merged into a fresh initModel() the way lib/autosave.ts reloads a mirror, clientChoices.PERSON_1 is still \"client:OAPIL\"; resolveClientChoice's own logic on the rebuilt state names \"OAPIL\", so the Client control reseeds on \"OAPIL\". Sam, who never stored a choice, resolves to null on the same rebuilt state and reseeds on \"__NO_CLIENT_CHOSEN__\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD11",
+      "title": "Clear always returns filters.client to the person's stored choice, never to unscoped 'All' — whichever way the session drifted off it — and returns a person with no stored choice to the sentinel",
+      "expected": "AC9 and BR14 of ART-20260905-023 (step 17 of ART-20260905-024): with Priya's choice stored as OAPIL through the real setClientChoice write, Clear's own contract (`{ ...EMPTY_FILTERS, client: restingClient }`) is run against a filters value drifted off the stored choice by an unrelated facet edit (status set to 'Open', client left at a legacy 'All' a saved view could have applied) and against one drifted by choosing a different client outright ('Acme'); both land on client=OAPIL — never 'All', never 'Acme' — with every other facet back at EMPTY_FILTERS's default, proving neither drift survives the click and neither lands on unscoped All. The same contract for Sam, who never stored a choice, returns client to NO_CLIENT_CHOSEN rather than to whatever he had picked.",
+      "verdict": "PASS",
+      "actual": "Priya's stored choice resolves to \"OAPIL\". Drifted by an unrelated facet edit (client=\"All\", status=\"Open\"), Clear yields client=\"OAPIL\", status=\"All\". Drifted by choosing 'Acme' outright, Clear yields client=\"OAPIL\". Sam, unstored, is returned to \"__NO_CLIENT_CHOSEN__\" rather than kept on \"Beta Corp\".",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "CD12",
+      "title": "Revealing an issue inside the person's own stakeholder scope widens filters to its client and the issue is present after the widen; revealing one outside the scope leaves filters untouched and names why, never resetting to EMPTY_FILTERS",
+      "expected": "AC10 of ART-20260905-023 (step 17 of ART-20260905-024): Priya, Technical and a live member of Harbour only, reveals an issue under Harbour (inside memberProjectIdsFor) from a rest position — revealIssue's own decision (matchesFilters fails at rest, so it tries `{ ...EMPTY_FILTERS, client: row.issue.client }`, which now passes scope) widens filters to client=OAPIL, and visibleRows over the widened filters lists the Harbour issue. Revealing an issue under Quay (outside memberProjectIdsFor) from a non-empty, mid-session filters value — the widened candidate still fails the same scope check, so revealIssue leaves filters exactly as they were (not reset to EMPTY_FILTERS, which would hide the whole grid the way the pre-BR14 behaviour did) and returns a refusal reason naming the project-membership cause; the Quay issue is absent from visibleRows either way.",
+      "verdict": "PASS",
+      "actual": "Revealing OAPIL-004 (Harbour, in Priya's scope) from rest widens filters to client=\"OAPIL\" with no refusal, and it is present in visibleRows afterward. Revealing OAPIL-005 (Quay, outside Priya's scope) from client=\"OAPIL\"/status=\"Open\" leaves filters at client=\"OAPIL\"/status=\"Open\" — untouched — with refusal \"OAPIL-005 is on a project you are not a member of, so it cannot be listed here.\", and it stays absent from visibleRows.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }
