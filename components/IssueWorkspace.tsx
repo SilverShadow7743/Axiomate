@@ -1325,7 +1325,10 @@ export default function IssueWorkspace({
               ? availabilityForAssignment(state, issue, owner, now)
               : null
             if (verdict && refusesAssignment(verdict)) {
-              const nowMs = Date.now()
+              // performance.now(), not Date.now(): this window only ever compares two points
+              // within one page session, and a wall-clock adjustment (sleep/resume, an NTP
+              // correction) between them must not stretch or shrink it.
+              const nowMs = performance.now()
               const again = pendingAssign.current
               const stillArmed =
                 again &&
