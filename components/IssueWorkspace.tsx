@@ -47,6 +47,7 @@ import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
 import { clientFilterScopeFor } from '@/lib/projectBoundary'
 import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
+import { applySavedFilters } from '@/lib/savedViews'
 import { sortTree } from '@/lib/sort'
 import { availabilityForAssignment, refusesAssignment } from '@/lib/assignment'
 import UserMenu from './UserMenu'
@@ -1056,16 +1057,25 @@ export default function IssueWorkspace({
         // EMPTY_FILTERS rests the Client facet at NO_CLIENT_CHOSEN, under which matchesFilters
         // admits nothing (BR2) — so a bare reset would hide the very row this promised to show,
         // and the reveal effect below would find no index and give up. Choose the revealed
-        // record's own client instead: the row carries it, and the reveal decides nothing about
-        // the general Clear semantics still open under OQ8 (ART-20260905-017 step 10).
+        // record's own client instead: the row carries it (BR14's reveal rule).
         const client = row.issue?.client
-        if (client) {
-          setFilters({ ...EMPTY_FILTERS, client })
-          notify(`Filters cleared and Client set to ${client} so ${id} is visible.`)
-        } else {
+        if (!client) {
           setFilters(EMPTY_FILTERS)
           notify(`Filters cleared, but ${id} carries no client — choose one in the Filters row to list it.`, true)
+          setRevealTarget(id)
+          return
         }
+        const candidate = { ...EMPTY_FILTERS, client }
+        if (!matchesFilters(row, candidate, scope)) {
+          // The row's own client still does not admit it: its project sits outside the
+          // person's stakeholder set (an exempt seat's payload can hold such a row). Resetting
+          // to a state that hides everything would trade one empty grid for another, so the
+          // row is left unrevealed and the notice says why instead (AC10).
+          notify(`${id} is on a project you are not a member of, so it cannot be listed here.`, true)
+          return
+        }
+        setFilters(candidate)
+        notify(`Filters cleared and Client set to ${client} so ${id} is visible.`)
       }
       setRevealTarget(id)
     },
@@ -2165,21 +2175,21 @@ export default function IssueWorkspace({
         notificationsUnread={notificationsUnread}
         savedViews={state.model.savedViews}
         onApplySavedView={(v) => {
-          setFilters(v.filters)
+          // A view stored at rest (BR14) carries no client of its own; applying it leaves the
+          // person's own choice — the stored one if there is one, else nothing chosen — in
+          // place rather than resetting it, so the shared view and the person's preference
+          // never fight (AC12). Any other stored client, including 'All', applies as-is.
+          setFilters(applySavedFilters(v.filters, storedClient ?? NO_CLIENT_CHOSEN))
           setView(v.view)
         }}
         onDeleteSavedView={(id) =>
           dispatch({ t: 'deleteSavedView', id, now: new Date().toISOString() })
         }
         onSaveCurrentView={(name) => {
-          // A view saved while the Client facet rests would write the UI sentinel into the
-          // shared model for every colleague, and apply to an empty grid. Whether the sentinel
-          // is excluded on save or defined on apply is OQ8's call (ART-20260905-017 step 6);
-          // until then nothing at rest is stored.
-          if (filters.client === NO_CLIENT_CHOSEN) {
-            notify('Choose a client (or All) in the Filters row before saving a view.', true)
-            return
-          }
+          // Saving at rest is legitimate now (BR14): parseSavedFilters (lib/savedViews.ts)
+          // stores the sentinel as "no client stored" and applySavedFilters defines what that
+          // means on apply, so the browser no longer needs to refuse it — the reducer arm is
+          // the one line, and its message is the toast `dispatch` already raises on success.
           dispatch({
             t: 'upsertSavedView',
             view: { name, filters, view },
@@ -2204,6 +2214,7 @@ export default function IssueWorkspace({
         model={state.model}
         filters={filters}
         setFilters={setFilters}
+        restingClient={storedClient ?? NO_CLIENT_CHOSEN}
         personResolved={personId !== null}
         onClientChosen={(client) => {
           // The person's explicit act on the control, the one path that records

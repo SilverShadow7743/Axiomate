@@ -123,6 +123,13 @@ interface Props {
   model: OperatingModel
   filters: FilterState
   setFilters: (f: FilterState) => void
+  /**
+   * Where the Client facet rests for this person (ART-20260905-024 step 17; BR14, AC9): the
+   * stored choice if one exists, else `NO_CLIENT_CHOSEN`. Clear returns the facet here rather
+   * than to the sentinel outright, and being at this value does not arm Clear — a person who
+   * has already chosen a client is not "filtering" by being on it.
+   */
+  restingClient: string
   /** Whether the signed-in actor resolved to a directory Person — see `FilterDropdown`. */
   personResolved: boolean
   /**
@@ -179,6 +186,7 @@ export default function FilterBar({
   model,
   filters,
   setFilters,
+  restingClient,
   personResolved,
   onClientChosen,
   facets,
@@ -249,9 +257,16 @@ export default function FilterBar({
     isSet(k, filters[k]),
   ).length
 
-  /** Whether anything deviates from the resting view — see `isSet` for what "resting" means per key. */
+  /**
+   * Whether anything deviates from the resting view — see `isSet` for what "resting" means per
+   * key. The Client facet is the one exception: its resting value is per-person (`restingClient`,
+   * ART-20260905-024 step 17), not the sentinel `isSet` tests for, so being at the person's
+   * stored choice does not arm Clear (BR14, AC9) even though the same value counts as an active
+   * filter for the Filters chip (`isActiveFilter` in `lib/filterPresentation.ts`, which has no
+   * notion of "this person's resting client" to compare against).
+   */
   const active = (Object.entries(filters) as [keyof FilterState, string | boolean][]).some(([k, v]) =>
-    isSet(k, v),
+    k === 'client' ? v !== restingClient : isSet(k, v),
   )
 
   // My work and Portfolio compute their own lists; the record filters do nothing to them,
@@ -340,7 +355,11 @@ export default function FilterBar({
       </button>
 
       {active && (
-        <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)} title="Reset filters to the default view">
+        <button
+          className="btn ghost"
+          onClick={() => setFilters({ ...EMPTY_FILTERS, client: restingClient })}
+          title="Reset filters to the default view"
+        >
           Clear
         </button>
       )}
