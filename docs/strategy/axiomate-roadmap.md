@@ -71,17 +71,20 @@ Not person-weeks. Two real constraints:
 ### Now — decisions, not builds
 Things that block other things and need a person, not an agent:
 
-- Confirm whether client-mail intake (I2d) is actually back on. If not, re-enabling it is
-  higher priority than anything below — it's a regression in a shipped capability, not new work.
 - A7, the guest invite — a five-minute Entra action, open three weeks.
 - Decide whether `pending-actions.md` should be retired in favour of the artifact trail, or kept
   as the record of operational/human-side facts artifacts don't cover (recommendation: the
   latter, scoped down to exactly that — Entra/mailbox/deployment facts, not code status).
-- Reconcile `axiomate-vision.md`'s twelve pillars against `axiomate-product-blueprint.md`'s
-  twelve suites into one mapping, so "next" is read against one framework, not two. This is a
-  real analysis task, not a rubber stamp — they don't line up one-to-one (e.g. the blueprint's
-  Application Suite has no clean pillar home; the vision's pillar 2, Context Graph, has no clean
-  suite home either).
+- ~~Reconcile `axiomate-vision.md`'s twelve pillars against `axiomate-product-blueprint.md`'s
+  twelve suites~~ **Done, 2026-09-06** — `docs/strategy/axiomate-pillar-suite-mapping.md`. Four
+  findings changed what's below: pillar 11 (Business Operations) was split into three suites
+  (Client/Engagement/Finance) and should be planned as one stream, not three; the blueprint's
+  Intelligence Suite does not actually cover the hardest, AI-blocked half of pillar 3 (capture-
+  and-understand from unstructured text); Growth Suite has no pillar ancestor and is,
+  substantively, a CRM — a build-vs-buy question given `office-axiomate/CLAUDE.md` already
+  states Business Central and D365 Sales are not core Axiocloud capabilities; Application Suite
+  also has no pillar ancestor but maps comfortably onto delivery/knowledge without that same
+  tension.
 
 ### Next — real, unblocked, not yet built
 Drawn from `axiomate-vision.md` §8's own read of where to go after this session's shipped work
@@ -89,30 +92,38 @@ Drawn from `axiomate-vision.md` §8's own read of where to go after this session
 
 - **Pillar 9, Organizational Memory** — decisions and commitments already exist as concepts
   (`RaidKind`, `ChangeRequest`); making them queryable is structural work, not AI-blocked.
-- **Pillar 11's remaining slice, Business Operations** — customer-facing external collaboration
-  has a real access-control precedent already (the client-scoped guest role, `PERSON_85`/A7
-  above), so extending it doesn't require new security architecture, just more of the same
-  pattern.
+- **Pillar 11's remaining slice, Business Operations** (Client + Engagement + Finance suites,
+  planned as one stream per the mapping above) — customer-facing external collaboration has a
+  real access-control precedent already (the client-scoped guest role, `PERSON_85`/A7 above), so
+  extending it doesn't require new security architecture, just more of the same pattern.
 - **D1/D2-shaped modelling questions** — the pattern in pending-actions.md's D2 (a taxonomy
   decision that looks like a config edit but isn't) recurs; any blueprint suite picked up next
   should expect at least one of these before implementation starts.
 
 ### Later — real, but blocked on AI credits
 Everything in `axiomate-vision.md`'s MVP slice B (capture-and-understand from unstructured
-signal), the AI-narrate button already wired and idle, and most of the new blueprint's
+signal — this is the item the mapping doc's finding 2 says is **not** delivered by building the
+Intelligence Suite as specified, and needs to be tracked here as its own line, not assumed
+covered), the AI-narrate button already wired and idle, and most of the new blueprint's
 Intelligence Suite (INT-001 through INT-008) and Automation Suite's Agent Studio/Agent Workspace
-(AUT-004/005) sit here. Not "someday" — genuinely ready to build the day credits exist, per
+(AUT-004/005). Not "someday" — genuinely ready to build the day credits exist, per
 `axiomate-vision.md` §6's specific list of what agent orchestration additionally requires
 (agent-attributed audit entries, agents as directory entries with roles — neither exists today).
 
 ### Someday — needs its own Intent pass first
-The blueprint's suites that assume domain objects this codebase doesn't have at all: Growth
-Suite (no Opportunity/Contract layer — this is a CRM, and Axiomate TMS is not one today),
-Application Suite (no Application/Integration entities), and the capability-toggle idea from the
-Hive-inspired proposals doc (`2026-09-06-hive-inspired-proposals.md`) — a real architectural
-question about what a "tenant" can turn on or off, not a UI change. None of these should be
-estimated before a Domain & Architecture Analyst pass, because the estimate would be guessing at
-a data model that doesn't exist yet.
+Application Suite (no Application/Integration entities exist in `prisma/schema.prisma`) and the
+capability-toggle idea from the Hive-inspired proposals doc
+(`2026-09-06-hive-inspired-proposals.md`) both need a Domain & Architecture Analyst pass before
+anyone estimates them — the estimate would otherwise be guessing at a data model that doesn't
+exist yet.
+
+**Growth Suite sits in its own category, blocked on a business decision, not an architecture
+pass.** It is substantively a CRM (pipeline, opportunity, proposal, contract workflow) with no
+ancestor in `axiomate-vision.md`'s twelve pillars, and `office-axiomate/CLAUDE.md` already
+records that Business Central and D365 Sales are not core Axiocloud capabilities — building one
+inside Axiomate is a real alternative to buying or adopting an existing CRM for Axiocloud's own
+sales process, and that call belongs to the business, not to a product blueprint. Nothing in
+Growth Suite should move above this line until that's answered.
 
 ## What this roadmap deliberately doesn't do
 
@@ -124,9 +135,13 @@ real, what's blocked, and what's still just an idea — and where the actual bot
 
 ## Recommended immediate next step
 
-Client-mail intake is checked and healthy (above). What's left with real, immediate value:
+Client-mail intake is checked and healthy, and the pillar/suite reconciliation is done (both
+above). What's left with real, immediate value:
 
 1. **A7, the guest invite** — the one open item nothing else in this roadmap can substitute
    for, because it needs Entra admin-center access this session doesn't have. Still yours.
-2. The pillar/suite reconciliation (Now, above) — everything in "Someday" and half of "Next" is
-   easier to prioritize correctly once there's one map instead of two.
+2. **The Growth Suite build-vs-buy question** (Someday, above) — a business decision, not
+   something for Intent to resolve on its own, and it currently blocks the one blueprint suite
+   with the most screens (GRT-001 through GRT-007).
+3. When credits exist: pillar 3's capture-and-understand layer, tracked on its own (Later,
+   above) rather than assumed to arrive as a side effect of building the Intelligence Suite.
