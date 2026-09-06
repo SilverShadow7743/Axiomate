@@ -5,6 +5,7 @@ import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
+import { logAuthRefusal } from '@/lib/authLog'
 import { alreadySent, isOutboundRefusal, outboundNoteBody, sendingMailboxFor } from '@/lib/outbound'
 import { sendAsMailbox } from '@/lib/mail'
 import type { Action } from '@/lib/workspace'
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
   }
   const session = getSession(req)
   if (!session.verified) {
+    logAuthRefusal('POST /api/mail/send', 'not signed in', session.actor)
     return NextResponse.json(
       { ok: false, error: 'Sign in to write to a client.', signInRequired: true },
       { status: 401 },
@@ -87,6 +89,7 @@ export async function POST(req: Request) {
 
     const verdict = can(state.model, session.actor, 'mail.send')
     if (!verdict.allowed) {
+      logAuthRefusal('POST /api/mail/send', verdict.reason ?? 'mail.send refused', session.actor)
       return NextResponse.json({ ok: false, error: verdict.reason ?? 'Not permitted.' }, { status: 403 })
     }
 
@@ -97,6 +100,7 @@ export async function POST(req: Request) {
      */
     const noteVerdict = can(state.model, session.actor, 'note.add')
     if (!noteVerdict.allowed) {
+      logAuthRefusal('POST /api/mail/send', noteVerdict.reason ?? 'note.add refused', session.actor)
       return NextResponse.json(
         {
           ok: false,

@@ -46,6 +46,7 @@ import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
+import { logAuthRefusal } from '@/lib/authLog'
 import { documentStore } from '@/lib/storage/graph'
 import { MAX_UPLOAD_BYTES, formatBytes, subjectProblem, uploadProblem } from '@/lib/documents'
 import { filingFolderFor, type Action } from '@/lib/workspace'
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
 
   const session = getSession(req)
   if (identityEstablished() && !session.verified) {
+    logAuthRefusal('POST /api/documents', 'not signed in', session.actor)
     return NextResponse.json(
       { ok: false, error: 'Sign in to attach a file.', signInRequired: true },
       { status: 401 },
@@ -137,6 +139,7 @@ export async function POST(req: Request) {
     const { state } = await loadWorkspace(tenantId)
     const may = can(state.model, session.actor, 'document.upload')
     if (!may.allowed) {
+      logAuthRefusal('POST /api/documents', may.reason ?? 'document.upload refused', session.actor)
       return NextResponse.json({ ok: false, error: may.reason ?? 'Not permitted.' }, { status: 403 })
     }
 

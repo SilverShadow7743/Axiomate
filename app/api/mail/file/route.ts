@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can, isStaffedOn } from '@/lib/access'
+import { logAuthRefusal } from '@/lib/authLog'
 import { getMailToken } from '@/lib/db/mailTokens'
 import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
@@ -20,6 +21,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const session = getSession(req)
   if (identityEstablished() && !session.verified) {
+    logAuthRefusal('POST /api/mail/file', 'not signed in', session.actor)
     return NextResponse.json({ ok: false, error: 'Sign in to file mail.' }, { status: 401 })
   }
 
@@ -62,6 +64,7 @@ export async function POST(req: Request) {
 
   const may = can(state.model, session.actor, 'evidence.add')
   if (!may.allowed) {
+    logAuthRefusal('POST /api/mail/file', may.reason ?? 'evidence.add refused', session.actor)
     return NextResponse.json({ ok: false, error: may.reason ?? 'Not permitted.' }, { status: 403 })
   }
 
@@ -70,11 +73,14 @@ export async function POST(req: Request) {
     ? Object.values(state.inboundMail).find((m) => m.messageId === msg.internetMessageId)
     : undefined
   if (already) {
-    return NextResponse.json({
-      ok: false,
-      error: `This mail is already filed${already.issueId ? ` against ${already.issueId}` : ''}.`,
-      issueId: already.issueId,
-    })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `This mail is already filed${already.issueId ? ` against ${already.issueId}` : ''}.`,
+        issueId: already.issueId,
+      },
+      { status: 409 },
+    )
   }
 
   const filer = {
@@ -93,6 +99,7 @@ export async function POST(req: Request) {
     if (!projectOf(state, body.parentId ?? '')) {
       const mayInternal = can(state.model, session.actor, 'internal.view')
       if (!mayInternal.allowed) {
+        logAuthRefusal('POST /api/mail/file (create, no project)', 'internal.view refused', session.actor)
         return NextResponse.json(
           { ok: false, error: 'This scope has no project, so only an internal seat may file mail here.' },
           { status: 403 },
@@ -103,7 +110,7 @@ export async function POST(req: Request) {
       { t: 'create', parentId: body.parentId, kind: 'issue', draft: mapped.createDraft, now } as never as SubmittedAction,
     ])
     if (!made.ok || !made.createdId) {
-      return NextResponse.json({ ok: false, error: made.error ?? 'The record was refused.' })
+      return NextResponse.json({ ok: false, error: made.error ?? 'The record was refused.' }, { status: 409 })
     }
     await persistActions(tenantId, session.actor, [
       { t: 'recordInboundMail', ...mapped.inboundMailFields, issueId: made.createdId, refusalReason: null, now } as never as Action,
@@ -113,12 +120,13 @@ export async function POST(req: Request) {
 
   const target = state.issues[body.issueId ?? '']
   if (!target || target.deletedAt) {
-    return NextResponse.json({ ok: false, error: 'That issue no longer exists.' })
+    return NextResponse.json({ ok: false, error: 'That issue no longer exists.' }, { status: 404 })
   }
   const targetProject = projectOf(state, target.id)
   if (targetProject) {
     const members = Object.values(state.projectMembers)
     if (!isStaffedOn(state.model, session.actor, targetProject, members)) {
+      logAuthRefusal('POST /api/mail/file (attach)', 'not staffed on target project', session.actor)
       return NextResponse.json(
         { ok: false, error: `${session.actor.name} is not staffed on this project.` },
         { status: 403 },
@@ -128,6 +136,7 @@ export async function POST(req: Request) {
     /* No project to check staffing against (ART-20260906-030's F1) -- the same rule as the
      * create-mode branch above, so a client seat's `evidence.add` grant cannot reach a
      * structural issue outside any client's own scope. */
+    logAuthRefusal('POST /api/mail/file (attach, no project)', 'internal.view refused', session.actor)
     return NextResponse.json(
       { ok: false, error: 'This issue has no project, so only an internal seat may file mail on it.' },
       { status: 403 },
@@ -138,5 +147,5 @@ export async function POST(req: Request) {
   ])
   return attached.ok
     ? NextResponse.json({ ok: true, issueId: target.id })
-    : NextResponse.json({ ok: false, error: attached.error ?? 'The attach was refused.' })
+    : NextResponse.json({ ok: false, error: attached.error ?? 'The attach was refused.' }, { status: 409 })
 }
