@@ -1,0 +1,100 @@
+{
+  "id": "ART-20260906-050",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-batching-1"
+  },
+  "created": "2026-09-06",
+  "title": "Validation: importWorkspace batching (backend batch 2)",
+  "traces": [
+    "ART-20260906-049"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-049",
+    "gates": [
+      {
+        "name": "tsc --noEmit",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "clean, no output"
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "126 Prisma calls checked, all tenant-scoped; 34 row mappers, all stamp tenantId"
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "3/3 arms follow the actor parameter"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "contract-check: 46 artifact(s) valid, before this artifact's own addition"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "225 scenarios, 0 FAIL, identical PARTIAL/NOT IMPLEMENTED/NOT TESTABLE set to the pre-change baseline"
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "pass",
+        "evidence": "74 passed, 0 failed, against the real configured Postgres database, using its own self-cleaning proof-persistence tenant -- directly exercises the batched importWorkspace path (\"the seed imports\", \"and reads back with the same issues\")"
+      },
+      {
+        "name": "audit:rls",
+        "command": "npm run audit:rls",
+        "result": "pass",
+        "evidence": "all 6 checks pass against the real database, including tenant isolation and self-cleanup of both proof tenants -- confirms createMany's multi-row INSERT is enforced per row by the RLS policy exactly as per-row create was"
+      },
+      {
+        "name": "audit:integrity",
+        "command": "npm run audit:integrity",
+        "result": "pass",
+        "evidence": "read-only, 0 error(s) and 0 review finding(s) against the real axiocloud tenant"
+      }
+    ],
+    "scenarios": {
+      "passed": 206,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "Independent general-purpose review agent, adversarial brief; traced depthOf's invariant against the schema's actual node/issue shape rather than accepting the task description's framing, checked every one of the fourteen flat-collection FKs against prisma/schema.prisma for an undisclosed intra-collection dependency, and read the actual RLS migration SQL to confirm per-row policy enforcement under a multi-row INSERT.",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "low",
+          "summary": "A createMany failure on a dangling foreign key surfaces one generic constraint error for the whole batch rather than naming the offending row.",
+          "file": "lib/db/repo.ts",
+          "disposition": "accepted -- both forms roll back to the same end state inside the one transaction; marginal debuggability cost only"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "A single createMany statement is capped by Postgres at 65,535 bind parameters; an unusually large same-depth batch (roughly 1,800+ issues) would approach it, a failure mode the old per-row loop never had.",
+          "file": "lib/db/repo.ts",
+          "disposition": "accepted -- unexercised headroom at this codebase's current stated scale of hundreds of rows per tenant, tracked as a forward-looking limit"
+        }
+      ]
+    },
+    "verdict": "pass",
+    "conditions": [
+      "F1 and F2 (both LOW) stay open as recorded, tracked risks -- neither blocks merge, per this house's own gate (fail or a HIGH/MEDIUM finding stops for review; LOW-only findings on a pass do not).",
+      "Four items from the same industry-standard review remain open: the missing HierarchyNode.sowId index (LOW, needs a Prisma migration and architect approval), the HIGH migration expand/contract policy decision (a documentation/process change, not a code fix), and the remaining frontend findings in components/IssueWorkspace.tsx (owner-assignment override visibility, the blocking native confirm(), the search-flash effect, the mirrorError double-effect) -- tracked, not part of this correction's scope."
+    ]
+  }
+}
