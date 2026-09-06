@@ -1,0 +1,53 @@
+{
+  "id": "ART-20260906-058",
+  "kind": "architecture-decision",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "domain-architecture-analyst",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-migration-policy"
+  },
+  "created": "2026-09-06",
+  "title": "Require expand/contract sequencing for destructive schema migrations",
+  "traces": [
+    "ART-20260906-057"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"Write a policy doc (Recommended)\" -- selected via AskUserQuestion, 2026-09-06, in response to the assistant naming this as one of two remaining review items needing explicit direction."
+    }
+  ],
+  "body": {
+    "context": "The 2026-09-06 industry-standard review's Prisma/Postgres conventions dimension raised a HIGH finding: nothing in this repository's process states that a destructive migration (drop/rename a column, narrow a type) must ship no earlier than the application code that stops needing the old shape. Migration 20260826000002_rich_content_json backfilled Issue.description/IssueNote.body into a new JSON shape and dropped the originals in the same migration, deployed to production while the application was still reading/writing the old plain-text shape -- the deployed Overview tab threw rendering a JSON object as a React child, and the intake mailbox watcher wrote plain strings into the new column as bare JSON string values. Reverted within the hour (20260826000003_revert_rich_content_json) and correctly redone the next day in the same deploy as the reading code (20260827000001_rich_content_json).",
+    "decision": "Any migration that would break an existing reader or writer of the current schema shape is split into two migrations: an expand step (add the new shape, backfill it, ship whenever convenient) and a contract step (drop the old shape, ships no earlier than the same deploy as the application code that has fully stopped using it). A single migration may do both only when nothing currently deployed reads or writes what is being removed.",
+    "alternatives": [
+      {
+        "option": "A migration linter or CI check enforcing this mechanically",
+        "rejected_because": "Worth doing later, but needs a machine-readable notion of \"currently deployed\" this repository does not yet track; recording the rule in writing does not block adding enforcement afterward."
+      },
+      {
+        "option": "Leave it as the unwritten convention the redo migration already followed",
+        "rejected_because": "The redo migration's own comment states the rule in prose, but a rule stated once inside one migration's comment is not discoverable by the next person writing a migration."
+      },
+      {
+        "option": "Rewrite the historical migrations to look like they always followed this pattern",
+        "rejected_because": "The revert-then-redo sequence is the evidence this decision cites; editing it away removes the one concrete illustration of the failure mode."
+      }
+    ],
+    "consequences": [
+      "A destructive schema change now costs two migrations and two deploys where it might have been one -- deliberately, for the class of change that broke production the one time this wasn't followed",
+      "Purely additive migrations (new column, new table, new index) are unaffected and still ship whenever ready",
+      "The historical migrations cited stay exactly as they are; this rule governs migrations written from here forward"
+    ],
+    "affects": [
+      "prisma/migrations/",
+      "docs/adr/0005-expand-contract-migrations.md"
+    ],
+    "principles_checked": [],
+    "adr_path": "docs/adr/0005-expand-contract-migrations.md"
+  }
+}

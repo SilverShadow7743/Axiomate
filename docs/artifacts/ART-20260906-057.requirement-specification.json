@@ -1,0 +1,64 @@
+{
+  "id": "ART-20260906-057",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-migration-policy"
+  },
+  "created": "2026-09-06",
+  "title": "Adopt expand/contract as the required pattern for destructive schema migrations",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"Write a policy doc (Recommended)\" -- selected in response to the assistant naming this as one of two remaining review items needing explicit direction rather than standing batch authorization, the other being the HierarchyNode.sowId index."
+    }
+  ],
+  "body": {
+    "problem": "The industry-standard review's Prisma/Postgres conventions dimension raised a HIGH finding: this codebase's migration history does not consistently follow an expand/contract pattern for destructive schema changes (adding a column, backfilling it, and deploying the reading/writing application code BEFORE a later, separate migration drops what it replaces). The concrete evidence is migration 20260826000002_rich_content_json, which added Issue.description_new / IssueNote.body_new, backfilled them, then DROPPED the original description/body columns and RENAMED the new ones into place -- all inside the SAME migration, deployed to production ahead of the application code that reads the new JSON shape. Per that migration's own emergency revert (20260826000003_revert_rich_content_json): 'That migration landed on the live production database while the deployed app ... was still the pre-rich-content build, which reads/writes Issue.description and IssueNote.body as plain strings. Two live risks followed immediately: the deployed Overview tab would throw trying to render a JSON object as a React child, and the intake mailbox watcher ... would write plain strings into the new Json columns as bare JSON string values.' The migration was reverted within the hour and correctly re-applied later (20260827000001_rich_content_json) in the same deploy as the reading/writing code. This is not a finding about a bug in any single migration's SQL -- both the original and the redo are careful, defensively-written migrations that check production data before running. It is a finding about deployment sequencing: nothing in this repository's process states that a migration destroying or renaming a column must be deployed no earlier than the application code that stops needing the old shape, and the one time this was violated, it broke production within the hour.",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), Prisma/Postgres conventions dimension. Evidence for the finding traced directly to this repository's own migration history and the incident recorded in 20260826000003_revert_rich_content_json's own migration comment, rather than reconstructed from the original review's summary.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P0",
+    "scope_in": [
+      "An architecture decision record establishing expand/contract as the required pattern for any migration that would make an existing reader or writer of the current schema shape fail: dropping a column, renaming a column, narrowing a type, or adding a NOT NULL constraint with no default that existing writes do not already satisfy",
+      "The decision covers deployment sequencing (which migration ships in which deploy, relative to which application code), not SQL authoring style -- this codebase's migrations already write careful, defensive SQL (per-tenant RLS-aware backfills, production data checked before writing the migration); the gap is entirely about when the destructive half is allowed to ship",
+      "The decision names the concrete precedent (20260826000002/3/20260827000001) as the incident that motivates it, and states the same pattern already exists correctly in that history's own redo migration (20260827000001) and in commentary elsewhere (nodeToRow/issueToRow's ID-first migration referenced in the founder's own prior work) -- so this is codifying an existing correct instinct, not introducing an unfamiliar practice"
+    ],
+    "scope_out": [
+      "Rewriting or annotating the historical migrations themselves -- they already ran, the data is correct today, and the revert-then-redo sequence is itself a legitimate historical record, not something to be edited away",
+      "A migration linter or CI check that mechanically enforces the pattern -- worth considering separately once the policy exists in writing, not bundled into recording the policy itself",
+      "The two remaining code-level findings from the same review (HierarchyNode.sowId index, raised separately as ART-20260906-059/060; the IssueWorkspace.tsx window.confirm() finding, already scoped out in ART-20260906-053)"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a future migration that would drop, rename, or otherwise remove a column or table that any currently-deployed application code still reads or writes",
+        "when": "that migration is planned",
+        "then": "the destructive step ships in a separate, later migration than the additive/backfill step, and no earlier than the same deploy as the application code that stops needing the old shape"
+      },
+      {
+        "id": "AC2",
+        "given": "the ADR",
+        "when": "read",
+        "then": "it names the concrete production incident that motivates the policy, with enough detail (migration names, what broke, how long, how it was fixed) that a future reader understands why this is a rule and not a suggestion"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review, grounded in this repository's own incident history). A migration that removes or narrows something a currently-deployed application still depends on must not ship before that dependency is gone from production -- expand (add, backfill) and contract (remove the old shape) are separate migrations, sequenced around the application deploy, never one migration doing both."
+    ],
+    "domain_entities": [
+      "migration",
+      "expand/contract",
+      "20260826000002_rich_content_json"
+    ],
+    "open_questions": []
+  }
+}
