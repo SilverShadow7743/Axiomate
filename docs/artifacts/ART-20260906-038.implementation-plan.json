@@ -1,0 +1,90 @@
+{
+  "id": "ART-20260906-038",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-a11y-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Accessibility batch 1: reason-field errors, focus-restore guard, contrast, focus-visible, Escape dismissal, aria-expanded",
+  "traces": [
+    "ART-20260906-037"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "engineering-lead",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "auto-approved: no protected path (components/*.tsx, app/globals.css only), no migration"
+    }
+  ],
+  "body": {
+    "design_ref": "None -- no open design question; every fix mirrors an existing pattern already working elsewhere in the codebase (the danger-colour convention, the .chat-input focus-visible pattern, the More button's aria-expanded).",
+    "workstreams": [
+      {
+        "name": "editors",
+        "owns": [
+          "components/QuickEditPopover.tsx",
+          "components/StatusCellEditor.tsx",
+          "components/useOverlay.ts"
+        ]
+      },
+      {
+        "name": "styles",
+        "owns": [
+          "app/globals.css"
+        ]
+      },
+      {
+        "name": "filterbar",
+        "owns": [
+          "components/FilterBar.tsx"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "useOverlay.ts: guard the focus-restore cleanup on document.activeElement being document.body, so a caller's own explicit focus target is never overwritten.",
+        "workstream": "editors",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 2,
+        "title": "QuickEditPopover.tsx and StatusCellEditor.tsx: add reasonAttempted state, aria-invalid, aria-describedby and a role=alert error/hint span for the required reason field.",
+        "workstream": "editors",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 3,
+        "title": "app/globals.css: recompute --text-faint (light and dark) and --h-atrisk/--sev-medium (light) to clear 4.5:1; add .rte:focus-within; add .field-hint/.field-error classes for step 2.",
+        "workstream": "styles",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 4,
+        "title": "FilterBar.tsx: extract useDismissOnOutsideOrEscape, apply to Columns/More/Legend; add aria-expanded to Columns and Legend.",
+        "workstream": "filterbar",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y",
+        "risk": "low",
+        "done": true
+      }
+    ],
+    "protected_paths_touched": [],
+    "migration": false,
+    "commit_boundaries": [
+      "All four steps as one commit: they close seven findings from the same review dimension across four files with no ordering dependency between them, and splitting them would not make any of them independently revertable in a way that matters -- each fix stands alone."
+    ],
+    "highest_regression_risk_step": 1,
+    "rollback": "Revert the single commit. Step 1 (useOverlay.ts) carries the only behavioural risk (focus restoration for every overlay in the app); it was verified against every caller (grep confirmed none toggles active=false while leaving its focused DOM node attached) and empirically, in a live browser, by the independent review."
+  }
+}

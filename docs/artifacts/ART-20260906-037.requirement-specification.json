@@ -1,0 +1,92 @@
+{
+  "id": "ART-20260906-037",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-a11y-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Close seven accessibility and UX findings from the industry-standard review (WCAG 2.1 AA, NN/g heuristics)",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"You already have priority\" (2026-09-06), in response to the assistant naming this batch (the two HIGH frontend findings plus the related MEDIUM/LOW accessibility findings from the same review dimension) as the recommended next item after the security correction."
+    }
+  ],
+  "body": {
+    "problem": "Six-dimension industry-standard review (2026-09-06) confirmed seven accessibility/UX findings, two HIGH: (1) QuickEditPopover.tsx/StatusCellEditor.tsx's required status-change reason field gave a screen-reader user no announcement when a save was refused (WCAG 3.3.1); (2) closing an editor could silently move focus to a non-tabbable cell because useOverlay.ts's unconditional focus-restore-on-unmount overwrote the caller's own focus target (WCAG 2.4.3). Five more in the same dimension: two colour-contrast failures below the 4.5:1 AA floor (--text-faint, --h-atrisk/--sev-medium), the rich-text editor's focus outline removed with no replacement (WCAG 2.4.7), three FilterBar popovers with no Escape dismissal (NN/g consistency), and two disclosure buttons missing aria-expanded (WCAG 4.1.2).",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), six independent reviewers each citing a named external standard, each finding adversarially verified by a separate agent before being reported. This specification's own author additionally found a third contrast failure the review missed (--text-faint in dark theme, 4.16:1) while computing the light-theme fix's exact replacement value.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P1",
+    "scope_in": [
+      "components/QuickEditPopover.tsx and StatusCellEditor.tsx: aria-describedby, aria-invalid and a persistent hint that becomes an announced (role=alert) error after a refused submit attempt on the required reason field",
+      "components/useOverlay.ts: the focus-restore-on-unmount cleanup only fires when focus would otherwise be lost (document.activeElement is document.body), not unconditionally, so a caller's own explicit focus target (e.g. TreeGrid's focusRow) is never overwritten",
+      "app/globals.css: --text-faint (both light and dark) and --h-atrisk/--sev-medium (light; dark already passed) recomputed to clear the 4.5:1 WCAG 1.4.3 floor, with the real contrast ratio recorded in a comment beside each",
+      "app/globals.css: .rte:focus-within gets a border-color change, mirroring the existing .chat-input/.resp-input pattern, replacing the outline .rte-content:focus removes",
+      "components/FilterBar.tsx: a shared useDismissOnOutsideOrEscape hook, replacing the three near-duplicate outside-click-only effects for the Columns, More and Legend popovers, adding Escape dismissal to all three without adopting useOverlay's modal (inert/focus-trap) behaviour",
+      "components/FilterBar.tsx: aria-expanded added to the Columns and Legend buttons, matching the adjacent More button which already had it"
+    ],
+    "scope_out": [
+      "Routing the three FilterBar popovers through the modal useOverlay hook (a deliberate scope decision: they are lightweight non-modal dropdowns and gain nothing from inert/tab-trap/focus-restore that a small Escape-and-outside-click handler does not already give them)",
+      "The remaining findings from the same review (the HIGH backend migration-pattern finding, the MEDIUM/LOW backend findings, the MEDIUM owner-assignment-override and native-confirm()/search-flash/mirrorError frontend findings) — separate corrections"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "the required status-change reason field is empty",
+        "when": "the person presses Enter (QuickEditPopover) or the disabled Save path is attempted (StatusCellEditor, which already moves focus to the field)",
+        "then": "aria-invalid becomes true, a role=alert error is rendered and announced, and the input's aria-describedby continues to point at it"
+      },
+      {
+        "id": "AC2",
+        "given": "an overlay's onClose handler synchronously moves focus to a specific element before the overlay unmounts (TreeGrid's focusRow pattern)",
+        "when": "the overlay's useOverlay cleanup runs",
+        "then": "the cleanup does not overwrite that focus target, because document.activeElement is no longer document.body at cleanup time"
+      },
+      {
+        "id": "AC3",
+        "given": "an overlay closes with no custom focus-restore call (the ordinary case)",
+        "when": "useOverlay's cleanup runs",
+        "then": "focus restores to the original trigger exactly as before this change, because document.activeElement is document.body at cleanup time"
+      },
+      {
+        "id": "AC4",
+        "given": "the --text-faint or --h-atrisk/--sev-medium tokens, in either theme",
+        "when": "measured against their background with the WCAG relative-luminance formula",
+        "then": "the ratio is at least 4.5:1"
+      },
+      {
+        "id": "AC5",
+        "given": "the Columns, More or Legend popover is open",
+        "when": "the person presses Escape",
+        "then": "the popover closes, matching every other overlay in the app"
+      },
+      {
+        "id": "AC6",
+        "given": "the Columns or Legend button",
+        "when": "read by assistive technology",
+        "then": "its aria-expanded state matches whether its menu is open"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A required field's validation state must be programmatically determinable (aria-invalid) and its error text programmatically associated (aria-describedby) and announced (role=alert) at the moment an attempt is refused — a disabled button's title attribute or a focus move alone does not satisfy this.",
+      "BR2 (E1, this review). A hook shared by multiple overlay types must not let one caller's explicit focus intent be silently overwritten by the hook's own default behaviour; a default action fires only when its precondition (focus otherwise lost) actually holds."
+    ],
+    "domain_entities": [
+      "QuickEditPopover",
+      "StatusCellEditor",
+      "useOverlay",
+      "FilterBar"
+    ],
+    "open_questions": []
+  }
+}
