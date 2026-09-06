@@ -1,8 +1,8 @@
 {
-  "id": "ART-20260906-042",
+  "id": "ART-20260906-044",
   "kind": "implementation-plan",
-  "version": 1,
-  "status": "superseded",
+  "version": 2,
+  "status": "approved",
   "producer": {
     "agent": "implementation-planner",
     "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-backend-batch-1"
@@ -10,9 +10,9 @@
   "created": "2026-09-06",
   "title": "Backend batch 1: mail/file status codes, intake timing-safe comparison, auth-refusal logging",
   "traces": [
-    "ART-20260906-041"
+    "ART-20260906-043"
   ],
-  "supersedes": null,
+  "supersedes": "ART-20260906-042",
   "approvals": [
     {
       "role": "engineering-lead",
@@ -22,7 +22,7 @@
     }
   ],
   "body": {
-    "design_ref": "None -- no open design question; the status-code fix follows RFC 9110 semantics already used elsewhere in this codebase (e.g. the 409 on a refused persistActions call in other routes), the timing-safe comparison mirrors the existing lib/auth/seal.ts pattern verbatim, and the logging helper mirrors the one refusal already logged in app/api/auth/callback/route.ts.",
+    "design_ref": "None -- no open design question; the status-code fix follows RFC 9110 semantics already used elsewhere in this codebase (e.g. the 409 on a refused persistActions call in other routes), the timing-safe comparison mirrors the existing lib/auth/seal.ts pattern verbatim, and the logging helper mirrors the one refusal already logged in app/api/auth/callback/route.ts. Version 2 adds step 6, closing F1 from this batch's own pre-merge review.",
     "workstreams": [
       {
         "name": "mail-file",
@@ -87,12 +87,20 @@
         "verify_command": "npx tsc --noEmit && npm run audit:a11y && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios",
         "risk": "low",
         "done": true
+      },
+      {
+        "n": 6,
+        "title": "app/api/intake/route.ts: wire logAuthRefusal into the bearer-token-mismatch 401, with no actor -- closes F1 from this batch's own pre-merge review (the endpoint's own refusal had been wrongly scoped out on the reasoning that no session actor exists to log).",
+        "workstream": "timing-safe-token",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
       }
     ],
     "protected_paths_touched": [],
     "migration": false,
     "commit_boundaries": [
-      "All five steps as one commit: three independent findings on non-overlapping concerns (status codes, one cipher call, one logging call), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
+      "All six steps as one commit: three independent findings on non-overlapping concerns (status codes, one cipher call, one logging call), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
     ],
     "highest_regression_risk_step": 2,
     "rollback": "Revert the single commit. Step 2 carries the only step where a coding mistake could break the intake endpoint outright (e.g. a length check that rejects a correct token); verified against the existing reference implementation in lib/auth/seal.ts and against the full validate:scenarios suite, which already exercises intake's classify/refuse paths."
