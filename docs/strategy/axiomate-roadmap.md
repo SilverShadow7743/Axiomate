@@ -43,11 +43,12 @@ and a mailbox this session cannot reach):
 - **A7 — invite the guest.** App side done (`PERSON_85`, the scoped boundary, `GA1` proves it);
   the Entra invite itself was deferred by the founder on 23 Aug and, as far as this document
   trail shows, still hasn't happened.
-- **I2d — client mail intake may still be off.** As of 18 Aug both the app flag and the Logic
-  App watcher were disabled after a mis-pointed mailbox produced 27 junk issues in a day; the
-  fix needs a real shared mailbox address, not an individual's. If this is still off, **no
-  client email has been arriving for three weeks** — worth a direct check before anything else
-  in this roadmap, because it's a live gap in a shipped capability, not a backlog item.
+- **I2d — resolved, checked live 2026-09-06.** Checked directly against production via `az`:
+  the `axiomate-intake` Logic App is `Enabled`, its trigger is `When_a_new_email_arrives_in_the_
+  shared_mailbox` (confirming the required repoint away from an individual's mailbox happened),
+  it is polling successfully every ~3 minutes today, and its last full successful run was
+  2026-08-24 — consistent with no new client email since then, not with a broken pipeline. This
+  item is closed; `pending-actions.md` is simply stale on it.
 
 ## What "capacity" means here
 
@@ -123,9 +124,9 @@ real, what's blocked, and what's still just an idea — and where the actual bot
 
 ## Recommended immediate next step
 
-Two candidates, both cheap relative to their value:
+Client-mail intake is checked and healthy (above). What's left with real, immediate value:
 
-1. Check whether client-mail intake is actually running (Now, above) — a live fact, not a
-   planning exercise, and the closest thing to a fire in this list.
-2. Do the pillar/suite reconciliation (Now, above) — everything in "Someday" and half of "Next"
-   is easier to prioritize correctly once there's one map instead of two.
+1. **A7, the guest invite** — the one open item nothing else in this roadmap can substitute
+   for, because it needs Entra admin-center access this session doesn't have. Still yours.
+2. The pillar/suite reconciliation (Now, above) — everything in "Someday" and half of "Next" is
+   easier to prioritize correctly once there's one map instead of two.
