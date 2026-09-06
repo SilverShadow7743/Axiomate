@@ -23,6 +23,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-GB">
       <head>
+        {/* Runs before paint so a stored 'light'/'dark' choice never flashes the OS-default
+            theme first — the CSS this sets `data-theme` for already exists (globals.css), this
+            is only the earliest possible place to read the choice back. Silently gives up if
+            storage is blocked; the OS-preference CSS branch is the fallback either way. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('axiomate.tms.theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}}catch(e){}`,
+          }}
+        />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

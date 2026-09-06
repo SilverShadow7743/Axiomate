@@ -5850,6 +5850,7 @@ select.cell-editor {
 .menu-item.danger { color: var(--h-overdue); }
 .user-panel form { margin: 0; }
 .user-panel .menu-item { width: 100%; text-align: left; }
+.user-panel .theme-row { padding: 2px 8px 8px; }
 
 
 /* ==================================================================

@@ -2206,6 +2206,11 @@ export default function IssueWorkspace({
           signInRequired={Boolean(signInRequired)}
           myProfileId={directoryPersonFor(state.model, actor)?.id ?? null}
           onOpenProfile={setOpenProfileId}
+          onOpenNotifications={() => setView('inbox')}
+          mayInternal={isInternal}
+          onOpenConfig={() => setConfigOpen(true)}
+          archivedCount={archivedCount}
+          onOpenArchive={() => setArchiveOpen(true)}
         />
       </div>
 

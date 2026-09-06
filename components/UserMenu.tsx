@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
+import { THEMES, loadTheme, saveTheme, type Theme } from '@/lib/theme'
+
+const THEME_LABEL: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' }
 
 /**
  * Who is signed in, and the way out.
@@ -39,6 +42,11 @@ export default function UserMenu({
   signInRequired,
   myProfileId,
   onOpenProfile,
+  onOpenNotifications,
+  mayInternal,
+  onOpenConfig,
+  archivedCount,
+  onOpenArchive,
 }: {
   actor: Actor
   verified: boolean
@@ -46,9 +54,23 @@ export default function UserMenu({
   /** This session's own directory id, when the signed-in actor resolves to one. */
   myProfileId: string | null
   onOpenProfile: (personId: string) => void
+  onOpenNotifications: () => void
+  /** Same gate `AppSidebar` uses for its own Configuration/Archive footer items. */
+  mayInternal: boolean
+  onOpenConfig: () => void
+  archivedCount: number
+  onOpenArchive: () => void
 }) {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement | null>(null)
+
+  // Read only once the menu can actually render the control (see the panel below) — safe
+  // against the server/client mismatch a bare useState(loadTheme) would risk, since 'open'
+  // starts false in both renders.
+  const [theme, setTheme] = useState<Theme>('system')
+  useEffect(() => {
+    if (open) setTheme(loadTheme())
+  }, [open])
 
   // Closing on an outside click rather than on blur: blur fires before the menu's own buttons
   // receive their click, so Sign out would never run.
@@ -157,6 +179,74 @@ export default function UserMenu({
             >
               My profile
             </button>
+          )}
+
+          <button
+            className="menu-item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onOpenNotifications()
+              setOpen(false)
+            }}
+          >
+            Notifications
+          </button>
+
+          {/* A live toggle rather than a navigate-away item, so switching and seeing the result
+              don't cost two separate menu openings. 'System' clears data-theme rather than
+              writing it, matching lib/theme.ts's rule that 'system' is the absence of the
+              attribute, not a third CSS branch. */}
+          <div className="menu-title">Appearance</div>
+          <div className="theme-row">
+            <div className="segmented" role="group" aria-label="Appearance">
+              {THEMES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={theme === t ? 'active' : ''}
+                  onClick={() => {
+                    setTheme(t)
+                    saveTheme(t)
+                  }}
+                >
+                  {THEME_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mayInternal && (
+            <>
+              <div className="menu-title">Workspace</div>
+              <button
+                className="menu-item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onOpenConfig()
+                  setOpen(false)
+                }}
+                title="Terminology, roles, responsibilities, agents — most settings are read-only unless you hold config.manage"
+              >
+                Configuration
+              </button>
+              {archivedCount > 0 && (
+                <button
+                  className="menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onOpenArchive()
+                    setOpen(false)
+                  }}
+                  title="Archived records, and the way to restore them"
+                >
+                  Archive
+                  <span className="menu-sub">{archivedCount} archived</span>
+                </button>
+              )}
+            </>
           )}
 
           {verified ? (
