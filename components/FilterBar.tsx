@@ -125,6 +125,13 @@ interface Props {
   setFilters: (f: FilterState) => void
   /** Whether the signed-in actor resolved to a directory Person — see `FilterDropdown`. */
   personResolved: boolean
+  /**
+   * The person's explicit act on the Client control alone (ART-20260905-024 step 16, BR13) —
+   * never fired by Clear, a reveal, or applying a saved view, which all go through `setFilters`
+   * directly. Optional because the demo/offline paths that render this bar without a directory
+   * person to record against simply omit it.
+   */
+  onClientChosen?: (client: string) => void
   facets: {
     clients: string[]
     types: string[]
@@ -173,6 +180,7 @@ export default function FilterBar({
   filters,
   setFilters,
   personResolved,
+  onClientChosen,
   facets,
   zoom,
   setZoom,
@@ -229,7 +237,13 @@ export default function FilterBar({
     return () => window.removeEventListener('mousedown', away)
   }, [moreMenu])
 
-  const set = (k: keyof FilterState, v: string) => setFilters({ ...filters, [k]: v })
+  const set = (k: keyof FilterState, v: string) => {
+    setFilters({ ...filters, [k]: v })
+    // The Client control's own choice, and only that one: every other facet, and every other
+    // path onto the Client facet (Clear, a reveal, applying a saved view), goes through
+    // `setFilters` above and stops there (ART-20260905-024 step 16).
+    if (k === 'client') onClientChosen?.(v)
+  }
   /** Set filters that live behind the More button, so it can report them. */
   const moreActive = (['module', 'severity', 'owner', 'accountable'] as const).filter((k) =>
     isSet(k, filters[k]),

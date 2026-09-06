@@ -124,6 +124,28 @@ import type { ConfigOp } from '@/lib/workspace'
  */
 const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
 
+/**
+ * Resolves a stored client choice (`OperatingModel.clientChoices`, ART-20260905-024 step 13) to
+ * the client node's name — the value `filters.client` carries, not the id the map stores.
+ *
+ * Degrades to `null`, never throws and never applies another tenant's node: an unresolved
+ * person, an absent entry, an id this tenant's `state.nodes` does not have, or a node whose kind
+ * is not on an externalParty tier all read as "nothing chosen" (AC8, BR16). Shared by the initial
+ * `filters` seed and `storedClient`, so a reload and Clear agree on the same resolution.
+ */
+function resolveClientChoice(
+  model: WorkspaceState['model'],
+  nodes: WorkspaceState['nodes'],
+  personId: string | null,
+): string | null {
+  if (!personId) return null
+  const clientId = model.clientChoices[personId]
+  if (!clientId) return null
+  const node = nodes[clientId]
+  if (!node || node.deletedAt) return null
+  return externalPartyKinds(tiersOf(model)).has(node.kind) ? node.name : null
+}
+
 interface Props {
   issues: SeedIssueInput[]
   relationships: IssueRelationship[]
@@ -620,7 +642,23 @@ export default function IssueWorkspace({
   )
 
   /* ---------------- view state ---------------- */
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
+  /**
+   * Seeded from the person's stored choice (ART-20260905-024 step 16, BR16), not from
+   * `EMPTY_FILTERS` outright: first use is genuinely nothing chosen (`resolveClientChoice`
+   * returns `null` when the map has no entry), and every later visit opens on what they chose
+   * last, resolved fresh against this tenant's nodes so a stale or foreign id degrades to the
+   * sentinel rather than being applied. A null `personId` (BR5: an unresolved sign-in) never
+   * reads the map at all — `resolveClientChoice` returns `null` for it directly.
+   */
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...EMPTY_FILTERS,
+    client:
+      resolveClientChoice(
+        state.model,
+        state.nodes,
+        directoryPersonFor(state.model, actor)?.id ?? null,
+      ) ?? NO_CLIENT_CHOSEN,
+  }))
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -760,6 +798,15 @@ export default function IssueWorkspace({
    *  `lib/projectBoundary.ts`). Built from the person, never from `isExempt` — an exempt seat
    *  gets the same scope (BR12). */
   const scope = useMemo(() => clientFilterScopeFor(state, personId), [state, personId])
+  /** The person's stored client choice, resolved to its current name (ART-20260905-024 step 16;
+   *  `null` when nothing is stored or it no longer resolves) — the value step 17's Clear and
+   *  saved-view apply return to, rather than to unscoped All (BR14). Kept separate from
+   *  `filters.client`, which the person can move away from in the same session without losing
+   *  what is stored. */
+  const storedClient = useMemo(
+    () => resolveClientChoice(state.model, state.nodes, personId),
+    [state.model, state.nodes, personId],
+  )
   /** The retired toolbar bell's number, now the sidebar Notifications badge. */
   const notificationsUnread = useMemo(
     () => unreadCount(state.notifications, actor.name, personId),
@@ -2158,6 +2205,16 @@ export default function IssueWorkspace({
         filters={filters}
         setFilters={setFilters}
         personResolved={personId !== null}
+        onClientChosen={(client) => {
+          // The person's explicit act on the control, the one path that records
+          // (ART-20260905-024 step 16, BR13, BR5). 'All' and the resting sentinel are session
+          // state, not a stored choice (assumption A1) — neither ever reaches here, but the
+          // literal checks stay as the record of that decision rather than trusting the caller.
+          if (client === 'All' || client === NO_CLIENT_CHOSEN || personId === null) return
+          const clientId = clientScopeIdFor(state, client)
+          if (!clientId) return
+          dispatch({ t: 'setClientChoice', personId, clientId, now: new Date().toISOString() })
+        }}
         facets={facets}
         zoom={zoom}
         setZoom={setZoom}
