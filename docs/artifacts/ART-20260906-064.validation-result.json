@@ -1,0 +1,153 @@
+{
+  "id": "ART-20260906-064",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
+  },
+  "created": "2026-09-06",
+  "title": "Validation: HierarchyNode.sowId index",
+  "traces": [
+    "ART-20260906-063"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-063",
+    "gates": [
+      {
+        "name": "prisma validate",
+        "command": "npx prisma validate",
+        "result": "pass",
+        "evidence": "schema valid"
+      },
+      {
+        "name": "prisma migrate status",
+        "command": "npx prisma migrate status",
+        "result": "pass",
+        "evidence": "35 migrations found, database schema up to date, no pending, no failed"
+      },
+      {
+        "name": "tsc --noEmit",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "clean, no output"
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "126 Prisma calls checked, all tenant-scoped; 34 row mappers, all stamp tenantId"
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "3/3 arms follow the actor parameter"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "contract-check: 61 artifact(s) valid, before this artifact's own addition"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "225 scenarios, 0 FAIL, identical PARTIAL/NOT IMPLEMENTED/NOT TESTABLE set to the pre-change baseline"
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "pass",
+        "evidence": "74 passed, 0 failed, against the real configured Postgres database, post-migration"
+      },
+      {
+        "name": "audit:rls",
+        "command": "npm run audit:rls",
+        "result": "pass",
+        "evidence": "all 6 checks pass against the real database, post-migration"
+      },
+      {
+        "name": "audit:integrity",
+        "command": "npm run audit:integrity",
+        "result": "pass",
+        "evidence": "read-only, 0 error(s) and 0 review finding(s) against the real axiocloud tenant, post-migration"
+      },
+      {
+        "name": "CI Verify (fresh-database migration bootstrap)",
+        "command": "GitHub Actions run 34037931381, triggered by this batch's own merge to master",
+        "result": "pass",
+        "evidence": "\"Apply migrations to the CI database\" succeeded against a fresh postgres:16 service container -- all 35 migrations, including 20260906000001_hierarchy_node_sow_index, apply cleanly from empty. Closes F6 from ART-20260906-063: this session's own checks ran against the already-migrated production database, not a bootstrap-from-empty; this run is that missing proof, run normally (via the master push trigger) rather than reproduced by hand. Full job: 23/23 steps succeeded (typecheck, tenancy, attribution, restore, estimation, contracts, migrations, persistence, scenario validation and its regression gate, build, package assembly)."
+      }
+    ],
+    "scenarios": {
+      "passed": 206,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "Independent general-purpose review agent, adversarial brief; verified the applied migration's row-count and lock-duration risk against real pg_class.reltuples figures rather than assuming, traced Postgres RESTRICT-constraint check semantics against the actual FK definition to determine when the check fires, and grepped every sowId reference across lib/, app/ and scripts/ to determine whether any SQL query pattern actually exists.",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "medium",
+          "summary": "The original submission had no change-set or validation-result artifact.",
+          "file": "docs/artifacts/",
+          "disposition": "fixed -- ART-20260906-063 and this artifact"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "The applied migration's comment claims a sequential-scan query pattern on sowId that does not exist in this codebase.",
+          "file": "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql",
+          "disposition": "accepted -- cannot be edited without breaking the applied migration's checksum; corrected record carried in ART-20260906-061"
+        },
+        {
+          "id": "F3",
+          "severity": "low",
+          "summary": "The applied migration's comment claims archiving a Sow triggers the Restrict constraint check; archiving is a soft-delete UPDATE that never fires it.",
+          "file": "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql",
+          "disposition": "accepted -- same checksum constraint as F2; corrected in ART-20260906-061"
+        },
+        {
+          "id": "F4",
+          "severity": "low",
+          "summary": "The plan overstated running the migration by hand as a deliberate exception to the CI/CD pipeline, when it is in fact how every release in this application's history has been made.",
+          "file": "docs/artifacts/ART-20260906-060.implementation-plan.json",
+          "disposition": "fixed -- ART-20260906-062"
+        },
+        {
+          "id": "F5",
+          "severity": "low",
+          "summary": "The plan's rollback note did not cover reconciling git history against the database's own _prisma_migrations record.",
+          "file": "docs/artifacts/ART-20260906-060.implementation-plan.json",
+          "disposition": "fixed -- ART-20260906-062 adds the prisma migrate resolve step"
+        },
+        {
+          "id": "F6",
+          "severity": "low",
+          "summary": "This session's own checks did not reproduce a bootstrap-from-empty run of the full migration history.",
+          "file": "N/A -- a process gap",
+          "disposition": "fixed -- CI run 34037931381 (see gates above) proves it, triggered normally by this batch's own merge to master"
+        },
+        {
+          "id": "F7",
+          "severity": "low",
+          "summary": "A pre-existing standing firewall rule permits this workstation's IP to reach the production Postgres server.",
+          "file": "N/A -- infrastructure posture, out of scope",
+          "disposition": "accepted -- pre-existing and unrelated to this change; not actioned"
+        }
+      ]
+    },
+    "verdict": "pass",
+    "conditions": [
+      "F2, F3 and F7 stay open by design -- F2/F3 cannot be corrected without breaking the applied migration's checksum (the corrected record lives in ART-20260906-061 instead); F7 is a pre-existing infrastructure posture question out of this change's scope.",
+      "Three items from the same industry-standard review remain open: the HIGH migration expand/contract policy decision (closed separately as ADR 0005, ART-20260906-057/058), the blocking window.confirm() in requestSelect (LOW, scoped out in ART-20260906-053), and the remaining frontend findings already closed in frontend batch 2 -- this was the last open item from the review's own list."
+    ]
+  }
+}
