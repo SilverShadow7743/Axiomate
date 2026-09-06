@@ -1,0 +1,80 @@
+{
+  "id": "ART-20260906-060",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
+  },
+  "created": "2026-09-06",
+  "title": "Add HierarchyNode_tenantId_sowId_idx via a plain CREATE INDEX migration",
+  "traces": [
+    "ART-20260906-059"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"Approve the migration (Recommended)\" -- AskUserQuestion, 2026-09-06. prisma/schema.prisma and prisma/migrations/ are protected paths; this is the required explicit approval before implementation."
+    }
+  ],
+  "body": {
+    "design_ref": "None -- the index mirrors the composite tenantId-first pattern HierarchyNode's other two indexes (parentId, deletedAt) already use.",
+    "workstreams": [
+      {
+        "name": "schema",
+        "owns": [
+          "prisma/schema.prisma",
+          "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "Add @@index([tenantId, sowId]) to HierarchyNode in prisma/schema.prisma; validate with npx prisma validate.",
+        "workstream": "schema",
+        "verify_command": "npx prisma validate && npx tsc --noEmit",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 2,
+        "title": "Hand-author the migration (this session has no shadow database, so prisma migrate dev cannot generate it): a single CREATE INDEX \"HierarchyNode_tenantId_sowId_idx\" ON \"HierarchyNode\"(\"tenantId\", \"sowId\") -- not CONCURRENTLY, since this repository's migrations run inside prisma migrate deploy's own per-file transaction (CONCURRENTLY cannot) and this codebase has no precedent for a non-transactional migration.",
+        "workstream": "schema",
+        "verify_command": "npx prisma migrate status",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 3,
+        "title": "Apply the migration to the configured database via npx prisma migrate deploy, run directly from this session rather than through .github/workflows/deploy.yml -- a deliberate exception, justified by: the user's explicit approval already covering \"the live-database proofs\"; the migration being purely additive with zero interaction with any code the deploy pipeline's ordering rules protect (nothing currently deployed changes what it reads/writes because this index exists); and this session already running the same category of direct-database verification (audit:persistence, audit:rls, audit:integrity) throughout. Recorded explicitly in the validation result rather than left implicit.",
+        "workstream": "schema",
+        "verify_command": "npx prisma migrate deploy && npx prisma generate",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 4,
+        "title": "Confirm the index exists via a direct pg_indexes query, then run the full verification suite plus all three live-database proofs.",
+        "workstream": "schema",
+        "verify_command": "npx tsc --noEmit && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios && npm run audit:persistence && npm run audit:rls && npm run audit:integrity",
+        "risk": "low",
+        "done": true
+      }
+    ],
+    "protected_paths_touched": [
+      "prisma/schema.prisma",
+      "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql"
+    ],
+    "migration": true,
+    "commit_boundaries": [
+      "All four steps as one commit: one schema change, one migration, applied and proven together."
+    ],
+    "highest_regression_risk_step": 3,
+    "rollback": "The index can be dropped (DROP INDEX \"HierarchyNode_tenantId_sowId_idx\") without any data loss or application-code change, since nothing reads or writes differently because it exists -- it only changes a query plan. Reverting the commit reverts the schema.prisma declaration and leaves the already-applied migration file in git history; a genuine rollback of the applied database state would additionally need the DROP statement run by hand, since prisma migrate deploy has no built-in down-migration."
+  }
+}

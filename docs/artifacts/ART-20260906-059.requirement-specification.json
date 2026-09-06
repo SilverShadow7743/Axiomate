@@ -1,0 +1,67 @@
+{
+  "id": "ART-20260906-059",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
+  },
+  "created": "2026-09-06",
+  "title": "Add a missing index on HierarchyNode.sowId",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"Approve the migration (Recommended)\" -- selected via AskUserQuestion, 2026-09-06, explicitly covering adding the index, writing a migration, and running it through the full spec/plan/change-set/validation-result discipline including the live-database proofs."
+    },
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "Same selection as above -- prisma/schema.prisma and prisma/migrations/ are protected paths per .claude/contracts/registry.json, requiring explicit architect approval before implementation; this AskUserQuestion answer is that approval."
+    }
+  ],
+  "body": {
+    "problem": "The industry-standard review's Prisma/Postgres conventions dimension found HierarchyNode.sowId -- a foreign key (the SowDelivery relation to Sow, onDelete: Restrict) -- carries no database index, unlike the model's two other reference columns (parentId, deletedAt), both already indexed. Postgres does not index foreign-key columns automatically. Two costs follow: a query filtering or joining on a project's SOW does a sequential scan, and every DELETE or archive of a Sow row pays a full table scan of HierarchyNode to enforce the onDelete: Restrict constraint, since Postgres must find every referencing row before it can refuse the delete.",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), Prisma/Postgres conventions dimension.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P3",
+    "scope_in": [
+      "prisma/schema.prisma: add @@index([tenantId, sowId]) to HierarchyNode, matching the composite tenantId-first convention already used on the model's other two indexes",
+      "A new migration (20260906000001_hierarchy_node_sow_index) adding the matching CREATE INDEX statement, applied directly to the configured database as part of this correction's own verification (see the implementation plan for why a plain, non-CONCURRENTLY statement was chosen, and why it was applied outside the CI/CD deploy pipeline for this specific, purely additive case)"
+    ],
+    "scope_out": [
+      "A migration linter or CI check enforcing that every foreign key column is indexed -- worth considering separately, not bundled into fixing this one instance",
+      "Any other index gap not named by the review"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "the configured database after this migration is applied",
+        "when": "pg_indexes is queried for the HierarchyNode table",
+        "then": "an index named HierarchyNode_tenantId_sowId_idx exists on (tenantId, sowId)"
+      },
+      {
+        "id": "AC2",
+        "given": "the full standard verification suite and the three live-database proofs (audit:persistence, audit:rls, audit:integrity)",
+        "when": "run after the migration is applied",
+        "then": "all pass with the same result shape as before this change -- an index changes a query plan, never a query's result"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A foreign-key column with an onDelete constraint that must scan for referencing rows (Restrict, and Cascade/SetNull no less so) should carry an index, matching the convention this schema already applies to HierarchyNode's other two reference columns."
+    ],
+    "domain_entities": [
+      "HierarchyNode",
+      "Sow"
+    ],
+    "open_questions": []
+  }
+}
