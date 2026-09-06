@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
+import { can, isStaffedOn } from '@/lib/access'
 import { getMailToken } from '@/lib/db/mailTokens'
 import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
 import { mapGraphMessage, type GraphMessageLike } from '@/lib/mailFile'
-import type { Action } from '@/lib/workspace'
+import { projectOf, type Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,11 @@ export async function POST(req: Request) {
   const tenantId = currentTenantId()
   const { state } = await loadWorkspace(tenantId)
 
+  const may = can(state.model, session.actor, 'evidence.add')
+  if (!may.allowed) {
+    return NextResponse.json({ ok: false, error: may.reason ?? 'Not permitted.' }, { status: 403 })
+  }
+
   /* The dedupe the arm deliberately lacks: a mail files once, however many clicks. */
   const already = msg.internetMessageId
     ? Object.values(state.inboundMail).find((m) => m.messageId === msg.internetMessageId)
@@ -94,6 +100,16 @@ export async function POST(req: Request) {
   const target = state.issues[body.issueId ?? '']
   if (!target || target.deletedAt) {
     return NextResponse.json({ ok: false, error: 'That issue no longer exists.' })
+  }
+  const targetProject = projectOf(state, target.id)
+  if (targetProject) {
+    const members = Object.values(state.projectMembers)
+    if (!isStaffedOn(state.model, session.actor, targetProject, members)) {
+      return NextResponse.json(
+        { ok: false, error: `${session.actor.name} is not staffed on this project.` },
+        { status: 403 },
+      )
+    }
   }
   const attached = await persistActions(tenantId, session.actor, [
     { t: 'recordInboundMail', ...mapped.inboundMailFields, issueId: target.id, refusalReason: null, now } as never as Action,
