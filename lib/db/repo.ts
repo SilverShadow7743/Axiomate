@@ -515,73 +515,94 @@ export async function importWorkspace(
      */
     await tx.workspaceMeta.create({ data: { tenantId, seq: seed.seq, seededAt: new Date() } })
     // Parents before children, or the self-referencing foreign key rejects the insert.
-    const byDepth = [...nodes].sort((a, b) => depthOf(seed, a.id) - depthOf(seed, b.id))
-    for (const n of byDepth) await tx.hierarchyNode.create({ data: nodeToRow(tenantId, n) })
+    // Siblings at the same depth carry no reference to one another, so each depth level
+    // batches into a single insert rather than one round trip per row -- the only ordering
+    // this self-reference actually requires is level-by-level, not row-by-row.
+    for (const batch of byDepthBatches(nodes, seed)) {
+      await tx.hierarchyNode.createMany({ data: batch.map((n) => nodeToRow(tenantId, n)) })
+    }
 
     // Same for sub-issues: an issue whose parent is another issue must follow it.
-    const issuesByDepth = [...issues].sort((a, b) => depthOf(seed, a.id) - depthOf(seed, b.id))
-    for (const i of issuesByDepth) {
-      await tx.issue.create({ data: issueToRow(tenantId, i, Boolean(seed.issues[i.parentId])) })
+    for (const batch of byDepthBatches(issues, seed)) {
+      await tx.issue.createMany({
+        data: batch.map((i) => issueToRow(tenantId, i, Boolean(seed.issues[i.parentId]))),
+      })
     }
 
-    for (const a of Object.values(seed.activities)) {
-      await tx.issueActivity.create({ data: activityToRow(tenantId, a) })
+    const activities = Object.values(seed.activities)
+    if (activities.length) {
+      await tx.issueActivity.createMany({ data: activities.map((a) => activityToRow(tenantId, a)) })
     }
-    for (const d of seed.dependencies) {
-      await tx.issueDependency.create({ data: dependencyToRow(tenantId, d) })
+    if (seed.dependencies.length) {
+      await tx.issueDependency.createMany({
+        data: seed.dependencies.map((d) => dependencyToRow(tenantId, d)),
+      })
     }
     // Relationships from the log can reference issues that were never logged; skip those
     // rather than failing the whole import on a dangling reference.
-    for (const r of seed.relationships) {
-      if (!seed.issues[r.sourceIssueId] || !seed.issues[r.targetIssueId]) continue
-      await tx.issueRelationship.create({ data: relationshipToRow(tenantId, r) })
+    const relationships = seed.relationships.filter(
+      (r) => seed.issues[r.sourceIssueId] && seed.issues[r.targetIssueId],
+    )
+    if (relationships.length) {
+      await tx.issueRelationship.createMany({
+        data: relationships.map((r) => relationshipToRow(tenantId, r)),
+      })
     }
-    for (const e of Object.values(seed.evidence)) {
-      await tx.evidence.create({ data: evidenceToRow(tenantId, e) })
+    const evidence = Object.values(seed.evidence)
+    if (evidence.length) {
+      await tx.evidence.createMany({ data: evidence.map((e) => evidenceToRow(tenantId, e)) })
     }
     // After the issues, like evidence: a note's foreign key is its issue.
-    for (const n of Object.values(seed.notes)) {
-      await tx.issueNote.create({ data: noteToRow(tenantId, n) })
+    const notes = Object.values(seed.notes)
+    if (notes.length) {
+      await tx.issueNote.createMany({ data: notes.map((n) => noteToRow(tenantId, n)) })
     }
     // SOWs before the nodes that point at them would be ideal, but the nodes are written
     // first and carry the reference — so these are laid down here and the projects' `sowId`
     // is set by the node write that follows on a later import.
-    for (const c of Object.values(seed.commitments)) {
-      await tx.commitment.create({ data: commitmentToRow(tenantId, c) })
+    const commitments = Object.values(seed.commitments)
+    if (commitments.length) {
+      await tx.commitment.createMany({ data: commitments.map((c) => commitmentToRow(tenantId, c)) })
     }
-    for (const a of Object.values(seed.allocations)) {
-      if (!seed.nodes[a.projectId]) continue
-      await tx.allocation.create({ data: allocationToRow(tenantId, a) })
+    const allocations = Object.values(seed.allocations).filter((a) => seed.nodes[a.projectId])
+    if (allocations.length) {
+      await tx.allocation.createMany({ data: allocations.map((a) => allocationToRow(tenantId, a)) })
     }
-    for (const s of Object.values(seed.sows)) {
-      if (!seed.nodes[s.engagementId]) continue
-      await tx.sow.create({ data: sowToRow(tenantId, s) })
+    const sows = Object.values(seed.sows).filter((s) => seed.nodes[s.engagementId])
+    if (sows.length) {
+      await tx.sow.createMany({ data: sows.map((s) => sowToRow(tenantId, s)) })
     }
-    for (const n of Object.values(seed.notifications)) {
-      if (!seed.issues[n.aboutId]) continue
-      await tx.notification.create({ data: notificationToRow(tenantId, n) })
+    const notifications = Object.values(seed.notifications).filter((n) => seed.issues[n.aboutId])
+    if (notifications.length) {
+      await tx.notification.createMany({
+        data: notifications.map((n) => notificationToRow(tenantId, n)),
+      })
     }
-    for (const a of Object.values(seed.approvals)) {
-      if (!seed.issues[a.subjectId]) continue
-      await tx.approval.create({ data: approvalToRow(tenantId, a) })
+    const approvals = Object.values(seed.approvals).filter((a) => seed.issues[a.subjectId])
+    if (approvals.length) {
+      await tx.approval.createMany({ data: approvals.map((a) => approvalToRow(tenantId, a)) })
     }
-    for (const e of Object.values(seed.timeEntries)) {
-      if (!seed.issues[e.issueId]) continue
-      await tx.timeEntry.create({ data: timeToRow(tenantId, e) })
+    const timeEntries = Object.values(seed.timeEntries).filter((e) => seed.issues[e.issueId])
+    if (timeEntries.length) {
+      await tx.timeEntry.createMany({ data: timeEntries.map((e) => timeToRow(tenantId, e)) })
     }
     // Estimates before revisions: a revision's foreign key is the estimate, not the issue.
-    for (const e of Object.values(seed.estimates)) {
-      if (!seed.issues[e.issueId]) continue
-      await tx.issueEstimate.create({ data: estimateToRow(tenantId, e) })
+    const estimates = Object.values(seed.estimates).filter((e) => seed.issues[e.issueId])
+    if (estimates.length) {
+      await tx.issueEstimate.createMany({ data: estimates.map((e) => estimateToRow(tenantId, e)) })
     }
-    for (const v of Object.values(seed.estimateRevisions)) {
-      if (!seed.estimates[v.issueId]) continue
-      await tx.estimateRevision.create({ data: revisionToRow(tenantId, v) })
+    const estimateRevisions = Object.values(seed.estimateRevisions).filter(
+      (v) => seed.estimates[v.issueId],
+    )
+    if (estimateRevisions.length) {
+      await tx.estimateRevision.createMany({
+        data: estimateRevisions.map((v) => revisionToRow(tenantId, v)),
+      })
     }
     // After the nodes: each row is keyed by the engagement node it describes.
-    for (const e of Object.values(seed.engagements)) {
-      if (!seed.nodes[e.nodeId]) continue
-      await tx.engagement.create({ data: engagementToRow(tenantId, e) })
+    const engagements = Object.values(seed.engagements).filter((e) => seed.nodes[e.nodeId])
+    if (engagements.length) {
+      await tx.engagement.createMany({ data: engagements.map((e) => engagementToRow(tenantId, e)) })
     }
     if (seed.audit.length) {
       await tx.scheduleAudit.createMany({ data: seed.audit.map((a) => auditToRow(tenantId, a)) })
@@ -627,6 +648,23 @@ export async function importWorkspace(
     reason: 'Seeded from the issue log.',
     counts: { nodes: nodes.length, issues: issues.length, relationships: seed.relationships.length },
   }
+}
+
+/**
+ * Groups items into depth-ordered batches: everything at depth 0 in one array, depth 1 in the
+ * next, and so on. A self-referencing foreign key only requires that a parent's INSERT precede
+ * its child's -- it says nothing about the order between two siblings -- so a batch is safe to
+ * write with one `createMany` rather than one `create` per row.
+ */
+function byDepthBatches<T extends { id: string }>(items: T[], state: WorkspaceState): T[][] {
+  const buckets = new Map<number, T[]>()
+  for (const item of items) {
+    const d = depthOf(state, item.id)
+    const bucket = buckets.get(d)
+    if (bucket) bucket.push(item)
+    else buckets.set(d, [item])
+  }
+  return [...buckets.entries()].sort(([a], [b]) => a - b).map(([, batch]) => batch)
 }
 
 /** Distance to the root, so parents are always inserted before their children. */
