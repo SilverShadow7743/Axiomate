@@ -10,6 +10,7 @@ import type { Actor } from '@/lib/actor'
 import { useLabels } from './labels'
 import { liveDisciplines } from '@/lib/config'
 import type { OperatingModel } from '@/lib/config'
+import { isActiveFilter, clientRestingCaption } from '@/lib/filterPresentation'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
 
@@ -19,13 +20,11 @@ const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
  * Each key needs its own test: most facets rest at 'All', search rests at empty,
  * `showCompleted`/`raidOnly` rest at false, and the Client facet rests at `NO_CLIENT_CHOSEN` —
  * a sentinel that is not a choice (BR7 of ART-20260905-016), so it must not arm Clear or
- * count towards More. Comparing a boolean against 'All' would have made Clear look
- * permanently armed; comparing the sentinel against 'All' would do the same.
+ * count towards More. Delegates to `isActiveFilter` (`lib/filterPresentation.ts`) so this bar
+ * and the scenario harness that pins AC1 agree on one rule rather than two copies of it.
  */
 function isSet(k: keyof FilterState, v: string | boolean): boolean {
-  if (k === 'search') return v !== ''
-  if (k === 'showCompleted' || k === 'raidOnly') return v === true
-  return v !== 'All' && v !== NO_CLIENT_CHOSEN
+  return isActiveFilter(k, v)
 }
 
 /**
@@ -41,6 +40,7 @@ function FilterDropdown({
   options,
   value,
   onChange,
+  personResolved,
 }: {
   label: string
   name: keyof FilterState
@@ -53,6 +53,13 @@ function FilterDropdown({
   options: readonly (string | { value: string; label: string })[]
   value: string
   onChange: (k: keyof FilterState, v: string) => void
+  /**
+   * Only meaningful for the Client facet (`name === 'client'`): whether the signed-in actor
+   * resolved to a directory Person. Unset for every other facet. When it is `false` and there
+   * are no clients to offer, the resting option says the account is not in the directory
+   * (BR11 of ART-20260905-023) rather than inviting a choice that would list nothing.
+   */
+  personResolved?: boolean
 }) {
   /**
    * The control labels itself, rather than carrying a caption beside it.
@@ -69,10 +76,12 @@ function FilterDropdown({
    *
    * The Client facet alone has a resting state that is not 'All': `NO_CLIENT_CHOSEN`, on
    * which nothing is listed (BR2, BR7 of ART-20260905-016). It gets its own option, captioned
-   * as an instruction — "Client: choose one" — because the bare sentinel is never shown and
-   * the word "None" is already taken by Discipline's "records with no discipline". 'All'
-   * stays offered beneath it as a choice in its own right. The accent marks a choice made,
-   * so neither resting value takes it.
+   * as an instruction via `clientRestingCaption` — "Client: choose one" — because the bare
+   * sentinel is never shown and the word "None" is already taken by Discipline's "records with
+   * no discipline". When the person has no clients to choose from because the sign-in itself
+   * did not resolve, the caption says that instead (BR11 of ART-20260905-023) — choosing one
+   * is not the available next step. 'All' stays offered beneath it as a choice in its own
+   * right. The accent marks a choice made, so neither resting value takes it.
    */
   const resting = name === 'client'
   return (
@@ -85,7 +94,13 @@ function FilterDropdown({
         onChange={(e) => onChange(name, e.target.value)}
         className={isSet(name, value) ? 'on' : ''}
       >
-        {resting && <option value={NO_CLIENT_CHOSEN}>{label}: choose one</option>}
+        {resting && (
+          <option value={NO_CLIENT_CHOSEN}>
+            {options.length === 0 && personResolved === false
+              ? `${label}: this account is not in the directory`
+              : clientRestingCaption(label)}
+          </option>
+        )}
         <option value="All">{label}: All</option>
         {options.map((o) => {
           const value = typeof o === 'string' ? o : o.value
@@ -108,6 +123,8 @@ interface Props {
   model: OperatingModel
   filters: FilterState
   setFilters: (f: FilterState) => void
+  /** Whether the signed-in actor resolved to a directory Person — see `FilterDropdown`. */
+  personResolved: boolean
   facets: {
     clients: string[]
     types: string[]
@@ -155,6 +172,7 @@ export default function FilterBar({
   model,
   filters,
   setFilters,
+  personResolved,
   facets,
   zoom,
   setZoom,
@@ -237,7 +255,14 @@ export default function FilterBar({
           sidebar now — navigation left the bar with the clean shell.) */}
       {filtersApply && (
       <>
-      <FilterDropdown label={labels.TIER_ORGANIZATION} name="client" options={facets.clients} value={filters.client} onChange={set} />
+      <FilterDropdown
+        label={labels.TIER_ORGANIZATION}
+        name="client"
+        options={facets.clients}
+        value={filters.client}
+        onChange={set}
+        personResolved={personResolved}
+      />
       <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
       <FilterDropdown
         label="Discipline"

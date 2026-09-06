@@ -45,6 +45,8 @@ import {
 } from '@/lib/workspace'
 import type { IssueIndexEntry, Proposal } from '@/lib/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
+import { clientFilterScopeFor } from '@/lib/projectBoundary'
+import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
 import { sortTree } from '@/lib/sort'
 import { availabilityForAssignment, refusesAssignment } from '@/lib/assignment'
 import UserMenu from './UserMenu'
@@ -743,10 +745,25 @@ export default function IssueWorkspace({
    * queue nobody opens.
    */
   const myWorkCount = useMemo(() => myWork(state, actor, today).items.length, [state, actor, today])
+  /** The directory Person the signed-in actor resolves to, or null when the sign-in matches
+   *  nobody (BR11 of ART-20260905-023) — the one resolution the Client filter's scope, its
+   *  empty-grid reason and the dropdown's resting caption all read, rather than each calling
+   *  `directoryPersonFor` its own way. */
+  const personId = useMemo(
+    () => directoryPersonFor(state.model, actor)?.id ?? null,
+    [state.model, actor],
+  )
+  /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
+   *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
+   *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
+   *  the payload the read gate already computed rather than a second set (`clientFilterScopeFor`,
+   *  `lib/projectBoundary.ts`). Built from the person, never from `isExempt` — an exempt seat
+   *  gets the same scope (BR12). */
+  const scope = useMemo(() => clientFilterScopeFor(state, personId), [state, personId])
   /** The retired toolbar bell's number, now the sidebar Notifications badge. */
   const notificationsUnread = useMemo(
-    () => unreadCount(state.notifications, actor.name, directoryPersonFor(state.model, actor)?.id ?? null),
-    [state.notifications, state.model, actor],
+    () => unreadCount(state.notifications, actor.name, personId),
+    [state.notifications, actor.name, personId],
   )
 
   const sortedRows = useMemo(
@@ -755,16 +772,16 @@ export default function IssueWorkspace({
   )
 
   const rows = useMemo(
-    () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model))),
-    [sortedRows, filters, collapsed, state.model],
+    () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model)), scope),
+    [sortedRows, filters, collapsed, state.model, scope],
   )
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
-  const facets = useMemo(() => facetsOf(state), [state])
+  const facets = useMemo(() => facetsOf(state, scope), [state, scope])
 
   const counts = useMemo(() => {
     const issueRows = sortedRows.filter((r) => r.kind === 'issue')
-    const shown = issueRows.filter((r) => matchesFilters(r, filters))
+    const shown = issueRows.filter((r) => matchesFilters(r, filters, scope))
     const tally = (h: string) => shown.filter((r) => r.scheduleHealth === h).length
     /**
      * "Done" is counted against the facets but not against the completed toggle.
@@ -775,7 +792,7 @@ export default function IssueWorkspace({
      * completed* because completed things are hidden is worse than not showing the figure.
      */
     const completed = issueRows.filter(
-      (r) => matchesFilters(r, { ...filters, showCompleted: true }) && r.scheduleHealth === 'Completed',
+      (r) => matchesFilters(r, { ...filters, showCompleted: true }, scope) && r.scheduleHealth === 'Completed',
     ).length
     return {
       total: issueRows.length,
@@ -786,7 +803,7 @@ export default function IssueWorkspace({
       completed,
       unscheduled: tally('Unscheduled'),
     }
-  }, [sortedRows, filters])
+  }, [sortedRows, filters, scope])
 
   /**
    * Archived records, counted so the entry point can hide itself.
@@ -988,7 +1005,7 @@ export default function IssueWorkspace({
         }
         return next
       })
-      if (!matchesFilters(row, filters)) {
+      if (!matchesFilters(row, filters, scope)) {
         // EMPTY_FILTERS rests the Client facet at NO_CLIENT_CHOSEN, under which matchesFilters
         // admits nothing (BR2) — so a bare reset would hide the very row this promised to show,
         // and the reveal effect below would find no index and give up. Choose the revealed
@@ -1005,7 +1022,7 @@ export default function IssueWorkspace({
       }
       setRevealTarget(id)
     },
-    [allRows, filters, notify, requestSelect, view, setView],
+    [allRows, filters, scope, notify, requestSelect, view, setView],
   )
 
   useEffect(() => {
@@ -1743,25 +1760,22 @@ export default function IssueWorkspace({
    *
    * The report prints this at the top. A status report whose scope is implicit is one people
    * misread once and stop trusting afterwards — and "everything" is itself a scope worth
-   * stating rather than leaving blank.
+   * stating rather than leaving blank. `scopeLabelFor` (`lib/filterPresentation.ts`, step 9)
+   * holds the rule so the scenario harness can pin it: at 'All' it names the person's own
+   * scope — how many stakeholder projects on how many clients — rather than naming every
+   * client in the tenant, because under scoped-All the rows were computed from the person's
+   * projects only and a report must never state a scope wider than that (BR15 of
+   * ART-20260905-023).
    */
-  const scopeLabel = useMemo(() => {
-    const parts: string[] = []
-    // The resting value is not a client and not 'All'; a report built there must say so
-    // rather than print "All clients" over an empty view (AC13 of ART-20260905-016).
-    if (filters.client === NO_CLIENT_CHOSEN) parts.push('No client chosen')
-    else if (filters.client !== 'All') parts.push(filters.client)
-    if (filters.module !== 'All') parts.push(filters.module)
-    if (filters.type !== 'All') parts.push(filters.type)
-    if (filters.status !== 'All') parts.push(`status ${filters.status}`)
-    if (filters.severity !== 'All') parts.push(`severity ${filters.severity}`)
-    if (filters.owner !== 'All') parts.push(`owner ${filters.owner}`)
-    if (filters.accountable !== 'All') parts.push(`accountable ${filters.accountable}`)
-    if (filters.health !== 'All') parts.push(filters.health)
-    if (filters.search.trim()) parts.push(`matching “${filters.search.trim()}”`)
-    const base = parts.length ? parts.join(' · ') : `All clients — ${state.model.organization.name}`
-    return filters.showCompleted ? base : `${base} (completed hidden in the view; counted here)`
-  }, [filters, state.model.organization.name])
+  const scopeLabel = useMemo(
+    () =>
+      scopeLabelFor(filters, {
+        organization: state.model.organization.name,
+        stakeholderProjects: scope.memberProjectIds.size,
+        stakeholderClients: facets.clients.length,
+      }),
+    [filters, state.model.organization.name, scope, facets.clients.length],
+  )
 
   /**
    * Daily IMS.
@@ -1773,7 +1787,7 @@ export default function IssueWorkspace({
    */
   const exportDailyIms = useCallback(() => {
     const inScope = sortedRows.filter(
-      (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }),
+      (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }, scope),
     )
     const report = buildDailyIms(state, inScope, today, scopeLabel)
     download(`daily-ims-${today}.txt`, renderImsText(report, state.model.organization.name), 'text/plain')
@@ -1781,17 +1795,20 @@ export default function IssueWorkspace({
     notify(
       `Daily IMS exported — ${report.position.open} open of ${report.position.total}, ${report.sections.length} section(s) needing attention.`,
     )
-  }, [state, sortedRows, filters, today, scopeLabel, download, notify])
+  }, [state, sortedRows, filters, scope, today, scopeLabel, download, notify])
 
   /**
    * A client pack is for exactly one client — the same precondition `clientView` itself has —
    * so this refuses before building anything when the screen isn't scoped to one, rather than
-   * silently picking a client or building against an ambiguous filter.
+   * silently picking a client or building against an ambiguous filter. `clientPackProblem`
+   * (`lib/filterPresentation.ts`) holds the rule so the scenario harness can pin AC13's
+   * sentinel half alongside 'All'.
    */
   const openClientPack = useCallback(
     (kind: 'weekly' | 'monthly') => {
-      if (filters.client === 'All' || filters.client === NO_CLIENT_CHOSEN) {
-        notify('Pick one client first — a client pack is for a single client, not the whole workspace.', true)
+      const problem = clientPackProblem(filters.client)
+      if (problem) {
+        notify(problem, true)
         return
       }
       const scopeId = clientScopeIdFor(state, filters.client)
@@ -1818,11 +1835,13 @@ export default function IssueWorkspace({
   const slaPlan = useMemo(
     () =>
       planSlaDates(
-        sortedRows.filter((r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true })),
+        sortedRows.filter(
+          (r) => r.kind === 'issue' && matchesFilters(r, { ...filters, showCompleted: true }, scope),
+        ),
         sla,
         today,
       ),
-    [sortedRows, filters, sla, today],
+    [sortedRows, filters, scope, sla, today],
   )
 
   /**
@@ -1917,7 +1936,8 @@ export default function IssueWorkspace({
             header deliberately: the firm is the one running the product and does not need
             telling, and the tree itself is the page — labelling it competes with the row that
             is actually selected. The organisation name is still configured and still used
-            wherever it disambiguates, such as the filter summary for "All clients". */}
+            wherever it disambiguates, such as the resting filter summary's own-projects
+            wording (`scopeLabel`, `scopeLabelFor`). */}
 
         <div className="search">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -2137,6 +2157,7 @@ export default function IssueWorkspace({
         model={state.model}
         filters={filters}
         setFilters={setFilters}
+        personResolved={personId !== null}
         facets={facets}
         zoom={zoom}
         setZoom={setZoom}
@@ -2300,7 +2321,12 @@ export default function IssueWorkspace({
         <div className="pane-tree" style={{ width: treeWidth }}>
           <TreeGrid
             rows={rows}
-            noClientChosen={filters.client === NO_CLIENT_CHOSEN}
+            emptyReason={emptyGridReason({
+              filters,
+              personResolved: personId !== null,
+              stakeholderProjects: scope.memberProjectIds.size,
+              clientLabel: orgLabels.TIER_ORGANIZATION,
+            })}
             columns={orderedCols}
             colWidths={colWidths}
             setColWidths={setColWidths}

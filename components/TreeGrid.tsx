@@ -13,17 +13,18 @@ import type { StatusPolicy } from '@/lib/statusPolicy'
 import RowMenu, { type RowActions } from './RowMenu'
 import StatusCellEditor from './StatusCellEditor'
 import QuickEditPopover from './QuickEditPopover'
-import { useLabels } from './labels'
 
 interface Props {
   rows: ScheduleRow[]
   /**
-   * The Client facet is resting at `NO_CLIENT_CHOSEN`, so `rows` is empty by definition
-   * rather than because nothing matched (BR2 of ART-20260905-016). The empty branch names
-   * the next action instead of reporting a non-match — the two states look identical from
+   * Why `rows` is empty, in words — or `null` when it is a genuine filter miss. Computed by
+   * `emptyGridReason` (`lib/filterPresentation.ts`) from the person's resolution, their
+   * stakeholder scope and the Client facet: an unresolved actor, a resolved person on no
+   * project, and the resting `NO_CLIENT_CHOSEN` sentinel each name the next action instead of
+   * reporting a non-match — every one of those states looks identical to a filter miss from
    * the rows alone, and the wrong caption teaches people the filters are broken.
    */
-  noClientChosen: boolean
+  emptyReason: string | null
   columns: ColumnDef[]
   colWidths: Record<string, number>
   setColWidths: (fn: (prev: Record<string, number>) => Record<string, number>) => void
@@ -63,7 +64,7 @@ interface Props {
 
 export default function TreeGrid({
   rows,
-  noClientChosen,
+  emptyReason,
   columns,
   colWidths,
   setColWidths,
@@ -86,7 +87,6 @@ export default function TreeGrid({
   statusPolicy,
   actions,
 }: Props) {
-  const labels = useLabels()
   const widthOf = useCallback((c: ColumnDef) => colWidths[c.key] ?? c.width, [colWidths])
 
   /**
@@ -485,11 +485,7 @@ export default function TreeGrid({
       {/* body */}
       <div className="scroll-body" ref={bodyRef} onScroll={onScroll}>
         {rows.length === 0 ? (
-          <div className="empty">
-            {noClientChosen
-              ? `Choose a ${labels.TIER_ORGANIZATION.toLowerCase()} in the Filters row to list its issues.`
-              : 'No issues match the current filters.'}
-          </div>
+          <div className="empty">{emptyReason ?? 'No issues match the current filters.'}</div>
         ) : (
           <div
             style={{ width: totalWidth }}
