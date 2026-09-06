@@ -1,0 +1,93 @@
+{
+  "id": "ART-20260906-025",
+  "kind": "change-set",
+  "version": 2,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "wf-axiomate-change-build-proof-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "Client filter on feat/ART-20260905-016: all seventeen steps of plan ART-20260905-024 built, committed and re-verified; no confirmed review findings; verdict clean",
+  "traces": [
+    "ART-20260905-023",
+    "ART-20260905-024"
+  ],
+  "supersedes": "ART-20260905-018",
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260905-016",
+    "base": "2a297f9f9e0afa461bb15a4a2d9754bb2fb40e67",
+    "commits": [
+      "4cabc5916d3ff4bdac770a053514fd4f6320f7e3",
+      "0bd630b173eccccef42aa74804a8b8b8eba0c3f1",
+      "961c14ec309d647c842cc2b860697fb0eca3ff1c",
+      "0573b6ae08a80198689e63e4ecc8b1dfeb733a12",
+      "84a9c13712e53308cdd6a69f977cef700c44a78a",
+      "45e1a47a92a71d986dbf30fe984d6134d8497c06",
+      "1f91b87b90d92d3b133bfd897e9e712445755faf",
+      "64de4b34d9c1d8c79c95f4b098812dd45f221d8a",
+      "7579142db70c0b932056237e2a8992edf4498ed2",
+      "bbe38b7bc28cdb2a009ca5e1a14b391086cea137",
+      "37c6cf669f043294be4fa7f6a941d8a6b2400d70",
+      "946a253710eaaef5b125b77b99174618632c6e89",
+      "3e72e9c1e37125401a0a63f5ee14e153a1c97825"
+    ],
+    "files": [
+      { "path": "lib/types.ts", "workstream": "filter-logic" },
+      { "path": "lib/tree.ts", "workstream": "filter-logic" },
+      { "path": "lib/filterPresentation.ts", "workstream": "filter-logic" },
+      { "path": "lib/projectBoundary.ts", "workstream": "stakeholder-logic" },
+      { "path": "lib/workspace.ts", "workstream": "preference-storage" },
+      { "path": "lib/access.ts", "workstream": "preference-storage" },
+      { "path": "lib/actionShape.ts", "workstream": "preference-storage" },
+      { "path": "lib/config.ts", "workstream": "preference-storage" },
+      { "path": "lib/clientBoundary.ts", "workstream": "preference-storage" },
+      { "path": "lib/savedViews.ts", "workstream": "preference-storage" },
+      { "path": "lib/db/persist.ts", "workstream": "preference-storage" },
+      { "path": "app/api/workspace/route.ts", "workstream": "preference-storage" },
+      { "path": "components/FilterBar.tsx", "workstream": "ui" },
+      { "path": "components/FiltersHeader.tsx", "workstream": "ui" },
+      { "path": "components/TreeGrid.tsx", "workstream": "ui" },
+      { "path": "components/IssueWorkspace.tsx", "workstream": "ui" },
+      { "path": "scripts/scenario-validation.ts", "workstream": "proof" },
+      { "path": "data/validation.json", "workstream": "proof" },
+      { "path": "docs/artifacts/ART-20260905-018.change-set.json", "workstream": "unowned" },
+      { "path": "docs/artifacts/ART-20260905-019.validation-result.json", "workstream": "unowned" }
+    ],
+    "plan_ref": "ART-20260905-024",
+    "steps_built": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    "self_validation": {
+      "commands": [
+        "steps 1, 2 and 5 (commit 4cabc59, review fixes folded in at 961c14e) verify_command at build: npx tsc --noEmit && npm run validate:scenarios | CD1 PASS, resting-state UI for AC1 / AC13's sentinel half — exit 0",
+        "steps 3 and 4 (commit 0bd630b) verify_command at build: npx tsc --noEmit && npm run validate:scenarios | CD2, CD3 PASS, memberProjectIdsFor pinned as the stakeholder definition — exit 0",
+        "steps 6, 7 and 8 (commit 45e1a47) verify_command at build: npx tsc --noEmit && the ClientFilterScope tsx assertions && npm run validate:scenarios | CD4 PASS — exit 0; re-run at proof time against current HEAD — exit 0",
+        "steps 9 and 10 (commit 1f91b87) verify_command at build: npx tsc --noEmit && npm run validate:scenarios | CD5, CD6 PASS — exit 0",
+        "steps 11 and 12 (commit 64de4b3) verify_command at build: npx tsc --noEmit && npm run validate:scenarios | CD7 PASS — exit 0; re-run at proof time against current HEAD — exit 0",
+        "steps 13 and 14 (commit 7579142) verify_command at build: npx tsc --noEmit && npm run audit:attribution && npm run validate:scenarios | CD8 PASS — exit 0",
+        "step 15 (commit bbe38b7) verify_command at build: npx tsc --noEmit && npm run audit:a11y && npm run validate:scenarios | GA1 PASS — exit 0",
+        "step 16 (commit 37c6cf6) verify_command at build: npx tsc --noEmit && npm run audit:a11y && npm run validate:scenarios | GA1 PASS — exit 0",
+        "step 17 (commits 946a253, fixed at 3e72e9c) verify_command at build: npx tsc --noEmit && npm run audit:a11y && npm run validate:scenarios | GA1 PASS — exit 0",
+        "full re-verification at proof time (2026-09-06) against current branch HEAD 3e72e9c: npx tsc --noEmit — exit 0; npm run audit:a11y (eslint components app) — exit 0; npm run validate:scenarios — CD1 through CD8 PASS, GA1 PASS, 219/219 scenarios, 0 FAIL, data/validation.json unchanged against the committed file",
+        "npm run audit:contracts — run after writing this artifact"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 0,
+      "findings_open": 0,
+      "verdict": "clean",
+      "findings": [],
+      "notes": [
+        "Input to this review carried an empty CONFIRMED FINDINGS list; nothing was fixed because nothing was confirmed as a finding to fix.",
+        "All three findings recorded against version 1 of this change set (ART-20260905-018) are resolved on this branch: the revealIssue and resting-saved-view fixes landed in 961c14e as before, and data/validation.json now carries the 'proof' workstream in plan ART-20260905-024 (version 3), closing the one finding that was previously left open pending a planner decision.",
+        "Two observations surfaced during step-level self-verification (per the step results feeding this run) are carried forward for awareness, not as confirmed findings, since neither was independently confirmed here and CONFIRMED FINDINGS was empty: (a) step 15's note that lib/clientBoundary.ts's clientView zeroes state.projectMembers for every client/guest reader, so clientFilterScopeFor(state, personId) yields an empty memberProjectIds for a client seat, which could hide project-tier issues from a client-visible tree/board/calendar view even though the payload-only GA1 scenario still passes; (b) step 14's note that CD8's 'unresolved actor is refused' assertion depends on a scenario-built empty defaultRoleIds, and under the shipped default (defaultRoleIds: [ADMIN_ROLE_ID]) an unresolved actor falls back to admin by the pre-existing access-fallback design, not something introduced by step 13. Recommend the architect or a follow-up risk-assessment/review decide whether either needs a plan amendment.",
+        "Ownership gap carried forward, same shape as ART-20260905-019's condition on data/validation.json: commit 0573b6a (already on the branch, from a prior run, before this run started) committed docs/artifacts/ART-20260905-018.change-set.json and -019.validation-result.json onto feat/ART-20260905-016. Neither path sits in any owns list of plan ART-20260905-024 v3 — the plan's five workstreams cover code, scenarios and the proof file only, not artifact bookkeeping — so they are listed above as 'unowned' rather than silently dropped from files[], on the ART-20260905-018 precedent. This run did not commit them (no commit was made for artifacts in this run, per instruction) and did not invent a workstream for them. Left for the planner: either exclude docs/artifacts/* from feature-branch commits going forward, or plan v4 adds a workstream that owns artifact bookkeeping the way v3 gave data/validation.json to proof. Until resolved, the proof-orchestrator's ownership gate is expected to flag these two paths exactly as it flagged data/validation.json before v3."
+      ]
+    },
+    "working_tree_not_included": [
+      "data/discussion.json asAt bump (unstaged, out of scope, present before and after this run)",
+      "untracked: .claude/jobs/, .claude/settings.json"
+    ]
+  }
+}

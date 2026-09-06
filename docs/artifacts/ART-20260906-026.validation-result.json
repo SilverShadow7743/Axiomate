@@ -1,0 +1,129 @@
+{
+  "id": "ART-20260906-026",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "wf-axiomate-change-build-proof-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "Proof of ART-20260906-025 on feat/ART-20260905-016: every gate that ran passed, nothing regressed (208 to 216 unique scenarios, CD1-CD8 added, all PASS), no high security finding, but two committed artifact-bookkeeping files sit outside every owns list of plan ART-20260905-024 v3, so the verdict is fail on ownership alone",
+  "traces": [
+    "ART-20260906-025"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-025",
+    "plan_ref": "ART-20260905-024",
+    "gates": [
+      {
+        "name": "ownership",
+        "command": "git diff --stat master...feat/ART-20260905-016, reconciled against ART-20260905-024 v3 workstreams[].owns and ART-20260906-025 files[]",
+        "result": "fail",
+        "evidence": "The diff has exactly the 20 files the change set lists (verified with git diff --stat master...feat/ART-20260905-016; no undisclosed file). 18 sit inside their workstream's owns list: lib/types.ts, lib/tree.ts, lib/filterPresentation.ts (filter-logic); lib/projectBoundary.ts (stakeholder-logic); lib/workspace.ts, lib/access.ts, lib/actionShape.ts, lib/config.ts, lib/clientBoundary.ts, lib/savedViews.ts, lib/db/persist.ts, app/api/workspace/route.ts (preference-storage); components/FilterBar.tsx, FiltersHeader.tsx, TreeGrid.tsx, IssueWorkspace.tsx (ui); scripts/scenario-validation.ts, data/validation.json (proof — the v3 fix that closed validation result ART-20260905-019's ownership condition holds). The remaining 2 — docs/artifacts/ART-20260905-018.change-set.json and docs/artifacts/ART-20260905-019.validation-result.json — are committed on the branch (by 0573b6a, before this run) and are outside every owns list in plan v3; the change set itself marks them 'unowned'. Per the proof-orchestrator sequence, a file outside its workstream's owns list is a fail before any gate runs — the same rule validation result ART-20260905-019 applied to data/validation.json ('the verdict stays fail on ownership alone, whatever the gates say'). The gates below were run anyway so this result carries evidence rather than a bare refusal."
+      },
+      {
+        "name": "tsc",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "exit 0; no output."
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "exit 0; 'Prisma calls checked in lib/db: 126 / PASS — every tenant-scoped model call names a tenant. / Reducer attribution: no ambient identity; the actor is a parameter / Row mappers: 34 — all stamp tenantId'. Same call count as ART-20260905-019, confirming no new unscoped call."
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "exit 0; 'Attribution: 3/3 arms follow the actor parameter; no action can override it.' (updateIssue, setDates, config (label))."
+      },
+      {
+        "name": "audit:restore",
+        "command": "npm run audit:restore",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Restore: archive is no longer a one-way door, in either mode.'"
+      },
+      {
+        "name": "audit:estimation",
+        "command": "npm run audit:estimation",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Estimation: capacity cannot break a dependency chain, and an agreed number cannot move without a reason.'"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "exit 0 before this artifact was written: 'contract-check: 23 artifact(s) valid'. Re-run after writing this artifact as the checker; that exit code is reported alongside this result."
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "skipped",
+        "evidence": "skipped: production database, CI runs it against a service container. DATABASE_URL in this environment is unset/resolves outside a service container the proof orchestrator may use for a persistence proof. Not run, therefore not passed."
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "exit 0; 'Written to data/validation.json — 219 scenarios.' Summary: PASS 200, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1. CD1 PASS, CD2 PASS, CD3 PASS, CD4 PASS, CD5 PASS, CD6 PASS, CD7 PASS, CD8 PASS, GA1 PASS. data/validation.json after the run is byte-identical to the committed file on the branch (git diff on the path is empty), so the committed baseline is what the suite produces. Note: the 219 findings carry 3 duplicate ids (AC1, TD1, SC1 — 216 unique), present on master too (211 findings, 208 unique) and therefore pre-existing, not introduced by this change."
+      },
+      {
+        "name": "regression",
+        "command": "git show master:data/validation.json compared with data/validation.json on the branch, per scenario id (verdict field)",
+        "result": "pass",
+        "evidence": "master: 208 unique ids — PASS 189, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1. branch: 216 unique ids — PASS 197, PARTIAL 17, NOT TESTABLE 1, NOT IMPLEMENTED 1 (counting one row per unique id; the raw finding counts above include the 3 pre-existing duplicates). No verdict changed on any existing id; no id removed; 8 added, all PASS: CD1-CD8. Regressed: none. Reconciling the two PASS figures in this result: the body.scenarios.passed field below (200) is the harness's own printed summary line, counting all 219 rows including the 3 pre-existing duplicate ids; this gate's 197/189 pair is the unique-id count used for the regression comparison itself, since a duplicated id cannot be compared to itself meaningfully. The unique-id figure (197) is the authoritative one for judging what changed; the harness figure (200) is reported because it is the literal tool output."
+      },
+      {
+        "name": "coverage",
+        "command": "specification ART-20260905-023 v6 acceptance_criteria[].scenario fields, plus the CD4-CD8 scenarios plan ART-20260905-024 v3 names for the criteria its steps cover, against scenario ids in scripts/scenario-validation.ts",
+        "result": "fail",
+        "evidence": "Twelve of fifteen acceptance criteria are proven, several under a different name than the specification states (see below); three — AC6, AC9, AC10 — have no scenario under any name and their plan steps (16, 17, 17) are nonetheless marked done, which is a genuine coverage gap rather than the lenient branch the sequence allows (that branch requires a scenario to exist under a different name, not merely a done step). Recorded as fail on this gate and as a condition below; it does not change the overall verdict, already fail on ownership. All 17 plan steps are marked done. The specification names four criteria directly: AC1 -> CD1, AC2 -> CD3, AC11 -> GA1, AC15 -> CD2 — all exist and pass. The plan's own step titles name five more against the new CD4-CD8 scenarios it adds: AC2, AC5, AC17 -> CD4 (step 6's title, proven by CD4's assertions a/c/e); AC1's UI half, AC13's sentinel half -> CD5, CD6 (step 10's title, stated verbatim); AC12 -> CD7 (step 12's title); AC7, AC8 -> CD8 (step 14's title). Read directly against CD4's assertions, two more criteria are provably exercised under BR11/BR10 without being named in either document: AC4 (an unresolved actor sees nothing — CD4 assertion (d), clientFilterScopeFor(state, null)) and the row-narrowing half of AC3 (a resolved person on zero projects, 'Dev' in CD4, sees only ungated records — assertion (f)); AC3's other half, the empty-grid message text itself, has no scenario id anywhere and is proven only inline in step 9's build-time verify command. Three criteria have no scenario under any name: AC6 (the choice is restored on the next visit — step 16's seeding), AC9 (Clear returns to the stored choice — step 17), AC10 (revealIssue widens or refuses with a message — step 17); their steps are done and their behaviour is described in the step text, but scripts/scenario-validation.ts carries no CD9 or later. Listed as conditions, not a fail, per instruction."
+      },
+      {
+        "name": "security-review",
+        "command": "axiomate-security-review and axiomate-tenant-isolation over git diff master...feat/ART-20260905-016, with particular attention to the setClientChoice permission row and clientView",
+        "result": "pass",
+        "evidence": "One confirmed medium finding (F1) and one confirmed low finding (F2), both below and both in security.findings; marked pass because the proof-orchestrator's rule fails this gate only on a high finding, and neither is high. Beyond those two: no new route (setClientChoice rides the existing KINDS-gated /api/workspace route), no secret, tenant isolation intact (audit:tenancy unchanged at 126 calls; state.nodes/state.model.people read in the new arm are already the tenant's, so a foreign id is simply absent rather than checked separately). Attribution: apply(state, action, actor) keeps actor a separate parameter never read from the action body (verified at lib/workspace.ts:1874); the route resolves actor from session.actor, never the request (app/api/workspace/route.ts:216). clientView zeroes clientChoices (lib/clientBoundary.ts:125), verified withheld from client seats. can(), isExempt, redactForReader and projectView are untouched."
+      }
+    ],
+    "scenarios": {
+      "passed": 200,
+      "partial": 17,
+      "not_implemented": 1,
+      "not_testable": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "proof-orchestrator (axiomate-security-review, axiomate-tenant-isolation)",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "medium",
+          "file": "components/IssueWorkspace.tsx:801 (clientFilterScopeFor call), lib/clientBoundary.ts:125",
+          "summary": "clientFilterScopeFor is applied unconditionally to client seats, whose zeroed projectMembers make its stakeholder set always empty, silently hiding a client-visible record under a real project node from that client seat — a narrowing BR8 and scope_out say this feature must not cause.",
+          "description": "clientFilterScopeFor(state, personId) (step 15) is called unconditionally for every reader of IssueWorkspace, internal or client, and is passed to every matchesFilters/visibleRows/facetsOf call with no gate on can(state.model, actor, 'internal.view').allowed. For a client seat, redactForReader routes to clientView (lib/db/boot.ts:425), which zeroes state.projectMembers (lib/clientBoundary.ts:124), so memberProjectIdsFor — and therefore clientFilterScopeFor — always returns an empty set for that reader, whatever project they would otherwise be shown under. Verified empirically: a client-visible record that sits under an actual project-tier node (unlike GA1's fixture, whose only marked record has no project ancestor — BASE's seed issues carry client/engagement/module with no project) would now be additionally filtered out of Tree/Board/Calendar for that client seat by the new scope logic, even though clientView already permits it through content-based visibility. This narrows a client seat's view, which contradicts BR8 ('the client-seat boundary... is never widened or narrowed by this feature') and the specification's own scope_out ('Client-seat behaviour... is preserved unchanged'). It is fail-closed (nothing is exposed that should be withheld) rather than a data-exposure finding, which is why it is medium rather than high, but it is a real, unproven-by-any-scenario functional regression against the specification's stated non-goal. GA1 does not exercise it because its only clientVisible fixture record has no project-tier ancestor. Named fix: gate scope construction/application on internal.view (construct clientFilterScopeFor only when can(state.model, actor, 'internal.view').allowed, else pass no scope so clientView's own content-based visibility governs alone), and add a scenario with a client-visible record under a real project node read by a client seat. This is confirmed, not the unconfirmed observation the build review carried forward — the mechanism was traced end to end in this run: boot.ts's branch (internal.view vs clientView), IssueWorkspace.tsx's unconditional scope wiring, and BASE's fixture shape."
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "file": "lib/workspace.ts (setClientChoice arm), lib/access.ts:280 (defaultRoleIds)",
+          "summary": "setClientChoice's self-or-admin gate inherits the pre-existing defaultRoleIds-to-ADMIN fallback: an actor the directory cannot resolve is granted config.manage by default and can write another person's clientChoice — the same exposure setNotificationPref already ships with, not introduced by this diff.",
+          "description": "The setClientChoice arm's self-or-admin gate (const self = directoryPersonFor(...)?.id === a.personId; if (!self && !can(..., 'config.manage').allowed) refuse) is byte-for-byte the same shape as the pre-existing setNotificationPref arm (lib/workspace.ts:5838-5844). Verified empirically: rolesFor falls back to model.access.defaultRoleIds = [ADMIN_ROLE_ID] for any actor that does not resolve to a directory person with roles (lib/access.ts:298-306), and ADMIN_ROLE_ID is granted ALL permission keys including config.manage (lib/access.ts:230). So an actor the directory cannot resolve is, under the shipped default policy, treated as self-or-admin and CAN write another person's clientChoice — the change set's carried-forward note (b) is correct that this is pre-existing, not introduced by step 13: the identical exposure already exists on setNotificationPref today, unrelated to this change. Recorded as low because it is a systemic characteristic of the whole permission model (the module comment at lib/access.ts:31 names it directly as something to retire 'the day a login exists'), not something this diff makes worse in kind — it now also reaches one more field. No fix required by this change; a platform-level fix (narrowing or removing defaultRoleIds' ADMIN fallback) is out of this change's scope and would affect every self-or-admin arm, not just this one."
+        }
+      ]
+    },
+    "verdict": "fail",
+    "conditions": [
+      "Ownership: docs/artifacts/ART-20260905-018.change-set.json and docs/artifacts/ART-20260905-019.validation-result.json are committed on the branch but sit outside every owns list of plan ART-20260905-024 v3 — its five workstreams cover code, scenarios and the proof file only, not artifact bookkeeping. Until the implementation planner either excludes docs/artifacts/* from feature-branch commits going forward or a plan version adds a workstream that owns artifact bookkeeping (the way v3 gave data/validation.json to proof), the verdict stays fail on ownership alone, whatever the gates say — the same rule validation result ART-20260905-019 applied to data/validation.json before v3 closed that gap.",
+      "Security (medium, named fix, F1 above): before this branch ships, either gate clientFilterScopeFor's construction/application in components/IssueWorkspace.tsx on can(state.model, actor, 'internal.view').allowed, or otherwise confirm client seats never reach a project-tier client-visible record in production data — and add a scenario (a CD9) with a client-visible record under a real project node read by a client seat, since GA1's fixture cannot exercise this and none of CD1-CD8 do either.",
+      "Coverage: the Scenario Author adds, on the branch in a separate run, scenarios for AC6 (the stored choice is restored on the next visit — step 16 seeding), AC9 (Clear returns to the stored choice, not unscoped All — step 17) and AC10 (revealIssue widens to the stakeholder set or refuses with the named message — step 17), then the Intent orchestra names them on the specification's next version. AC3's message-text half (the 'not a member of any project' teaching copy) also has no scenario id; the row-narrowing half is already proven by CD4's 'Dev' actor.",
+      "Persistence: audit:persistence was skipped because this environment has no service-container database reachable. The release decision must cite the CI run of the persistence audit against the service container for the commits on this branch; this result does not stand in for it.",
+      "Security (low, informational, F2 above): the self-or-admin gate on setClientChoice inherits the same defaultRoleIds-to-ADMIN fallback exposure that setNotificationPref already ships with — an actor the directory cannot resolve is treated as an administrator under the shipped default policy. This is pre-existing and platform-wide, not introduced by this change, and is left for a separate decision on the access-fallback design rather than blocking this branch."
+    ]
+  }
+}
