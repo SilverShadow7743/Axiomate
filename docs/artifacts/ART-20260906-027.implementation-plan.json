@@ -1,0 +1,71 @@
+{
+  "id": "ART-20260906-027",
+  "kind": "implementation-plan",
+  "version": 4,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "wf-axiomate-change-fix-f1-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "Client filter, version 4: gate clientFilterScopeFor on internal.view to close F1 of ART-20260906-026, and add the AC6/AC9/AC10 coverage its condition 3 named as missing",
+  "traces": [
+    "ART-20260905-023",
+    "ART-20260905-006",
+    "ART-20260906-026"
+  ],
+  "supersedes": "ART-20260905-024",
+  "approvals": [
+    {
+      "role": "engineering-lead",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "auto-approved: no protected path, no migration; fixes confirmed finding F1 of ART-20260906-026"
+    }
+  ],
+  "body": {
+    "design_ref": "docs/adr/0002-client-filter-stakeholder-scope.md (ART-20260905-006); specification ART-20260905-023 version 6, approved, no open questions (BR8-BR12 govern the stakeholder scope this plan touches); validation result ART-20260906-026 (proof-orchestrator, verdict fail on ownership) finding F1 (medium, confirmed) and its 'coverage' gate condition 3 (AC6, AC9, AC10 have built steps but no scenario). This plan does not re-open ownership: the two artifact-bookkeeping files ART-20260906-026 found unowned (docs/artifacts/ART-20260905-018.change-set.json, docs/artifacts/ART-20260905-019.validation-result.json) are pre-existing commits on the branch from before this plan and are not touched by either step here; nothing in this plan adds a new unowned file.",
+    "context": "F1, traced end to end by the proof-orchestrator in ART-20260906-026: components/IssueWorkspace.tsx builds and applies the Client-filter scope (clientFilterScopeFor, line ~801) for every reader, internal or client. lib/clientBoundary.ts's clientView (line ~124) zeroes state.projectMembers for a client/guest seat, so that seat's stakeholder set — and therefore its scope — is always empty, and lib/tree.ts's withinScope (matchesFilters/visibleRows/facetsOf, line ~426) then silently drops any client-visible issue that happens to sit under a real project-tier node from that client's own already-authorised view. This narrows what a client seat sees, which BR8 and the specification's scope_out both say this feature must not do. lib/tree.ts's own doc comment on ClientFilterScope already states the fix's mechanism: withinScope returns true when scope is undefined ('No scope at all means today's behaviour, unchanged'). internal.view (lib/access.ts, granted to ROLE_ADMIN and every internal role, structurally forbidden on ROLE_CLIENT_SPONSOR/LEAD/USER at lib/access.ts's accessProblems, ~line 141) is the codebase's own established boundary between an internal seat and a client seat, so gating scope construction on it fixes client seats while an exempt internal seat (BR12) keeps exactly the same scoped view it has today, because isInternal is true for it and the scope is built the same way as before the fix.",
+    "workstreams": [
+      {
+        "name": "ui",
+        "owns": [
+          "components/IssueWorkspace.tsx"
+        ]
+      },
+      {
+        "name": "proof",
+        "owns": [
+          "scripts/scenario-validation.ts",
+          "data/validation.json"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "Gate clientFilterScopeFor on internal.view in components/IssueWorkspace.tsx (fixes F1 of ART-20260906-026, medium, confirmed). Hoist `const isInternal = can(state.model, actor, 'internal.view').allowed` once, immediately before the scope memo (currently line ~801), and reuse that binding at the existing `mayInternal={can(state.model, actor, 'internal.view').allowed}` call on AppSidebar (currently line ~2168) so the permission is computed once per render, not twice, rather than adding a second read of the same fact. Change the scope memo from `useMemo(() => clientFilterScopeFor(state, personId), [state, personId])` to `useMemo(() => (isInternal ? clientFilterScopeFor(state, personId) : undefined), [state, personId, isInternal])`. With no scope, matchesFilters/visibleRows/facetsOf in lib/tree.ts fall through withinScope's undefined-scope branch (already documented as 'today's behaviour, unchanged'), so a client or guest seat's Tree/Board/Calendar/facets are governed by clientView's content-based visibility alone, exactly as before this feature existed; an internal seat, exempt or not (BR12), is unaffected because isInternal is true for it and clientFilterScopeFor is built exactly as it is today. No other file changes for the fix itself. Because a fix nothing proves is a hope, not a fix, this step's own commit also adds scenario CD9 to scripts/scenario-validation.ts, and therefore also carries the data/validation.json rewrite the validate:scenarios run in this step's verify_command produces (both files the proof workstream owns; they land in this commit because the fix and the proof that closes F1 are one unit of work, not because ui workstream is reassigned ownership of them — the same crossing v3's proof workstream already carries for every scenario-adding step) — the scenario validation result ART-20260906-026 named directly: a fixture with a client-visible issue nested under a real project-tier node (the CD4 fixture shape: a client, a project under it, an issue under the project — unlike GA1's only clientVisible fixture record, which has no project ancestor), read through redactForReader/clientView by a ROLE_CLIENT_* actor, is asserted to still appear in visibleRows/Tree for that client seat once the gate above is in place (closing the exact regression F1 named), while an internal seat on the fixture's project (e.g. Priya, as CD4 uses) still gets its own narrowed, member-scoped view — proving the fix repairs the client seat without touching BR9-BR12 for internal seats. PASS count today is 200 in the printed summary (219 rows, 216 unique ids, per ART-20260906-026's regression gate); CD9 makes 201 (217 unique).",
+        "workstream": "ui",
+        "verify_command": "npx tsc --noEmit && test \"$(grep -c \"can(state.model, actor, 'internal.view').allowed\" components/IssueWorkspace.tsx)\" -eq 1 && grep -q 'isInternal ? clientFilterScopeFor' components/IssueWorkspace.tsx && npm run validate:scenarios 2>&1 | awk '/^CD9[[:space:]]+PASS/{f=1} /^[^[:space:]]+[[:space:]]+PASS[[:space:]]/{n++} END{exit !(f && n>=201)}'",
+        "risk": "high",
+        "done": false
+      },
+      {
+        "n": 2,
+        "title": "Three coverage scenarios in scripts/scenario-validation.ts, closing condition 3 of ART-20260906-026: AC6, AC9 and AC10 of specification ART-20260905-023 v6 have built steps (16, 17, 17 of plan ART-20260905-024 v3) but no scenario proves any of them, which is a genuine gap rather than the lenient 'proven under a different name' branch the proof sequence allows. Following the CD1-CD8 pattern (real fixtures, the real reducer, never a typed-in expectation): CD10 pins AC6 (persistence across reopen, step 16) — setClientChoice's write lands in state.model.clientChoices; re-deriving the stored choice (resolveClientChoice) on a state rebuilt from the persisted OperatingModel document, as a fresh reopen would load it, shows the same client and the Client control opens on it without the person choosing again; a person who never stored a choice still opens on NO_CLIENT_CHOSEN (BR16), so persistence is proven and so is its absence. CD11 pins AC9 (Clear returns to the stored choice, step 17) — filters.client is moved off the stored choice both by an unrelated facet change and by choosing a different client outright, then Clear returns filters.client to the stored value in both cases, never to unscoped 'All'; the same is exercised for a person with no stored choice, where Clear returns to NO_CLIENT_CHOSEN. CD12 pins AC10 (revealIssue widens to scope or names why it does not, step 17) — a revealed issue whose project is inside the person's stakeholder set (memberProjectIdsFor) causes filters to widen (to scoped-All or to the record's own client, per the step 17 build) and the issue is present in visibleRows after the widen; a revealed issue whose project is outside the stakeholder set is not included, and the caller receives a named refusal reason rather than a reset to EMPTY_FILTERS that would hide the whole grid the way the pre-BR14 behaviour did. This step is its own commit boundary because it is independent coverage of already-built and already-shipped behaviour, not a correctness fix nothing else depends on. PASS count 201 after step 1 (217 unique); CD10, CD11 and CD12 make 204 (220 unique).",
+        "workstream": "proof",
+        "verify_command": "npm run validate:scenarios 2>&1 | awk '/^CD10[[:space:]]+PASS/{a=1} /^CD11[[:space:]]+PASS/{b=1} /^CD12[[:space:]]+PASS/{c=1} /^[^[:space:]]+[[:space:]]+PASS[[:space:]]/{n++} END{exit !(a && b && c && n>=204)}'",
+        "risk": "low",
+        "done": false
+      }
+    ],
+    "protected_paths_touched": [],
+    "migration": false,
+    "commit_boundaries": [
+      "step 1 alone: the isInternal gate on clientFilterScopeFor in components/IssueWorkspace.tsx together with CD9, the scenario that proves it — a fix nothing proves is a hope, not a fix, so the behaviour change and its proof land in one commit",
+      "step 2 alone: CD10, CD11 and CD12, the AC6/AC9/AC10 coverage condition 3 of ART-20260906-026 named as missing — independent of step 1's fix, proving already-built and already-shipped behaviour rather than blocking on or being blocked by it"
+    ],
+    "highest_regression_risk_step": 1,
+    "rollback": "Revert the two commits in reverse order (step 2, then step 1); neither touches a schema or a persisted data shape. Step 2's commit reverts cleanly alone — it only adds scenario coverage over already-shipped behaviour, no production code path. Step 1's commit reverts by restoring the unconditional `clientFilterScopeFor(state, personId)` scope memo, which reintroduces F1 (a client seat again loses any client-visible record that sits under a real project-tier node) — that is an acceptable rollback state only as a temporary measure, not a target one, and the fix should be reapplied rather than left reverted. Reverting either or both commits is safe for a tenant already running: clientChoices, projectMembers and every other model shape this plan reads are untouched by it."
+  }
+}

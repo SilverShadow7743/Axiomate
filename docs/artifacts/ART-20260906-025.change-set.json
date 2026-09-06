@@ -2,7 +2,7 @@
   "id": "ART-20260906-025",
   "kind": "change-set",
   "version": 2,
-  "status": "final",
+  "status": "superseded",
   "producer": {
     "agent": "build-orchestrator",
     "run": "wf-axiomate-change-build-proof-20260906-1"
