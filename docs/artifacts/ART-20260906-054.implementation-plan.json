@@ -1,8 +1,8 @@
 {
-  "id": "ART-20260906-052",
+  "id": "ART-20260906-054",
   "kind": "implementation-plan",
-  "version": 1,
-  "status": "superseded",
+  "version": 2,
+  "status": "approved",
   "producer": {
     "agent": "implementation-planner",
     "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-frontend-batch-2"
@@ -10,9 +10,9 @@
   "created": "2026-09-06",
   "title": "Frontend batch 2: owner-override expiry, search-index render-time reset, mirrorError removal",
   "traces": [
-    "ART-20260906-051"
+    "ART-20260906-053"
   ],
-  "supersedes": null,
+  "supersedes": "ART-20260906-052",
   "approvals": [
     {
       "role": "engineering-lead",
@@ -22,7 +22,7 @@
     }
   ],
   "body": {
-    "design_ref": "None -- no open design question; the render-time state adjustment is React's own documented pattern for exactly this case (resetting derived state on a prop/computed-value change without an extra Effect-driven render), and the mirrorError removal follows the same documentation's guidance against state that exists only to feed a second Effect.",
+    "design_ref": "None -- no open design question; the render-time state adjustment is React's own documented pattern for exactly this case (resetting derived state on a prop/computed-value change without an extra Effect-driven render), and the mirrorError removal follows the same documentation's guidance against state that exists only to feed a second Effect. Version 2 adds step 6, closing F1 from this batch's own pre-merge review.",
     "workstreams": [
       {
         "name": "issue-workspace",
@@ -71,12 +71,20 @@
         "verify_command": "npx tsc --noEmit && npm run audit:a11y && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios",
         "risk": "low",
         "done": true
+      },
+      {
+        "n": 6,
+        "title": "Measure the arm window with performance.now() instead of Date.now() -- closes F1 from this batch's own pre-merge review (a wall-clock adjustment between arming and a repeat could stretch or shrink the window).",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
       }
     ],
     "protected_paths_touched": [],
     "migration": false,
     "commit_boundaries": [
-      "All five steps as one commit: three independent findings in one file (a timing bound, a render-timing fix, and an Effect-chain removal), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
+      "All six steps as one commit: three independent findings in one file (a timing bound, a render-timing fix, and an Effect-chain removal), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
     ],
     "highest_regression_risk_step": 2,
     "rollback": "Revert the single commit. Step 2 carries the only step with a real behavioural change to a security-adjacent decision (whether an owner-availability override is recorded) -- verified by tracing every one of the four transitions (fresh refusal, in-window confirm, expired repeat, different row/owner) against the existing scenario suite and by reading availabilityForAssignment's own contract to confirm nothing about its refusal shape changed."
