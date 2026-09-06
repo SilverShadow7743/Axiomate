@@ -44,6 +44,7 @@ export default function StatusCellEditor({
   const reasonRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState(value)
   const [reason, setReason] = useState('')
+  const [reasonAttempted, setReasonAttempted] = useState(false)
   const [at, setAt] = useState({ top: 0, left: 0 })
   useOverlay(pop)
 
@@ -76,7 +77,10 @@ export default function StatusCellEditor({
   const commit = () => {
     // Not a refusal message and not a browser prompt: the missing thing is put under the
     // cursor, which is the shortest route from "this will not go through" to it going through.
+    // `reasonAttempted` is the announced half of that — moving focus is silent to a screen
+    // reader unless the field it lands on also says why (WCAG 3.3.1).
     if (!ready) {
+      setReasonAttempted(true)
       reasonRef.current?.focus()
       return
     }
@@ -125,11 +129,26 @@ export default function StatusCellEditor({
           <span className="menu-title">Why</span>
           <input
             ref={reasonRef}
+            id="sc-status-reason"
             type="text"
             value={reason}
             placeholder="A short reason — required"
-            onChange={(e) => setReason(e.target.value)}
+            aria-describedby="sc-status-reason-hint"
+            aria-invalid={reasonAttempted && !ready}
+            onChange={(e) => {
+              setReason(e.target.value)
+              if (reasonAttempted) setReasonAttempted(false)
+            }}
           />
+          <span
+            id="sc-status-reason-hint"
+            className={reasonAttempted && !ready ? 'field-error' : 'field-hint'}
+            role={reasonAttempted && !ready ? 'alert' : undefined}
+          >
+            {reasonAttempted && !ready
+              ? 'A reason is required to save this status change.'
+              : 'A short reason is required.'}
+          </span>
         </label>
 
         <p className="prov status-editor-note">

@@ -1,0 +1,63 @@
+{
+  "id": "ART-20260906-039",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-a11y-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Change set: accessibility batch 1",
+  "traces": [
+    "ART-20260906-037",
+    "ART-20260906-038"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-037",
+    "base": "93bd8e221147fb9097aed5de78f0473c5f2b5d7a",
+    "commits": [],
+    "files": [
+      {
+        "path": "components/useOverlay.ts",
+        "workstream": "editors"
+      },
+      {
+        "path": "components/QuickEditPopover.tsx",
+        "workstream": "editors"
+      },
+      {
+        "path": "components/StatusCellEditor.tsx",
+        "workstream": "editors"
+      },
+      {
+        "path": "app/globals.css",
+        "workstream": "styles"
+      },
+      {
+        "path": "components/FilterBar.tsx",
+        "workstream": "filterbar"
+      }
+    ],
+    "plan_ref": "ART-20260906-038",
+    "self_validation": {
+      "commands": [
+        "npx tsc --noEmit",
+        "npm run audit:a11y",
+        "npm run audit:tenancy",
+        "npm run audit:attribution",
+        "npm run audit:contracts",
+        "npm run validate:scenarios"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 0,
+      "findings_open": 0,
+      "verdict": "clean",
+      "findings": []
+    }
+  }
+}
