@@ -1,0 +1,111 @@
+{
+  "id": "ART-20260906-063",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
+  },
+  "created": "2026-09-06",
+  "title": "Change set: HierarchyNode.sowId index",
+  "traces": [
+    "ART-20260906-061",
+    "ART-20260906-062"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-059",
+    "base": "f42bef880acfc0a57ffcbf2531e9e7e83c2a2809",
+    "commits": [
+      "d15556ec082a401ea964108a57580ddaa68afab5"
+    ],
+    "files": [
+      {
+        "path": "prisma/schema.prisma",
+        "workstream": "schema"
+      },
+      {
+        "path": "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql",
+        "workstream": "schema"
+      },
+      {
+        "path": "data/persistence.json",
+        "workstream": "schema"
+      }
+    ],
+    "plan_ref": "ART-20260906-062",
+    "self_validation": {
+      "commands": [
+        "npx prisma validate",
+        "npx prisma migrate status",
+        "npx tsc --noEmit",
+        "npm run audit:tenancy",
+        "npm run audit:attribution",
+        "npm run audit:contracts",
+        "npm run validate:scenarios",
+        "npm run audit:persistence",
+        "npm run audit:rls",
+        "npm run audit:integrity"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 6,
+      "findings_open": 1,
+      "verdict": "fixed",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "medium",
+          "summary": "The original submission (ART-20260906-059/060) had no change-set or validation-result artifact, despite the implementation plan and the commit message both promising the full spec/plan/change-set/validation-result discipline -- the one change in this batch that touched production directly and most needed a durable record.",
+          "file": "docs/artifacts/",
+          "disposition": "fixed -- this change-set and the accompanying validation-result (ART-20260906-064) are that record"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "The applied migration's own comment claims a sequential-scan query pattern on sowId that does not exist anywhere in this codebase (every sowId filter runs against an already-loaded in-memory WorkspaceState, never a SQL WHERE/JOIN).",
+          "file": "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql",
+          "disposition": "accepted, not fixed in the file -- the migration is already applied to production and prisma_migrations records its checksum; editing the file now would break every subsequent prisma migrate deploy against this database. ART-20260906-061 (spec v2) carries the corrected record instead."
+        },
+        {
+          "id": "F3",
+          "severity": "low",
+          "summary": "The applied migration's own comment claims archiving a Sow row triggers the onDelete: Restrict constraint check -- archiving is a soft-delete UPDATE that touches no key column and never fires the check; only a genuine SQL DELETE does, which this application never issues on Sow outside test cleanup.",
+          "file": "prisma/migrations/20260906000001_hierarchy_node_sow_index/migration.sql",
+          "disposition": "accepted, not fixed in the file -- same checksum constraint as F2; corrected in ART-20260906-061"
+        },
+        {
+          "id": "F4",
+          "severity": "low",
+          "summary": "The plan's framing of running prisma migrate deploy directly from this session as a deliberate exception to the CI/CD pipeline overstated the deviation: docs/deployment.md's own section 3a states every release in this application's history has been made by hand, since the pipeline's deploy job has never actually run.",
+          "file": "docs/artifacts/ART-20260906-060.implementation-plan.json",
+          "disposition": "fixed -- ART-20260906-062 (plan v2) corrects the framing"
+        },
+        {
+          "id": "F5",
+          "severity": "low",
+          "summary": "The plan's rollback note covered dropping the index from the database but not reconciling git history against the database's own _prisma_migrations record after a revert.",
+          "file": "docs/artifacts/ART-20260906-060.implementation-plan.json",
+          "disposition": "fixed -- ART-20260906-062 adds the prisma migrate resolve --rolled-back step"
+        },
+        {
+          "id": "F6",
+          "severity": "low",
+          "summary": "This session's checks (migrate status, the three live-database proofs) ran against the already-migrated production database, not a full bootstrap-from-empty run -- the one gate CI's Verify job normally proves on every push (all 35 migrations applying cleanly to a fresh postgres:16 container) was not reproduced locally.",
+          "file": "N/A -- a process gap, not a file",
+          "disposition": "addressed by opening this PR -- CI's Verify job runs prisma migrate deploy against a fresh container as part of its normal push/PR trigger; its result is recorded in the validation-result (ART-20260906-064) rather than reproduced by hand"
+        },
+        {
+          "id": "F7",
+          "severity": "low",
+          "summary": "A pre-existing standing firewall rule permits this workstation's IP to reach the production Postgres server, unrelated to and predating this specific migration.",
+          "file": "N/A -- infrastructure posture, out of scope for this change",
+          "disposition": "not fixed -- correctly identified by the reviewer as a broader, pre-existing access posture question, not something introduced or worsened by this change; not actioned here"
+        }
+      ]
+    }
+  }
+}

@@ -201,6 +201,7 @@ model HierarchyNode {
   @@id([tenantId, id])
   @@index([tenantId, parentId])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, sowId])
 }
 
 model Issue {
