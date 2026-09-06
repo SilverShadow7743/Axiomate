@@ -1,0 +1,120 @@
+{
+  "id": "ART-20260906-034",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "superseded",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "wf-axiomate-change-security-fix-20260906-1"
+  },
+  "created": "2026-09-06",
+  "title": "Proof of ART-20260906-033 on feat/ART-20260906-030: the original recordInboundMail authorization bypass (any signed-in actor, no permission, no staffing) is confirmed closed by independent re-derivation from source; every gate that ran passed, CD13 proves AC1-AC5, nothing regressed; one lower-severity residual found in review -- a project-less issue (an issue parented directly under client or engagement, which canParent permits) has no staffing gate on either layer, leaving evidence.add as the sole check for that case -- verdict conditional",
+  "traces": [
+    "ART-20260906-033"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-033",
+    "plan_ref": "ART-20260906-032",
+    "ownership": {
+      "result": "pass",
+      "evidence": "Change set files[] (lib/workspace.ts:reducer, app/api/mail/file/route.ts:route, scripts/scenario-validation.ts:proof, data/validation.json:proof) matches plan ART-20260906-032's workstream owns lists exactly. Commits 0f85ff4 (reducer+proof) and 9e1d960 (route) touch no file outside their workstream's owns list."
+    },
+    "gates": [
+      {
+        "name": "tsc",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "exit 0; no output."
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "exit 0; 'Prisma calls checked in lib/db: 126 / PASS -- every tenant-scoped model call names a tenant. / Row mappers: 34 -- all stamp tenantId.' Call count unchanged from prior runs, consistent with this diff adding no new Prisma query."
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "exit 0; 'Attribution: 3/3 arms follow the actor parameter; no action can override it.'"
+      },
+      {
+        "name": "audit:restore",
+        "command": "npm run audit:restore",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Restore: archive is no longer a one-way door, in either mode.'"
+      },
+      {
+        "name": "audit:estimation",
+        "command": "npm run audit:estimation",
+        "result": "pass",
+        "evidence": "exit 0; every line 'ok'; 'Estimation: capacity cannot break a dependency chain, and an agreed number cannot move without a reason.'"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "exit 0; 'contract-check: 31 artifact(s) valid' before this artifact was written; re-run after writing it per instruction (see note below)."
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "skipped",
+        "evidence": "skipped: production database, CI runs it against a service container. (This environment's DATABASE_URL points at the real Azure Postgres instance, not a disposable service container -- confirmed by reading .env before deciding to skip rather than run.)"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "exit 0; CD13 PASS at P0 -- 'recordInboundMail is gated on evidence.add and project staffing wherever it is reached, and a correctly-permissioned, correctly-staffed actor is unaffected'. Summary: 205 PASS / 17 PARTIAL / 1 NOT IMPLEMENTED / 1 NOT TESTABLE, 224 findings written to data/validation.json (matches the committed file byte-for-byte per the change set's own self_validation note)."
+      },
+      {
+        "name": "regression",
+        "command": "git show master:data/validation.json compared with data/validation.json on the branch, per finding id (verdict field)",
+        "result": "pass",
+        "evidence": "master: 220 unique ids. branch: 221 unique ids. No id that was PASS on master is anything but PASS on the branch -- regressed: none. Exactly one id added relative to master: CD13, PASS. No other verdict changed."
+      },
+      {
+        "name": "coverage",
+        "command": "ART-20260906-030's acceptance_criteria (AC1-AC5) cross-checked against scripts/scenario-validation.ts",
+        "result": "pass",
+        "evidence": "Scenario CD13 exists, is named explicitly against 'AC1-AC5 of ART-20260906-030' in its own description text, passes, and its assertions map one-to-one: ac1And2 (Nina, no evidence.add, refused -- AC1/AC2), ac3 (Priya, evidence.add but unstaffed on Harbour, refused on attach -- AC3), ac4 (Priya staffed, real recordInboundMail succeeds unchanged -- AC4), ac5 (bare apply() call, no route, Nina against Quay unstaffed, refused by projectScopeOf directly with ACTION_PERMISSIONS.recordInboundMail null so no capability check could have refused it instead -- AC5). Read directly against scripts/scenario-validation.ts lines 11015-11094, not taken on the change set's word. Note: specification ART-20260906-030 itself carries no literal 'scenario' field per AC (same documentation-linkage gap noted on prior runs, e.g. ART-20260906-029) -- CD13's own text names the ACs it closes, which this gate accepts as coverage evidence the same way prior runs did for CD10-CD12."
+      },
+      {
+        "name": "security-review",
+        "command": "axiomate-security-review and axiomate-tenant-isolation over the diff of both commits (0f85ff4, 9e1d960), independently re-deriving from current source whether the original vulnerability (recordInboundMail reachable via app/api/mail/file/route.ts with no evidence.add check and no staffing check) is closed -- not taken from the change set's self-report",
+        "result": "pass",
+        "evidence": "Pass on the original vulnerability; one medium residual recorded as F1 below -- Read app/api/mail/file/route.ts directly (lines 60-119): can(state.model, session.actor, 'evidence.add') is called at line 63, before both the 'create' branch (line 87, which calls persistActions at line 88 and again at line 94) and the 'attach' branch (target resolved at line 100, persistActions called at line 114) -- confirmed one permission gate sits ahead of every persistActions call in both modes, exactly as AC1/AC2 require. Confirmed a staffing check (isStaffedOn against projectOf(state, target.id), lines 104-113) runs before the attach-mode persistActions call at line 114, returning 403 on refusal, exactly as AC3 requires. Read lib/workspace.ts's projectScopeOf directly (lines 887-891): a 'recordInboundMail' case now exists, returning one(a.issueId) when an issue is present and null otherwise (matching every other case's treatment of an action with no resolvable issue, e.g. addEvidence/addNote), which apply()'s own staffing loop (lines 1965-1975) consumes independently of any route -- confirmed as AC5's defense-in-depth. Searched the full repository for every construction of a 'recordInboundMail' action (20 files matched the literal string; of the code files, only app/api/mail/file/route.ts and app/api/intake/route.ts construct one for persistActions): app/api/intake/route.ts uses INTAKE_ACTOR ({id:'machine:intake', name:'Intake'}, lib/actor.ts:54), and isStaffedOn's own isExempt check (lib/access.ts:407-408, 420-426) returns true unconditionally for isMachineActor (matches the 'machine:' prefix) -- confirmed by reading both files directly that the machine intake path is, and remains, exempt from the new staffing gate by the same mechanism every other machine-written action already relies on, not a new special case. lib/db/persist.ts and lib/actionShape.ts (the write projection and the schema validator) only describe recordInboundMail's shape and persistence, neither constructs nor gates it, and neither changed in this diff. No other file in the repository constructs a recordInboundMail action reaching persistActions. Diff reviewed line by line for secrets, new unauthenticated routes, and payload exposure: none found -- the change is two additive, minimal blocks (a permission check, a staffing check) plus one additive switch case; no removed check, no widened scope, no new Prisma query (audit:tenancy's call count is unchanged). The route-level staffing check and the reducer's projectScopeOf case both resolve through the same projectOf(state, issueId) walk up the tree; per canParent's own rule (lib/workspace.ts:'An issue may sit under any non-root tier, or under another issue') and the shipped tier chain (lib/config.ts DEFAULT_TIERS: company -> client -> engagement -> project -> outcome -> module), an issue can be parented directly under client or engagement with no project in its ancestry at all, so projectOf returns null for it -- this is a pre-existing, reachable configuration, not a new one this fix introduces. For such an issue: the route's staffing check is skipped (targetProject is null, line 105's if guards it out), the reducer's own staffing loop is skipped (projectScopeOf also returns null via the identical projectOf call), and ACTION_PERMISSIONS.recordInboundMail is null so apply()'s capability check never runs for this action type either -- leaving the route's can(..., 'evidence.add') as the sole gate for that case, on both create and attach. This is FINDING F1 below, severity medium: it requires evidence.add (unlike the original vulnerability, which required nothing), so it is not the original bypass reopening, but it is a real, currently-reachable gap in the staffing intent BR2 of ART-20260906-030 states ('projectScopeOf is meant to cover every action type that resolves to a project'). Verdict on the ORIGINAL vulnerability: CONFIRMED CLOSED, by direct code reading, not by trusting the change set's self-report -- the finding above is a narrower, lower-severity residual surfaced by this independent re-derivation, not a reopening of what this fix targeted."
+      }
+    ],
+    "scenarios": {
+      "passed": 205,
+      "partial": 17,
+      "not_implemented": 1,
+      "not_testable": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "proof-orchestrator (axiomate-security-review, axiomate-tenant-isolation)",
+      "vulnerability_status": "CONFIRMED CLOSED -- independently re-derived from current source on branch feat/ART-20260906-030 (commits 0f85ff4, 9e1d960), not taken from the change set's self-report. The original vulnerability (any signed-in actor, no evidence.add, no project staffing, reaching recordInboundMail via app/api/mail/file/route.ts) is closed on exactly the surface ART-20260906-030 scoped: both create and attach are gated on can(state.model, actor, 'evidence.add') ahead of persistActions, attach additionally checks isStaffedOn, and the reducer's own projectScopeOf now covers this action type as defense in depth. See security-review gate evidence above for the full code trace.",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "medium",
+          "file": "app/api/mail/file/route.ts (lines 104-113), lib/workspace.ts (projectScopeOf's recordInboundMail case, lines 887-891), lib/access.ts (ACTION_PERMISSIONS.recordInboundMail: null, line 604)",
+          "status": "open, newly found by this review -- not present in the change set's self-report",
+          "summary": "An issue with no project in its ancestry (canParent permits an issue directly under client or engagement in the shipped tier chain: company -> client -> engagement -> project -> outcome -> module) makes projectOf(state, issueId) return null. Both new staffing checks resolve through that same function, so both are silently absent for such an issue -- the route's staffing check is skipped (targetProject is falsy), and the reducer's projectScopeOf case also returns null, so apply()'s staffing loop skips too. Because ACTION_PERMISSIONS.recordInboundMail is null (deliberately, for the machine intake path), apply()'s ordinary capability check never runs for this action type either. Net effect: for a project-less issue, the route's can(..., 'evidence.add') check is the sole gate on both create and attach -- any actor holding evidence.add can attach fabricated mail to any project-less issue in the tenant regardless of staffing. This is narrower than the original vulnerability (it requires evidence.add, which the original required nothing) and does not reopen what this fix targeted, but it is a real, currently-reachable gap in the staffing intent BR2 of ART-20260906-030 states for projectScopeOf. Not covered by CD13, whose fixture issues are both created under a project. Fix would mirror the pattern already used for actions coarser than a project (i.e. an explicit decision on what, if anything, should gate a project-less issue's evidence) -- a design question for the Intent orchestra, not something this proof can resolve on its own."
+        }
+      ]
+    },
+    "verdict": "conditional",
+    "conditions": [
+      "Security (medium, F1, newly found by this review): a project-less issue (parented directly under client or engagement, which the shipped tier chain permits) has no staffing gate at all on recordInboundMail -- evidence.add is the sole check for that case, on both create and attach. Recommend the Intent orchestra decide whether project-less issues should refuse recordInboundMail outright, require a different check, or are an accepted exception, and route the decision through the standard plan-build-proof loop; CD13 does not cover this case today.",
+      "Persistence: audit:persistence was not run because this environment's DATABASE_URL points at the real Azure Postgres instance, not a disposable service container; the release decision must cite the CI run of the persistence audit against the service container for these two commits before deploying. This result does not stand in for that run.",
+      "Documentation linkage: specification ART-20260906-030 carries no literal 'scenario' field on AC1-AC5 pointing at CD13, even though CD13 exists, passes, and its own description text names all five ACs verbatim. Non-blocking (same class of gap accepted on prior runs, e.g. ART-20260906-029's condition on AC6/AC9/AC10), but worth the Intent orchestra adding scenario: 'CD13' to each of AC1-AC5 on the specification's next version.",
+      "Deploy is a separate, manual step: per risk R1 in ART-20260906-031, merging to master does not itself deploy (the pipeline's deploy job is manual-dispatch only). Closing the ORIGINAL vulnerability in the running production app still requires that deliberate deploy step after merge; this is unrelated to F1 above."
+    ]
+  }
+}

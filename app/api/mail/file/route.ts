@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
+import { can, isStaffedOn } from '@/lib/access'
 import { getMailToken } from '@/lib/db/mailTokens'
 import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
 import { mapGraphMessage, type GraphMessageLike } from '@/lib/mailFile'
-import type { Action } from '@/lib/workspace'
+import { projectOf, type Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,11 @@ export async function POST(req: Request) {
   const tenantId = currentTenantId()
   const { state } = await loadWorkspace(tenantId)
 
+  const may = can(state.model, session.actor, 'evidence.add')
+  if (!may.allowed) {
+    return NextResponse.json({ ok: false, error: may.reason ?? 'Not permitted.' }, { status: 403 })
+  }
+
   /* The dedupe the arm deliberately lacks: a mail files once, however many clicks. */
   const already = msg.internetMessageId
     ? Object.values(state.inboundMail).find((m) => m.messageId === msg.internetMessageId)
@@ -79,6 +85,20 @@ export async function POST(req: Request) {
   const now = new Date().toISOString()
 
   if (body.mode === 'create') {
+    /* A parent with no project ancestor (the tier chain permits an issue directly under a
+     * client or engagement) has no staffing fact to check `recordInboundMail` against — see
+     * the matching gate below on the attach path. Requiring `internal.view` here keeps a
+     * client seat, who legitimately holds `evidence.add`, from filing mail on a structural
+     * node outside any client's own scope (ART-20260906-030's F1). */
+    if (!projectOf(state, body.parentId ?? '')) {
+      const mayInternal = can(state.model, session.actor, 'internal.view')
+      if (!mayInternal.allowed) {
+        return NextResponse.json(
+          { ok: false, error: 'This scope has no project, so only an internal seat may file mail here.' },
+          { status: 403 },
+        )
+      }
+    }
     const made = await persistActions(tenantId, session.actor, [
       { t: 'create', parentId: body.parentId, kind: 'issue', draft: mapped.createDraft, now } as never as SubmittedAction,
     ])
@@ -94,6 +114,24 @@ export async function POST(req: Request) {
   const target = state.issues[body.issueId ?? '']
   if (!target || target.deletedAt) {
     return NextResponse.json({ ok: false, error: 'That issue no longer exists.' })
+  }
+  const targetProject = projectOf(state, target.id)
+  if (targetProject) {
+    const members = Object.values(state.projectMembers)
+    if (!isStaffedOn(state.model, session.actor, targetProject, members)) {
+      return NextResponse.json(
+        { ok: false, error: `${session.actor.name} is not staffed on this project.` },
+        { status: 403 },
+      )
+    }
+  } else if (!can(state.model, session.actor, 'internal.view').allowed) {
+    /* No project to check staffing against (ART-20260906-030's F1) -- the same rule as the
+     * create-mode branch above, so a client seat's `evidence.add` grant cannot reach a
+     * structural issue outside any client's own scope. */
+    return NextResponse.json(
+      { ok: false, error: 'This issue has no project, so only an internal seat may file mail on it.' },
+      { status: 403 },
+    )
   }
   const attached = await persistActions(tenantId, session.actor, [
     { t: 'recordInboundMail', ...mapped.inboundMailFields, issueId: target.id, refusalReason: null, now } as never as Action,

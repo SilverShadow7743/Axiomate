@@ -1,0 +1,92 @@
+{
+  "id": "ART-20260906-036",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-security-fix-2"
+  },
+  "created": "2026-09-06",
+  "title": "Validation: recordInboundMail authorization bypass and its F1 residual, both closed",
+  "traces": [
+    "ART-20260906-035"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-035",
+    "gates": [
+      {
+        "name": "tsc --noEmit",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "clean, no output"
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "PASS -- every tenant-scoped model call names a tenant"
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "3/3 arms follow the actor parameter; no action can override it"
+      },
+      {
+        "name": "audit:restore",
+        "command": "npm run audit:restore",
+        "result": "pass",
+        "evidence": "unaffected by this change (no restore/soft-delete path touched); re-run for completeness, unchanged from ART-20260906-034"
+      },
+      {
+        "name": "audit:estimation",
+        "command": "npm run audit:estimation",
+        "result": "pass",
+        "evidence": "unaffected by this change; unchanged from ART-20260906-034"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "contract-check: 32 artifact(s) valid, before this artifact's own addition"
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "skipped",
+        "evidence": "skipped: production database, CI runs it against a service container"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "226 total scenarios; CD13 PASS (P0), CD14 PASS (P1, new); 0 regressed vs git show master:data/validation.json"
+      }
+    ],
+    "scenarios": {
+      "passed": 206,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "proof-orchestrator, re-deriving from source rather than trusting the change set's self-report",
+      "findings": [
+        {
+          "severity": "low",
+          "summary": "The reducer's own projectScopeOf case for recordInboundMail still resolves to no gate (null) for a project-less issue, matching every other action type coarser than a project (e.g. a SOW). This is intentional and consistent with the codebase's existing design: the reducer's staffing gate is a project-scoped mechanism, not a general authorization layer, and the route-level internal.view check (this change) is where the policy decision for a project-less issue correctly belongs, the same way clientView/redactForReader decisions live outside the reducer's staffing gate.",
+          "file": "lib/workspace.ts"
+        }
+      ]
+    },
+    "verdict": "pass",
+    "conditions": [
+      "Documentation linkage: specification ART-20260906-030 does not yet name CD14 against a new acceptance criterion for the project-less case; F1 was discovered during proof, after the specification was written and approved. Recommend a version 2 of ART-20260906-030 adding an AC6 (project-less issues require internal.view) with scenario: 'CD14', for full traceability -- non-blocking, the proof and the fix already exist and are correct.",
+      "Deploy is a separate, manual step: merging to master does not itself deploy (the pipeline's deploy job is manual-dispatch only, per risk R1 of ART-20260906-031). Closing this vulnerability in the running production app requires that deliberate deploy step after merge.",
+      "The persistence audit was not run against a live database in this environment; CI's run against the service container is the release decision's evidence for that gate, as in every prior validation result today."
+    ]
+  }
+}
