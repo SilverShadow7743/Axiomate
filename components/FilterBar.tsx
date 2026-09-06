@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { FilterState, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { WorkspaceView } from '@/lib/viewChoice'
 import { EMPTY_FILTERS, NO_CLIENT_CHOSEN } from '@/lib/types'
@@ -13,6 +13,39 @@ import type { OperatingModel } from '@/lib/config'
 import { isActiveFilter, clientRestingCaption } from '@/lib/filterPresentation'
 
 const ZOOMS: ZoomLevel[] = ['Day', 'Week', 'Month', 'Quarter']
+
+/**
+ * Dismiss a non-modal popover on Escape or on a pointer down outside it.
+ *
+ * `useOverlay` already gives every dialog Escape, but it is a modal contract too — `inert` on
+ * the app shell, a Tab trap, focus restoration — which is more than a small filter dropdown
+ * needs or should impose on the rest of the toolbar while it is open. This is the same
+ * dismiss-key convention (Escape, the one every other overlay in the app honors) without the
+ * modal behaviour, closing the gap between these three menus and everything else.
+ */
+function useDismissOnOutsideOrEscape(
+  active: boolean,
+  wrap: RefObject<HTMLElement | null>,
+  close: () => void,
+) {
+  const closeRef = useRef(close)
+  closeRef.current = close
+  useEffect(() => {
+    if (!active) return
+    const away = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) closeRef.current()
+    }
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current()
+    }
+    window.addEventListener('mousedown', away)
+    window.addEventListener('keydown', onEscape)
+    return () => {
+      window.removeEventListener('mousedown', away)
+      window.removeEventListener('keydown', onEscape)
+    }
+  }, [active, wrap])
+}
 
 /**
  * Whether one facet deviates from its resting value.
@@ -227,23 +260,8 @@ export default function FilterBar({
   const [moreMenu, setMoreMenu] = useState(false)
   const moreWrap = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!colMenu) return
-    const away = (e: MouseEvent) => {
-      if (menuWrap.current && !menuWrap.current.contains(e.target as Node)) setColMenu(false)
-    }
-    window.addEventListener('mousedown', away)
-    return () => window.removeEventListener('mousedown', away)
-  }, [colMenu])
-
-  useEffect(() => {
-    if (!moreMenu) return
-    const away = (e: MouseEvent) => {
-      if (moreWrap.current && !moreWrap.current.contains(e.target as Node)) setMoreMenu(false)
-    }
-    window.addEventListener('mousedown', away)
-    return () => window.removeEventListener('mousedown', away)
-  }, [moreMenu])
+  useDismissOnOutsideOrEscape(colMenu, menuWrap, () => setColMenu(false))
+  useDismissOnOutsideOrEscape(moreMenu, moreWrap, () => setMoreMenu(false))
 
   const set = (k: keyof FilterState, v: string) => {
     setFilters({ ...filters, [k]: v })
@@ -397,7 +415,7 @@ export default function FilterBar({
 
       {view === 'tree' && (
       <div ref={menuWrap} style={{ position: 'relative' }}>
-        <button className="btn ghost" onClick={() => setColMenu((v) => !v)}>
+        <button className="btn ghost" onClick={() => setColMenu((v) => !v)} aria-expanded={colMenu}>
           Columns ▾
         </button>
         {colMenu && (
@@ -509,14 +527,7 @@ function Legend() {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const away = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
-    }
-    window.addEventListener('mousedown', away)
-    return () => window.removeEventListener('mousedown', away)
-  }, [open])
+  useDismissOnOutsideOrEscape(open, wrap, () => setOpen(false))
 
   const shapes: [string, string][] = [
     ['lg-summary', 'Summary roll-up (client / process area)'],
@@ -537,7 +548,7 @@ function Legend() {
 
   return (
     <div ref={wrap} style={{ position: 'relative' }}>
-      <button className="btn ghost" onClick={() => setOpen((v) => !v)}>
+      <button className="btn ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         Legend
       </button>
       {open && (

@@ -17,7 +17,10 @@
   --border-strong: #c8c3bc;
   --text: #1a1815;
   --text-muted: #64605a;
-  --text-faint: #948f88;
+  /* #5c5850 on white is 7.08:1 -- WCAG 1.4.3 AA needs 4.5:1; the prior #948f88 sat at 3.21:1
+     and this token is used for real body text (.side-title, .kv dt, field labels), not just
+     decoration. */
+  --text-faint: #5c5850;
 
   --accent: #b92a2a;
   --accent-soft: #fbeaea;
@@ -31,14 +34,17 @@
   --today: #b92a2a;
 
   --h-ontrack: #157f5c;
-  --h-atrisk: #b06a00;
+  /* #8f5500 on white is 6.06:1 -- the prior #b06a00 sat at 4.28:1, just under the 4.5:1 AA
+     floor, for text this app renders always-visible (the filter-bar "N at risk" count, risk
+     chips). --sev-medium shares the same value and the same fix for the same reason. */
+  --h-atrisk: #8f5500;
   --h-overdue: #c0392b;
   --h-blocked: #6b4ead;
   --h-complete: #5a6b7a;
   --h-unsched: #98a2ad;
 
   --sev-high: #c0392b;
-  --sev-medium: #b06a00;
+  --sev-medium: #8f5500;
   --sev-low: #6b7783;
 
   --bar-issue: #3d6fa8;
@@ -84,7 +90,10 @@
     --border-strong: #3d454e;
     --text: #e6eaee;
     --text-muted: #9aa5b1;
-    --text-faint: #6f7b87;
+    /* #8b96a1 on #14171a is 5.98:1 -- the prior #6f7b87 sat at 4.16:1, under the 4.5:1 AA
+       floor (WCAG 1.4.3); this dark-theme half was not caught by the review, which checked
+       the light theme, so it is fixed here for the same reason. */
+    --text-faint: #8b96a1;
     --accent: #e05a5a;
     --accent-soft: #35201f;
     --accent-2: #8b7fe8;
@@ -118,7 +127,7 @@
   --border-strong: #3d454e;
   --text: #e6eaee;
   --text-muted: #9aa5b1;
-  --text-faint: #6f7b87;
+  --text-faint: #8b96a1;
   --accent: #e05a5a;
   --accent-soft: #35201f;
   --accent-2: #8b7fe8;
@@ -1684,6 +1693,19 @@ select.cell-editor {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+/* The reason field's persistent description (WCAG 3.3.1) -- neutral until a submit attempt
+   is refused, at which point it switches to .field-error and role="alert" announces it.
+   --h-overdue rather than the unthemed --danger fallback (#b42318, 2.74:1 on the dark
+   background) -- this is already the app's danger colour and passes AA in both themes. */
+.field-hint {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.field-error {
+  font-size: 10.5px;
+  color: var(--h-overdue);
+  font-weight: 600;
 }
 .status-editor-field .menu-title {
   padding: 0;
@@ -4720,6 +4742,13 @@ select.cell-editor {
   background: var(--bg);
   border-radius: 3px;
   overflow: hidden;
+}
+/* .rte-content:focus below removes the browser outline (it sits inside a bordered box, not on
+   the page edge) but had no replacement -- WCAG 2.4.7 Focus Visible. This mirrors the
+   .chat-input/.resp-input pattern already used elsewhere: outline:none paired with a
+   border-color change on the wrapper, so a keyboard user tabbing in still sees where they are. */
+.rte:focus-within {
+  border-color: var(--accent);
 }
 .rte-readonly {
   border-color: transparent;

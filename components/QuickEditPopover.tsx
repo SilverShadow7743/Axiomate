@@ -50,6 +50,7 @@ export default function QuickEditPopover({
   const [severity, setSeverity] = useState<string>(row.severity ?? 'Medium')
   const [status, setStatus] = useState<string>(row.status ?? 'Open')
   const [statusReason, setStatusReason] = useState('')
+  const [reasonAttempted, setReasonAttempted] = useState(false)
 
   useLayoutEffect(() => {
     const cell = host.current?.parentElement
@@ -78,8 +79,17 @@ export default function QuickEditPopover({
   const statusChanged = status !== row.status
   const statusReady = statusChanged && statusReason.trim().length > 0
   const commitStatus = () => {
-    if (!statusReady) return
-    if (onCommit('status', status, statusReason.trim())) setStatusReason('')
+    if (!statusReady) {
+      // Enter is the one live "submit" path when Save is disabled — this is the moment WCAG
+      // 3.3.1 asks for the error to become visible and announced, not just implied by a
+      // dimmed button (whose `title` most screen readers never surface).
+      setReasonAttempted(true)
+      return
+    }
+    if (onCommit('status', status, statusReason.trim())) {
+      setStatusReason('')
+      setReasonAttempted(false)
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -133,9 +143,15 @@ export default function QuickEditPopover({
             <label className="status-editor-field">
               <span className="menu-title">Why</span>
               <input
+                id="qe-status-reason"
                 value={statusReason}
                 placeholder="A short reason — required"
-                onChange={(e) => setStatusReason(e.target.value)}
+                aria-describedby="qe-status-reason-hint"
+                aria-invalid={reasonAttempted && !statusReady}
+                onChange={(e) => {
+                  setStatusReason(e.target.value)
+                  if (reasonAttempted) setReasonAttempted(false)
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -143,6 +159,15 @@ export default function QuickEditPopover({
                   }
                 }}
               />
+              <span
+                id="qe-status-reason-hint"
+                className={reasonAttempted && !statusReady ? 'field-error' : 'field-hint'}
+                role={reasonAttempted && !statusReady ? 'alert' : undefined}
+              >
+                {reasonAttempted && !statusReady
+                  ? 'A reason is required to save this status change.'
+                  : 'A short reason is required.'}
+              </span>
             </label>
             <div className="status-editor-actions">
               <button

@@ -1,0 +1,90 @@
+{
+  "id": "ART-20260906-040",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-a11y-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Validation: accessibility batch 1",
+  "traces": [
+    "ART-20260906-039"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-039",
+    "gates": [
+      {
+        "name": "tsc --noEmit",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "clean, no output"
+      },
+      {
+        "name": "audit:a11y",
+        "command": "npm run audit:a11y",
+        "result": "pass",
+        "evidence": "clean, zero eslint-plugin-jsx-a11y warnings"
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "34 row mappers, all stamp tenantId -- unaffected by a frontend-only change, re-run for completeness"
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "3/3 arms follow the actor parameter"
+      },
+      {
+        "name": "audit:restore",
+        "command": "npm run audit:restore",
+        "result": "pass",
+        "evidence": "unaffected by this change; re-run for completeness"
+      },
+      {
+        "name": "audit:estimation",
+        "command": "npm run audit:estimation",
+        "result": "pass",
+        "evidence": "unaffected by this change; re-run for completeness"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "contract-check: 34 artifact(s) valid, before this artifact's own addition"
+      },
+      {
+        "name": "audit:persistence",
+        "command": "npm run audit:persistence",
+        "result": "skipped",
+        "evidence": "skipped: production database, CI runs it against a service container; also unaffected by a frontend-only change"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "225 scenarios, 0 FAIL, 0 regressed against git show master:data/validation.json"
+      }
+    ],
+    "scenarios": {
+      "passed": 205,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "Independent general-purpose review agent, adversarial brief; empirically verified the focus-restore fix in a live Chromium instance against a throwaway test route, confirmed deleted afterward and the working tree left clean.",
+      "findings": []
+    },
+    "verdict": "pass",
+    "conditions": [
+      "Six findings from the same industry-standard review remain open: one HIGH backend (the migration expand/contract pattern, which needs a policy decision for future migrations rather than a code change to historical ones), three MEDIUM and two LOW backend, and four remaining frontend items (owner-assignment override visibility, the blocking native confirm(), the search-flash effect, and the mirrorError double-effect) -- tracked, not part of this correction's scope."
+    ]
+  }
+}

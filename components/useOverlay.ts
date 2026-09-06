@@ -99,8 +99,16 @@ export function useOverlay(
       if (at !== -1) overlayStack.splice(at, 1)
       // Only the last overlay out restores the background.
       if (overlayStack.length === 0) shell?.removeAttribute('inert')
-      // Guard: the trigger may have unmounted while the overlay was open.
-      if (restoreTo && document.contains(restoreTo)) restoreTo.focus()
+      /* Guard: the trigger may have unmounted while the overlay was open. A second guard, just
+       * as load-bearing — only restore if focus would otherwise be LOST (dropped to <body>).
+       * A caller's own onClose often moves focus somewhere more specific first (TreeGrid's
+       * focusRow, landing on the row rather than the tabIndex=-1 cell that opened the popover) —
+       * that runs synchronously, before this cleanup, so by the time we get here
+       * document.activeElement already reflects the caller's intended target. Restoring to
+       * `restoreTo` unconditionally would silently overwrite it (WCAG 2.4.3 Focus Order). */
+      const focusAlreadyClaimed =
+        document.activeElement && document.activeElement !== document.body
+      if (restoreTo && document.contains(restoreTo) && !focusAlreadyClaimed) restoreTo.focus()
     }
   }, [containerRef, active])
 }
