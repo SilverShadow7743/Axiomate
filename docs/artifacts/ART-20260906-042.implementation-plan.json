@@ -1,0 +1,100 @@
+{
+  "id": "ART-20260906-042",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-backend-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Backend batch 1: mail/file status codes, intake timing-safe comparison, auth-refusal logging",
+  "traces": [
+    "ART-20260906-041"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "engineering-lead",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "auto-approved: no protected path (app/api/**/route.ts, lib/authLog.ts only), no migration, no schema change"
+    }
+  ],
+  "body": {
+    "design_ref": "None -- no open design question; the status-code fix follows RFC 9110 semantics already used elsewhere in this codebase (e.g. the 409 on a refused persistActions call in other routes), the timing-safe comparison mirrors the existing lib/auth/seal.ts pattern verbatim, and the logging helper mirrors the one refusal already logged in app/api/auth/callback/route.ts.",
+    "workstreams": [
+      {
+        "name": "mail-file",
+        "owns": [
+          "app/api/mail/file/route.ts"
+        ]
+      },
+      {
+        "name": "timing-safe-token",
+        "owns": [
+          "app/api/intake/route.ts"
+        ]
+      },
+      {
+        "name": "auth-logging",
+        "owns": [
+          "lib/authLog.ts",
+          "app/api/workspace/route.ts",
+          "app/api/mail/send/route.ts",
+          "app/api/documents/route.ts",
+          "app/api/documents/[id]/route.ts"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "app/api/mail/file/route.ts: set status 409 on the dedupe-conflict response, status 409 on create-refused, status 404 on issue-not-found, status 409 on attach-refused. Confirm components/InboxPanel.tsx reads data.ok from the parsed body, not res.ok/status.",
+        "workstream": "mail-file",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 2,
+        "title": "app/api/intake/route.ts: import timingSafeEqual from node:crypto; compare the bearer token via a length check followed by timingSafeEqual instead of !==, mirroring lib/auth/seal.ts.",
+        "workstream": "timing-safe-token",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 3,
+        "title": "Add lib/authLog.ts: logAuthRefusal(route, reason, actor) writing one console.warn line. No dependency on request/session internals so it is trivially unit-safe.",
+        "workstream": "auth-logging",
+        "verify_command": "npx tsc --noEmit",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 4,
+        "title": "Wire logAuthRefusal into the 5 named 401/403 sites in app/api/mail/file/route.ts, excluding the deliberately-scoped-out 'reconnect your inbox' 401.",
+        "workstream": "mail-file",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 5,
+        "title": "Wire logAuthRefusal into the remaining 8 named 401/403 sites across app/api/workspace/route.ts, app/api/mail/send/route.ts, app/api/documents/route.ts and app/api/documents/[id]/route.ts.",
+        "workstream": "auth-logging",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
+      }
+    ],
+    "protected_paths_touched": [],
+    "migration": false,
+    "commit_boundaries": [
+      "All five steps as one commit: three independent findings on non-overlapping concerns (status codes, one cipher call, one logging call), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
+    ],
+    "highest_regression_risk_step": 2,
+    "rollback": "Revert the single commit. Step 2 carries the only step where a coding mistake could break the intake endpoint outright (e.g. a length check that rejects a correct token); verified against the existing reference implementation in lib/auth/seal.ts and against the full validate:scenarios suite, which already exercises intake's classify/refuse paths."
+  }
+}

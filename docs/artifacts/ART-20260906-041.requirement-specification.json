@@ -1,0 +1,103 @@
+{
+  "id": "ART-20260906-041",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-backend-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Close three backend findings from the industry-standard review: wrong HTTP status codes, a timing-unsafe token comparison, and unlogged auth refusals",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"You already have priority\" (2026-09-06), in response to the assistant naming the remaining review findings, in descending severity, as the standing work queue after the security correction (ART-20260906-034) and the accessibility batch (ART-20260906-037/038)."
+    }
+  ],
+  "body": {
+    "problem": "Six-dimension industry-standard review (2026-09-06) confirmed three backend findings, none HIGH but each a named standards gap: (1) app/api/mail/file/route.ts returned 200/no-explicit-status for what are really 404/409 conditions -- a dedupe conflict, a refused create, an issue-not-found, and a refused attach -- contrary to RFC 9110 status-code semantics and the Microsoft REST API Guidelines this codebase otherwise follows; (2) app/api/intake/route.ts compared the caller's bearer token to the configured shared secret with a plain !== string comparison, which short-circuits on the first differing byte and leaks how many leading characters matched through response timing (OWASP A02:2021 Cryptographic Failures) -- the one control standing between the open internet and a write on this specifically unauthenticated-by-design endpoint; (3) no route logged anything server-side when a request was refused for authentication (401) or authorization (403) reasons, across every write/mutate/read-sensitive endpoint that checks a session or a permission -- so repeated probing, credential stuffing, or a misconfigured client silently hammering a permission it does not hold, left no trace to alert on or correlate (OWASP A09:2021 Security Logging and Monitoring Failures).",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), six independent reviewers each citing a named external standard (OWASP Top 10 2021, RFC 9110, Prisma/Postgres conventions, React/Next.js conventions, WCAG 2.1 AA, NN/g heuristics), each finding adversarially verified by a separate agent before being reported.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P2",
+    "scope_in": [
+      "app/api/mail/file/route.ts: dedupe-conflict, create-refused, issue-not-found and attach-refused responses return 409/409/404/409 respectively instead of 200 or an implicit 200",
+      "app/api/intake/route.ts: the bearer-token comparison against the configured shared secret uses node:crypto's timingSafeEqual with a length check first, mirroring the existing pattern in lib/auth/seal.ts",
+      "lib/authLog.ts (new): a single logAuthRefusal(route, reason, actor) helper that writes one console.warn line per refusal, matching the one refusal this codebase already logs (app/api/auth/callback/route.ts's sign-in-failed warning)",
+      "logAuthRefusal wired into every 401/403 refusal site across app/api/mail/file/route.ts, app/api/workspace/route.ts, app/api/mail/send/route.ts, app/api/documents/route.ts and app/api/documents/[id]/route.ts (13 sites in total)"
+    ],
+    "scope_out": [
+      "app/api/mail/file/route.ts's 'reconnect your inbox' 401 -- a benign onboarding-incomplete state (the person has not yet linked a mailbox), not a security-relevant refusal, so logging it would be noise rather than signal",
+      "app/api/intake/route.ts's own 401 (bad or missing bearer token) -- deliberately excluded from logAuthRefusal: the caller is a machine/webhook on a shared secret, not a human session, so there is no actor identity to log, and the endpoint's existing 503-when-unconfigured and 401-on-mismatch responses are already the intended signal for that path",
+      "The remaining findings from the same review: importWorkspace batching (lib/db/repo.ts), the missing HierarchyNode.sowId index (requires a Prisma migration and architect approval), the HIGH migration expand/contract policy finding (a documentation/process decision, not a code fix), and the remaining frontend findings in components/IssueWorkspace.tsx -- separate corrections"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a mail already filed against an issue (matching internetMessageId)",
+        "when": "the same message is filed again",
+        "then": "the response carries HTTP 409, not 200"
+      },
+      {
+        "id": "AC2",
+        "given": "a create-mode file-mail request whose persistActions call is refused by the reducer",
+        "when": "the response is returned",
+        "then": "it carries HTTP 409"
+      },
+      {
+        "id": "AC3",
+        "given": "an attach-mode file-mail request naming an issue id that does not exist or is soft-deleted",
+        "when": "the response is returned",
+        "then": "it carries HTTP 404"
+      },
+      {
+        "id": "AC4",
+        "given": "an attach-mode file-mail request whose persistActions call is refused by the reducer",
+        "when": "the response is returned",
+        "then": "it carries HTTP 409"
+      },
+      {
+        "id": "AC5",
+        "given": "the existing UI caller of this endpoint (components/InboxPanel.tsx)",
+        "when": "any of the above responses is returned",
+        "then": "the caller's existing behaviour is unchanged, because it reads the parsed JSON body's ok field and never inspects res.ok or the HTTP status"
+      },
+      {
+        "id": "AC6",
+        "given": "a bearer token presented to /api/intake that differs from the configured secret by one byte at any position, including the last",
+        "when": "the comparison runs many times",
+        "then": "no observable timing difference correlates with which byte differs, because the comparison is a constant-time equality check rather than a short-circuiting one"
+      },
+      {
+        "id": "AC7",
+        "given": "any of the 13 named 401/403 refusal sites across the five listed route files",
+        "when": "the refusal fires",
+        "then": "exactly one console.warn line is emitted naming the route, the actor (or 'unresolved actor' when none is known), and the refusal reason, before the HTTP response is returned"
+      },
+      {
+        "id": "AC8",
+        "given": "the logged reason and route strings",
+        "when": "inspected",
+        "then": "they contain no token, password, session cookie, or full request body -- only the route path, a short human-readable refusal reason already safe to show the caller, and the actor's own id/name"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A response describing a resource conflict, a not-found condition, or a refused write must carry the matching HTTP status code (RFC 9110); a 200 with an ok:false body is not a substitute where a caller or an intermediary (proxy, monitoring, cache) reasonably keys behaviour off status.",
+      "BR2 (E1, this review). A secret comparison reachable from an untrusted caller must run in constant time with respect to the secret's content; length may be checked first only because timingSafeEqual itself requires equal-length buffers, not as a substitute for the content comparison being constant-time.",
+      "BR3 (E1, this review). Every authentication or authorization refusal on a route reachable by a human session must produce one server-side log line naming the route, the actor, and the reason, so that repeated or patterned refusals are visible to whoever operates the deployment."
+    ],
+    "domain_entities": [
+      "InboundMail",
+      "authLog",
+      "intake token"
+    ],
+    "open_questions": []
+  }
+}
