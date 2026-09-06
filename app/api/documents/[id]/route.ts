@@ -33,6 +33,7 @@ import { databaseConfigured } from '@/lib/db/client'
 import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
+import { logAuthRefusal } from '@/lib/authLog'
 import { documentStore } from '@/lib/storage/graph'
 
 export const runtime = 'nodejs'
@@ -68,6 +69,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
    */
   const session = getSession(_req)
   if (identityEstablished() && !session.verified) {
+    logAuthRefusal('GET /api/documents/[id]', 'not signed in', session.actor)
     return NextResponse.json({ ok: false, error: 'Sign in to open this file.' }, { status: 401 })
   }
   if (!databaseConfigured()) {

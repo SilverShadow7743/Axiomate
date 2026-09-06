@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { loadWorkspace } from '@/lib/db/repo'
@@ -6,6 +7,7 @@ import { currentTenantId } from '@/lib/tenant'
 import { classify, provenanceNote, type InboundMessage, htmlToText, alreadyReceived, matchingIssue } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
+import { logAuthRefusal } from '@/lib/authLog'
 import { secretProblem, secretValue } from '@/lib/secrets'
 import { wrapPlainText } from '@/lib/richText'
 
@@ -75,7 +77,20 @@ export async function POST(req: Request) {
   }
 
   const auth = req.headers.get('authorization') ?? ''
-  if (auth !== `Bearer ${TOKEN}`) {
+  // A plain `!==` short-circuits on the first differing byte, which leaks how many leading
+  // characters matched through response timing — the one control on an endpoint that is
+  // unauthenticated by design otherwise has nothing standing between the internet and a write.
+  // `timingSafeEqual` throws on a length mismatch rather than returning false (the same
+  // footgun lib/auth/seal.ts's own comment names), so the length check comes first.
+  const authBuf = Buffer.from(auth)
+  const expectedBuf = Buffer.from(`Bearer ${TOKEN}`)
+  const authorised = authBuf.length === expectedBuf.length && timingSafeEqual(authBuf, expectedBuf)
+  if (!authorised) {
+    // This is the one endpoint reachable by anonymous internet traffic, so a bad or missing
+    // bearer token is the one refusal here with no session actor behind it -- logged with no
+    // actor rather than skipped, since probing this specific token is the exact threat the
+    // logging exists to surface (ART-20260906-041's F1).
+    logAuthRefusal('POST /api/intake', 'bearer token mismatch', null)
     return NextResponse.json({ ok: false, error: 'Not authorised.' }, { status: 401 })
   }
 

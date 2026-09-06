@@ -14,6 +14,7 @@ import { persistActions } from '@/lib/db/persist'
 import { sendAsMailbox } from '@/lib/mail'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
+import { logAuthRefusal } from '@/lib/authLog'
 import type { Action } from '@/lib/workspace'
 import { keyProblem, type SubmittedAction } from '@/lib/idempotency'
 import { batchProblem } from '@/lib/actionShape'
@@ -205,6 +206,7 @@ export async function POST(req: Request) {
      */
     const session = getSession(req)
     if (identityEstablished() && !session.verified) {
+      logAuthRefusal('POST /api/workspace', 'not signed in', session.actor)
       return NextResponse.json(
         { ok: false, error: 'Sign in to make changes.', signInRequired: true },
         { status: 401 },
