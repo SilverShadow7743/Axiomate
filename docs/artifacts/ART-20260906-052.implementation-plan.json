@@ -1,0 +1,84 @@
+{
+  "id": "ART-20260906-052",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-frontend-batch-2"
+  },
+  "created": "2026-09-06",
+  "title": "Frontend batch 2: owner-override expiry, search-index render-time reset, mirrorError removal",
+  "traces": [
+    "ART-20260906-051"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "engineering-lead",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "auto-approved: no protected path (components/IssueWorkspace.tsx only), no migration"
+    }
+  ],
+  "body": {
+    "design_ref": "None -- no open design question; the render-time state adjustment is React's own documented pattern for exactly this case (resetting derived state on a prop/computed-value change without an extra Effect-driven render), and the mirrorError removal follows the same documentation's guidance against state that exists only to feed a second Effect.",
+    "workstreams": [
+      {
+        "name": "issue-workspace",
+        "owns": [
+          "components/IssueWorkspace.tsx"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "Add ASSIGN_OVERRIDE_WINDOW_MS module constant; give notify an optional durationMs parameter (default 4500); add armedAt to pendingAssign's ref shape.",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 2,
+        "title": "commitCell's 'owner' case: gate the override confirmation on armedAt being within ASSIGN_OVERRIDE_WINDOW_MS of now, re-arming and re-notifying (with the toast held open for the same window) rather than confirming when it has expired.",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 3,
+        "title": "Replace the searchActive-reset useEffect with a render-time adjustment: track prevDeferredSearch in state, and reset searchActive to 0 synchronously when deferredSearch has changed since the last render.",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 4,
+        "title": "Remove mirrorError state and its dedicated notify Effect; call notify directly inside the debounced mirror-save Effect on failure, deduplicated against a new lastMirrorError ref so a repeated identical failure is not renotified.",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 5,
+        "title": "Full verification: tsc, a11y lint, tenancy, attribution, contracts, scenario suite. Attempted a live browser check via the dev server; blocked by this environment holding no sign-in credentials for the configured identity provider (identityEstablished() is true against this database), so the check could not get past /signin -- recorded as an unverified-in-this-session gap in the validation result rather than claimed.",
+        "workstream": "issue-workspace",
+        "verify_command": "npx tsc --noEmit && npm run audit:a11y && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios",
+        "risk": "low",
+        "done": true
+      }
+    ],
+    "protected_paths_touched": [],
+    "migration": false,
+    "commit_boundaries": [
+      "All five steps as one commit: three independent findings in one file (a timing bound, a render-timing fix, and an Effect-chain removal), each low-risk in isolation, closed together because they share one review, one verification run, and one PR."
+    ],
+    "highest_regression_risk_step": 2,
+    "rollback": "Revert the single commit. Step 2 carries the only step with a real behavioural change to a security-adjacent decision (whether an owner-availability override is recorded) -- verified by tracing every one of the four transitions (fresh refusal, in-window confirm, expired repeat, different row/owner) against the existing scenario suite and by reading availabilityForAssignment's own contract to confirm nothing about its refusal shape changed."
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "id": "ART-20260906-051",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-frontend-batch-2"
+  },
+  "created": "2026-09-06",
+  "title": "Close three of four remaining IssueWorkspace.tsx findings from the industry-standard review",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"You already have priority\" (2026-09-06), in response to the assistant naming the remaining review findings, in descending severity, as the standing work queue after the security correction, the accessibility batch, and backend batches 1 and 2."
+    }
+  ],
+  "body": {
+    "problem": "The React/Next.js conventions dimension of the industry-standard review found four issues in components/IssueWorkspace.tsx, all previously deferred as the last item in the queue: (1) MEDIUM -- the owner-assignment override (a refused availability check, confirmed by repeating the same assignment) had no visible armed state beyond a 4.5s toast and never expired, so a person could coincidentally repeat the identical assignment on the identical row long after the original refusal and silently record an override neither attempt intended as a confirmation; (2) LOW -- a blocking native window.confirm() gates leaving a row with unsaved changes, freezing the tab and looking unstyled against the rest of the app's non-modal design; (3) LOW -- searchActive (the highlighted search-result index) was reset to 0 in a useEffect keyed on the deferred search query, which fires after the query's own render has already painted the OLD index against the NEW hits, a one-frame flash before the Effect corrects it; (4) LOW -- mirrorError, a piece of state whose only reader was a second Effect that called notify() on it, existing purely to chain one Effect's result into another.",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), React/Next.js conventions dimension, adversarially verified before being reported.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P1",
+    "scope_in": [
+      "components/IssueWorkspace.tsx: the owner-assignment override in commitCell's 'owner' case gains a time bound (ASSIGN_OVERRIDE_WINDOW_MS, 20s) -- a repeat outside that window is treated as a fresh attempt (re-armed, re-notified) rather than confirmed; the toast's own visible duration is extended to match the same window via a new optional durationMs parameter on notify, so the arm and its only visible sign of being armed expire together",
+      "components/IssueWorkspace.tsx: the searchActive reset moves from a useEffect keyed on deferredSearch to a render-time state adjustment (the React-documented 'adjust state during render' pattern, comparing deferredSearch against a tracked previous value), so the corrected index is applied before the affected render ever paints rather than one frame after",
+      "components/IssueWorkspace.tsx: mirrorError state and its dedicated notify-only Effect are removed; the debounced mirror-save Effect calls notify directly when a save fails, deduplicated against a ref (lastMirrorError) holding the last message already reported, preserving the existing 'reported once, not on every keystroke' behaviour without a second Effect to carry it"
+    ],
+    "scope_out": [
+      "The blocking native window.confirm() for unsaved-changes navigation (LOW) -- requestSelect's synchronous boolean return is depended on by six call sites (open an edit dialog, switch to the Time tab, early-return before acting on the target row, and others) to decide what happens immediately after a selection change succeeds or is refused. A native confirm() is the only browser primitive that can supply that answer synchronously; replacing it with a non-blocking custom dialog consistent with the rest of the app's non-modal design requires converting requestSelect and all six call sites to an async flow and building a confirmation UI component that does not exist anywhere in this codebase today -- a redesign disproportionate to a LOW finding on the one window.confirm() call site in the whole app. Left for a separately-scoped follow-up if the team wants requestSelect's calling contract changed.",
+      "The remaining findings from the same review: the HierarchyNode.sowId missing index (LOW, requires a Prisma migration and architect approval), and the HIGH migration expand/contract policy decision (a documentation/process change, not a code fix) -- both raised separately for explicit direction rather than actioned under standing batch authorization, since one touches a protected path and the other is an executive policy call"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "an owner-assignment attempt refused by availabilityForAssignment, followed by the identical owner set again on the identical row within 20 seconds",
+        "when": "the second attempt commits",
+        "then": "it is recorded as a confirmed override (acceptUnavailable: true), exactly as before this change"
+      },
+      {
+        "id": "AC2",
+        "given": "an owner-assignment attempt refused by availabilityForAssignment, followed by the identical owner set again on the identical row more than 20 seconds later",
+        "when": "the second attempt commits",
+        "then": "it is treated as a fresh attempt -- re-armed and re-notified, not silently confirmed as an override"
+      },
+      {
+        "id": "AC3",
+        "given": "the refusal toast for an armed owner-override",
+        "when": "it is displayed",
+        "then": "it remains visible for the same duration the override stays confirmable (20 seconds), so the arm and its only visible sign of being armed disappear together"
+      },
+      {
+        "id": "AC4",
+        "given": "the global search query changes and the deferred value updates, producing a new, shorter hit list than the previously active index pointed into",
+        "when": "the affected render commits and paints",
+        "then": "the highlighted index has already been reset to 0 in that same paint -- no frame shows the old index applied against the new hit list"
+      },
+      {
+        "id": "AC5",
+        "given": "a browser-mirror save fails with the same error message on two consecutive debounced saves",
+        "when": "the second failure occurs",
+        "then": "no second toast is shown -- the failure is reported once until the message changes or the save succeeds"
+      },
+      {
+        "id": "AC6",
+        "given": "a browser-mirror save that had been failing subsequently succeeds",
+        "when": "a later save fails again with the same message it failed with before",
+        "then": "the toast is shown again, because the intervening success cleared the last-reported message"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A confirmable action gated behind repeating it must expire: an unbounded confirmation window lets a coincidental, unrelated repeat of the same input silently confirm an action neither attempt intended to confirm.",
+      "BR2 (E1, this review). State that exists only to be read by exactly one Effect, which exists only to react to that state, should be collapsed into the Effect that already has the information -- the intermediate state adds a render and a point of drift with no reader of its own.",
+      "BR3 (E1, this review). A value derived from another value in the same render (like a reset index derived from a changed query) belongs in that render, not in a follow-up Effect -- adjusting state during render, not after it, is what avoids painting a stale intermediate frame."
+    ],
+    "domain_entities": [
+      "pendingAssign",
+      "searchActive",
+      "mirrorError",
+      "requestSelect"
+    ],
+    "open_questions": []
+  }
+}
