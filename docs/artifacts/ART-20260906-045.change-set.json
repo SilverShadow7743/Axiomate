@@ -1,0 +1,86 @@
+{
+  "id": "ART-20260906-045",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-backend-batch-1"
+  },
+  "created": "2026-09-06",
+  "title": "Change set: backend batch 1",
+  "traces": [
+    "ART-20260906-043",
+    "ART-20260906-044"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-041",
+    "base": "bea431c7835dac98086784933c1a0ec306cd2509",
+    "commits": [
+      "f08cc388210a94a794ef10d2788d7f5a3cfc6351"
+    ],
+    "files": [
+      {
+        "path": "app/api/mail/file/route.ts",
+        "workstream": "mail-file"
+      },
+      {
+        "path": "app/api/intake/route.ts",
+        "workstream": "timing-safe-token"
+      },
+      {
+        "path": "lib/authLog.ts",
+        "workstream": "auth-logging"
+      },
+      {
+        "path": "app/api/workspace/route.ts",
+        "workstream": "auth-logging"
+      },
+      {
+        "path": "app/api/mail/send/route.ts",
+        "workstream": "auth-logging"
+      },
+      {
+        "path": "app/api/documents/route.ts",
+        "workstream": "auth-logging"
+      },
+      {
+        "path": "app/api/documents/[id]/route.ts",
+        "workstream": "auth-logging"
+      }
+    ],
+    "plan_ref": "ART-20260906-044",
+    "self_validation": {
+      "commands": [
+        "npx tsc --noEmit",
+        "npm run audit:a11y",
+        "npm run audit:tenancy",
+        "npm run audit:attribution",
+        "npm run audit:contracts",
+        "npm run validate:scenarios"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 2,
+      "findings_open": 0,
+      "verdict": "fixed",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "medium",
+          "summary": "app/api/intake/route.ts's own bearer-token-mismatch 401 was wrongly scoped out of logAuthRefusal on the reasoning that it has no session actor -- it is the one endpoint facing anonymous internet traffic, making its refusals the highest-value ones in this batch to log.",
+          "disposition": "fixed before commit -- app/api/intake/route.ts now calls logAuthRefusal('POST /api/intake', 'bearer token mismatch', null) on that refusal; ART-20260906-041/042 re-versioned to ART-20260906-043/044 (v2) to bring it into scope"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "app/api/mail/file/route.ts's 'reconnect your inbox' 401 was not wired to logAuthRefusal, unlike the file's other three 401/403 sites.",
+          "disposition": "accepted, not fixed -- deliberate scope decision, confirmed correct by the reviewer: the caller is already an authenticated session with a benign onboarding-incomplete state (no connected mailbox yet), not a security-relevant refusal, so logging it would be noise rather than signal (recorded in ART-20260906-043's scope_out)"
+        }
+      ]
+    }
+  }
+}
