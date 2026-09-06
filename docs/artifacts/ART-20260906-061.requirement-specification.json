@@ -1,0 +1,69 @@
+{
+  "id": "ART-20260906-061",
+  "kind": "requirement-specification",
+  "version": 2,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
+  },
+  "created": "2026-09-06",
+  "title": "Add a missing index on HierarchyNode.sowId",
+  "traces": [],
+  "supersedes": "ART-20260906-059",
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"Approve the migration (Recommended)\" -- selected via AskUserQuestion, 2026-09-06, explicitly covering adding the index, writing a migration, and running it through the full spec/plan/change-set/validation-result discipline including the live-database proofs."
+    },
+    {
+      "role": "architect",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "Same selection as above -- prisma/schema.prisma and prisma/migrations/ are protected paths per .claude/contracts/registry.json, requiring explicit architect approval before implementation; this AskUserQuestion answer is that approval."
+    }
+  ],
+  "body": {
+    "problem": "The industry-standard review's Prisma/Postgres conventions dimension found HierarchyNode.sowId -- a foreign key (the SowDelivery relation to Sow, onDelete: Restrict) -- carries no database index, unlike the model's two other reference columns (parentId, deletedAt), both already indexed. Postgres does not index foreign-key columns automatically. CORRECTED RECORD (v2, see source below): the applied migration file's own comment overstates the practical benefit in two ways this specification corrects, since the file itself cannot be edited without breaking its checksum against the database's migration history (see scope_out). (1) It claims a query filtering or joining on a project's SOW does a sequential scan -- no such query exists anywhere in this codebase today; every place that filters by sowId (lib/workspace.ts, lib/scope.ts, lib/milestone.ts, lib/watch.ts, etc.) filters an already-loaded, in-memory WorkspaceState, never a SQL WHERE/JOIN, because lib/db/repo.ts's loadWorkspace loads a tenant's HierarchyNode rows unconditionally. (2) It claims every DELETE or archive of a Sow row pays a full table scan -- archiving is a soft delete (UPDATE Sow SET deletedAt = ...), which touches no key column and triggers no Restrict check at all; Postgres only re-checks a Restrict foreign key when the referenced key columns (tenantId, id) are actually deleted or updated, per the constraint's own definition (ON DELETE RESTRICT ON UPDATE CASCADE, prisma/migrations/20260815000000_init/migration.sql). This application never issues a real SQL DELETE on Sow -- lib/workspace.ts only ever soft-deletes it; the sole real sow.deleteMany in this codebase is scripts/persistence-proof.ts's test-cleanup routine, which deliberately nulls hierarchyNode.sowId first specifically to avoid ever triggering the Restrict check. The index's real, current justification is standard FK-column hygiene and cheap insurance against a future access pattern (a real query filtering by sowId, or a raw/administrative DELETE FROM \\\"Sow\\\") -- not a fix for an observed slow query or an expensive archive path, neither of which exists today.",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), Prisma/Postgres conventions dimension. Version 2 corrects the practical-benefit claim after this batch's own independent pre-merge review (a general-purpose review agent, 2026-09-06) checked it against the actual codebase rather than accepting it on assertion: see the corrected problem statement below.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P3",
+    "scope_in": [
+      "prisma/schema.prisma: add @@index([tenantId, sowId]) to HierarchyNode, matching the composite tenantId-first convention already used on the model's other two indexes",
+      "A new migration (20260906000001_hierarchy_node_sow_index) adding the matching CREATE INDEX statement, applied directly to the configured database as part of this correction's own verification"
+    ],
+    "scope_out": [
+      "A migration linter or CI check enforcing that every foreign key column is indexed -- worth considering separately, not bundled into fixing this one instance",
+      "Any other index gap not named by the review",
+      "Editing the migration file's own comment to correct the inaccuracy named below -- the migration is already applied to the production database, and prisma_migrations records its checksum; editing the file now would make every subsequent prisma migrate deploy against this database fail on a checksum mismatch, per docs/deployment.md's own warning ('any later edit to that file makes every subsequent migrate deploy fail'). This specification is the corrected record instead."
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "the configured database after this migration is applied",
+        "when": "pg_indexes is queried for the HierarchyNode table",
+        "then": "an index named HierarchyNode_tenantId_sowId_idx exists on (tenantId, sowId)"
+      },
+      {
+        "id": "AC2",
+        "given": "the full standard verification suite and the three live-database proofs (audit:persistence, audit:rls, audit:integrity)",
+        "when": "run after the migration is applied",
+        "then": "all pass with the same result shape as before this change -- an index changes a query plan, never a query's result"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A foreign-key column with an onDelete constraint that must scan for referencing rows on a genuine SQL DELETE (Restrict, and Cascade/SetNull no less so) should carry an index, matching the convention this schema already applies to HierarchyNode's other two reference columns.",
+      "BR2 (E1, this batch's own pre-merge review). A migration's own committed comment is a permanent record once applied to a shared database -- its claims should be checked against the actual codebase before committing, not asserted from the general FK-indexing rule alone, because it cannot be corrected afterward without breaking the migration history's checksum."
+    ],
+    "domain_entities": [
+      "HierarchyNode",
+      "Sow"
+    ],
+    "open_questions": []
+  }
+}

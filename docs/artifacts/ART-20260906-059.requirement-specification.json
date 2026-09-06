@@ -2,7 +2,7 @@
   "id": "ART-20260906-059",
   "kind": "requirement-specification",
   "version": 1,
-  "status": "approved",
+  "status": "superseded",
   "producer": {
     "agent": "intent-orchestrator",
     "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"

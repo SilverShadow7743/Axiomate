@@ -2,7 +2,7 @@
   "id": "ART-20260906-060",
   "kind": "implementation-plan",
   "version": 1,
-  "status": "approved",
+  "status": "superseded",
   "producer": {
     "agent": "implementation-planner",
     "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-sowid-index"
