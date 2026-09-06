@@ -1,0 +1,76 @@
+{
+  "id": "ART-20260906-048",
+  "kind": "implementation-plan",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "implementation-planner",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-batching-1"
+  },
+  "created": "2026-09-06",
+  "title": "Batch importWorkspace's inserts: depth-batched nodes/issues, single createMany for fourteen flat tables",
+  "traces": [
+    "ART-20260906-047"
+  ],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "engineering-lead",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "auto-approved: no protected path (lib/db/repo.ts is not in the protected-paths list -- lib/workspace.ts, lib/types.ts, lib/access.ts, middleware.ts, prisma/schema.prisma, migrations and .github/workflows are the only protected paths), no migration, no schema change"
+    }
+  ],
+  "body": {
+    "design_ref": "None -- no open design question; Prisma's createMany is the framework's own documented batching primitive, already used elsewhere in this same function for scheduleAudit rows.",
+    "workstreams": [
+      {
+        "name": "tree-batching",
+        "owns": [
+          "lib/db/repo.ts"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "n": 1,
+        "title": "Add byDepthBatches(items, state) next to depthOf: groups a HierarchyNode[]/Issue[] array into arrays bucketed by tree depth, sorted ascending by depth.",
+        "workstream": "tree-batching",
+        "verify_command": "npx tsc --noEmit",
+        "risk": "low",
+        "done": true
+      },
+      {
+        "n": 2,
+        "title": "Replace the nodes and issues sort-then-per-row-create loops with byDepthBatches(...) + one createMany per depth bucket.",
+        "workstream": "tree-batching",
+        "verify_command": "npx tsc --noEmit && npm run audit:persistence && npm run audit:rls",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 3,
+        "title": "Replace the fourteen flat per-row-create loops (activities, dependencies, relationships, evidence, notes, commitments, allocations, sows, notifications, approvals, timeEntries, estimates, estimateRevisions, engagements) with a filter (where the original loop had an inline continue) followed by one createMany call each, preserving the existing statement order between blocks (estimates before estimateRevisions, etc.).",
+        "workstream": "tree-batching",
+        "verify_command": "npx tsc --noEmit && npm run audit:persistence && npm run audit:rls && npm run audit:integrity",
+        "risk": "medium",
+        "done": true
+      },
+      {
+        "n": 4,
+        "title": "Full verification: tsc, tenancy, attribution, contracts, scenario suite, plus the three live-database proofs (persistence, rls, integrity) against the real configured database using self-cleaning proof tenants.",
+        "workstream": "tree-batching",
+        "verify_command": "npx tsc --noEmit && npm run audit:tenancy && npm run audit:attribution && npm run audit:contracts && npm run validate:scenarios && npm run audit:persistence && npm run audit:rls && npm run audit:integrity",
+        "risk": "low",
+        "done": true
+      }
+    ],
+    "protected_paths_touched": [],
+    "migration": false,
+    "commit_boundaries": [
+      "All four steps as one commit: one function, one coherent refactor (depth-batched tree tables plus fourteen flat tables), verified together against the live database rather than split into a partially-batched intermediate state."
+    ],
+    "highest_regression_risk_step": 2,
+    "rollback": "Revert the single commit. Step 2 carries the only step where a mistake in depth-bucket grouping could violate the self-referencing foreign key (a child batched with or before its parent); verified against the live persistence and RLS proofs, which seed and read back a real multi-depth tree through the real database rather than a mock."
+  }
+}

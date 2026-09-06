@@ -1,0 +1,77 @@
+{
+  "id": "ART-20260906-047",
+  "kind": "requirement-specification",
+  "version": 1,
+  "status": "approved",
+  "producer": {
+    "agent": "intent-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-batching-1"
+  },
+  "created": "2026-09-06",
+  "title": "Batch importWorkspace's per-row inserts into createMany calls",
+  "traces": [],
+  "supersedes": null,
+  "approvals": [
+    {
+      "role": "product-owner",
+      "by": "Nishant Sekhar",
+      "date": "2026-09-06",
+      "evidence": "\"You already have priority\" (2026-09-06), in response to the assistant naming the remaining review findings, in descending severity, as the standing work queue after the security correction, the accessibility batch and backend batch 1."
+    }
+  ],
+  "body": {
+    "problem": "The industry-standard review's Prisma/Postgres conventions dimension found lib/db/repo.ts's importWorkspace inserting every row of every one of roughly fifteen tables (hierarchy nodes, issues, activities, dependencies, relationships, evidence, notes, commitments, allocations, SOWs, notifications, approvals, time entries, estimates, estimate revisions, engagements) one at a time in a for-loop calling .create(), inside a single Prisma transaction. Each row is a separate network round trip to Postgres; a tenant seeded from a real issue log with hundreds of rows per table pays hundreds of round trips where Prisma's own createMany batches the same rows into one statement. This is the seeding path every new tenant runs once, so its cost is paid at onboarding rather than on the interactive path, but the transaction already carries a 120-second timeout (importWorkspace's own $transaction call) and a large-enough log could approach it under one-row-at-a-time insertion where the batched form would not.",
+    "source": {
+      "reference": "Industry-standard review workflow (2026-09-06), Prisma/Postgres conventions dimension, adversarially verified before being reported.",
+      "evidence_level": "E1"
+    },
+    "request_kind": "correction",
+    "priority": "P2",
+    "scope_in": [
+      "lib/db/repo.ts's importWorkspace: replace the per-row .create() loop with a single .createMany() call for every table that has no ordering dependency on another row in the SAME collection (activities, dependencies, relationships, evidence, notes, commitments, allocations, sows, notifications, approvals, timeEntries, estimates, estimateRevisions, engagements) -- fourteen tables, each already filtered for dangling references exactly as the original per-row loop did, now via Array.prototype.filter before the createMany call rather than an inline continue",
+      "lib/db/repo.ts: a new byDepthBatches(items, state) helper, next to the existing depthOf helper, that groups hierarchyNode/issue rows into depth-ordered batches -- same-depth rows share one createMany call, since two siblings at the same tree depth never reference each other as parent/child, while depth-to-depth ordering (parents fully inserted before their children's batch starts) is preserved exactly as the original sort-then-loop did"
+    ],
+    "scope_out": [
+      "Changing the transaction boundary, the 120-second timeout, or the RLS session-variable setup (tx.$executeRaw('SELECT set_config(...)')) that precedes these inserts -- unaffected by batching the statements that follow it",
+      "Any table not currently written by importWorkspace, and the workspaceMeta/operatingModel upsert calls at the end of the transaction (already single-row by nature, not a batching candidate)",
+      "The remaining findings from the same review: the missing HierarchyNode.sowId index (requires a Prisma migration and architect approval), the HIGH migration expand/contract policy decision (a documentation/process change, not a code fix), and the remaining frontend findings in components/IssueWorkspace.tsx -- separate corrections"
+    ],
+    "acceptance_criteria": [
+      {
+        "id": "AC1",
+        "given": "a seed with hierarchy nodes and issues spanning more than one tree depth",
+        "when": "importWorkspace runs",
+        "then": "every row is present afterward with the same field values as the equivalent per-row insert would have produced, and no child row's insert was attempted before its parent's batch completed"
+      },
+      {
+        "id": "AC2",
+        "given": "any of the fourteen flat collections (activities, dependencies, relationships, evidence, notes, commitments, allocations, sows, notifications, approvals, timeEntries, estimates, estimateRevisions, engagements) containing a row that references a node or issue not present in the seed",
+        "when": "importWorkspace runs",
+        "then": "that row is silently skipped, exactly as the original per-row loop's inline continue did -- the filter predicate is unchanged, only its point of application moved from inside the loop to before the createMany call"
+      },
+      {
+        "id": "AC3",
+        "given": "a live Postgres database with the row-level-security policy from docs/plans/2026-08-24-row-level-security-design.md already in force",
+        "when": "importWorkspace's batched inserts run inside the transaction that has already set app.tenant_id",
+        "then": "every inserted row carries the correct tenant id and no row from a different tenant becomes visible or is affected, exactly as the pre-batching behaviour"
+      },
+      {
+        "id": "AC4",
+        "given": "the full seed described in scripts/persistence-proof.ts and scripts/rls-proof.ts",
+        "when": "npm run audit:persistence and npm run audit:rls are run against the real configured database",
+        "then": "both pass with the same result shape as before this change (0 failed persistence checks, all RLS isolation and cleanup checks passing)"
+      }
+    ],
+    "business_rules": [
+      "BR1 (E1, this review). A self-referencing foreign key only constrains INSERT order between a row and its own ancestor chain; it says nothing about order between two rows with no ancestor relationship to each other, so those rows may be written in any relative order, including together in one statement.",
+      "BR2 (E1, this review). A batched insert must apply exactly the same dangling-reference filter the row-by-row form applied, expressed as a filter before the batch rather than a per-row skip during it -- the two must admit and reject the identical set of rows."
+    ],
+    "domain_entities": [
+      "importWorkspace",
+      "HierarchyNode",
+      "Issue",
+      "byDepthBatches"
+    ],
+    "open_questions": []
+  }
+}
