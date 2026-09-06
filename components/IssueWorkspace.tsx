@@ -2176,10 +2176,13 @@ export default function IssueWorkspace({
         savedViews={state.model.savedViews}
         onApplySavedView={(v) => {
           // A view stored at rest (BR14) carries no client of its own; applying it leaves the
-          // person's own choice — the stored one if there is one, else nothing chosen — in
-          // place rather than resetting it, so the shared view and the person's preference
-          // never fight (AC12). Any other stored client, including 'All', applies as-is.
-          setFilters(applySavedFilters(v.filters, storedClient ?? NO_CLIENT_CHOSEN))
+          // person's current client in place — the stored choice if there is one, else
+          // whatever the facet is set to right now (which may be session-only 'All', never
+          // written back) — rather than resetting it, so the shared view and the person's
+          // preference never fight (AC12). Any other stored client, including 'All', applies
+          // as-is. Distinct from `restingClient` below: Clear must never land on unscoped All
+          // (AC9), but applying a view must not silently empty a grid someone is looking at.
+          setFilters(applySavedFilters(v.filters, storedClient ?? filters.client))
           setView(v.view)
         }}
         onDeleteSavedView={(id) =>
