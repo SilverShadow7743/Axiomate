@@ -1,0 +1,65 @@
+{
+  "id": "ART-20260906-055",
+  "kind": "change-set",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "build-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-frontend-batch-2"
+  },
+  "created": "2026-09-06",
+  "title": "Change set: IssueWorkspace frontend batch 2",
+  "traces": [
+    "ART-20260906-053",
+    "ART-20260906-054"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "branch": "feat/ART-20260906-051",
+    "base": "ea2d4f6502f161305d9dfb219a57780674e62a69",
+    "commits": [
+      "1d69fb7f70ffdf2b0f50f0719eda0338723d606c",
+      "9e27322bc6121428b66cc4be09d2a12736f37e9e"
+    ],
+    "files": [
+      {
+        "path": "components/IssueWorkspace.tsx",
+        "workstream": "issue-workspace"
+      }
+    ],
+    "plan_ref": "ART-20260906-054",
+    "self_validation": {
+      "commands": [
+        "npx tsc --noEmit",
+        "npm run audit:a11y",
+        "npm run audit:tenancy",
+        "npm run audit:attribution",
+        "npm run audit:contracts",
+        "npm run validate:scenarios"
+      ],
+      "passed": true
+    },
+    "review": {
+      "findings_confirmed": 2,
+      "findings_open": 0,
+      "verdict": "fixed",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "low",
+          "summary": "The owner-override arm window used Date.now() (wall clock) rather than a monotonic clock, so a system clock adjustment between arming and a repeat (sleep/resume, an NTP correction) could stretch or shrink the 20s confirmation window.",
+          "file": "components/IssueWorkspace.tsx",
+          "disposition": "fixed before commit -- switched to performance.now(); ART-20260906-051/052 re-versioned to ART-20260906-053/054 (v2) to bring it into scope"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "pendingAssign holds one arm at a time, so cycling through several unavailable owners in quick succession can leave up to four stale 20-second toasts visible while only the most recent combination is actually armed.",
+          "file": "components/IssueWorkspace.tsx",
+          "disposition": "accepted, not fixed -- repeating an older visible toast's combination safely re-arms rather than silently confirming, so this is a readability nuance, not a correctness defect; recorded in ART-20260906-053's scope_out"
+        }
+      ]
+    }
+  }
+}

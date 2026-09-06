@@ -1,0 +1,89 @@
+{
+  "id": "ART-20260906-056",
+  "kind": "validation-result",
+  "version": 1,
+  "status": "final",
+  "producer": {
+    "agent": "proof-orchestrator",
+    "run": "claude-session-0131kn5rsn1dnuKVXft3KSXp-frontend-batch-2"
+  },
+  "created": "2026-09-06",
+  "title": "Validation: IssueWorkspace frontend batch 2",
+  "traces": [
+    "ART-20260906-055"
+  ],
+  "supersedes": null,
+  "approvals": [],
+  "body": {
+    "change_set_ref": "ART-20260906-055",
+    "gates": [
+      {
+        "name": "tsc --noEmit",
+        "command": "npx tsc --noEmit",
+        "result": "pass",
+        "evidence": "clean, no output"
+      },
+      {
+        "name": "audit:a11y",
+        "command": "npm run audit:a11y",
+        "result": "pass",
+        "evidence": "clean, zero eslint-plugin-jsx-a11y warnings"
+      },
+      {
+        "name": "audit:tenancy",
+        "command": "npm run audit:tenancy",
+        "result": "pass",
+        "evidence": "unaffected by a frontend-only change, re-run for completeness"
+      },
+      {
+        "name": "audit:attribution",
+        "command": "npm run audit:attribution",
+        "result": "pass",
+        "evidence": "3/3 arms follow the actor parameter"
+      },
+      {
+        "name": "audit:contracts",
+        "command": "npm run audit:contracts",
+        "result": "pass",
+        "evidence": "contract-check: 52 artifact(s) valid, before this artifact's own addition"
+      },
+      {
+        "name": "validate:scenarios",
+        "command": "npm run validate:scenarios",
+        "result": "pass",
+        "evidence": "225 scenarios, 0 FAIL, identical PARTIAL/NOT IMPLEMENTED/NOT TESTABLE set to the pre-change baseline"
+      }
+    ],
+    "scenarios": {
+      "passed": 206,
+      "partial": 17,
+      "not_implemented": 1,
+      "regressed": []
+    },
+    "security": {
+      "reviewer": "Independent general-purpose review agent, adversarial brief; traced all four transitions of the owner-override state machine (fresh refusal, in-window confirm, expired repeat, different row/owner attempted in between) directly against the committed diff, confirmed the render-time searchActive reset converges without an infinite-render risk, and traced the mirrorError-to-ref conversion through fail/fail/succeed/fail to confirm the dedup-then-reset behavior is exact.",
+      "findings": [
+        {
+          "id": "F1",
+          "severity": "low",
+          "summary": "The owner-override arm window used Date.now() rather than a monotonic clock, letting a wall-clock adjustment stretch or shrink the 20s window.",
+          "file": "components/IssueWorkspace.tsx",
+          "disposition": "fixed before merge -- switched to performance.now()"
+        },
+        {
+          "id": "F2",
+          "severity": "low",
+          "summary": "pendingAssign's single-slot design can leave stale, still-visible toasts for a combination that is no longer actually armed, if several different owners are attempted in quick succession.",
+          "file": "components/IssueWorkspace.tsx",
+          "disposition": "accepted -- always fails safe (re-arms rather than silently confirms); a readability nuance, not a correctness defect"
+        }
+      ]
+    },
+    "verdict": "pass",
+    "conditions": [
+      "F2 (LOW) stays out of scope by design, recorded in ART-20260906-053's scope_out.",
+      "No live browser verification was possible in this environment: the app requires real sign-in against a configured identity provider, and this session holds no credentials for it. All verification here is static (types, lint, the pure-function scenario harness) -- the three fixes have not been empirically observed running in a browser.",
+      "Three items from the same industry-standard review remain open: the blocking window.confirm() in requestSelect (LOW, scoped out this batch -- fixing it correctly needs an async redesign of six call sites), the HierarchyNode.sowId missing index (LOW, needs a Prisma migration and explicit architect approval -- raised separately), and the HIGH migration expand/contract policy decision (a documentation/process change, not a code fix -- raised separately)."
+    ]
+  }
+}

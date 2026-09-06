@@ -126,6 +126,12 @@ import type { ConfigOp } from '@/lib/workspace'
 const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
 
 /**
+ * How long a refused owner-assignment stays confirmable by repeating it. See `pendingAssign`
+ * in `IssueWorkspace` for why this window exists at all.
+ */
+const ASSIGN_OVERRIDE_WINDOW_MS = 20_000
+
+/**
  * Resolves a stored client choice (`OperatingModel.clientChoices`, ART-20260905-024 step 13) to
  * the client node's name — the value `filters.client` carries, not the id the map stores.
  *
@@ -248,8 +254,17 @@ export default function IssueWorkspace({
    */
   const [dirty, setDirty] = useState(false)
 
-  /** The owner change awaiting a second press. See the owner case in the cell editor. */
-  const pendingAssign = useRef<{ rowId: string; owner: string } | null>(null)
+  /**
+   * The owner change awaiting a second press. See the owner case in the cell editor.
+   *
+   * `armedAt` bounds how long a refusal stays confirmable: without it, a person could set the
+   * same unavailable owner on the same row weeks apart, for entirely unrelated reasons, and
+   * the second attempt would silently record an override neither one of them intended as a
+   * confirmation. `ASSIGN_OVERRIDE_WINDOW_MS` is also the toast's own visible lifetime for this
+   * message (see the `notify` call below) — the arm and its only visible sign of being armed
+   * expire together.
+   */
+  const pendingAssign = useRef<{ rowId: string; owner: string; armedAt: number } | null>(null)
   /*
    * Stacked, not replaced: the old single slot meant a refusal could be overwritten by the
    * save confirmation that landed half a second later, and the person never saw why their
@@ -258,7 +273,7 @@ export default function IssueWorkspace({
    */
   const toastSeq = useRef(0)
   const toastTimers = useRef(new Map<number, number>())
-  const notify = useCallback((msg: string, error = false) => {
+  const notify = useCallback((msg: string, error = false, durationMs = 4500) => {
     const id = ++toastSeq.current
     setToasts((prev) => [...prev.slice(-3), { id, msg, error }])
     toastTimers.current.set(
@@ -266,7 +281,7 @@ export default function IssueWorkspace({
       window.setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id))
         toastTimers.current.delete(id)
-      }, 4500),
+      }, durationMs),
     )
   }, [])
   useEffect(
@@ -574,8 +589,11 @@ export default function IssueWorkspace({
    * ordering left to get wrong.
    */
   const [modelHydrated, setModelHydrated] = useState(false)
-  /** Set when the browser mirror is full — reported once, not on every keystroke. */
-  const [mirrorError, setMirrorError] = useState<string | null>(null)
+  /** The last mirror-write error already reported, so a full-storage failure that repeats
+   * on every debounced save is not renotified on each one -- only when it first appears or
+   * its message changes. A ref rather than state: nothing renders from this, so there is no
+   * second effect to synchronise it to. */
+  const lastMirrorError = useRef<string | null>(null)
 
   useEffect(() => {
     // With a database, the server is the authority and local storage must stay out of it
@@ -609,14 +627,14 @@ export default function IssueWorkspace({
     const t = window.setTimeout(() => {
       const res = saveWorkspaceLocally(tenantId, state)
       saveModel(tenantId, state.model)
-      setMirrorError(res.ok ? null : (res.error ?? 'Could not write to browser storage.'))
+      const message = res.ok ? null : (res.error ?? 'Could not write to browser storage.')
+      if (message && message !== lastMirrorError.current) {
+        notify(`${message} Changes are no longer being kept.`, true)
+      }
+      lastMirrorError.current = message
     }, 400)
     return () => window.clearTimeout(t)
-  }, [state, modelHydrated, persistence.enabled, tenantId])
-
-  useEffect(() => {
-    if (mirrorError) notify(`${mirrorError} Changes are no longer being kept.`, true)
-  }, [mirrorError, notify])
+  }, [state, modelHydrated, persistence.enabled, tenantId, notify])
 
   /**
    * A browser mirror left over from a session that had no database.
@@ -691,7 +709,18 @@ export default function IssueWorkspace({
     [state, deferredSearch, today],
   )
   const searchOpen = searchFocus && filters.search.trim().length >= 2
-  useEffect(() => setSearchActive(0), [deferredSearch])
+  /**
+   * Reset during render, not in an Effect: an Effect fires after the query's own commit paints
+   * with the OLD active index against the NEW hits (searchHits is derived from this same
+   * deferredSearch, in the same render), which can flash a stale highlight for one frame before
+   * the Effect corrects it on the next. Adjusting state while rendering lets React throw that
+   * render away and redo it with the reset index already applied, before anything paints.
+   */
+  const [prevDeferredSearch, setPrevDeferredSearch] = useState(deferredSearch)
+  if (deferredSearch !== prevDeferredSearch) {
+    setPrevDeferredSearch(deferredSearch)
+    setSearchActive(0)
+  }
 
   const requestSelect = useCallback(
     (id: string | null): boolean => {
@@ -1296,10 +1325,23 @@ export default function IssueWorkspace({
               ? availabilityForAssignment(state, issue, owner, now)
               : null
             if (verdict && refusesAssignment(verdict)) {
+              // performance.now(), not Date.now(): this window only ever compares two points
+              // within one page session, and a wall-clock adjustment (sleep/resume, an NTP
+              // correction) between them must not stretch or shrink it.
+              const nowMs = performance.now()
               const again = pendingAssign.current
-              if (!again || again.rowId !== rowId || again.owner !== owner) {
-                pendingAssign.current = { rowId, owner }
-                notify(`${verdict.message} Set the same owner again to assign anyway — it will be recorded as a decision.`, true)
+              const stillArmed =
+                again &&
+                again.rowId === rowId &&
+                again.owner === owner &&
+                nowMs - again.armedAt <= ASSIGN_OVERRIDE_WINDOW_MS
+              if (!stillArmed) {
+                pendingAssign.current = { rowId, owner, armedAt: nowMs }
+                notify(
+                  `${verdict.message} Set the same owner again within ${Math.round(ASSIGN_OVERRIDE_WINDOW_MS / 1000)}s to assign anyway — it will be recorded as a decision.`,
+                  true,
+                  ASSIGN_OVERRIDE_WINDOW_MS,
+                )
                 return false
               }
               pendingAssign.current = null
