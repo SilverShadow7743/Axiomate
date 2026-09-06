@@ -10670,6 +10670,113 @@ scenario(
   },
 )
 
+/*
+ * F1 of ART-20260906-026 (medium, confirmed): components/IssueWorkspace.tsx built the Client
+ * filter's scope (clientFilterScopeFor) for every reader, internal or not. clientView zeroes
+ * projectMembers for a client/guest seat (CD8's own 'withheld' above), so that seat's
+ * stakeholder set — and its scope — was always empty, and withinScope in lib/tree.ts then
+ * silently dropped any client-visible issue sitting under a real project-tier node from that
+ * client's own already-authorised view (BR8 forbids narrowing a client's own view this way).
+ * The fix gates scope construction on internal.view, the same boundary redactForReader itself
+ * branches on (lib/db/boot.ts) before ever reaching clientView. CD9 drives both sides of that
+ * gate over one fixture, rather than asserting the component's conditional by inspection.
+ */
+
+scenario(
+  'CD9',
+  "Gating the Client filter's scope on internal.view keeps a client-visible issue under a real project visible to the client who owns it, while an internal seat keeps its own narrowed, member-scoped view",
+  "The CD4 fixture shape — a client, two projects under it, an issue under each — but with both issues marked clientVisible (unlike GA1's only clientVisible fixture record, which has no project ancestor and so never exercises F1). Read through clientView, the same boundary redactForReader applies for a reader without internal.view (lib/db/boot.ts): both client-visible issues survive clientView itself, and once the scope this fix gates is skipped for that non-internal actor, visibleRows keeps both under 'All' and facetsOf keeps their client on the dropdown — closing F1. Run unconditionally, the way the code read before this fix, clientFilterScopeFor over that same client-seat state finds an empty memberProjectIds (clientView's zeroed projectMembers), and both issues — each with a real project ancestor — fail withinScope and vanish from visibleRows and facetsOf alike, which is the exact regression this closes. Priya, an internal seat live on only one of the two projects, is unaffected: isInternal is true for her, so her scope is built exactly as before and admits only her own project's issue (CD4's own proof, replayed here).",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const nodeId = (s: WorkspaceState, kind: string, name: string) =>
+      Object.values(s.nodes).find((n) => n.kind === kind && n.name === name)!.id
+    const issueId = (s: WorkspaceState, subject: string) =>
+      Object.values(s.issues).find((i) => i.subject === subject && !i.deletedAt)!.id
+
+    /* BASE's seeded issues carry no project ancestor at all — archived out so the fixture's two
+       project-nested, client-visible issues are the only live ones and every list below can be
+       asserted exactly, the same trim CD3 and CD4 make. */
+    let st = BASE
+    for (const id of ['OAPIL-1', 'OAPIL-2', 'OAPIL-3']) st = ok(st, { t: 'softDelete', id, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const p1 = nodeId(st, 'project', 'Harbour')
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const p2 = nodeId(st, 'project', 'Quay')
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Harbour ticket' }, now: NOW } as Action)
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Quay ticket' }, now: NOW } as Action)
+    const i1 = issueId(st, 'Harbour ticket')
+    const i2 = issueId(st, 'Quay ticket')
+    st = ok(st, { t: 'updateIssue', id: i1, patch: { clientVisible: true }, now: NOW } as Action)
+    st = ok(st, { t: 'updateIssue', id: i2, patch: { clientVisible: true }, now: NOW } as Action)
+
+    /* Priya: an internal, Technical seat, live on Harbour only — CD4's own seat and shape,
+       replayed over this fixture rather than assumed to still hold. */
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    /* A client seat scoped to OAPIL — a ROLE_CLIENT_* role, refused internal.view structurally
+       (accessProblems; GA2), never a member of either project. */
+    st = ok(st, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Casey Client', roleIds: ['ROLE_CLIENT_USER'], email: 'casey@oapil.example', clientScopeId: oapilId },
+      now: NOW,
+    } as Action)
+    const caseyId = Object.values(st.model.people).find((p) => p.name === 'Casey Client')!.id
+    const casey: Actor = { id: caseyId, name: 'Casey Client' }
+
+    /* The state a client seat actually receives — clientView, the boundary redactForReader
+       applies for a reader whose internal.view does not resolve (lib/db/boot.ts) — zeroes
+       projectMembers (F1's cause) but keeps both client-visible issues and their project
+       ancestors, since visibility there is about content, not project membership. */
+    const asClient = clientView(st, oapilId)
+    const bothSurviveClientView = Boolean(asClient.issues[i1]) && Boolean(asClient.issues[i2])
+    const clientRows = rowsOf(asClient)
+    const clientExternal = externalPartyKinds(tiersOf(asClient.model))
+    const isInternalCasey = can(asClient.model, casey, 'internal.view').allowed
+
+    /* The fix: no scope at all for a non-internal actor, so withinScope's undefined-scope
+       branch applies and clientView's own content-based visibility is the only gate. */
+    const fixedScope = isInternalCasey ? clientFilterScopeFor(asClient, caseyId) : undefined
+    const fixedIds = visibleRows(clientRows, UNFILTERED, new Set(), clientExternal, fixedScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const fixedClients = facetsOf(asClient, fixedScope).clients.join(',')
+
+    /* The regression this closes: the unconditional scope the fix removes, run over the exact
+       same client-seat state, finds an empty stakeholder set (clientView zeroed projectMembers)
+       and drops both issues — each fails withinScope because it has a real project ancestor the
+       empty set does not contain — and the dropdown empties out with them. */
+    const regressedScope = clientFilterScopeFor(asClient, caseyId)
+    const regressedIds = visibleRows(clientRows, UNFILTERED, new Set(), clientExternal, regressedScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const regressedClients = facetsOf(asClient, regressedScope).clients.join(',')
+
+    const closesF1 =
+      bothSurviveClientView &&
+      !isInternalCasey &&
+      regressedScope.memberProjectIds.size === 0 &&
+      regressedIds === '' &&
+      regressedClients === '' &&
+      fixedIds === [i1, i2].sort().join(',') &&
+      fixedClients === 'OAPIL'
+
+    /* Priya, internal, keeps her own narrowed, member-scoped view — only Harbour's issue, never
+       Quay's — because isInternal is true for her and her scope is built exactly as it is
+       today; the fix changes nothing for her (BR9-BR12, CD4). */
+    const isInternalPriya = can(st.model, priya, 'internal.view').allowed
+    const priyaScope = isInternalPriya ? clientFilterScopeFor(st, priyaId) : undefined
+    const priyaIds = visibleRows(rowsOf(st), UNFILTERED, new Set(), externalPartyKinds(tiersOf(st.model)), priyaScope)
+      .filter((r) => r.kind === 'issue').map((r) => r.id).sort().join(',')
+    const internalSeatUnaffected = isInternalPriya && priyaIds === i1
+
+    const good = closesF1 && internalSeatUnaffected
+    return good
+      ? { verdict: 'PASS', actual: `clientView(oapilId) keeps both ${i1} and ${i2} (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=${isInternalCasey}; the unconditional scope this fix removes finds memberProjectIds.size=${regressedScope.memberProjectIds.size}, visibleRows lists [${regressedIds || '(none)'}] and facetsOf lists [${regressedClients || '(none)'}]; gated on internal.view, scope is undefined, visibleRows lists [${fixedIds}] and facetsOf lists [${fixedClients}]. Priya (Technical, on Harbour only): internal.view=${isInternalPriya}, scope built as before, visibleRows lists [${priyaIds}] — Quay's issue absent.`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
+  },
+)
+
 /* ================================================================== *
  * RD1's async half — the PDF renderers.
  *

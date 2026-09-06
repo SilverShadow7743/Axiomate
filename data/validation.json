@@ -2192,6 +2192,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD9",
+      "title": "Gating the Client filter's scope on internal.view keeps a client-visible issue under a real project visible to the client who owns it, while an internal seat keeps its own narrowed, member-scoped view",
+      "expected": "The CD4 fixture shape — a client, two projects under it, an issue under each — but with both issues marked clientVisible (unlike GA1's only clientVisible fixture record, which has no project ancestor and so never exercises F1). Read through clientView, the same boundary redactForReader applies for a reader without internal.view (lib/db/boot.ts): both client-visible issues survive clientView itself, and once the scope this fix gates is skipped for that non-internal actor, visibleRows keeps both under 'All' and facetsOf keeps their client on the dropdown — closing F1. Run unconditionally, the way the code read before this fix, clientFilterScopeFor over that same client-seat state finds an empty memberProjectIds (clientView's zeroed projectMembers), and both issues — each with a real project ancestor — fail withinScope and vanish from visibleRows and facetsOf alike, which is the exact regression this closes. Priya, an internal seat live on only one of the two projects, is unaffected: isInternal is true for her, so her scope is built exactly as before and admits only her own project's issue (CD4's own proof, replayed here).",
+      "verdict": "PASS",
+      "actual": "clientView(oapilId) keeps both OAPIL-004 and OAPIL-005 (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=false; the unconditional scope this fix removes finds memberProjectIds.size=0, visibleRows lists [(none)] and facetsOf lists [(none)]; gated on internal.view, scope is undefined, visibleRows lists [OAPIL-004,OAPIL-005] and facetsOf lists [OAPIL]. Priya (Technical, on Harbour only): internal.view=true, scope built as before, visibleRows lists [OAPIL-004] — Quay's issue absent.",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

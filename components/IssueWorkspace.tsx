@@ -792,13 +792,24 @@ export default function IssueWorkspace({
     () => directoryPersonFor(state.model, actor)?.id ?? null,
     [state.model, actor],
   )
+  /** Whether this actor is internal (`lib/access.ts`'s established boundary between an internal
+   *  seat and a client seat) — computed once here and reused at the `mayInternal` prop below,
+   *  rather than read twice. */
+  const isInternal = can(state.model, actor, 'internal.view').allowed
   /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
    *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
    *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
    *  the payload the read gate already computed rather than a second set (`clientFilterScopeFor`,
    *  `lib/projectBoundary.ts`). Built from the person, never from `isExempt` — an exempt seat
-   *  gets the same scope (BR12). */
-  const scope = useMemo(() => clientFilterScopeFor(state, personId), [state, personId])
+   *  gets the same scope (BR12). Undefined for a client/guest seat (F1 of ART-20260906-026): a
+   *  client's stakeholder set is always empty (`clientView` zeroes `projectMembers`), so building
+   *  a scope for one silently dropped any client-visible issue nested under a real project-tier
+   *  node — `withinScope` in `lib/tree.ts` treats no scope as today's unchanged, content-only
+   *  visibility, which is what a client or guest seat must get. */
+  const scope = useMemo(
+    () => (isInternal ? clientFilterScopeFor(state, personId) : undefined),
+    [state, personId, isInternal],
+  )
   /** The person's stored client choice, resolved to its current name (ART-20260905-024 step 16;
    *  `null` when nothing is stored or it no longer resolves) — the value step 17's Clear and
    *  saved-view apply return to, rather than to unscoped All (BR14). Kept separate from
@@ -1828,7 +1839,11 @@ export default function IssueWorkspace({
     () =>
       scopeLabelFor(filters, {
         organization: state.model.organization.name,
-        stakeholderProjects: scope.memberProjectIds.size,
+        // `scope` is undefined for a client/guest seat (no stakeholder scope is built for one,
+        // per the gate above); its stakeholder set was already empty pre-fix (`clientView`
+        // zeroes `projectMembers`), so `?? 0` reproduces that seat's existing count exactly —
+        // this label's number is unchanged by the fix, only the row-level scoping is.
+        stakeholderProjects: scope?.memberProjectIds.size ?? 0,
         stakeholderClients: facets.clients.length,
       }),
     [filters, state.model.organization.name, scope, facets.clients.length],
@@ -2165,7 +2180,7 @@ export default function IssueWorkspace({
       <AppSidebar
         view={view}
         setView={setView}
-        mayInternal={can(state.model, actor, 'internal.view').allowed}
+        mayInternal={isInternal}
         myWorkCount={myWorkCount}
         timesheetQueue={
           can(state.model, actor, 'time.approve').allowed
@@ -2395,7 +2410,11 @@ export default function IssueWorkspace({
             emptyReason={emptyGridReason({
               filters,
               personResolved: personId !== null,
-              stakeholderProjects: scope.memberProjectIds.size,
+              // `scope` is undefined for a client/guest seat (no stakeholder scope is built for
+              // one, per the gate above); its stakeholder set was already empty pre-fix
+              // (`clientView` zeroes `projectMembers`), so `?? 0` reproduces that seat's
+              // existing count exactly — unchanged by the fix, only the row-level scoping is.
+              stakeholderProjects: scope?.memberProjectIds.size ?? 0,
               clientLabel: orgLabels.TIER_ORGANIZATION,
             })}
             columns={orderedCols}
