@@ -37,12 +37,14 @@ contradict each other in one:
    pillar-by-pillar against the codebase.
 
 **Still real from `pending-actions.md`**, because these are operational/human facts no code
-artifact would capture, and this pass could not re-verify them live (they depend on Entra state
-and a mailbox this session cannot reach):
+artifact would capture — both now checked live against Entra/Azure via `az` (this session had
+tenant access after all):
 
-- **A7 — invite the guest.** App side done (`PERSON_85`, the scoped boundary, `GA1` proves it);
-  the Entra invite itself was deferred by the founder on 23 Aug and, as far as this document
-  trail shows, still hasn't happened.
+- **A7 — was stale.** Not "deferred, never sent": the invitation actually went out 31 August
+  (Graph API confirms a real `Guest` user, `externalUserState: PendingAcceptance`, unchanged
+  since). Resent 2026-09-06 at the founder's request, same guest object, no duplicate created.
+  What's left is entirely human: open the invite email in `nishant.ax@gmail.com` and accept it.
+  Nothing further to check or grant from this side.
 - **I2d — resolved, checked live 2026-09-06.** Checked directly against production via `az`:
   the `axiomate-intake` Logic App is `Enabled`, its trigger is `When_a_new_email_arrives_in_the_
   shared_mailbox` (confirming the required repoint away from an individual's mailbox happened),
@@ -71,7 +73,8 @@ Not person-weeks. Two real constraints:
 ### Now — decisions, not builds
 Things that block other things and need a person, not an agent:
 
-- A7, the guest invite — a five-minute Entra action, open three weeks.
+- ~~A7, the guest invite~~ **Resent 2026-09-06.** Now waiting on a two-minute human action
+  (accept the email in `nishant.ax@gmail.com`) rather than anything Entra-side.
 - Decide whether `pending-actions.md` should be retired in favour of the artifact trail, or kept
   as the record of operational/human-side facts artifacts don't cover (recommendation: the
   latter, scoped down to exactly that — Entra/mailbox/deployment facts, not code status).
@@ -135,11 +138,11 @@ real, what's blocked, and what's still just an idea — and where the actual bot
 
 ## Recommended immediate next step
 
-Client-mail intake is checked and healthy, and the pillar/suite reconciliation is done (both
-above). What's left with real, immediate value:
+Client-mail intake is healthy, A7's invitation is resent, and the pillar/suite reconciliation is
+done (all above). What's left with real, immediate value:
 
-1. **A7, the guest invite** — the one open item nothing else in this roadmap can substitute
-   for, because it needs Entra admin-center access this session doesn't have. Still yours.
+1. **Accept the resent invitation** — genuinely the one item left that only the founder, in
+   the `nishant.ax@gmail.com` inbox, can do.
 2. **The Growth Suite build-vs-buy question** (Someday, above) — a business decision, not
    something for Intent to resolve on its own, and it currently blocks the one blueprint suite
    with the most screens (GRT-001 through GRT-007).
