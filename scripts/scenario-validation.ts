@@ -47,7 +47,7 @@ import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
-import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
+import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, isStaffedOn, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
@@ -10986,6 +10986,110 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: `Revealing ${harbourRow.id} (Harbour, in Priya's scope) from rest widens filters to client=${JSON.stringify(widened.filters.client)} with no refusal, and it is present in visibleRows afterward. Revealing ${quayRow.id} (Quay, outside Priya's scope) from client=${JSON.stringify(midSession.client)}/status=${JSON.stringify(midSession.status)} leaves filters at client=${JSON.stringify(refused.filters.client)}/status=${JSON.stringify(refused.filters.status)} — untouched — with refusal ${JSON.stringify(refused.refusal)}, and it stays absent from visibleRows.`, stops: '', severity: 'P1', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `widenSucceeds=${widenSucceeds} (refusal=${JSON.stringify(widened.refusal)}, filters=${JSON.stringify(widened.filters)}) refusalHolds=${refusalHolds} (startsHidden=${startsHidden}, refusal=${JSON.stringify(refused.refusal)}, filters=${JSON.stringify(refused.filters)})`, stops: 'at revealIssue in components/IssueWorkspace.tsx — a reveal inside scope fails to widen or does not surface the row, or a reveal outside scope resets filters to EMPTY_FILTERS (hiding the whole grid) instead of leaving them and naming the cause', severity: 'P1', impact: "revealing a row from My Work, a mention or the assistant would either fail to show a row the person is entitled to see, or would blank a mid-session filtered view the moment it hit a row on a project they are not staffed on" } as const
+  },
+)
+
+/*
+ * ART-20260906-030 (F1 of the industry-standard review, security correction ART-030/031/032):
+ * app/api/mail/file/route.ts called persistActions with recordInboundMail directly — no can()
+ * check (ACTION_PERMISSIONS.recordInboundMail is deliberately null, machine-only by design) and
+ * no reachable projectScopeOf case (it fell to the default: return null branch), so any
+ * signed-in actor, staffed on nothing, could attach fabricated mail evidence to any issue in the
+ * tenant. Step 1 of the plan closes the second half — projectScopeOf now carries a
+ * 'recordInboundMail' case beside addEvidence/addNote's — and CD13 is its proof (AC5): a bare
+ * recordInboundMail action reaching apply() from any caller, staffed on nothing, is refused by
+ * the reducer's own gate, with no route in the loop at all.
+ *
+ * This file drives the reducer and library layer directly and has no way to invoke a Next.js
+ * route handler (no request, no session, no fetch to Graph) — so AC1-AC4, which describe
+ * app/api/mail/file/route.ts's own 403s (steps 2 and 3, a separate commit), are proven here by
+ * driving the exact primitives that route wiring calls: can(state.model, actor, 'evidence.add')
+ * — the same check already working at app/api/documents/route.ts:138 — and isStaffedOn, the
+ * helper app/api/workspace/route.ts's staffing check already uses. Both permission and staffing
+ * read correctly off one fixture built through the real reducer, and a staffed, permissioned
+ * actor's recordInboundMail still applies exactly as today (AC4) — the regression the fix must
+ * not cause. Whether route.ts actually calls these two functions is not this file's question;
+ * it is verified by reading the route's source once steps 2 and 3 land.
+ */
+
+scenario(
+  'CD13',
+  'recordInboundMail is gated on evidence.add and project staffing wherever it is reached, and a correctly-permissioned, correctly-staffed actor is unaffected',
+  "AC1-AC5 of ART-20260906-030. Fixture: Harbour and Quay, two projects under OAPIL, each with one issue. Nina holds ROLE_CLIENT_USER — no evidence.add (AC1, AC2: the route's can(state.model, actor, 'evidence.add') check sits before either mode branch, so one failing check refuses create and attach alike). Priya holds ROLE_TECHNICAL — evidence.add granted — but starts a member of neither project: isStaffedOn against Harbour is false (AC3, the attach-mode staffing check app/api/workspace/route.ts's own convention performs). Staffed onto Harbour, isStaffedOn turns true and a real recordInboundMail action applied as Priya against Harbour's issue succeeds and is recorded, unchanged (AC4). Finally, a bare recordInboundMail action reached through apply() directly — no route at all — as Nina (who holds no evidence.add) against Quay's issue, which she is not staffed on: ACTION_PERMISSIONS.recordInboundMail is null so apply()'s own capability check never runs for this action type, and the refusal comes solely from projectScopeOf's staffing gate — proof that the reducer's defense-in-depth holds independent of both the route and of whatever permission the caller does or does not have (AC5).",
+  () => {
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    let st = ok(BASE, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Harbour' }, now: NOW } as Action)
+    const p1 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Harbour')!.id
+    st = ok(st, { t: 'create', parentId: oapilId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const p2 = Object.values(st.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+    st = ok(st, { t: 'create', parentId: p1, kind: 'issue', draft: { name: 'Harbour ticket' }, now: NOW } as Action)
+    const harbourTicketId = Object.values(st.issues).find((i) => i.subject === 'Harbour ticket')!.id
+    st = ok(st, { t: 'create', parentId: p2, kind: 'issue', draft: { name: 'Quay ticket' }, now: NOW } as Action)
+    const quayTicketId = Object.values(st.issues).find((i) => i.subject === 'Quay ticket')!.id
+
+    /* Priya: ROLE_TECHNICAL, which carries evidence.add via DELIVERY_CORE — but not yet staffed
+       on either project. */
+    const priyaId = Object.values(st.model.people).find((p) => p.name === 'Priya')!.id
+    st = ok(st, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const priya: Actor = { id: priyaId, name: 'Priya' }
+
+    /* Nina: ROLE_CLIENT_USER, which carries work.create and note.add but not evidence.add — the
+       AC1/AC2 actor — and a member of no project at all. */
+    st = ok(st, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Nina NoAccess', roleIds: ['ROLE_CLIENT_USER'], email: 'nina@oapil.example', clientScopeId: oapilId },
+      now: NOW,
+    } as Action)
+    const ninaId = Object.values(st.model.people).find((p) => p.name === 'Nina NoAccess')!.id
+    const nina: Actor = { id: ninaId, name: 'Nina NoAccess' }
+
+    /* AC1/AC2 — the permission gate the route checks once, ahead of either mode. */
+    const ninaPermission = can(st.model, nina, 'evidence.add')
+    const ac1And2 = ninaPermission.allowed === false
+
+    /* AC3 — permissioned, not yet staffed on the target issue's project. */
+    const priyaPermission = can(st.model, priya, 'evidence.add')
+    const membersBefore = Object.values(st.projectMembers)
+    const ac3 = priyaPermission.allowed === true && isStaffedOn(st.model, priya, p1, membersBefore) === false
+
+    /* Staff Priya onto Harbour. */
+    st = ok(st, { t: 'addProjectMember', projectId: p1, person: 'Priya', projectRoleId: 'PROJROLE_CONSULTANT', now: NOW } as Action)
+    const membersAfter = Object.values(st.projectMembers)
+    const nowStaffed = isStaffedOn(st.model, priya, p1, membersAfter)
+
+    /* AC4 — correctly permissioned, correctly staffed: the real action, unchanged. */
+    const filed = apply(
+      st,
+      {
+        t: 'recordInboundMail', mailbox: 'priya@axiocloud.example', from: 'client@oapil.example',
+        subject: 'Re: Harbour ticket', body: 'See attached.', messageId: 'msg-cd13-filed',
+        receivedAt: NOW, issueId: harbourTicketId, refusalReason: null, conversationId: null, now: NOW,
+      } as Action,
+      priya,
+    )
+    const filedEntry = Object.values(filed.state.inboundMail).find((m) => m.messageId === 'msg-cd13-filed')
+    const ac4 = nowStaffed && !filed.error && Boolean(filedEntry) && filedEntry?.issueId === harbourTicketId
+
+    /* AC5 — a bare action through apply(), no route in the loop, as Nina (who holds no
+       evidence.add at all) against Quay, which she is not staffed on. ACTION_PERMISSIONS.
+       recordInboundMail is null, so this cannot be the permission check refusing — only
+       projectScopeOf's staffing gate can be, and only if the reducer's own case for it holds. */
+    const bare = apply(
+      st,
+      {
+        t: 'recordInboundMail', mailbox: 'nina@axiocloud.example', from: 'client@oapil.example',
+        subject: 'Fabricated evidence', body: 'x', messageId: 'msg-cd13-bare',
+        receivedAt: NOW, issueId: quayTicketId, refusalReason: null, conversationId: null, now: NOW,
+      } as Action,
+      nina,
+    )
+    const noRowWritten = !Object.values(bare.state.inboundMail).some((m) => m.messageId === 'msg-cd13-bare')
+    const ac5 = Boolean(bare.error) && /not staffed on this project/.test(bare.error ?? '') && noRowWritten
+
+    const good = ac1And2 && ac3 && ac4 && ac5
+    return good
+      ? { verdict: 'PASS', actual: `Nina (ROLE_CLIENT_USER): can(evidence.add)=${JSON.stringify(ninaPermission)}. Priya (ROLE_TECHNICAL) before staffing: can(evidence.add).allowed=${priyaPermission.allowed}, isStaffedOn(Harbour)=${isStaffedOn(st.model, priya, p1, membersBefore)}; after staffing: isStaffedOn(Harbour)=${nowStaffed}, recordInboundMail against Harbour's issue → error=${filed.error ?? 'none'}, logged=${Boolean(filedEntry)}. Nina's bare recordInboundMail against Quay's issue (no route, no permission check possible — ACTION_PERMISSIONS.recordInboundMail is null) → error=${JSON.stringify(bare.error)}, no InboundMail row written.`, stops: '', severity: 'P0', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `ac1And2=${ac1And2} (ninaPermission=${JSON.stringify(ninaPermission)}) ac3=${ac3} (priyaPermission.allowed=${priyaPermission.allowed}, staffedBefore=${isStaffedOn(st.model, priya, p1, membersBefore)}) ac4=${ac4} (nowStaffed=${nowStaffed}, filed.error=${filed.error}, filedEntry=${JSON.stringify(filedEntry)}) ac5=${ac5} (bare.error=${JSON.stringify(bare.error)}, noRowWritten=${noRowWritten})`, stops: 'at can(state.model, actor, \'evidence.add\'), at isStaffedOn, or at projectScopeOf\'s recordInboundMail case — one of the two independent gates the fix relies on is not resolving the way app/api/mail/file/route.ts (steps 2, 3) and lib/workspace.ts (step 1) need it to', severity: 'P0', impact: 'any signed-in actor, staffed on nothing, could keep attaching fabricated mail evidence to any issue in the tenant — the authorization bypass this correction exists to close' } as const
   },
 )
 

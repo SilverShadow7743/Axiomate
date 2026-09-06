@@ -2232,6 +2232,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "CD13",
+      "title": "recordInboundMail is gated on evidence.add and project staffing wherever it is reached, and a correctly-permissioned, correctly-staffed actor is unaffected",
+      "expected": "AC1-AC5 of ART-20260906-030. Fixture: Harbour and Quay, two projects under OAPIL, each with one issue. Nina holds ROLE_CLIENT_USER — no evidence.add (AC1, AC2: the route's can(state.model, actor, 'evidence.add') check sits before either mode branch, so one failing check refuses create and attach alike). Priya holds ROLE_TECHNICAL — evidence.add granted — but starts a member of neither project: isStaffedOn against Harbour is false (AC3, the attach-mode staffing check app/api/workspace/route.ts's own convention performs). Staffed onto Harbour, isStaffedOn turns true and a real recordInboundMail action applied as Priya against Harbour's issue succeeds and is recorded, unchanged (AC4). Finally, a bare recordInboundMail action reached through apply() directly — no route at all — as Nina (who holds no evidence.add) against Quay's issue, which she is not staffed on: ACTION_PERMISSIONS.recordInboundMail is null so apply()'s own capability check never runs for this action type, and the refusal comes solely from projectScopeOf's staffing gate — proof that the reducer's defense-in-depth holds independent of both the route and of whatever permission the caller does or does not have (AC5).",
+      "verdict": "PASS",
+      "actual": "Nina (ROLE_CLIENT_USER): can(evidence.add)={\"allowed\":false,\"reason\":\"Attach evidence is not something Client User can do here.\"}. Priya (ROLE_TECHNICAL) before staffing: can(evidence.add).allowed=true, isStaffedOn(Harbour)=false; after staffing: isStaffedOn(Harbour)=true, recordInboundMail against Harbour's issue → error=none, logged=true. Nina's bare recordInboundMail against Quay's issue (no route, no permission check possible — ACTION_PERMISSIONS.recordInboundMail is null) → error=\"Nina NoAccess is not staffed on this project.\", no InboundMail row written.",
+      "stops": "",
+      "severity": "P0",
+      "impact": "none"
     }
   ]
 }

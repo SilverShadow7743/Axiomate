@@ -884,6 +884,11 @@ export function projectScopeOf(state: WorkspaceState, a: Action): string[] | nul
       return state.timeEntries[a.id] ? one(state.timeEntries[a.id].issueId) : null
     case 'decideApproval':
       return state.approvals[a.id] ? one(state.approvals[a.id].subjectId) : null
+    case 'recordInboundMail':
+      // issueId is typed string | null on this action -- one() takes string, so this can only
+      // resolve a project when there is an issue to resolve it from. No issue means no project
+      // to gate on, same as every other case above that returns null when nothing resolves.
+      return a.issueId ? one(a.issueId) : null
     default:
       return null
   }
