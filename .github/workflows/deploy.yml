@@ -260,17 +260,10 @@ jobs:
   # ===================================================================================
   deploy:
     needs: verify
-    # Manual dispatch only, until the infrastructure this job assumes actually exists. It was
-    # failing on every push at its own DATABASE_URL guard — correctly, because the GitHub
-    # `production` environment has no secrets configured (no DATABASE_URL, no OIDC client), and
-    # even with them the job could not complete: it deploys through a staging slot, and the
-    # app's B1 Basic plan does not offer deployment slots. A red X on every push over a job
-    # that cannot succeed teaches people to ignore the pipeline, which silences the verify job
-    # above — the part that IS real. Releases currently ship through the operator's clean-room
-    # process; to enable this path, create the Entra app registration and federated credential
-    # (docs/deployment.md), set the environment secrets, move the plan to a slot-capable tier
-    # (or rewrite this job to deploy directly), and remove this gate.
-    if: github.event_name == 'workflow_dispatch'
+    # Ran manual-dispatch-only until 7 Sep 2026, while the infrastructure this job assumes did
+    # not yet exist: no Entra app registration/federated credential, no GitHub environment
+    # secrets, and a B1 Basic plan with no deployment slot. All three now exist — see
+    # docs/deployment.md §2 — so this job runs on every push to main/master, same as verify.
     runs-on: ubuntu-latest
     # The environment is where DATABASE_URL lives, where a required reviewer can be attached, and
     # what the federated credential is scoped to. See the OIDC comment below.

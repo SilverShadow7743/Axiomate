@@ -32,13 +32,13 @@ there is no `.nvmrc` and `package.json` has no `engines` field — but 22 satisf
 
 ### 2.1 In Entra, for the pipeline's own identity
 
-**Status, 7 Sep 2026: done except one role assignment, in progress.** `axiomate-tms-deploy`
-(client ID `74f381dd-fd4e-4fb7-b9b7-421c977566ef`) exists with the federated credential below,
-already scoped exactly as this section specifies. `Website Contributor` on the App Service is
-assigned. The PostgreSQL firewall-rule rights are not yet assigned — granting it is in progress.
-Basic publishing credentials (SCM and FTP) are disabled. What's left after the role assignment:
-§2.2's GitHub environment secrets, and removing the `deploy` job's `workflow_dispatch`-only gate
-in `.github/workflows/deploy.yml`.
+**Status, 7 Sep 2026: done.** `axiomate-tms-deploy` (client ID `74f381dd-fd4e-4fb7-b9b7-421c977566ef`)
+exists with the federated credential below, already scoped exactly as this section specifies.
+`Website Contributor` on the App Service is assigned. `Contributor` on `axiomate-tms-db` (the
+PostgreSQL flexible server, for firewall-rule management) is assigned — confirmed by a direct ARM
+role-assignment read against the server, principal `17cd7b9d-9a98-471b-a9ef-80c27103b673`. Basic
+publishing credentials (SCM and FTP) are disabled. What's left: §2.2's GitHub environment secrets,
+and removing the `deploy` job's `workflow_dispatch`-only gate in `.github/workflows/deploy.yml`.
 
 The workflow authenticates with `azure/login` using a federated credential, and there is no
 client secret and no publish profile anywhere in this repository. A publish profile is a
@@ -171,15 +171,11 @@ thing that stops half-finished work reaching production, and it has already earn
 once: a UI change that did not typecheck was in the tree at the moment a release was cut.
 
 **A `staging` slot now exists** (`axiomate-tms-staging.azurewebsites.net`; the plan moved to
-P0v3 on 7 Sep 2026) — but the `deploy` job is still gated `if: github.event_name ==
-'workflow_dispatch'` and cannot swap into it automatically yet. Two things are still missing,
-named in that job's own comment: an Entra app registration with a federated credential, and the
-GitHub `production` environment's secrets (`DATABASE_URL`, the OIDC client details). Until both
-exist, everything section 3 says about swapping remains aspiration for the automated path. A
-manual release still restarts the site directly, which takes roughly a minute, and the browser
-write queue's retry budget is about seven and a half seconds — so a user mid-edit during a
-manual deploy can have their queue halt. Deploy when nobody is working, until the pipeline can
-use the slot it now has.
+P0v3 on 7 Sep 2026), and as of 7 Sep 2026 the `deploy` job's `workflow_dispatch`-only gate is
+removed — the Entra app registration/federated credential and the GitHub `production`
+environment's secrets are both in place (docs/deployment.md §2), so a push to main/master now
+runs `deploy` and swaps into the slot automatically. This manual, `git archive`-based path
+remains documented as a fallback for when the pipeline itself is the thing that's broken.
 
 The run has two jobs.
 
