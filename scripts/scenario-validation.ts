@@ -37,6 +37,7 @@ import { runRecurrences,
 import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
 import { invoicePosition } from '../lib/invoice'
 import { checkChecklistItem, checklistFor } from '../lib/checklist'
+import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '../lib/analytics'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
 import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
@@ -11726,6 +11727,111 @@ scenario(
       stops: passed ? '' : 'at removeChecklistItem or checklistFor',
       severity: 'P3',
       impact: passed ? 'none' : 'a removed checklist item is still shown, or the record is not actually marked removed',
+    }
+  },
+)
+
+/* ================================================================== *
+ * Analytics — docs/plans/2026-09-07-analytics-design.md
+ * ================================================================== */
+
+scenario(
+  'AN1',
+  'bySeverityAndStatus counts live issues, excludes deleted, worst count first',
+  'Two High/Open, one Medium/Open, one deleted High/Open (not counted) — High/Open leads with 2.',
+  () => {
+    const issues = {
+      a: itIssue({ id: 'a', lastActivity: TODAY, severity: 'High', status: 'Open' }),
+      b: itIssue({ id: 'b', lastActivity: TODAY, severity: 'High', status: 'Open' }),
+      c: itIssue({ id: 'c', lastActivity: TODAY, severity: 'Medium', status: 'Open' }),
+      d: itIssue({ id: 'd', lastActivity: TODAY, severity: 'High', status: 'Open', deletedAt: TODAY }),
+    }
+    const result = bySeverityAndStatus(issues)
+    const passed =
+      result[0]?.severity === 'High' && result[0]?.status === 'Open' && result[0]?.count === 2 &&
+      result.some((r) => r.severity === 'Medium' && r.status === 'Open' && r.count === 1) &&
+      result.reduce((n, r) => n + r.count, 0) === 3
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: JSON.stringify(result),
+      stops: passed ? '' : 'at bySeverityAndStatus in lib/analytics.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'the severity/status cross-tab miscounts, or counts a deleted issue',
+    }
+  },
+)
+
+scenario(
+  'AN2',
+  'byClient counts open issues and open-High separately, excludes terminal statuses',
+  'Two open (one High) against OAPIL, one Closed against OAPIL (not counted) — OAPIL reports open=2, openHigh=1.',
+  () => {
+    const issues = {
+      a: itIssue({ id: 'a', lastActivity: TODAY, client: 'OAPIL', severity: 'High', status: 'Open' }),
+      b: itIssue({ id: 'b', lastActivity: TODAY, client: 'OAPIL', severity: 'Medium', status: 'In Progress' }),
+      c: itIssue({ id: 'c', lastActivity: TODAY, client: 'OAPIL', severity: 'High', status: 'Closed - confirmed' }),
+    }
+    const result = byClient(issues)
+    const oapil = result.find((r) => r.client === 'OAPIL')
+    const passed = oapil?.open === 2 && oapil?.openHigh === 1
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: JSON.stringify(result),
+      stops: passed ? '' : 'at byClient in lib/analytics.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'the per-client cross-tab counts a closed issue as open, or miscounts High severity',
+    }
+  },
+)
+
+scenario(
+  'AN3',
+  'byAgeBucket buckets open issues by working days since raised, and reports all four buckets',
+  'One issue in each of the four buckets; a fifth bucket never exists and none is dropped for having zero.',
+  () => {
+    const issues = {
+      a: itIssue({ id: 'a', lastActivity: TODAY, status: 'Open', raised: '2026-08-14' }),
+      b: itIssue({ id: 'b', lastActivity: TODAY, status: 'Open', raised: '2026-07-26' }),
+      c: itIssue({ id: 'c', lastActivity: TODAY, status: 'Open', raised: '2026-06-16' }),
+      d: itIssue({ id: 'd', lastActivity: TODAY, status: 'Open', raised: '2026-03-18' }),
+    }
+    const result = byAgeBucket(issues, TODAY)
+    const passed =
+      result.length === 4 &&
+      result.find((r) => r.bucket === '0-7')?.count === 1 &&
+      result.find((r) => r.bucket === '8-30')?.count === 1 &&
+      result.find((r) => r.bucket === '31-90')?.count === 1 &&
+      result.find((r) => r.bucket === '90+')?.count === 1
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: JSON.stringify(result),
+      stops: passed ? '' : 'at byAgeBucket in lib/analytics.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'the age-bucket cross-tab misbuckets an issue, or drops a bucket that has nothing in it',
+    }
+  },
+)
+
+scenario(
+  'AN4',
+  'byOwner counts open issues per owner, busiest first, with Unassigned as a real row',
+  'Two open for Priya, one open with no owner — Priya leads with 2, Unassigned reports 1.',
+  () => {
+    const issues = {
+      a: itIssue({ id: 'a', lastActivity: TODAY, status: 'Open', owner: 'Priya' }),
+      b: itIssue({ id: 'b', lastActivity: TODAY, status: 'Open', owner: 'Priya' }),
+      c: itIssue({ id: 'c', lastActivity: TODAY, status: 'Open', owner: '' }),
+    }
+    const result = byOwner(issues)
+    const passed =
+      result[0]?.owner === 'Priya' && result[0]?.open === 2 &&
+      result.find((r) => r.owner === 'Unassigned')?.open === 1
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: JSON.stringify(result),
+      stops: passed ? '' : 'at byOwner in lib/analytics.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'the owner cross-tab miscounts, or silently drops unowned work instead of naming it Unassigned',
     }
   },
 )

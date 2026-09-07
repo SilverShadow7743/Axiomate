@@ -17,7 +17,7 @@ import type { SavedView } from '@/lib/savedViews'
 
 const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
   { title: 'My work', items: ['mywork', 'mycalendar', 'inbox'] },
-  { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio', 'applications'] },
+  { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio', 'applications', 'analytics'] },
   { title: 'Records', items: ['timesheet', 'mail'] },
 ]
 
@@ -41,6 +41,7 @@ const VIEW_LABEL: Record<WorkspaceView, string> = {
   calendar: 'Calendar',
   portfolio: 'Portfolio',
   applications: 'Applications',
+  analytics: 'Analytics',
   timesheet: 'Timesheets',
   inbox: 'Inbox',
   mycalendar: 'My calendar',
@@ -53,6 +54,7 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   calendar: 'Due dates on a month, with the undated on a rail',
   portfolio: 'Every engagement at once — overdue, blocked, unowned, quiet',
   applications: 'What each client runs, and how it connects — every application at once',
+  analytics: 'Firm-wide cross-tabs over the live register — severity, client, age, owner',
   timesheet: 'Your week, gathered — and the approval queue, if you hold it',
   inbox: 'What needs a decision, what you’re waiting on, and what the rules have told you',
   mycalendar: 'Your own month — events, leave, allocation and your due dates, private to you',

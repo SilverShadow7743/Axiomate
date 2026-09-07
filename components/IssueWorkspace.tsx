@@ -12,6 +12,7 @@ import MyCalendarPanel from './MyCalendarPanel'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ApplicationLandscape from './ApplicationLandscape'
+import AnalyticsView from './AnalyticsView'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
@@ -2352,6 +2353,8 @@ export default function IssueWorkspace({
           }
           docked
         />
+      ) : view === 'analytics' ? (
+        <AnalyticsView state={state} today={today} docked />
       ) : view === 'calendar' ? (
         <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
       ) : view === 'board' ? (

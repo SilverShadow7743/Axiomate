@@ -2402,6 +2402,46 @@
       "stops": "",
       "severity": "P3",
       "impact": "none"
+    },
+    {
+      "id": "AN1",
+      "title": "bySeverityAndStatus counts live issues, excludes deleted, worst count first",
+      "expected": "Two High/Open, one Medium/Open, one deleted High/Open (not counted) — High/Open leads with 2.",
+      "verdict": "PASS",
+      "actual": "[{\"severity\":\"High\",\"status\":\"Open\",\"count\":2},{\"severity\":\"Medium\",\"status\":\"Open\",\"count\":1}]",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "AN2",
+      "title": "byClient counts open issues and open-High separately, excludes terminal statuses",
+      "expected": "Two open (one High) against OAPIL, one Closed against OAPIL (not counted) — OAPIL reports open=2, openHigh=1.",
+      "verdict": "PASS",
+      "actual": "[{\"client\":\"OAPIL\",\"open\":2,\"openHigh\":1}]",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "AN3",
+      "title": "byAgeBucket buckets open issues by working days since raised, and reports all four buckets",
+      "expected": "One issue in each of the four buckets; a fifth bucket never exists and none is dropped for having zero.",
+      "verdict": "PASS",
+      "actual": "[{\"bucket\":\"0-7\",\"count\":1},{\"bucket\":\"8-30\",\"count\":1},{\"bucket\":\"31-90\",\"count\":1},{\"bucket\":\"90+\",\"count\":1}]",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "AN4",
+      "title": "byOwner counts open issues per owner, busiest first, with Unassigned as a real row",
+      "expected": "Two open for Priya, one open with no owner — Priya leads with 2, Unassigned reports 1.",
+      "verdict": "PASS",
+      "actual": "[{\"owner\":\"Priya\",\"open\":2},{\"owner\":\"Unassigned\",\"open\":1}]",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
     }
   ]
 }
