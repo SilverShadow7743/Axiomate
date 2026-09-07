@@ -34,6 +34,7 @@ import { runRecurrences,
   type SeedIssueInput,
   type WorkspaceState,
 } from '../lib/workspace'
+import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
 import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
@@ -8597,6 +8598,7 @@ function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string
   return {
     parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
     subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
+    applicationId: null,
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
     accountable: 'OAPIL', raised: TODAY, actualEnd: null, statusSince: null,
     pausedDays: 0, age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',
@@ -11233,6 +11235,208 @@ scenario(
     }
   }
 }
+
+/* ================================================================== *
+ * Application Suite — docs/plans/2026-09-07-application-suite-design.md
+ * ================================================================== */
+
+scenario(
+  'APP1',
+  'An application is recorded against a real client node, and refused against anything else',
+  'upsertApplication succeeds against client:OAPIL; refused with no client, and refused against a non-client node (an issue id).',
+  () => {
+    const created = act(BASE, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL',
+      patch: { name: 'D365 Finance & Operations', platform: 'D365 F&O', environment: 'PROD' },
+      now: NOW,
+    })
+    const withoutClient = act(BASE, {
+      t: 'upsertApplication', id: null, patch: { name: 'x' }, now: NOW,
+    })
+    const wrongKind = act(BASE, {
+      t: 'upsertApplication', id: null, clientNodeId: 'OAPIL-1', patch: { name: 'x' }, now: NOW,
+    })
+    const passed =
+      created.createdId != null &&
+      created.state.applications[created.createdId!]?.name === 'D365 Finance & Operations' &&
+      created.state.applications[created.createdId!]?.clientNodeId === 'client:OAPIL' &&
+      !!withoutClient.error &&
+      !!wrongKind.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `created=${JSON.stringify(created.createdId)} (${created.error ?? 'ok'}) withoutClient=${JSON.stringify(withoutClient.error)} wrongKind=${JSON.stringify(wrongKind.error)}`,
+      stops: passed ? '' : 'at the upsertApplication reducer arm',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an application could be created with no real client, or against any node id',
+    }
+  },
+)
+
+scenario(
+  'APP2',
+  'checkApplication refuses a nameless application',
+  'A name is the one field an application record cannot be saved without.',
+  () => {
+    const nameless = checkApplication({
+      id: 'app-x', clientNodeId: 'client:OAPIL', name: '  ', platform: '', environment: '',
+      status: 'Planned', goLiveDate: null, owner: '', ownerId: null, vendor: '', description: '',
+      recordedBy: 'val', recordedAt: NOW, deletedAt: null,
+    })
+    const named = checkApplication({
+      id: 'app-x', clientNodeId: 'client:OAPIL', name: 'Commerce', platform: '', environment: '',
+      status: 'Planned', goLiveDate: null, owner: '', ownerId: null, vendor: '', description: '',
+      recordedBy: 'val', recordedAt: NOW, deletedAt: null,
+    })
+    const passed = nameless !== null && named === null
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `nameless=${JSON.stringify(nameless)} named=${JSON.stringify(named)}`,
+      stops: passed ? '' : 'at checkApplication in lib/application.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'an unnamed application could be saved',
+    }
+  },
+)
+
+scenario(
+  'APP3',
+  'An integration needs two different, real applications',
+  'upsertIntegrationLink succeeds between two real applications; refused against a missing one, and refused between an application and itself.',
+  () => {
+    const withOne = ok(BASE, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL',
+      patch: { name: 'D365 F&O' }, now: NOW,
+    })
+    const app1 = Object.values(withOne.applications)[0]!.id
+    const withTwo = ok(withOne, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL',
+      patch: { name: 'Power Automate' }, now: NOW,
+    })
+    const app2 = Object.values(withTwo.applications).find((a) => a.id !== app1)!.id
+
+    const linked = act(withTwo, {
+      t: 'upsertIntegrationLink', id: null, sourceApplicationId: app1, targetApplicationId: app2,
+      patch: { interface: 'Power Automate flow', businessProcess: 'Order fulfilment' }, now: NOW,
+    })
+    const missing = act(withTwo, {
+      t: 'upsertIntegrationLink', id: null, sourceApplicationId: app1, targetApplicationId: 'app-none',
+      patch: {}, now: NOW,
+    })
+    const selfLinked = act(withTwo, {
+      t: 'upsertIntegrationLink', id: null, sourceApplicationId: app1, targetApplicationId: app1,
+      patch: {}, now: NOW,
+    })
+    const passed =
+      linked.createdId != null &&
+      linked.state.integrationLinks[linked.createdId!]?.businessProcess === 'Order fulfilment' &&
+      !!missing.error &&
+      !!selfLinked.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `linked=${JSON.stringify(linked.createdId)} (${linked.error ?? 'ok'}) missing=${JSON.stringify(missing.error)} self=${JSON.stringify(selfLinked.error)}`,
+      stops: passed ? '' : 'at the upsertIntegrationLink reducer arm or checkIntegrationLink',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an integration could be recorded against a nonexistent or duplicate application',
+    }
+  },
+)
+
+scenario(
+  'APP4',
+  'Application concerns are named claims, worst first, never a score',
+  'openHigh leads, then overdue, then integrationsInactive; a clean application reports none.',
+  () => {
+    const issues = [
+      { applicationId: 'app-1', deletedAt: null, severity: 'High', overdue: false },
+      { applicationId: 'app-1', deletedAt: null, severity: 'Medium', overdue: true },
+      { applicationId: 'app-1', deletedAt: null, severity: 'Low', overdue: false },
+      // Not this application's — must not be counted.
+      { applicationId: 'app-2', deletedAt: null, severity: 'High', overdue: false },
+      // Deleted — must not be counted.
+      { applicationId: 'app-1', deletedAt: NOW, severity: 'High', overdue: true },
+    ]
+    const links = [
+      {
+        id: 'int-1', sourceApplicationId: 'app-1', targetApplicationId: 'app-2', interface: '',
+        businessProcess: '', frequency: '', status: 'Inactive' as const, recordedBy: 'val',
+        recordedAt: NOW, deletedAt: null,
+      },
+    ]
+    const dirty = applicationConcerns('app-1', issues, links)
+    const clean = applicationConcerns('app-1', [], [])
+
+    const passed =
+      dirty.length === 3 &&
+      dirty[0]!.kind === 'openHigh' && dirty[0]!.count === 1 &&
+      dirty[1]!.kind === 'overdue' && dirty[1]!.count === 1 &&
+      dirty[2]!.kind === 'integrationsInactive' && dirty[2]!.count === 1 &&
+      clean.length === 0
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `dirty=${JSON.stringify(dirty)} clean=${JSON.stringify(clean)}`,
+      stops: passed ? '' : 'at applicationConcerns in lib/application.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : "an application's concerns are wrongly ordered, wrongly counted, or a clean one is not reported clean",
+    }
+  },
+)
+
+scenario(
+  'APP5',
+  "Linking an issue to an application is additive — module is untouched",
+  "updateIssue sets applicationId through the ordinary patch; the issue's own module string is unchanged.",
+  () => {
+    const withApp = ok(BASE, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL', patch: { name: 'D365 F&O' }, now: NOW,
+    })
+    const appId = Object.values(withApp.applications)[0]!.id
+    const before = withApp.issues['OAPIL-1']!
+    const after = ok(withApp, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { applicationId: appId }, now: NOW,
+    })
+    const linked = after.issues['OAPIL-1']!
+    const passed = linked.applicationId === appId && linked.module === before.module
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `applicationId=${JSON.stringify(linked.applicationId)} module=${JSON.stringify(linked.module)} (was ${JSON.stringify(before.module)})`,
+      stops: passed ? '' : 'at updateIssue\'s patch handling, or applicationId missing from actionShape\'s wire allow-list',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an issue cannot be linked to a real application, or linking it silently changes its module',
+    }
+  },
+)
+
+scenario(
+  'APP6',
+  'An application cannot be removed while issues or integrations still reference it',
+  'removeApplication is refused while a live issue names it, and again while a live integration names it.',
+  () => {
+    const withApp = ok(BASE, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL', patch: { name: 'D365 F&O' }, now: NOW,
+    })
+    const appId = Object.values(withApp.applications)[0]!.id
+    const withIssueLinked = ok(withApp, { t: 'updateIssue', id: 'OAPIL-1', patch: { applicationId: appId }, now: NOW })
+    const refusedForIssue = act(withIssueLinked, { t: 'removeApplication', id: appId, now: NOW })
+
+    const withApp2 = ok(withApp, {
+      t: 'upsertApplication', id: null, clientNodeId: 'client:OAPIL', patch: { name: 'Power Automate' }, now: NOW,
+    })
+    const app2Id = Object.values(withApp2.applications).find((a) => a.id !== appId)!.id
+    const withLink = ok(withApp2, {
+      t: 'upsertIntegrationLink', id: null, sourceApplicationId: appId, targetApplicationId: app2Id, patch: {}, now: NOW,
+    })
+    const refusedForLink = act(withLink, { t: 'removeApplication', id: appId, now: NOW })
+
+    const passed = !!refusedForIssue.error && !!refusedForLink.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `refusedForIssue=${JSON.stringify(refusedForIssue.error)} refusedForLink=${JSON.stringify(refusedForLink.error)}`,
+      stops: passed ? '' : 'at the removeApplication reducer arm',
+      severity: 'P2',
+      impact: passed ? 'none' : 'removing an application could silently orphan a linked issue or a recorded integration',
+    }
+  },
+)
 
 /* ================================================================== *
  * Report

@@ -85,6 +85,15 @@ import {
 } from './milestone'
 import { takeSnapshot, type Snapshot } from './snapshot'
 import {
+  checkApplication,
+  checkIntegrationLink,
+  defaultApplication,
+  nextApplicationId,
+  nextIntegrationLinkId,
+  type Application,
+  type IntegrationLink,
+} from './application'
+import {
   checkChange,
   contractedPosition,
   decideChangeProblem,
@@ -263,6 +272,9 @@ export interface IssueRecord {
    * provenance — never a default.
    */
   discipline: string
+  /** A real Application this issue is about, when one has been recorded. Additive to `module`
+   *  above, never a replacement — see `./application`. */
+  applicationId: string | null
   severity: Severity
   status: IssueStatus
   owner: string
@@ -397,6 +409,13 @@ export interface WorkspaceState {
    * `milestonePosition` reports that as a different thing from having made no progress.
    */
   milestones: Record<string, Milestone>
+  /**
+   * A client's own technology landscape — what they run, and how it connects. See
+   * `./application` and `docs/plans/2026-09-07-application-suite-design.md`.
+   */
+  applications: Record<string, Application>
+  /** A recorded data flow between two applications. See `./application`. */
+  integrationLinks: Record<string, IntegrationLink>
   /**
    * A point-in-time copy of a project or engagement's planned dates and cost, taken
    * deliberately and never changed once taken. See `./snapshot`.
@@ -560,6 +579,8 @@ export interface SeedIssueInput {
   sourceType?: string
   /** A `Discipline` id. Absent in every seed, because nothing in the log records one. */
   discipline?: string
+  /** A real Application id. Absent in every seed — the concept postdates every imported log. */
+  applicationId?: string | null
   severity: Severity
   status: IssueStatus
   owner: string
@@ -676,6 +697,8 @@ export function initWorkspace(
       sourceType: i.sourceType ?? '',
       // Empty, not guessed. The imported log has no discipline column and never had one.
       discipline: i.discipline ?? '',
+      // Null, not guessed — same reasoning as discipline. The seed predates this field.
+      applicationId: i.applicationId ?? null,
       plannedStart: null,
       plannedEnd: null,
       percentOverride: null,
@@ -706,6 +729,8 @@ export function initWorkspace(
     documents: {},
     documentReviews: {},
     milestones: {},
+    applications: {},
+    integrationLinks: {},
     snapshots: {},
     scopeItems: {},
     /**
@@ -1151,6 +1176,30 @@ export type Action =
       evidenceDocumentId?: string | null
       now: string
     }
+  /* ---- APPLICATIONS — see ./application ---- */
+  | {
+      t: 'upsertApplication'
+      id: string | null
+      /** Required on create, ignored on update — an application does not change client. */
+      clientNodeId?: string
+      patch: Partial<
+        Pick<Application, 'name' | 'platform' | 'environment' | 'status' | 'goLiveDate' | 'owner' | 'vendor' | 'description'>
+      >
+      now: string
+    }
+  | { t: 'removeApplication'; id: string; now: string }
+  | {
+      t: 'upsertIntegrationLink'
+      id: string | null
+      /** Required on create, ignored on update — an integration does not change its endpoints;
+       *  a re-pointed integration is a new one, the same reasoning `upsertMilestone` applies to
+       *  an accepted milestone's name. */
+      sourceApplicationId?: string
+      targetApplicationId?: string
+      patch: Partial<Pick<IntegrationLink, 'interface' | 'businessProcess' | 'frequency' | 'status'>>
+      now: string
+    }
+  | { t: 'removeIntegrationLink'; id: string; now: string }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -2112,6 +2161,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // (the WBS transform, e.g.) is the only caller that has one; the ordinary UI form
           // never passes this key, so it keeps meaning "created here" for everyone else.
           sourceType: a.draft.sourceType || '',
+          // Not settable on create — an application link is added afterwards, through
+          // `updateIssue`, the same way `discipline` usually is.
+          applicationId: null,
           /*
            * Unclassified unless the person creating it said otherwise, and NOT defaulted to the
            * first configured discipline the way `type` is above.
@@ -2385,6 +2437,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         // discipline. It is the *progress* of the original that must not come with it, not its
         // description.
         discipline: original.discipline,
+        applicationId: original.applicationId,
         // Created here, so there is no earlier classification to preserve — as in `create`.
         sourceType: '',
         severity: original.severity,
@@ -5232,6 +5285,145 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           a.decision === 'Accepted'
             ? `${existing.name} accepted${frozen === null ? '' : ` at ${next.currency} ${frozen.toLocaleString()}`}.`
             : `${existing.name} returned.`,
+      }
+    }
+
+    case 'upsertApplication': {
+      const existing = a.id ? state.applications[a.id] : null
+      if (a.id && !existing) return { state, error: 'That application no longer exists.' }
+
+      const clientNodeId = existing?.clientNodeId ?? a.clientNodeId
+      if (!clientNodeId) return { state, error: 'An application needs a client.' }
+      const node = state.nodes[clientNodeId]
+      // The flag, not the literal kind 'client' — see `isExternalPartyKind`'s own comment and
+      // the same check the guest-scope arm above already makes for the identical question.
+      if (!node || node.deletedAt || !isExternalPartyKind(tiersOf(state.model), node.kind)) {
+        return { state, error: 'An application must belong to one of the client nodes in the tree.' }
+      }
+
+      const id = existing?.id ?? nextApplicationId(state.applications)
+      const merged: Application = {
+        ...(existing ?? defaultApplication(id, clientNodeId)),
+        name: a.patch.name ?? existing?.name ?? '',
+        platform: a.patch.platform ?? existing?.platform ?? '',
+        environment: a.patch.environment ?? existing?.environment ?? '',
+        status: a.patch.status ?? existing?.status ?? 'Planned',
+        goLiveDate: a.patch.goLiveDate === undefined ? (existing?.goLiveDate ?? null) : a.patch.goLiveDate,
+        owner: a.patch.owner ?? existing?.owner ?? '',
+        ownerId: existing?.ownerId ?? directoryIdByName(state.model, a.patch.owner ?? existing?.owner ?? ''),
+        vendor: a.patch.vendor ?? existing?.vendor ?? '',
+        description: a.patch.description ?? existing?.description ?? '',
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+      const problem = checkApplication(merged)
+      if (problem) return { state, error: problem }
+
+      return {
+        state: {
+          ...state,
+          applications: { ...state.applications, [id]: merged },
+          audit: log(actor, state, {
+            rowId: clientNodeId,
+            field: 'application',
+            from: existing?.name ?? null,
+            to: merged.name,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? `${merged.name} updated.` : `${merged.name} added.`,
+      }
+    }
+
+    case 'removeApplication': {
+      const existing = state.applications[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That application no longer exists.' }
+      if (Object.values(state.issues).some((i) => i.applicationId === a.id && !i.deletedAt)) {
+        return { state, error: 'Issues are still linked to this application. Unlink them first.' }
+      }
+      if (
+        Object.values(state.integrationLinks).some(
+          (l) => !l.deletedAt && (l.sourceApplicationId === a.id || l.targetApplicationId === a.id),
+        )
+      ) {
+        return { state, error: 'Integrations still reference this application. Remove them first.' }
+      }
+      return {
+        state: {
+          ...state,
+          applications: { ...state.applications, [a.id]: { ...existing, deletedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: existing.clientNodeId, field: 'application', from: existing.name, to: null, at: a.now, by,
+          }),
+        },
+        message: `${existing.name} removed.`,
+      }
+    }
+
+    case 'upsertIntegrationLink': {
+      const existing = a.id ? state.integrationLinks[a.id] : null
+      if (a.id && !existing) return { state, error: 'That integration no longer exists.' }
+
+      const sourceApplicationId = existing?.sourceApplicationId ?? a.sourceApplicationId
+      const targetApplicationId = existing?.targetApplicationId ?? a.targetApplicationId
+      if (!sourceApplicationId || !targetApplicationId) {
+        return { state, error: 'An integration needs a source and a target application.' }
+      }
+
+      const id = existing?.id ?? nextIntegrationLinkId(state.integrationLinks)
+      const merged: IntegrationLink = {
+        id,
+        sourceApplicationId,
+        targetApplicationId,
+        interface: a.patch.interface ?? existing?.interface ?? '',
+        businessProcess: a.patch.businessProcess ?? existing?.businessProcess ?? '',
+        frequency: a.patch.frequency ?? existing?.frequency ?? '',
+        status: a.patch.status ?? existing?.status ?? 'Active',
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+      const problem = checkIntegrationLink(merged, state.applications)
+      if (problem) return { state, error: problem }
+
+      return {
+        state: {
+          ...state,
+          integrationLinks: { ...state.integrationLinks, [id]: merged },
+          audit: log(actor, state, {
+            rowId: sourceApplicationId,
+            field: 'integrationLink',
+            from: existing ? `${existing.sourceApplicationId} -> ${existing.targetApplicationId}` : null,
+            to: `${sourceApplicationId} -> ${targetApplicationId}`,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? 'Integration updated.' : 'Integration recorded.',
+      }
+    }
+
+    case 'removeIntegrationLink': {
+      const existing = state.integrationLinks[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That integration no longer exists.' }
+      return {
+        state: {
+          ...state,
+          integrationLinks: { ...state.integrationLinks, [a.id]: { ...existing, deletedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: existing.sourceApplicationId,
+            field: 'integrationLink',
+            from: `${existing.sourceApplicationId} -> ${existing.targetApplicationId}`,
+            to: null,
+            at: a.now,
+            by,
+          }),
+        },
+        message: 'Integration removed.',
       }
     }
 

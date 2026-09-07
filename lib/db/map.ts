@@ -40,6 +40,8 @@ import type {
   // Aliased because `Snapshot` is also the domain type from `../snapshot`, and unrelated to
   // `SnapshotPurpose` (evidence attachment kind) imported two lines below.
   Snapshot as SnapshotRow,
+  Application as ApplicationRow,
+  IntegrationLink as IntegrationLinkRow,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
@@ -66,6 +68,12 @@ import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
 import type { ScopeItem, ScopeKind, ScopeSource } from '../scope'
+import type {
+  Application,
+  ApplicationStatus,
+  IntegrationLink,
+  IntegrationStatus,
+} from '../application'
 import type {
   AcceptanceState,
   BillingTrigger,
@@ -222,6 +230,7 @@ export function issueToRow(
     type: i.type,
     sourceType: i.sourceType,
     discipline: i.discipline,
+    applicationId: i.applicationId ?? null,
     severity: SEVERITY_TO_DB[i.severity],
     status: i.status,
     owner: i.owner,
@@ -268,6 +277,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     type: r.type,
     sourceType: r.sourceType,
     discipline: r.discipline,
+    applicationId: r.applicationId ?? null,
     severity: SEVERITY_FROM_DB[r.severity],
     status: r.status as IssueStatus,
     owner: r.owner,
@@ -1409,6 +1419,82 @@ export function milestoneFromRow(r: MilestoneRow): Milestone {
     rejectionNote: r.rejectionNote,
     acceptedValue: r.acceptedValue === null ? null : Number(r.acceptedValue),
     evidenceDocumentId: r.evidenceDocumentId,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function applicationToRow(
+  tenantId: TenantId,
+  app: Application,
+): Prisma.ApplicationUncheckedCreateInput {
+  return {
+    tenantId,
+    id: app.id,
+    clientNodeId: app.clientNodeId,
+    name: app.name,
+    platform: app.platform,
+    environment: app.environment,
+    status: app.status,
+    goLiveDate: app.goLiveDate ? new Date(app.goLiveDate) : null,
+    owner: app.owner,
+    ownerId: app.ownerId,
+    vendor: app.vendor,
+    description: app.description,
+    recordedBy: app.recordedBy,
+    recordedAt: new Date(app.recordedAt),
+    deletedAt: app.deletedAt ? new Date(app.deletedAt) : null,
+  }
+}
+
+export function applicationFromRow(r: ApplicationRow): Application {
+  return {
+    id: r.id,
+    clientNodeId: r.clientNodeId,
+    name: r.name,
+    platform: r.platform,
+    environment: r.environment,
+    status: r.status as ApplicationStatus,
+    goLiveDate: r.goLiveDate ? r.goLiveDate.toISOString().slice(0, 10) : null,
+    owner: r.owner,
+    ownerId: r.ownerId,
+    vendor: r.vendor,
+    description: r.description,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function integrationLinkToRow(
+  tenantId: TenantId,
+  link: IntegrationLink,
+): Prisma.IntegrationLinkUncheckedCreateInput {
+  return {
+    tenantId,
+    id: link.id,
+    sourceApplicationId: link.sourceApplicationId,
+    targetApplicationId: link.targetApplicationId,
+    interface: link.interface,
+    businessProcess: link.businessProcess,
+    frequency: link.frequency,
+    status: link.status,
+    recordedBy: link.recordedBy,
+    recordedAt: new Date(link.recordedAt),
+    deletedAt: link.deletedAt ? new Date(link.deletedAt) : null,
+  }
+}
+
+export function integrationLinkFromRow(r: IntegrationLinkRow): IntegrationLink {
+  return {
+    id: r.id,
+    sourceApplicationId: r.sourceApplicationId,
+    targetApplicationId: r.targetApplicationId,
+    interface: r.interface,
+    businessProcess: r.businessProcess,
+    frequency: r.frequency,
+    status: r.status as IntegrationStatus,
     recordedBy: r.recordedBy,
     recordedAt: r.recordedAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,

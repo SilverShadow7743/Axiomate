@@ -36,6 +36,8 @@ import {
   documentToRow,
   reviewToRow,
   milestoneToRow,
+  applicationToRow,
+  integrationLinkToRow,
   scopeItemToRow,
   changeToRow,
   revisionToRow,
@@ -696,6 +698,34 @@ export async function persistSteps(
         if (before.milestones[id] === m) continue
         const row = milestoneToRow(tenantId, m)
         await tx.milestone.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'upsertApplication':
+    case 'removeApplication': {
+      for (const [id, app] of Object.entries(after.applications)) {
+        if (before.applications[id] === app) continue
+        const row = applicationToRow(tenantId, app)
+        await tx.application.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'upsertIntegrationLink':
+    case 'removeIntegrationLink': {
+      for (const [id, link] of Object.entries(after.integrationLinks)) {
+        if (before.integrationLinks[id] === link) continue
+        const row = integrationLinkToRow(tenantId, link)
+        await tx.integrationLink.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

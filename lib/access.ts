@@ -98,6 +98,7 @@ export const PERMISSIONS = [
   { key: 'scope.approve', label: 'Agree scope', what: 'Confirm that a recorded line is part of the agreed scope. Until it is agreed it is a note, and its hours are left out of the scope total.' },
   { key: 'milestone.edit', label: 'Plan a milestone', what: 'Set out the payment schedule against a statement of work, and record when a milestone is delivered.' },
   { key: 'milestone.accept', label: 'Accept a milestone', what: 'Sign a milestone off, or return it with a reason. Never one you recorded as delivered yourself — acceptance is somebody else’s judgement, and it is what makes a milestone billable.' },
+  { key: 'application.edit', label: 'Record an application', what: 'Add or change a client’s application, environment, or the integrations between them.' },
   /*
    * Two keys, not three. There is deliberately no `document.view`.
    *
@@ -249,14 +250,14 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff', 'application.edit'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
    * putting their name to a judgement about somebody they have worked with.
    */
   ROLE_PRINCIPAL: [...DELIVERY_CORE, 'estimate.agree', 'work.move', 'skill.assess', 'skill.view'],
-  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit', 'project.staff'],
+  ROLE_PROJECT_MANAGER: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.attribute', 'time.recordForOthers', 'capacity.allocate', 'capacity.record', 'skill.assess', 'skill.view', 'milestone.edit', 'scope.edit', 'project.staff', 'application.edit'],
   ROLE_FUNCTIONAL: [...DELIVERY_CORE],
   ROLE_TECHNICAL: [...DELIVERY_CORE],
   // Named explicitly rather than taking DELIVERY_CORE, so `skill.record` has to be added here
@@ -567,6 +568,10 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeMilestone: 'milestone.edit',
   deliverMilestone: 'milestone.edit',
   decideMilestone: 'milestone.accept',
+  upsertApplication: 'application.edit',
+  removeApplication: 'application.edit',
+  upsertIntegrationLink: 'application.edit',
+  removeIntegrationLink: 'application.edit',
   recordDocument: 'document.upload',
   /* Asking rides on upload (whoever may put a deliverable on the record may ask about it);
    * answering needs its own key; withdrawing is the asker's act, gated like asking. */

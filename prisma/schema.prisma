@@ -148,6 +148,8 @@ model Tenant {
   discussionFollows  DiscussionFollow[]
   meetings      Meeting[]
   snapshots     Snapshot[]
+  applications      Application[]
+  integrationLinks  IntegrationLink[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -195,6 +197,10 @@ model HierarchyNode {
   sowsHere Sow[] @relation("SowEngagement")
   allocations Allocation[] @relation("ProjectAllocation")
   projectMembers ProjectMember[] @relation("ProjectMembership")
+  /// Applications recorded against this node when it is one of this chain's externalParty
+  /// tiers (see `isExternalPartyKind` in lib/config.ts) — usually 'client', never checked
+  /// against that literal string. Empty on every other tier.
+  applications Application[] @relation("ApplicationClient")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -246,6 +252,14 @@ model Issue {
   /// the module or the subject — an inference would be right often enough to be trusted and
   /// wrong invisibly, which is the objection.
   discipline String @default("")
+
+  /// Which real Application this is about, when one has been recorded — additive to `module`
+  /// above, never a replacement for it. `module`'s existing free-text values (21 in the live
+  /// register) don't necessarily map 1:1 onto a real Application yet; reconciling them is a
+  /// deliberate later decision, not implied by this field existing. See
+  /// docs/plans/2026-09-07-application-suite-design.md.
+  applicationId String?
+  application   Application? @relation(fields: [tenantId, applicationId], references: [tenantId, id])
 
   severity    Severity
   /// Free text rather than an enum: the seven statuses come from the source log, and the
@@ -320,6 +334,7 @@ model Issue {
   @@index([tenantId, client, module])
   @@index([tenantId, status])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, applicationId])
 }
 
 /// A scheduled lifecycle activity beneath an issue (Investigation, RCA, ...), or a milestone.
@@ -1604,6 +1619,83 @@ model Milestone {
 
   @@id([tenantId, id])
   @@index([tenantId, sowId, sequence])
+}
+
+/// A client's own technology landscape — see docs/plans/2026-09-07-application-suite-design.md.
+/// Record-keeping only: what a client runs, and which discipline/environment it's in. No live
+/// telemetry, no cost, no AI reasoning — none of that can be backed honestly with what this
+/// application has today.
+model Application {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `app-12`, minted from the durable workspace counter — same convention as Milestone's `ms-N`.
+  id           String
+  /// One of this chain's externalParty tiers (`isExternalPartyKind` in lib/config.ts) — usually
+  /// 'client', never checked against that literal string. Restrict, not Cascade: an application
+  /// record must not silently vanish because a hierarchy node was archived elsewhere.
+  clientNodeId String
+  clientNode   HierarchyNode @relation("ApplicationClient", fields: [tenantId, clientNodeId], references: [tenantId, id], onDelete: Restrict)
+
+  name        String
+  /// D365 F&O | D365 Commerce | D365 CE | Salesforce | Power Platform | Azure service | Fabric |
+  /// Custom | ... Free text, like Engagement.type, for the same reason.
+  platform    String @default("")
+  /// DEV | UAT | PROD | ... matches DISC_ENVIRONMENT's own vocabulary (lib/config.ts).
+  environment String @default("")
+
+  /// Planned | Live | Decommissioned. Lifecycle, not health — health is computed, never stored,
+  /// same rule as everything else this schema's own header names.
+  status      String
+  goLiveDate  DateTime?
+  /// Free text, same accountable-party vocabulary pattern as Issue.accountable.
+  owner       String  @default("")
+  ownerId     String?
+  vendor      String  @default("")
+  description String  @db.Text
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  issues               Issue[]
+  integrationsFrom     IntegrationLink[] @relation("IntegrationSource")
+  integrationsTo       IntegrationLink[] @relation("IntegrationTarget")
+
+  @@id([tenantId, id])
+  @@index([tenantId, clientNodeId])
+  @@index([tenantId, deletedAt])
+}
+
+/// A recorded data flow between two applications — see the design doc above.
+model IntegrationLink {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `int-12`, minted from the same counter.
+  id String
+
+  sourceApplicationId String
+  sourceApplication   Application @relation("IntegrationSource", fields: [tenantId, sourceApplicationId], references: [tenantId, id], onDelete: Cascade)
+  targetApplicationId String
+  targetApplication   Application @relation("IntegrationTarget", fields: [tenantId, targetApplicationId], references: [tenantId, id], onDelete: Cascade)
+
+  /// "OData export", "Power Automate flow", "SFTP batch" — free text, not a fixed technology
+  /// enum; a firm's clients run every era of Microsoft integration tooling at once.
+  interface       String @default("")
+  /// What the integration is FOR, in business terms — "Order fulfilment", "GL posting".
+  /// Recorded even though nothing reasons over it yet — the design doc argues why.
+  businessProcess String @db.Text @default("")
+  frequency       String @default("")
+  status          String @default("Active")
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, sourceApplicationId])
+  @@index([tenantId, targetApplicationId])
 }
 
 /// What was true about something, from when, and why it changed.

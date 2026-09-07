@@ -11,6 +11,7 @@ import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
+import ApplicationLandscape from './ApplicationLandscape'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
@@ -2333,6 +2334,22 @@ export default function IssueWorkspace({
             } as Action)
           }}
           onReleaseAllocation={(id) => dispatch({ t: 'removeAllocation', id, now: new Date().toISOString() })}
+          docked
+        />
+      ) : view === 'applications' ? (
+        <ApplicationLandscape
+          state={state}
+          actor={actor}
+          today={today}
+          onUpsertApplication={(id, clientNodeId, patch) =>
+            dispatch({ t: 'upsertApplication', id, clientNodeId, patch, now: new Date().toISOString() } as Action)
+          }
+          onUpsertIntegrationLink={(id, sourceApplicationId, targetApplicationId, patch) =>
+            dispatch({
+              t: 'upsertIntegrationLink', id, sourceApplicationId, targetApplicationId, patch,
+              now: new Date().toISOString(),
+            } as Action)
+          }
           docked
         />
       ) : view === 'calendar' ? (

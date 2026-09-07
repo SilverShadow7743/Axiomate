@@ -11,6 +11,7 @@ import { COMMITMENT_KINDS } from './capacity'
 import { SKILL_ORDER, SKILL_SOURCES } from './skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
+import { APPLICATION_STATUSES, INTEGRATION_STATUSES } from './application'
 import { SCOPE_KINDS, SCOPE_SOURCES } from './scope'
 
 /**
@@ -491,7 +492,7 @@ const SHAPES = {
     patch: req(
       patchOf({
         parentId: idOrNull, client: text, module: text, subject: text, description: richDoc,
-        type: text, sourceType: text, discipline: text, severity: text, status: text, owner: text,
+        type: text, sourceType: text, discipline: text, applicationId: idOrNull, severity: text, status: text, owner: text,
         raisedBy: text, accountable: text, raised: textOrNull, lastActivity: textOrNull,
         actualEnd: textOrNull, age: num, daysSinceActivity: num, nextAction: text,
         evidence: text, evidenceDate: textOrNull, verification: text, source: text,
@@ -899,6 +900,39 @@ const SHAPES = {
     evidenceDocumentId: opt(idOrNull),
     now,
   },
+  upsertApplication: {
+    id: req(idOrNull),
+    clientNodeId: opt(id),
+    patch: req(
+      patchOf({
+        name: text,
+        platform: text,
+        environment: text,
+        status: oneOf(new Set(APPLICATION_STATUSES)),
+        goLiveDate: isoDateOrNull,
+        owner: text,
+        vendor: text,
+        description: text,
+      }),
+    ),
+    now,
+  },
+  removeApplication: { id: req(id), now },
+  upsertIntegrationLink: {
+    id: req(idOrNull),
+    sourceApplicationId: opt(id),
+    targetApplicationId: opt(id),
+    patch: req(
+      patchOf({
+        interface: text,
+        businessProcess: text,
+        frequency: text,
+        status: oneOf(new Set(INTEGRATION_STATUSES)),
+      }),
+    ),
+    now,
+  },
+  removeIntegrationLink: { id: req(id), now },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),

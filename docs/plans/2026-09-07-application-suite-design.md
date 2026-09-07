@@ -1,10 +1,17 @@
 # Application Suite — a client's own technology landscape
 
-*7 September 2026. A design, not an increment — from `docs/pending-actions.md` section J's gap
-survey, which named this the strongest near-term candidate among the entirely-unbuilt suites:
-zero-AI-needed, structural, and sitting directly on Axiocloud's own delivery specialism (D365
-F&O, Commerce, Azure, Fabric, Power Platform implementations) rather than a generic PM concept.
-The source pitch itself flags it as "a candidate flagship capability."*
+*7 September 2026. From `docs/pending-actions.md` section J's gap survey, which named this the
+strongest near-term candidate among the entirely-unbuilt suites: zero-AI-needed, structural, and
+sitting directly on Axiocloud's own delivery specialism (D365 F&O, Commerce, Azure, Fabric, Power
+Platform implementations) rather than a generic PM concept. The source pitch itself flags it as
+"a candidate flagship capability."*
+
+**Status: built, 7 September 2026**, same day as the design — schema (migration
+`20260907000001_application_suite`), reducer arms, and an `Applications` view
+(`components/ApplicationLandscape.tsx`) with add/edit and integration recording. Six scenarios
+(APP1–APP6) drive the real reducer; all PASS. The migration has not been run against a live
+database from this environment — verify it on the first real deploy. Everything below describes
+what was built exactly as designed; nothing changed shape between design and build.
 
 ## What this actually is, here
 

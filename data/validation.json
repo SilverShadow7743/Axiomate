@@ -888,7 +888,7 @@
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 45 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 46 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
@@ -2148,7 +2148,7 @@
       "title": "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
       "expected": "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
       "verdict": "PASS",
-      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 45 keys read the same before and after for both actors; projectView not called.",
+      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 46 keys read the same before and after for both actors; projectView not called.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
@@ -2251,6 +2251,66 @@
       "actual": "projectOf(looseIssue)=null (true). Lena (ROLE_CLIENT_LEAD): can(evidence.add).allowed=true, can(internal.view).allowed=false -- holds the permission the old route checked, refused by the new one. Priya (ROLE_TECHNICAL): can(internal.view).allowed=true -- the project-less branch does not refuse her.",
       "stops": "",
       "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "APP1",
+      "title": "An application is recorded against a real client node, and refused against anything else",
+      "expected": "upsertApplication succeeds against client:OAPIL; refused with no client, and refused against a non-client node (an issue id).",
+      "verdict": "PASS",
+      "actual": "created=\"app-1\" (ok) withoutClient=\"An application needs a client.\" wrongKind=\"An application must belong to one of the client nodes in the tree.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "APP2",
+      "title": "checkApplication refuses a nameless application",
+      "expected": "A name is the one field an application record cannot be saved without.",
+      "verdict": "PASS",
+      "actual": "nameless=\"An application needs a name.\" named=null",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "APP3",
+      "title": "An integration needs two different, real applications",
+      "expected": "upsertIntegrationLink succeeds between two real applications; refused against a missing one, and refused between an application and itself.",
+      "verdict": "PASS",
+      "actual": "linked=\"int-1\" (ok) missing=\"The target application no longer exists.\" self=\"An integration needs two different applications.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "APP4",
+      "title": "Application concerns are named claims, worst first, never a score",
+      "expected": "openHigh leads, then overdue, then integrationsInactive; a clean application reports none.",
+      "verdict": "PASS",
+      "actual": "dirty=[{\"kind\":\"openHigh\",\"count\":1,\"phrase\":\"1 open High-severity issue\"},{\"kind\":\"overdue\",\"count\":1,\"phrase\":\"1 overdue\"},{\"kind\":\"integrationsInactive\",\"count\":1,\"phrase\":\"1 integration marked Inactive\"}] clean=[]",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "APP5",
+      "title": "Linking an issue to an application is additive — module is untouched",
+      "expected": "updateIssue sets applicationId through the ordinary patch; the issue's own module string is unchanged.",
+      "verdict": "PASS",
+      "actual": "applicationId=\"app-1\" module=\"Inventory\" (was \"Inventory\")",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "APP6",
+      "title": "An application cannot be removed while issues or integrations still reference it",
+      "expected": "removeApplication is refused while a live issue names it, and again while a live integration names it.",
+      "verdict": "PASS",
+      "actual": "refusedForIssue=\"Issues are still linked to this application. Unlink them first.\" refusedForLink=\"Integrations still reference this application. Remove them first.\"",
+      "stops": "",
+      "severity": "P2",
       "impact": "none"
     }
   ]
