@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can, isStaffedOn } from '@/lib/access'
 import { logAuthRefusal } from '@/lib/authLog'
-import { getMailToken } from '@/lib/db/mailTokens'
+import { getPersonalGraphToken } from '@/lib/db/personalGraphTokens'
 import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Attaching needs an issue.' }, { status: 400 })
   }
 
-  const token = await getMailToken(session.actor.id)
+  const token = await getPersonalGraphToken(session.actor.id)
   if (!token) {
     return NextResponse.json({ ok: false, reconnect: true, error: 'Reconnect your inbox first.' }, { status: 401 })
   }

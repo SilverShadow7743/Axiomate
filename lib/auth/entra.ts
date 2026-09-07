@@ -53,6 +53,25 @@ export function configured(): boolean {
   return entraConfig() !== null
 }
 
+/**
+ * The one delegated scope string, declared once — see `lib/db/personalGraphTokens.ts`'s own
+ * comment on why a drifted copy here is worse than an import.
+ *
+ * `Mail.Read` powers `in-mail` (2026-08-31). `Mail.Send`, `Calendars.ReadWrite`, `Chat.Create`
+ * and `Chat.ReadWrite` are the write-side additions from `2026-09-07-personal-connect-write-
+ * design.md` — schedule-a-meeting, reply/reply-all, compose, and a Teams chat message, each
+ * dispatched as the signed-in person through their own token, never the app's. `Calendars.
+ * ReadWrite` here is personal-tier only: the reader places events on THEIR OWN calendar. It
+ * does not sync, read, or write anything in the tenant-stored `Meeting` model or its capacity
+ * math (`meetingHours`, `describeCapacity`) — that model's own design (`2026-08-30-e4-meetings-
+ * design.md`) named "Outlook/Graph calendar sync... the Graph client stays mail-only" as a
+ * non-goal, and this addition does not reopen it. Two different things share the word
+ * "meeting": one is a tracked capacity-consuming record the firm keeps; this is a person
+ * putting something on their own calendar and telling Axiomate nothing more than that they did.
+ */
+export const AXIOMATE_DELEGATED_SCOPES =
+  'openid profile email offline_access Mail.Read Mail.Send Calendars.ReadWrite Chat.Create Chat.ReadWrite'
+
 const authority = (tenantId: string) => `https://login.microsoftonline.com/${tenantId}/v2.0`
 
 /**
@@ -92,10 +111,9 @@ export async function beginSignIn(config: EntraConfig): Promise<PendingAuth> {
   url.searchParams.set('redirect_uri', config.redirectUri)
   url.searchParams.set('response_mode', 'query')
   // openid and profile identify the person; email gives the address the directory is joined
-  // on. Mail.Read + offline_access power the in-mail panel — DELEGATED, so each token reads
-  // only its own person's mailbox, and admin consent covers the tenant so no user sees an
-  // extra consent screen. See docs/plans/2026-08-31-in-mail-design.md.
-  url.searchParams.set('scope', 'openid profile email offline_access Mail.Read')
+  // on. The rest are DELEGATED, so each token acts only as its own person, and admin consent
+  // covers the tenant so no user sees an extra consent screen. See AXIOMATE_DELEGATED_SCOPES.
+  url.searchParams.set('scope', AXIOMATE_DELEGATED_SCOPES)
   url.searchParams.set('state', state)
   url.searchParams.set('nonce', nonce)
   url.searchParams.set('code_challenge', challenge)
@@ -128,7 +146,7 @@ export async function completeSignIn(
     grant_type: 'authorization_code',
     redirect_uri: config.redirectUri,
     code_verifier: codeVerifier,
-    scope: 'openid profile email offline_access Mail.Read',
+    scope: AXIOMATE_DELEGATED_SCOPES,
   })
 
   const res = await fetch(`https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`, {

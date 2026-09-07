@@ -293,6 +293,28 @@ export default function OverviewTab({
   /** The mail went but the note did not — the one state where Send must NOT be offered again. */
   const [sentUnrecorded, setSentUnrecorded] = useState(false)
 
+  /* ---------------- schedule a meeting (personal — see personalGraph.ts) ---------------- */
+
+  const [scheduling, setScheduling] = useState(false)
+  const [meetSubject, setMeetSubject] = useState('')
+  const [meetStart, setMeetStart] = useState('')
+  const [meetEnd, setMeetEnd] = useState('')
+  const [meetAttendees, setMeetAttendees] = useState('')
+  const [meetBusy, setMeetBusy] = useState(false)
+  const [meetError, setMeetError] = useState<string | null>(null)
+  const [meetResult, setMeetResult] = useState<{ webLink: string; onlineMeetingUrl: string | null } | null>(
+    null,
+  )
+
+  /* ---------------- message on Teams (personal) ---------------- */
+
+  const [messaging, setMessaging] = useState(false)
+  const [chatTo, setChatTo] = useState('')
+  const [chatText, setChatText] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [chatSent, setChatSent] = useState(false)
+
   /*
    * The compose belongs to one record. Without this, the component instance survives an issue
    * switch (nothing keys it on issue.id) and a reply typed to client A would sit in the box
@@ -300,6 +322,11 @@ export default function OverviewTab({
    * The generation counter makes an in-flight send's continuation stale the moment the issue
    * changes, so its success line, error, or button state cannot land on the wrong record.
    */
+  // A primitive, not `outbound` itself: `outbound` is a fresh object every render `state`
+  // changes at all, and depending on the object would reset a half-typed meeting form on any
+  // unrelated edit elsewhere in the workspace, not just on switching issues.
+  const defaultAttendee = !isOutboundRefusal(outbound) ? outbound.recipient : ''
+
   const composeGen = useRef(0)
   useEffect(() => {
     composeGen.current += 1
@@ -309,6 +336,24 @@ export default function OverviewTab({
     setMailError(null)
     setSentLine(null)
     setSentUnrecorded(false)
+    // Same reasoning as the client reply above, for the same class of bug: a half-filled
+    // meeting form must not survive a switch to another issue and get scheduled against it.
+    setScheduling(false)
+    setMeetSubject('')
+    setMeetStart('')
+    setMeetEnd('')
+    setMeetAttendees(defaultAttendee)
+    setMeetBusy(false)
+    setMeetError(null)
+    setMeetResult(null)
+    setMessaging(false)
+    setChatTo(defaultAttendee)
+    setChatText('')
+    setChatBusy(false)
+    setChatError(null)
+    setChatSent(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- defaultAttendee deliberately
+    // excluded: it must seed the field on an issue switch, not re-seed it on every recompute.
   }, [issue.id])
 
   const sendMail = async () => {
@@ -365,11 +410,116 @@ export default function OverviewTab({
     }
   }
 
+  const scheduleOnMyCalendar = async (): Promise<boolean> => {
+    const gen = composeGen.current
+    // Read the fallback here, not from a setState just issued by the caller — a state update
+    // is not visible to the next line that reads it, only to the next render.
+    const subject = meetSubject.trim() || issue.subject
+    const attendees = meetAttendees
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean)
+    setMeetBusy(true)
+    setMeetError(null)
+    try {
+      const res = await fetch('/api/calendar/schedule', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subject,
+          startIso: meetStart ? new Date(meetStart).toISOString() : '',
+          endIso: meetEnd ? new Date(meetEnd).toISOString() : '',
+          attendees,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        reconnect?: boolean
+        webLink?: string
+        onlineMeetingUrl?: string | null
+      } | null
+      if (composeGen.current !== gen) return false // moved to another issue while this was in flight
+      if (!res.ok || !data?.ok) {
+        setMeetError(
+          data?.reconnect
+            ? 'Your calendar connection is not active — sign in once to connect it.'
+            : (data?.error ?? 'The meeting could not be scheduled.'),
+        )
+        return false
+      }
+      setMeetResult({ webLink: data.webLink ?? '', onlineMeetingUrl: data.onlineMeetingUrl ?? null })
+      return true
+    } catch {
+      if (composeGen.current === gen)
+        setMeetError('The meeting could not be scheduled. Check the connection and try again.')
+      return false
+    } finally {
+      if (composeGen.current === gen) setMeetBusy(false)
+    }
+  }
+
+  const sendTeamsMessage = async (): Promise<boolean> => {
+    const gen = composeGen.current
+    const to = chatTo.trim()
+    const text = chatText.trim()
+    if (!to || !text) return false
+    setChatBusy(true)
+    setChatError(null)
+    try {
+      const res = await fetch('/api/teams/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to, text }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        reconnect?: boolean
+      } | null
+      if (composeGen.current !== gen) return false
+      if (!res.ok || !data?.ok) {
+        setChatError(
+          data?.reconnect
+            ? 'Your inbox connection is not active — sign in once to connect it.'
+            : (data?.error ?? 'The message could not be sent.'),
+        )
+        return false
+      }
+      setChatSent(true)
+      setChatText('')
+      return true
+    } catch {
+      if (composeGen.current === gen)
+        setChatError('The message could not be sent. Check the connection and try again.')
+      return false
+    } finally {
+      if (composeGen.current === gen) setChatBusy(false)
+    }
+  }
+
   useEffect(() => {
     // A part-typed client reply counts as unsaved work exactly like a half-edited form:
     // leaving the row would discard it silently, and the workspace's guard stops that.
-    onDirtyChange((editing && dirty) || (composing && mailBody.trim() !== ''))
-  }, [editing, dirty, composing, mailBody, onDirtyChange])
+    onDirtyChange(
+      (editing && dirty) ||
+        (composing && mailBody.trim() !== '') ||
+        (scheduling && (meetSubject.trim() !== '' || meetStart !== '' || meetEnd !== '')) ||
+        (messaging && chatText.trim() !== ''),
+    )
+  }, [
+    editing,
+    dirty,
+    composing,
+    mailBody,
+    scheduling,
+    meetSubject,
+    meetStart,
+    meetEnd,
+    messaging,
+    chatText,
+    onDirtyChange,
+  ])
 
   /* ---------------- view ---------------- */
 
@@ -493,6 +643,153 @@ export default function OverviewTab({
             )}
           </section>
         )}
+
+        {/* Personal — dispatched through the signed-in person's own Outlook, not the firm's
+            intake mailbox. Always offered; unlike "Reply to client" this needs no workspace
+            permission, because it writes nothing to the workspace — see /api/calendar/schedule. */}
+        <section className="appr-block">
+          <h4 className="est-h">Schedule a meeting</h4>
+          <p className="prov">
+            Personal — goes on your own Outlook calendar with a Teams link, not recorded on
+            this record.
+          </p>
+          {!scheduling ? (
+            <div className="ov-actions">
+              <button className="btn" onClick={() => { setMeetResult(null); setScheduling(true) }}>
+                Schedule…
+              </button>
+              {meetResult && (
+                <span className="prov">
+                  Scheduled —{' '}
+                  <a href={meetResult.onlineMeetingUrl ?? meetResult.webLink} target="_blank" rel="noreferrer">
+                    {meetResult.onlineMeetingUrl ? 'join link' : 'view in Outlook'}
+                  </a>
+                </span>
+              )}
+            </div>
+          ) : (
+            <>
+              <dl className="kv">
+                <dt>Subject</dt>
+                <dd>
+                  <input
+                    value={meetSubject}
+                    onChange={(e) => setMeetSubject(e.target.value)}
+                    aria-label="Meeting subject"
+                    placeholder={issue.subject}
+                  />
+                </dd>
+                <dt>Starts</dt>
+                <dd>
+                  <input
+                    type="datetime-local"
+                    value={meetStart}
+                    onChange={(e) => setMeetStart(e.target.value)}
+                    aria-label="Meeting start"
+                  />
+                </dd>
+                <dt>Ends</dt>
+                <dd>
+                  <input
+                    type="datetime-local"
+                    value={meetEnd}
+                    onChange={(e) => setMeetEnd(e.target.value)}
+                    aria-label="Meeting end"
+                  />
+                </dd>
+                <dt>Attendees</dt>
+                <dd>
+                  <input
+                    value={meetAttendees}
+                    onChange={(e) => setMeetAttendees(e.target.value)}
+                    aria-label="Attendee email addresses, comma-separated"
+                    placeholder="name@client.com, name@axiocloudsolutions.com"
+                  />
+                  <span className="prov"> · comma-separated addresses</span>
+                </dd>
+              </dl>
+              {meetError && <p className="ov-gate">{meetError}</p>}
+              <div className="ov-actions">
+                <button className="btn" disabled={meetBusy} onClick={() => setScheduling(false)}>
+                  Close
+                </button>
+                <button
+                  className="btn primary"
+                  disabled={
+                    meetBusy ||
+                    !(meetSubject.trim() || issue.subject) ||
+                    !meetStart ||
+                    !meetEnd ||
+                    !meetAttendees.trim()
+                  }
+                  onClick={async () => {
+                    // Close only on success — a failure must leave the form (and meetError)
+                    // visible, not vanish it the instant the person needs to read why.
+                    if (await scheduleOnMyCalendar()) setScheduling(false)
+                  }}
+                >
+                  {meetBusy ? 'Scheduling…' : 'Schedule'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* Personal, and the most sensitive of the three — see connected-workspace-design.md
+            §4. No default recipient beyond the same client contact the mail actions default
+            to; nothing here is offered pre-filled toward a colleague. */}
+        <section className="appr-block">
+          <h4 className="est-h">Message on Teams</h4>
+          <p className="prov">Personal — sent from your own Teams as you, not recorded here.</p>
+          {!messaging ? (
+            <div className="ov-actions">
+              <button className="btn" onClick={() => { setChatSent(false); setChatError(null); setMessaging(true) }}>
+                Message…
+              </button>
+              {chatSent && <span className="prov">Sent.</span>}
+            </div>
+          ) : (
+            <>
+              <dl className="kv">
+                <dt>To</dt>
+                <dd>
+                  <input
+                    value={chatTo}
+                    onChange={(e) => setChatTo(e.target.value)}
+                    aria-label="Recipient's work address"
+                    placeholder="name@axiocloudsolutions.com"
+                  />
+                </dd>
+                <dt>Message</dt>
+                <dd>
+                  <textarea
+                    rows={4}
+                    value={chatText}
+                    onChange={(e) => setChatText(e.target.value)}
+                    aria-label="Teams message"
+                    readOnly={chatBusy}
+                  />
+                </dd>
+              </dl>
+              {chatError && <p className="ov-gate">{chatError}</p>}
+              <div className="ov-actions">
+                <button className="btn" disabled={chatBusy} onClick={() => setMessaging(false)}>
+                  Close
+                </button>
+                <button
+                  className="btn primary"
+                  disabled={chatBusy || !chatTo.trim() || !chatText.trim()}
+                  onClick={async () => {
+                    if (await sendTeamsMessage()) setMessaging(false)
+                  }}
+                >
+                  {chatBusy ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
         <div className="cols-2">
           <dl className="kv">
             <dt>Issue</dt>

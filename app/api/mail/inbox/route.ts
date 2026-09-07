@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
-import { getMailToken } from '@/lib/db/mailTokens'
+import { getPersonalGraphToken } from '@/lib/db/personalGraphTokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'Sign in to read your inbox.' }, { status: 401 })
   }
 
-  const token = await getMailToken(session.actor.id)
+  const token = await getPersonalGraphToken(session.actor.id)
   if (!token) {
     // Absent or unrefreshable is "reconnect", never an error page — the RAM-only posture's
     // stated cost surfacing exactly where the design said it would.

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { completeSignIn, entraConfig } from '@/lib/auth/entra'
-import { storeMailTokens } from '@/lib/db/mailTokens'
+import { storePersonalGraphTokens } from '@/lib/db/personalGraphTokens'
 import { SESSION_COOKIE, SESSION_SECONDS, cookieAttributes, publicOrigin, sign } from '@/lib/auth/cookie'
 
 /**
@@ -69,15 +69,15 @@ export async function GET(req: Request) {
   try {
     const { identity, tokens } = await completeSignIn(config, code, verifier, nonce)
     /*
-     * The mail-token cache is a bonus on top of identity, never a dependency of it: a
+     * The personal-Graph-token cache is a bonus on top of identity, never a dependency of it: a
      * failure to store must not fail the sign-in. RAM-only by design — see
-     * docs/plans/2026-08-31-in-mail-design.md.
+     * docs/plans/2026-08-31-in-mail-design.md and 2026-09-07-personal-connect-write-design.md.
      */
     if (tokens) {
       try {
-        storeMailTokens(identity.oid, tokens)
+        storePersonalGraphTokens(identity.oid, tokens)
       } catch {
-        /* the Mail panel will simply say "reconnect" */
+        /* the Mail panel — and Calendar/Teams actions — will simply say "reconnect" */
       }
     }
     /*

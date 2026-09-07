@@ -34,6 +34,93 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
   const [attachId, setAttachId] = useState('')
   const [filed, setFiled] = useState<Record<string, string>>({})
 
+  /* ---------------- reply / reply-all — personal, see lib/personalGraph.ts ---------------- */
+  const [replying, setReplying] = useState<{ message: InboxMessage; all: boolean } | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replyBusy, setReplyBusy] = useState(false)
+  const [replyError, setReplyError] = useState<string | null>(null)
+  const [replied, setReplied] = useState<Record<string, true>>({})
+
+  const sendReply = async () => {
+    if (!replying || !replyText.trim()) return
+    setReplyBusy(true)
+    setReplyError(null)
+    try {
+      const res = await fetch('/api/mail/reply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          messageId: replying.message.id,
+          comment: replyText,
+          replyAll: replying.all,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        reconnect?: boolean
+      } | null
+      if (!res.ok || !data?.ok) {
+        setReplyError(
+          data?.reconnect
+            ? 'Your inbox connection is not active — sign in once to connect it.'
+            : (data?.error ?? 'The reply could not be sent.'),
+        )
+        return
+      }
+      setReplied((p) => ({ ...p, [replying.message.id]: true }))
+      setReplying(null)
+      setReplyText('')
+    } catch {
+      setReplyError('The reply could not be sent. Check the connection and try again.')
+    } finally {
+      setReplyBusy(false)
+    }
+  }
+
+  /* ---------------- compose new — personal ---------------- */
+  const [composingNew, setComposingNew] = useState(false)
+  const [composeTo, setComposeTo] = useState('')
+  const [composeSubject, setComposeSubject] = useState('')
+  const [composeBody, setComposeBody] = useState('')
+  const [composeBusy, setComposeBusy] = useState(false)
+  const [composeError, setComposeError] = useState<string | null>(null)
+  const [composeSent, setComposeSent] = useState(false)
+
+  const sendCompose = async () => {
+    setComposeBusy(true)
+    setComposeError(null)
+    try {
+      const to = composeTo.split(',').map((a) => a.trim()).filter(Boolean)
+      const res = await fetch('/api/mail/compose', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to, subject: composeSubject, body: composeBody }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        reconnect?: boolean
+      } | null
+      if (!res.ok || !data?.ok) {
+        setComposeError(
+          data?.reconnect
+            ? 'Your inbox connection is not active — sign in once to connect it.'
+            : (data?.error ?? 'The message could not be sent.'),
+        )
+        return
+      }
+      setComposeSent(true)
+      setComposeTo('')
+      setComposeSubject('')
+      setComposeBody('')
+    } catch {
+      setComposeError('The message could not be sent. Check the connection and try again.')
+    } finally {
+      setComposeBusy(false)
+    }
+  }
+
   const load = useCallback(async () => {
     setError(null)
     try {
@@ -108,6 +195,10 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
         <span className="ibx-note">
           Read through your own sign-in, shown only to you, stored nowhere.
         </span>
+        <span className="grow" />
+        <button className="btn" onClick={() => { setComposeSent(false); setComposeError(null); setComposingNew(true) }}>
+          Compose new…
+        </button>
       </div>
 
       {error && <p className="ibx-error">{error}</p>}
@@ -129,6 +220,19 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
           </div>
           <div className="ibx-row-side">
             <span className="ibx-date">{m.receivedAt ? formatIso(m.receivedAt.slice(0, 10)) : ''}</span>
+            {replied[m.id] && <span className="ibx-filed">replied</span>}
+            <button
+              className="btn"
+              onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: false }) }}
+            >
+              Reply…
+            </button>
+            <button
+              className="btn"
+              onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: true }) }}
+            >
+              Reply all…
+            </button>
             {filed[m.id] ? (
               <span className="ibx-filed">filed · {filed[m.id]}</span>
             ) : (
@@ -210,6 +314,93 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
               </button>
             </div>
             <p className="ibx-note">A newly created item appears in the tree on the next reload.</p>
+          </div>
+        </div>
+      )}
+
+      {replying && (
+        <div className="modal-scrim" role="dialog" aria-label={replying.all ? 'Reply all' : 'Reply'}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <h3>{replying.all ? 'Reply all to' : 'Reply to'} “{replying.message.subject}”</h3>
+            <p className="ibx-note">
+              Sent from your own mailbox, as you — not recorded on any record.
+            </p>
+            <textarea
+              rows={6}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              aria-label="Reply text"
+              placeholder="Sent as plain text, exactly as written here."
+              readOnly={replyBusy}
+            />
+            {replyError && <p className="ov-gate">{replyError}</p>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+              <button className="btn" disabled={replyBusy} onClick={() => setReplying(null)}>
+                Close
+              </button>
+              <button className="btn primary" disabled={replyBusy || !replyText.trim()} onClick={sendReply}>
+                {replyBusy ? 'Sending…' : replying.all ? 'Send to all' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {composingNew && (
+        <div className="modal-scrim" role="dialog" aria-label="Compose new mail">
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <h3>New message</h3>
+            <p className="ibx-note">Sent from your own mailbox, as you.</p>
+            {composeSent ? (
+              <>
+                <p className="ibx-note">Sent.</p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button className="btn" onClick={() => setComposingNew(false)}>
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="cfg-fld">
+                  <span>To</span>
+                  <input
+                    value={composeTo}
+                    onChange={(e) => setComposeTo(e.target.value)}
+                    placeholder="name@client.com, name@axiocloudsolutions.com"
+                    aria-label="Recipient email addresses, comma-separated"
+                  />
+                </label>
+                <label className="cfg-fld">
+                  <span>Subject</span>
+                  <input
+                    value={composeSubject}
+                    onChange={(e) => setComposeSubject(e.target.value)}
+                    aria-label="Subject"
+                  />
+                </label>
+                <textarea
+                  rows={6}
+                  value={composeBody}
+                  onChange={(e) => setComposeBody(e.target.value)}
+                  aria-label="Message"
+                  readOnly={composeBusy}
+                />
+                {composeError && <p className="ov-gate">{composeError}</p>}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button className="btn" disabled={composeBusy} onClick={() => setComposingNew(false)}>
+                    Close
+                  </button>
+                  <button
+                    className="btn primary"
+                    disabled={composeBusy || !composeTo.trim() || !composeSubject.trim() || !composeBody.trim()}
+                    onClick={sendCompose}
+                  >
+                    {composeBusy ? 'Sending…' : 'Send'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
