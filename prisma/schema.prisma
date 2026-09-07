@@ -152,6 +152,7 @@ model Tenant {
   integrationLinks  IntegrationLink[]
   invoices          Invoice[]
   invoiceLineItems  InvoiceLineItem[]
+  checklistItems    ChecklistItem[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -325,6 +326,7 @@ model Issue {
   timeEntries       TimeEntry[]
   approvals         Approval[]
   notes             IssueNote[]
+  checklistItems    ChecklistItem[]
 
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -1751,6 +1753,34 @@ model InvoiceLineItem {
   amount      Decimal @db.Decimal(14, 2)
 
   @@id([tenantId, id])
+}
+
+/// A lightweight to-do list within a task — see docs/plans/2026-09-07-checklist-design.md. Not a
+/// subtask: no status, no owner, no dates. A checklist item that needs any of those is a subtask
+/// (Issue.parentIssueId/subIssues), not this.
+model ChecklistItem {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `chk-12`, minted from the durable workspace counter.
+  id      String
+  issueId String
+  issue   Issue  @relation(fields: [tenantId, issueId], references: [tenantId, id], onDelete: Cascade)
+
+  text String
+  done Boolean @default(false)
+  /// Presentation order. Not a dependency — same rule as Milestone.sequence.
+  sequence Int
+
+  doneAt DateTime?
+  doneBy String?
+
+  recordedBy String
+  recordedAt DateTime
+  deletedAt  DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueId])
 }
 
 /// What was true about something, from when, and why it changed.

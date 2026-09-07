@@ -100,6 +100,7 @@ import {
   type InvoiceLineItem,
   type InvoiceStatus,
 } from './invoice'
+import { checkChecklistItem, nextChecklistSequence, type ChecklistItem } from './checklist'
 import {
   checkChange,
   contractedPosition,
@@ -367,6 +368,8 @@ export interface WorkspaceState {
   evidence: Record<string, EvidenceItem>
   /** The working record of how each issue progressed. See `./notes`. */
   notes: Record<string, IssueNote>
+  /** A lightweight to-do list within a task — not a subtask. See `./checklist`. */
+  checklistItems: Record<string, ChecklistItem>
   /** One estimate per issue, keyed by issue id. See `./estimation`. */
   estimates: Record<string, IssueEstimate>
   /** What changed to an agreed estimate, and why. */
@@ -770,6 +773,7 @@ export function initWorkspace(
     relationships: dedupeById(relationships),
     evidence: {},
     notes: {},
+    checklistItems: {},
     estimates: {},
     estimateRevisions: {},
     timeEntries: {},
@@ -1224,6 +1228,17 @@ export type Action =
       now: string
     }
   | { t: 'updateInvoiceStatus'; id: string; status: InvoiceStatus; now: string }
+  /* ---- CHECKLIST ITEMS — see ./checklist ---- */
+  | {
+      t: 'upsertChecklistItem'
+      id: string | null
+      /** Required on create, ignored on update — a checklist item does not change issue. */
+      issueId?: string
+      patch: Partial<Pick<ChecklistItem, 'text' | 'sequence'>>
+      now: string
+    }
+  | { t: 'toggleChecklistItem'; id: string; done: boolean; now: string }
+  | { t: 'removeChecklistItem'; id: string; now: string }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -5542,6 +5557,101 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: `${a.id} marked ${a.status}.`,
+      }
+    }
+
+    case 'upsertChecklistItem': {
+      const existing = a.id ? state.checklistItems[a.id] : null
+      if (a.id && !existing) return { state, error: 'That checklist item no longer exists.' }
+
+      const issueId = existing?.issueId ?? a.issueId
+      if (!issueId) return { state, error: 'A checklist item needs an issue.' }
+      const issue = state.issues[issueId]
+      if (!issue || issue.deletedAt) return { state, error: 'That issue no longer exists.' }
+
+      const seq = existing ? state.seq : state.seq + 1
+      const id = existing?.id ?? `chk-${seq}`
+      const text = a.patch.text ?? existing?.text ?? ''
+      const problem = checkChecklistItem(text)
+      if (problem) return { state, error: problem }
+
+      const merged: ChecklistItem = {
+        id,
+        issueId,
+        text,
+        done: existing?.done ?? false,
+        sequence: a.patch.sequence ?? existing?.sequence ?? nextChecklistSequence(state.checklistItems, issueId),
+        doneAt: existing?.doneAt ?? null,
+        doneBy: existing?.doneBy ?? null,
+        recordedBy: by,
+        recordedAt: a.now,
+        deletedAt: null,
+      }
+
+      return {
+        state: {
+          ...state,
+          seq,
+          checklistItems: { ...state.checklistItems, [id]: merged },
+          audit: log(actor, state, {
+            rowId: issueId,
+            field: 'checklistItem',
+            from: existing?.text ?? null,
+            to: merged.text,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? 'Checklist item updated.' : 'Checklist item added.',
+      }
+    }
+
+    /**
+     * Check it off, or return it to not-done. Its own arm rather than a patch through
+     * `upsertChecklistItem` — the same reasoning `deliverMilestone` argues for itself: buried
+     * inside a general patch, `doneBy` would be set by whoever last edited any field.
+     */
+    case 'toggleChecklistItem': {
+      const existing = state.checklistItems[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That checklist item no longer exists.' }
+      if (existing.done === a.done) return { state }
+
+      const next: ChecklistItem = {
+        ...existing,
+        done: a.done,
+        doneAt: a.done ? a.now : null,
+        doneBy: a.done ? by : null,
+      }
+      return {
+        state: {
+          ...state,
+          checklistItems: { ...state.checklistItems, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.issueId,
+            field: 'checklistItem.done',
+            from: String(existing.done),
+            to: String(a.done),
+            at: a.now,
+            by,
+          }),
+        },
+        message: a.done ? `“${existing.text}” checked off.` : `“${existing.text}” reopened.`,
+      }
+    }
+
+    case 'removeChecklistItem': {
+      const existing = state.checklistItems[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That checklist item no longer exists.' }
+      return {
+        state: {
+          ...state,
+          checklistItems: { ...state.checklistItems, [a.id]: { ...existing, deletedAt: a.now } },
+          audit: log(actor, state, {
+            rowId: existing.issueId, field: 'checklistItem', from: existing.text, to: null, at: a.now, by,
+          }),
+        },
+        message: 'Checklist item removed.',
       }
     }
 

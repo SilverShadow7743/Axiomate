@@ -2362,6 +2362,46 @@
       "stops": "",
       "severity": "P3",
       "impact": "none"
+    },
+    {
+      "id": "CHK1",
+      "title": "A checklist item is recorded against a real issue, and refused against anything else",
+      "expected": "upsertChecklistItem succeeds against a live issue; refused with no issue, and refused against a deleted one.",
+      "verdict": "PASS",
+      "actual": "created=\"chk-2\" (ok) withoutIssue=\"A checklist item needs an issue.\" wrongIssue=\"That issue no longer exists.\"",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "CHK2",
+      "title": "checkChecklistItem refuses empty text",
+      "expected": "A checklist item needs text — the one field it cannot be saved without.",
+      "verdict": "PASS",
+      "actual": "empty=\"A checklist item needs text.\" named=null",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "CHK3",
+      "title": "toggleChecklistItem stamps who checked it off, and clears that on reopen",
+      "expected": "done, doneAt and doneBy are set together; unchecking clears all three rather than leaving a stale stamp.",
+      "verdict": "PASS",
+      "actual": "checked={\"id\":\"chk-2\",\"issueId\":\"OAPIL-1\",\"text\":\"Update FBS\",\"done\":true,\"sequence\":1,\"doneAt\":\"2026-08-15T09:00:00.000Z\",\"doneBy\":\"Validator\",\"recordedBy\":\"Validator\",\"recordedAt\":\"2026-08-15T09:00:00.000Z\",\"deletedAt\":null} reopened={\"id\":\"chk-2\",\"issueId\":\"OAPIL-1\",\"text\":\"Update FBS\",\"done\":false,\"sequence\":1,\"doneAt\":null,\"doneBy\":null,\"recordedBy\":\"Validator\",\"recordedAt\":\"2026-08-15T09:00:00.000Z\",\"deletedAt\":null}",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
+    },
+    {
+      "id": "CHK4",
+      "title": "removeChecklistItem soft-deletes, and checklistFor excludes it",
+      "expected": "A removed item stops appearing in the live list but is not physically gone.",
+      "verdict": "PASS",
+      "actual": "before=1 after=0 deletedAt=\"2026-08-15T09:00:00.000Z\"",
+      "stops": "",
+      "severity": "P3",
+      "impact": "none"
     }
   ]
 }

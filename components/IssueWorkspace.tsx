@@ -2708,6 +2708,15 @@ export default function IssueWorkspace({
           onUpdateInvoiceStatus={(id, status) =>
             dispatch({ t: 'updateInvoiceStatus', id, status, now: new Date().toISOString() })
           }
+          onAddChecklistItem={(issueId, text) =>
+            dispatch({ t: 'upsertChecklistItem', id: null, issueId, patch: { text }, now: new Date().toISOString() })
+          }
+          onToggleChecklistItem={(id, done) =>
+            dispatch({ t: 'toggleChecklistItem', id, done, now: new Date().toISOString() })
+          }
+          onRemoveChecklistItem={(id) =>
+            dispatch({ t: 'removeChecklistItem', id, now: new Date().toISOString() })
+          }
           onUpsertScope={(sowId, id, patch) =>
             dispatch({ t: 'upsertScopeItem', id, sowId, patch, now: new Date().toISOString() })
           }

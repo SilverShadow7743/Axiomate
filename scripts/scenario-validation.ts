@@ -36,6 +36,7 @@ import { runRecurrences,
 } from '../lib/workspace'
 import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
 import { invoicePosition } from '../lib/invoice'
+import { checkChecklistItem, checklistFor } from '../lib/checklist'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
 import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
@@ -11618,6 +11619,113 @@ scenario(
       stops: passed ? '' : 'at checkRaiseInvoice, which should not treat a prior invoice line as a block',
       severity: 'P3',
       impact: passed ? 'none' : 'a legitimate partial re-bill or split invoice is refused',
+    }
+  },
+)
+
+/* ================================================================== *
+ * Checklist items — docs/plans/2026-09-07-checklist-design.md
+ * ================================================================== */
+
+scenario(
+  'CHK1',
+  'A checklist item is recorded against a real issue, and refused against anything else',
+  'upsertChecklistItem succeeds against a live issue; refused with no issue, and refused against a deleted one.',
+  () => {
+    const created = act(BASE, {
+      t: 'upsertChecklistItem', id: null, issueId: 'OAPIL-1', patch: { text: 'Confirm with client' }, now: NOW,
+    } as Action)
+    const withoutIssue = act(BASE, {
+      t: 'upsertChecklistItem', id: null, patch: { text: 'x' }, now: NOW,
+    } as Action)
+    const wrongIssue = act(BASE, {
+      t: 'upsertChecklistItem', id: null, issueId: 'no-such-issue', patch: { text: 'x' }, now: NOW,
+    } as Action)
+    const passed =
+      created.createdId != null &&
+      created.state.checklistItems[created.createdId!]?.text === 'Confirm with client' &&
+      created.state.checklistItems[created.createdId!]?.issueId === 'OAPIL-1' &&
+      created.state.checklistItems[created.createdId!]?.done === false &&
+      !!withoutIssue.error &&
+      !!wrongIssue.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `created=${JSON.stringify(created.createdId)} (${created.error ?? 'ok'}) withoutIssue=${JSON.stringify(withoutIssue.error)} wrongIssue=${JSON.stringify(wrongIssue.error)}`,
+      stops: passed ? '' : 'at the upsertChecklistItem reducer arm',
+      severity: 'P3',
+      impact: passed ? 'none' : 'a checklist item could be created with no real issue, or against any issue id',
+    }
+  },
+)
+
+scenario(
+  'CHK2',
+  'checkChecklistItem refuses empty text',
+  'A checklist item needs text — the one field it cannot be saved without.',
+  () => {
+    const empty = checkChecklistItem('   ')
+    const named = checkChecklistItem('Close ticket')
+    const passed = empty !== null && named === null
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `empty=${JSON.stringify(empty)} named=${JSON.stringify(named)}`,
+      stops: passed ? '' : 'at checkChecklistItem in lib/checklist.ts',
+      severity: 'P3',
+      impact: passed ? 'none' : 'a blank checklist item could be saved',
+    }
+  },
+)
+
+scenario(
+  'CHK3',
+  'toggleChecklistItem stamps who checked it off, and clears that on reopen',
+  'done, doneAt and doneBy are set together; unchecking clears all three rather than leaving a stale stamp.',
+  () => {
+    const created = ok(BASE, {
+      t: 'upsertChecklistItem', id: null, issueId: 'OAPIL-1', patch: { text: 'Update FBS' }, now: NOW,
+    } as Action)
+    const id = Object.keys(created.checklistItems)[0]!
+    const checked = ok(created, { t: 'toggleChecklistItem', id, done: true, now: NOW } as Action)
+    const reopened = ok(checked, { t: 'toggleChecklistItem', id, done: false, now: NOW } as Action)
+    const passed =
+      checked.checklistItems[id]?.done === true &&
+      checked.checklistItems[id]?.doneAt === NOW &&
+      checked.checklistItems[id]?.doneBy === A.name &&
+      reopened.checklistItems[id]?.done === false &&
+      reopened.checklistItems[id]?.doneAt === null &&
+      reopened.checklistItems[id]?.doneBy === null
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `checked=${JSON.stringify(checked.checklistItems[id])} reopened=${JSON.stringify(reopened.checklistItems[id])}`,
+      stops: passed ? '' : 'at the toggleChecklistItem reducer arm',
+      severity: 'P3',
+      impact: passed ? 'none' : 'checking off an item does not record who did it, or reopening it leaves a stale stamp',
+    }
+  },
+)
+
+scenario(
+  'CHK4',
+  'removeChecklistItem soft-deletes, and checklistFor excludes it',
+  'A removed item stops appearing in the live list but is not physically gone.',
+  () => {
+    const created = ok(BASE, {
+      t: 'upsertChecklistItem', id: null, issueId: 'OAPIL-1', patch: { text: 'Close ticket' }, now: NOW,
+    } as Action)
+    const id = Object.keys(created.checklistItems)[0]!
+    const before = checklistFor(created.checklistItems, 'OAPIL-1')
+    const removed = ok(created, { t: 'removeChecklistItem', id, now: NOW } as Action)
+    const after = checklistFor(removed.checklistItems, 'OAPIL-1')
+    const passed =
+      before.some((i) => i.id === id) &&
+      !after.some((i) => i.id === id) &&
+      removed.checklistItems[id]?.deletedAt === NOW
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `before=${before.length} after=${after.length} deletedAt=${JSON.stringify(removed.checklistItems[id]?.deletedAt)}`,
+      stops: passed ? '' : 'at removeChecklistItem or checklistFor',
+      severity: 'P3',
+      impact: passed ? 'none' : 'a removed checklist item is still shown, or the record is not actually marked removed',
     }
   },
 )

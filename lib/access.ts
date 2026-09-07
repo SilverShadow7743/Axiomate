@@ -575,6 +575,11 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeIntegrationLink: 'application.edit',
   raiseInvoice: 'invoice.manage',
   updateInvoiceStatus: 'invoice.manage',
+  // A checklist item is a lightweight annotation on an issue somebody is already allowed to
+  // edit — the same permission updateIssue itself uses, not a separate authority.
+  upsertChecklistItem: 'work.edit',
+  toggleChecklistItem: 'work.edit',
+  removeChecklistItem: 'work.edit',
   recordDocument: 'document.upload',
   /* Asking rides on upload (whoever may put a deliverable on the record may ask about it);
    * answering needs its own key; withdrawing is the asker's act, gated like asking. */

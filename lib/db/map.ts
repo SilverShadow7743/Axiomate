@@ -44,6 +44,7 @@ import type {
   IntegrationLink as IntegrationLinkRow,
   Invoice as InvoiceRow,
   InvoiceLineItem as InvoiceLineItemRow,
+  ChecklistItem as ChecklistItemRow,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
@@ -77,6 +78,7 @@ import type {
   IntegrationStatus,
 } from '../application'
 import type { Invoice, InvoiceLineItem, InvoiceStatus } from '../invoice'
+import type { ChecklistItem } from '../checklist'
 import type {
   AcceptanceState,
   BillingTrigger,
@@ -1556,6 +1558,40 @@ export function invoiceLineItemFromRow(r: InvoiceLineItemRow): InvoiceLineItem {
     milestoneId: r.milestoneId,
     description: r.description,
     amount: Number(r.amount),
+  }
+}
+
+export function checklistItemToRow(
+  tenantId: TenantId,
+  c: ChecklistItem,
+): Prisma.ChecklistItemUncheckedCreateInput {
+  return {
+    tenantId,
+    id: c.id,
+    issueId: c.issueId,
+    text: c.text,
+    done: c.done,
+    sequence: c.sequence,
+    doneAt: c.doneAt ? new Date(c.doneAt) : null,
+    doneBy: c.doneBy,
+    recordedBy: c.recordedBy,
+    recordedAt: new Date(c.recordedAt),
+    deletedAt: c.deletedAt ? new Date(c.deletedAt) : null,
+  }
+}
+
+export function checklistItemFromRow(r: ChecklistItemRow): ChecklistItem {
+  return {
+    id: r.id,
+    issueId: r.issueId,
+    text: r.text,
+    done: r.done,
+    sequence: r.sequence,
+    doneAt: r.doneAt ? r.doneAt.toISOString() : null,
+    doneBy: r.doneBy,
+    recordedBy: r.recordedBy,
+    recordedAt: r.recordedAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 

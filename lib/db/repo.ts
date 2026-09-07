@@ -23,6 +23,7 @@ import {
   integrationLinkFromRow,
   invoiceFromRow,
   invoiceLineItemFromRow,
+  checklistItemFromRow,
   scopeItemFromRow,
   auditToRow,
   dependencyFromRow,
@@ -159,6 +160,7 @@ type Reader = Pick<
   | 'integrationLink'
   | 'invoice'
   | 'invoiceLineItem'
+  | 'checklistItem'
 >
 
 /**
@@ -173,7 +175,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings, snapshots, applications, integrationLinks, invoices, invoiceLineItems] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings, snapshots, applications, integrationLinks, invoices, invoiceLineItems, checklistItems] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -253,6 +255,8 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
       // Appended at the END, per this destructure's own warning above.
       db.invoice.findMany({ where: { tenantId } }),
       db.invoiceLineItem.findMany({ where: { tenantId } }),
+      // Appended at the END, per this destructure's own warning above.
+      db.checklistItem.findMany({ where: { tenantId } }),
     ])
 
   const state: WorkspaceState = {
@@ -299,6 +303,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     integrationLinks: Object.fromEntries(integrationLinks.map((l) => [l.id, integrationLinkFromRow(l)])),
     invoices: Object.fromEntries(invoices.map((i) => [i.id, invoiceFromRow(i)])),
     invoiceLineItems: Object.fromEntries(invoiceLineItems.map((l) => [l.id, invoiceLineItemFromRow(l)])),
+    checklistItems: Object.fromEntries(checklistItems.map((c) => [c.id, checklistItemFromRow(c)])),
     scopeItems: Object.fromEntries(scopeItems.map((i) => [i.id, scopeItemFromRow(i)])),
     estimates: Object.fromEntries(estimates.map((e) => [e.issueId, estimateFromRow(e)])),
     estimateRevisions: Object.fromEntries(revisions.map((v) => [v.id, revisionFromRow(v)])),

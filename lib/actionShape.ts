@@ -968,6 +968,14 @@ const SHAPES = {
     status: req(oneOf(new Set(INVOICE_STATUSES))),
     now,
   },
+  upsertChecklistItem: {
+    id: req(idOrNull),
+    issueId: opt(id),
+    patch: req(patchOf({ text: text, sequence: num })),
+    now,
+  },
+  toggleChecklistItem: { id: req(id), done: req(bool), now },
+  removeChecklistItem: { id: req(id), now },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),

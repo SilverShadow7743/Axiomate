@@ -40,6 +40,7 @@ import {
   integrationLinkToRow,
   invoiceToRow,
   invoiceLineItemToRow,
+  checklistItemToRow,
   scopeItemToRow,
   changeToRow,
   revisionToRow,
@@ -752,6 +753,21 @@ export async function persistSteps(
         if (before.invoiceLineItems[id] === line) continue
         const row = invoiceLineItemToRow(tenantId, line)
         await tx.invoiceLineItem.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'upsertChecklistItem':
+    case 'toggleChecklistItem':
+    case 'removeChecklistItem': {
+      for (const [id, c] of Object.entries(after.checklistItems)) {
+        if (before.checklistItems[id] === c) continue
+        const row = checklistItemToRow(tenantId, c)
+        await tx.checklistItem.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,
