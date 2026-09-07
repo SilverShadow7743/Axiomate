@@ -186,6 +186,69 @@ What that leaves open, in the order it blocks things:
 
 ---
 
+## J. Product vision vs. what's actually hosted — the gap survey
+
+*Added 7 September 2026. Compares `docs/strategy/axiomate-vision.md` (12 pillars, 31 Aug) and
+`docs/strategy/axiomate-product-blueprint.md` (12 suites / ~100 screens, 6 Sep — self-described as
+"not checked against what exists... that reality-check is future work, not done here") against
+what is actually in `prisma/schema.prisma` and `components/` today. That reconciliation is run
+here. The vision doc already did a pillar-level version of this for pillars 4/6/8/10/12 (§8) — this
+extends it to all twelve pillars and, separately, the blueprint's twelve suites, which decompose
+the same ambition at a finer grain and surface gaps the pillar framing doesn't (an entire absent
+suite reads as a rounding error inside one pillar's "partial" rating).
+
+**Method and its limit.** This is a suite/pillar-level survey, not the screen-by-screen check the
+blueprint itself calls for (roughly 100 screens, IDs like DLV-014) — that remains separate, larger,
+unstarted work. What's below is accurate about which *suites* have real structure behind them and
+which are named only in the blueprint; it is not a claim about any individual screen ID.
+
+### What's substantially real (structural, not AI-dependent)
+
+| Pillar / Suite | Evidence | Gap against the stated target |
+|---|---|---|
+| **Delivery** (pillar 4, Suite 05) | The core of the built product: `HierarchyNode`/`Issue`/`IssueActivity`/`IssueDependency`, `TreeGrid`, `GanttChart`, `BoardView`, `CalendarView` — List/Kanban/Gantt/Calendar views all real | No first-class **Deliverable** entity distinct from Issue (DLV-013's Quality Criteria/Review/Approval/Version/Outcome shape isn't modelled — `Evidence`/`DocumentReview` cover adjacent ground, not this). No cross-level Action→Deliverable→Milestone→Engagement dependency visualization (DLV-015) beyond what Gantt already shows at the Issue level |
+| **Governance** (pillar 12, Suite 12) | One of the strongest areas, not one of the weakest as the blueprint's screen count might suggest: `lib/access.ts`'s granular RBAC (34+ permissions), full audit trail (`ScheduleAudit`), row-level security across all 39 tenant-scoped tables (verified 7 Sep, see section F above) | No unified **Audit Center** screen (GOV-007) — audit data exists, browsable per-record via History tabs, not as a firm-wide searchable log. No **Organization Workspace** (Business Units/Practices/Locations, GOV-002) beyond what `HierarchyNode`'s generic tiers already express. No AI/Agent Governance policy screens (GOV-005/006) — the `Agent` entity has `autonomy`/`requireApproval` fields, a real start, not a configurable policy surface |
+| **Workforce Intelligence** (pillar 10, People Suite) | `PersonRate`, `PersonSkill`, `Allocation`, `CapacityPanel.tsx`, effective-dated working patterns | No career-level progression (PPL-003), no Capability Matrix as a demand/supply/gap view (skills are recorded, not matched against demand), no AI staffing recommendation (PPL-006 — named AI-blocked below) |
+| **Work Management** (pillar 4 partial, Command Suite partial) | `MyWeek.tsx`/`MyWorkPanel.tsx` cover CMD-006's Today/Upcoming/Overdue/Blocked/Waiting shape closely | No persona-differentiated command centers (CMD-001 through CMD-005 — Associate/Consultant/Senior Consultant/Principal/Engagement Leader each seeing a different cockpit). Today the same screens render for everyone; career level exists in the role model but doesn't yet drive what's shown |
+| **Risk Intelligence** (pillar 8, partial Intelligence Suite) | `lib/watch.ts`'s six conditions (`overdue`, `atRisk`, `dueSoon`, `stale`, `planImpossible`, `sowOverConsumed`) — real, structural, automated | Not surfaced as a unified "Intelligence Center" (INT-001) with the Ask/Analyze/Predict/Recommend/Simulate/Execute action set — it's a background pass feeding notifications, not an explorable surface |
+| **Business Operations** (pillar 11, Finance Suite partial, Engagement Suite partial) | `Sow`/`ChangeRequest`/`Milestone`/`ScopeItem`, `CommercialPanel.tsx`, `FinanceReportView.tsx`; `isBillable`/`milestonePosition` (`lib/milestone.ts`) — genuinely sophisticated billing-eligibility logic | Invoicing itself designed today, not built (I2c above). No Profitability-by-resource/practice rollup (FIN-003). No Engagement Decision Center (ENG-007) or governance calendar (ENG-005) as distinct concepts — `Meeting` is generic, not engagement-governance-specific |
+| **Automation** (pillar 7, Suite 11) | Real, more than the blueprint's framing suggests is typical for a v1: 4 enabled automation rules (`issue.created`, `issue.overdue`, `sow.overConsumed`, `issue.owner`), an `Agent` registry with autonomy/approval settings, a `Workflow` concept (`ConfigWorkspace.tsx`'s Workflows section) | Workflows section is read-only — no Workflow Studio (AUT-002) to author a Trigger→Condition→Decision→Action chain from the UI. No Agent Studio (AUT-004) to configure a new agent's objective/knowledge/tools. No distinct Execution History (AUT-006) — folded into the general `ScheduleAudit` |
+
+### What's absent — not "partial," genuinely not started
+
+| Suite | What the blueprint describes | What exists today |
+|---|---|---|
+| **Growth Suite** (pipeline, opportunities, proposals, contracts as a sales motion) | GRT-001 through GRT-007 — pipeline, qualification, solution/estimation, proposal, contract, expansion intelligence | Nothing. No `Opportunity`, `Lead`, `Proposal`, or pre-`Engagement` pipeline concept anywhere in `prisma/schema.prisma`. An engagement exists only once it's already real |
+| **Client Suite** (client as a first-class entity with health, relationship, satisfaction) | CLT-001 through CLT-005 | `Client` exists only as a `HierarchyNode` tier — a place in the tree, not an entity with stakeholder sentiment, relationship strength, satisfaction scoring, or a 360° rollup across engagements |
+| **Knowledge Suite** (solutions, architecture patterns, decisions, lessons, accelerators as a searchable library) | KNW-001 through KNW-007 | `Document`/`DocumentReview` are generic file storage. No Solution Library, Architecture Library, Decision Library, or Lessons Learned structure (Situation→Action→Outcome→Lesson) |
+| **Application Suite** (the client's own technology landscape — D365, Salesforce, M365, integrations, health) | Flagged in the source pitch itself as *"a candidate flagship capability"* — APP-001 through APP-007 | Nothing. No `Application` or `Integration` model. Notable because Axiocloud's own core service line (D365 F&O, Commerce, Azure, Fabric implementations) is exactly the domain this suite would track for a client — the gap sits squarely in the firm's own specialism |
+
+### AI-blocked — structurally ready, waiting on the one thing vision.md already named
+
+Pillar 3 (Work Intelligence — detecting commitments/decisions/requirements from unstructured
+text), the generative half of pillar 1 (Work Capture), most of the Intelligence Suite's
+predictive/scenario capability (INT-004/005/006), and AI Command (AXS-003) all need an LLM that
+can *read and act*, not narrate. `/api/assist` today is read-only prose over already-computed
+figures (`lib/assist.ts`), explicitly walled off from writing anything. `axiomate-vision.md` §5
+already names the underlying blocker (zero Anthropic API credits, task #113) — unchanged as of
+7 Sep. Nothing in this survey changes that finding; it's restated here because it explains why
+three of twelve suites (Growth, Knowledge, most of Intelligence) can't fully close even once
+built — their differentiated value is generative, not just structural.
+
+### What this changes about "next," updated from vision.md §8
+
+Vision.md named pillar 9 (Organizational Memory) and the remainder of pillar 11 (Business
+Operations) as the strongest non-AI-blocked candidates on 31 Aug. Business Operations moved
+today — invoicing is designed (I2c). What the suite-level view adds that the pillar view didn't
+surface as sharply: **Client Suite** and **Application Suite** are both zero-built, both
+structural (no AI needed for a client health rollup or an application landscape record), and
+**Application Suite** in particular sits directly on Axiocloud's own delivery specialism —
+arguably a stronger near-term candidate than either pillar 9 or the Growth Suite, which is also
+zero-built but whose value (pipeline, proposals) is further from what this codebase's actual
+users — internal delivery — do day to day.
+
+---
+
 ## Current state, for reference
 
 *Updated 17 August 2026, after the release adding `Skill` + `PersonSkill`.*
