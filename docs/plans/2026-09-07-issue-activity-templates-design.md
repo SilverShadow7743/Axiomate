@@ -1,3 +1,17 @@
+**Status: built, 7 September 2026**, same day as the design. `ActivityTemplate`/`IssueTemplate`
+live in `OperatingModel` exactly as designed — no new Prisma model, no migration.
+`upsertActivityTemplate`/`deleteActivityTemplate`/`upsertIssueTemplate`/`deleteIssueTemplate`
+config ops, administered from two new Configuration tabs. `buildLifecycle` takes an optional
+`templateId`, resolving a named template's phases/weights or falling back to the shipped default
+(`ACT_STANDARD_CORRECTIVE_ACTION`, whose weights match the original hardcoded values exactly, so
+an issue naming no template is unaffected). The create-issue dialog gained a "Start from a
+template" selector, mirroring the existing blueprint-selector precedent: choosing one pre-fills
+type/severity immediately and, on submit, creates the issue and its starting checklist in one
+batch — the actual payoff the design named ("every engagement's skeleton rebuilt from memory"),
+not just administrable templates sitting unused. Four scenarios (TPL1–TPL4) drive the real
+reducer; all PASS, alongside all 244 pre-existing scenarios. `tsc --noEmit`, `npm run build` and
+`npm run audit:tenancy` all clean.
+
 # Issue and activity templates — the largest gap G1 named, made concrete
 
 *7 September 2026. A design, not an increment — G1 in `docs/pending-actions.md` names this the

@@ -2442,6 +2442,46 @@
       "stops": "",
       "severity": "P3",
       "impact": "none"
+    },
+    {
+      "id": "TPL1",
+      "title": "upsertActivityTemplate stores a valid template, and refuses weights that do not sum to 100%",
+      "expected": "Three phases at 40/30/30 succeeds; the same phases at 40/30/20 (90%) is refused.",
+      "verdict": "PASS",
+      "actual": "id=\"ACT_4\" underWeighted=\"The phase weights sum to 90%, not 100%.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TPL2",
+      "title": "deleteActivityTemplate is refused while an issue template still names it",
+      "expected": "An issue template pointing at an activity template blocks that activity template's removal.",
+      "verdict": "PASS",
+      "actual": "refused=\"“Quick fix issue” still names this as its activity template. Change that first.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TPL3",
+      "title": "buildLifecycle follows a named activity template, and falls back to the shipped default",
+      "expected": "A named template with different phases produces those phases; naming none produces the standard five-phase lifecycle.",
+      "verdict": "PASS",
+      "actual": "named=[\"Done\",\"Triage\"] default=[\"Closure\",\"Corrective Action\",\"Investigation\",\"Root Cause Analysis\",\"Verification\"]",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "TPL4",
+      "title": "upsertIssueTemplate refuses a default naming an activity template that does not exist",
+      "expected": "Storing defaults.activityTemplateId against a real id succeeds; a made-up id is refused before it is stored.",
+      "verdict": "PASS",
+      "actual": "created={\"id\":\"ISST_5\",\"name\":\"Real issue template\",\"appliesTo\":{},\"defaults\":{\"activityTemplateId\":\"ACT_4\"},\"checklist\":[\"Confirm with client\"]} invalid=\"That activity template does not exist.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }

@@ -1583,7 +1583,10 @@ export default function IssueWorkspace({
         delete draft.parentId
         const blueprintId = draft.blueprintId
         delete draft.blueprintId
+        const issueTemplateId = draft.issueTemplateId
+        delete draft.issueTemplateId
         const bp = blueprintId ? state.model.blueprints[blueprintId] : undefined
+        const issueTpl = issueTemplateId ? state.model.issueTemplates[issueTemplateId] : undefined
         if (dialog.kind === 'engagement' && bp) {
           /*
            * Create-and-apply as ONE batch. The blueprint is planned against a simulation of
@@ -1619,6 +1622,29 @@ export default function IssueWorkspace({
               )
               if (res.state && sim.createdId) revealIssue(sim.createdId, buildTree(res.state, today))
             }
+          } else {
+            ok = dispatch(createAction)
+          }
+        } else if ((dialog.kind === 'issue' || dialog.kind === 'sub-issue') && issueTpl && issueTpl.checklist.length > 0) {
+          /*
+           * Create-and-checklist as ONE batch, the same reasoning the blueprint branch above
+           * already applies: the checklist's ids are minted against a simulation of the create,
+           * so the batch mints what the plan expects, and a refusal anywhere leaves nothing
+           * half-built rather than an issue with half its starting checklist.
+           */
+          const createAction = { t: 'create', parentId, kind: dialog.kind, draft, now } as Action
+          const sim = applyWithRules(state, createAction, actor)
+          if (!sim.error && sim.createdId) {
+            const batch: Action[] = [
+              createAction,
+              ...issueTpl.checklist.map(
+                (text) =>
+                  ({ t: 'upsertChecklistItem', id: null, issueId: sim.createdId!, patch: { text }, now }) as Action,
+              ),
+            ]
+            const res = dispatchMany(batch)
+            ok = res.ok
+            if (res.ok && res.state && sim.createdId) revealIssue(sim.createdId, buildTree(res.state, today))
           } else {
             ok = dispatch(createAction)
           }

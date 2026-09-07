@@ -186,6 +186,7 @@ function AddForm({
   const disciplines = liveDisciplines(state.model)
   const parties = state.model.parties
   const blueprints = Object.values(state.model.blueprints ?? {})
+  const issueTemplates = Object.values(state.model.issueTemplates ?? {})
 
   return (
     <form
@@ -213,6 +214,32 @@ function AddForm({
               <option key={b.id} value={b.id}>
                 {b.name} · v{b.version}
               </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {/* Same "surface at the moment of need" reasoning as the blueprint selector above —
+          Configuration is not where anyone creating an issue is standing. Choosing a template
+          pre-fills type/severity below immediately; the checklist it carries, if any, is
+          created with the issue on submit. */}
+      {isIssue && issueTemplates.length > 0 && (
+        <Field label="Start from a template">
+          <select
+            value={f.issueTemplateId ?? ''}
+            onChange={(e) => {
+              const id = e.target.value
+              set('issueTemplateId', id)
+              const tpl = issueTemplates.find((t) => t.id === id)
+              if (tpl) {
+                if (tpl.defaults.type) set('type', tpl.defaults.type)
+                if (tpl.defaults.severity) set('severity', tpl.defaults.severity)
+              }
+            }}
+          >
+            <option value="">— none —</option>
+            {issueTemplates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </Field>

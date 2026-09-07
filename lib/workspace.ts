@@ -225,6 +225,8 @@ import { type IntakeForm,
   type Person,
   type ResponsibilityType,
   type RoutingRule,
+  type ActivityTemplate,
+  type IssueTemplate,
 } from './config'
 import { MEASURES, type Goal } from './goals'
 
@@ -1410,7 +1412,7 @@ export type Action =
     }
   | { t: 'cancelMeeting'; id: string; now: string }
   | { t: 'removeEvidence'; id: string; now: string }
-  | { t: 'buildLifecycle'; issueId: string; slaDays: number; now: string }
+  | { t: 'buildLifecycle'; issueId: string; slaDays: number; templateId?: string | null; now: string }
   /**
    * One activity with caller-supplied fields, alongside `buildLifecycle`'s auto-generated
    * 5-phase template — for a real historical phase (an import, a record of what actually
@@ -1571,6 +1573,10 @@ export type ConfigOp =
   | { k: 'deleteIntake'; id: string }
   | { k: 'upsertBlueprint'; id: string | null; patch: Partial<Blueprint> }
   | { k: 'deleteBlueprint'; id: string }
+  | { k: 'upsertActivityTemplate'; id: string | null; patch: Partial<ActivityTemplate> }
+  | { k: 'deleteActivityTemplate'; id: string }
+  | { k: 'upsertIssueTemplate'; id: string | null; patch: Partial<IssueTemplate> }
+  | { k: 'deleteIssueTemplate'; id: string }
   | { k: 'upsertIntakeForm'; id: string | null; patch: Partial<IntakeForm> }
   | { k: 'deleteIntakeForm'; id: string }
   | { k: 'upsertRecurrence'; id: string | null; patch: Partial<Recurrence> }
@@ -3474,15 +3480,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         return { state, error: `${a.issueId} already has a lifecycle plan.` }
       }
 
-      const weights: Record<string, number> = {
-        Investigation: 0.25,
-        'Root Cause Analysis': 0.2,
-        'Corrective Action': 0.35,
-        Verification: 0.2,
-        Closure: 0,
+      /*
+       * Named template, or the shipped default — see docs/plans/2026-09-07-issue-activity-
+       * templates-design.md. The default's own weights match this arm's original hardcoded
+       * values exactly, so an issue naming no template gets the same lifecycle it always did.
+       */
+      const template =
+        (a.templateId ? state.model.activityTemplates[a.templateId] : null) ??
+        state.model.activityTemplates['ACT_STANDARD_CORRECTIVE_ACTION'] ??
+        {
+          phases: [...ACTIVITY_PHASES],
+          weights: { Investigation: 0.25, 'Root Cause Analysis': 0.2, 'Corrective Action': 0.35, Verification: 0.2, Closure: 0 },
+          milestonePhase: 'Closure',
+        }
+      if (a.templateId && !state.model.activityTemplates[a.templateId]) {
+        return { state, error: 'That activity template does not exist.' }
       }
+      const phases = template.phases
+      const weights = template.weights
+      const milestonePhase = template.milestonePhase
       const issueProgress = STATUS_PROGRESS[issue.status]
-      const phaseShare = 100 / (ACTIVITY_PHASES.length - 1)
+      const nonMilestonePhaseCount = phases.filter((p) => p !== milestonePhase).length
+      const phaseShare = 100 / Math.max(1, nonMilestonePhaseCount)
 
       const activities = { ...state.activities }
       const deps = [...state.dependencies]
@@ -3490,10 +3509,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let consumed = 0
       let seq = state.seq
 
-      ACTIVITY_PHASES.forEach((phase, i) => {
+      phases.forEach((phase, i) => {
         seq += 1
-        const isMilestone = phase === 'Closure'
-        const wd = Math.max(1, Math.round(a.slaDays * weights[phase]))
+        const isMilestone = phase === milestonePhase
+        const wd = Math.max(1, Math.round(a.slaDays * (weights[phase] ?? 0)))
         const start = i === 0 ? cursor : addWorkingDays(cursor, 1)
         const end = isMilestone ? start : addWorkingDays(start, wd - 1)
 
@@ -3545,7 +3564,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
             rowId: a.issueId,
             field: 'lifecycle',
             from: null,
-            to: `${ACTIVITY_PHASES.length} activities linked finish-to-start`,
+            to: `${phases.length} activities linked finish-to-start`,
             at: a.now,
             by,
             reason: `Sized against a ${a.slaDays} working-day SLA window from the raised date. The log contains no activity breakdown, so these dates originate here, not from the source.`,
@@ -8992,6 +9011,85 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, blueprints: rest },
         { rowId: op.id, field: 'blueprint', from: bp.name, to: '(removed)', at: now, by },
         `“${bp.name}” removed.`,
+      )
+    }
+
+    case 'upsertActivityTemplate': {
+      const id = op.id ?? `ACT_${m.seq}`
+      const existing = m.activityTemplates[id]
+      const name = (op.patch.name ?? existing?.name ?? '').trim()
+      if (!name) return { state, error: 'An activity template needs a name.' }
+      const phases = op.patch.phases ?? existing?.phases ?? []
+      if (!phases.length) return { state, error: 'An activity template needs at least one phase.' }
+      const weights = op.patch.weights ?? existing?.weights ?? {}
+      const missing = phases.filter((p) => !(p in weights))
+      if (missing.length) return { state, error: `Every phase needs a weight — missing: ${missing.join(', ')}.` }
+      const total = phases.reduce((n, p) => n + (weights[p] ?? 0), 0)
+      if (Math.abs(total - 1) > 0.01) {
+        return { state, error: `The phase weights sum to ${Math.round(total * 100)}%, not 100%.` }
+      }
+      const milestonePhase = op.patch.milestonePhase === undefined ? (existing?.milestonePhase ?? null) : op.patch.milestonePhase
+      if (milestonePhase !== null && !phases.includes(milestonePhase)) {
+        return { state, error: 'The closing phase must be one of the phases listed above.' }
+      }
+      const tpl: ActivityTemplate = { id, name, phases, weights, milestonePhase }
+      return done(
+        { ...m, activityTemplates: { ...m.activityTemplates, [id]: tpl }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'activityTemplate', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `“${name}” updated.` : `“${name}” stored.`,
+      )
+    }
+
+    case 'deleteActivityTemplate': {
+      const tpl = m.activityTemplates[op.id]
+      if (!tpl) return { state, error: 'Activity template not found.' }
+      const referencedBy = Object.values(m.issueTemplates).find(
+        (t) => t.defaults.activityTemplateId === op.id,
+      )
+      if (referencedBy) {
+        return { state, error: `“${referencedBy.name}” still names this as its activity template. Change that first.` }
+      }
+      const rest = { ...m.activityTemplates }
+      delete rest[op.id]
+      return done(
+        { ...m, activityTemplates: rest },
+        { rowId: op.id, field: 'activityTemplate', from: tpl.name, to: '(removed)', at: now, by },
+        `“${tpl.name}” removed.`,
+      )
+    }
+
+    case 'upsertIssueTemplate': {
+      const id = op.id ?? `ISST_${m.seq}`
+      const existing = m.issueTemplates[id]
+      const name = (op.patch.name ?? existing?.name ?? '').trim()
+      if (!name) return { state, error: 'An issue template needs a name.' }
+      const defaults = { ...(existing?.defaults ?? {}), ...(op.patch.defaults ?? {}) }
+      if (defaults.activityTemplateId && !m.activityTemplates[defaults.activityTemplateId]) {
+        return { state, error: 'That activity template does not exist.' }
+      }
+      const tpl: IssueTemplate = {
+        id,
+        name,
+        appliesTo: op.patch.appliesTo ?? existing?.appliesTo ?? {},
+        defaults,
+        checklist: op.patch.checklist ?? existing?.checklist ?? [],
+      }
+      return done(
+        { ...m, issueTemplates: { ...m.issueTemplates, [id]: tpl }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'issueTemplate', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `“${name}” updated.` : `“${name}” stored.`,
+      )
+    }
+
+    case 'deleteIssueTemplate': {
+      const tpl = m.issueTemplates[op.id]
+      if (!tpl) return { state, error: 'Issue template not found.' }
+      const rest = { ...m.issueTemplates }
+      delete rest[op.id]
+      return done(
+        { ...m, issueTemplates: rest },
+        { rowId: op.id, field: 'issueTemplate', from: tpl.name, to: '(removed)', at: now, by },
+        `“${tpl.name}” removed.`,
       )
     }
 

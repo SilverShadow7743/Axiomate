@@ -603,6 +603,41 @@ export interface ProjectTemplate {
   requireApproval: boolean
 }
 
+/**
+ * A named phase sequence — replaces the one hardcoded lifecycle `buildLifecycle` always used.
+ * See docs/plans/2026-09-07-issue-activity-templates-design.md.
+ */
+export interface ActivityTemplate {
+  id: string
+  name: string
+  /** e.g. ['Investigation', 'Root Cause Analysis', 'Corrective Action', 'Verification', 'Closure'] */
+  phases: string[]
+  /** Same shape `buildLifecycle` already computes duration from. Must sum to 1 across the
+   *  non-milestone phases; checked by `checkActivityTemplate`. */
+  weights: Record<string, number>
+  /** Which phase, if any, is the closing milestone (zero duration, closes on 100%). */
+  milestonePhase: string | null
+}
+
+/**
+ * Default field values for a new issue of a given kind — pre-fills the create form, never
+ * spawns anything on its own. See docs/plans/2026-09-07-issue-activity-templates-design.md.
+ */
+export interface IssueTemplate {
+  id: string
+  name: string
+  /** For the create form's own suggestion — not enforced. */
+  appliesTo: { module?: string; discipline?: string }
+  defaults: {
+    type?: string
+    severity?: string
+    activityTemplateId?: string
+  }
+  /** Shown on create as a starting checklist — recorded as real ChecklistItem rows, not a
+   *  separate entity. */
+  checklist: string[]
+}
+
 /* ================================================================== *
  * Routing and intake
  * ================================================================== */
@@ -916,6 +951,8 @@ export interface OperatingModel {
   agents: Record<string, AgentRecord>
   workflows: Record<string, WorkflowRecord>
   templates: Record<string, ProjectTemplate>
+  activityTemplates: Record<string, ActivityTemplate>
+  issueTemplates: Record<string, IssueTemplate>
   routingRules: RoutingRule[]
   intake: IntakeMailbox[]
   /** Public structured-capture forms feeding the same pipeline. */
@@ -1214,6 +1251,27 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
 ]
 
 /**
+ * The one lifecycle `buildLifecycle` always used, before it was configurable — now the shipped
+ * default rather than a special case. Weights match `buildLifecycle`'s own hardcoded values
+ * exactly, so adopting this template changes nothing for an issue that names no other.
+ */
+const SEED_ACTIVITY_TEMPLATES: ActivityTemplate[] = [
+  {
+    id: 'ACT_STANDARD_CORRECTIVE_ACTION',
+    name: 'Standard corrective action',
+    phases: ['Investigation', 'Root Cause Analysis', 'Corrective Action', 'Verification', 'Closure'],
+    weights: {
+      Investigation: 0.25,
+      'Root Cause Analysis': 0.2,
+      'Corrective Action': 0.35,
+      Verification: 0.2,
+      Closure: 0,
+    },
+    milestonePhase: 'Closure',
+  },
+]
+
+/**
  * Build the shipped operating model.
  *
  * `sourceOwners` seeds the person directory from names already in the log. They arrive with
@@ -1275,6 +1333,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   const templates: Record<string, ProjectTemplate> = {}
   for (const t of SEED_TEMPLATES) templates[t.id] = t
 
+  const activityTemplates: Record<string, ActivityTemplate> = {}
+  for (const t of SEED_ACTIVITY_TEMPLATES) activityTemplates[t.id] = t
+
   return {
     organization: { ...DEFAULT_ORGANIZATION },
     documentFiling: { ...DEFAULT_DOCUMENT_FILING },
@@ -1308,6 +1369,8 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     agents,
     workflows,
     templates,
+    activityTemplates,
+    issueTemplates: {},
     routingRules: [],
     intake: [],
     intakeForms: [],

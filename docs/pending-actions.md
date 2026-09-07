@@ -153,7 +153,7 @@ nobody schedules.
 
 | # | Gap | Cost to close |
 |---|---|---|
-| G1 | **No structural template at any level** (one correction, 7 Sep: `buildLifecycle` already generates one fixed 5-phase activity sequence — `ACTIVITY_PHASES`/`weights` in `lib/workspace.ts` — so the true gap is that it isn't *configurable*, not that nothing exists). **Designed, 7 Sep, not built** — see `docs/plans/2026-09-07-issue-activity-templates-design.md` | Largest single gap, clearest payback. Every engagement's skeleton is rebuilt from memory — which is how the register grew 48 duplicate points |
+| ~~G1~~ | ~~No structural template at any level~~ | **Built, 7 Sep** — see `docs/plans/2026-09-07-issue-activity-templates-design.md`. `ActivityTemplate`/`IssueTemplate` administered from Configuration; `buildLifecycle` takes a named template or falls back to the original fixed sequence; the create-issue dialog offers "Start from a template," pre-filling fields and creating the starting checklist in one batch. Four scenarios (TPL1–TPL4) PASS |
 | G2 | **"Derived values are never stored as fact" has no gate.** It broke twice this month and a person caught both | A script flagging model fields matching known derived quantities, with an allow-list requiring a reason. Would have caught both |
 | G3 | Gates run only in CI | A pre-commit hook running `tsc --noEmit` and `audit:tenancy` — seconds, not minutes |
 | G4 | Scenarios and designs are not linked | A `design:` field per scenario makes "which designs are unproven" a query |

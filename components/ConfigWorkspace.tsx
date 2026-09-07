@@ -33,6 +33,8 @@ import {
   type DocumentFiling,
   type LabelKey,
   type ValueKind,
+  type ActivityTemplate,
+  type IssueTemplate,
 } from '@/lib/config'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
@@ -97,6 +99,8 @@ type Tab =
   | 'automation'
   | 'recurring'
   | 'blueprints'
+  | 'activityTemplates'
+  | 'issueTemplates'
   | 'watch'
   | 'sizing'
   | 'scopes'
@@ -127,6 +131,8 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
   { id: 'routing', label: 'Routing & intake', group: 'Automation' },
   { id: 'blueprints', label: 'Blueprints', group: 'Governance' },
+  { id: 'activityTemplates', label: 'Activity templates', group: 'Operating model' },
+  { id: 'issueTemplates', label: 'Issue templates', group: 'Operating model' },
   { id: 'scopes', label: 'Scope overrides', group: 'Governance' },
   { id: 'duplicates', label: 'Duplicates', group: 'Governance' },
 ]
@@ -318,6 +324,8 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'agents' && <Agents state={state} onConfig={onConfig} />}
           {tab === 'recurring' && <Recurring state={state} onConfig={onConfig} pass={pass} />}
           {tab === 'blueprints' && <Blueprints state={state} onConfig={onConfig} onApply={onApplyBlueprint} initialSource={initialBlueprintSource} />}
+          {tab === 'activityTemplates' && <ActivityTemplates state={state} onConfig={onConfig} />}
+          {tab === 'issueTemplates' && <IssueTemplates state={state} onConfig={onConfig} />}
           {tab === 'workTypes' && <WorkTypes state={state} onConfig={onConfig} />}
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
@@ -3133,6 +3141,295 @@ function Blueprints({
           </>
         )}
       </div>
+    </section>
+  )
+}
+
+/**
+ * A named phase sequence, replacing the one hardcoded lifecycle `buildLifecycle` always used.
+ * See docs/plans/2026-09-07-issue-activity-templates-design.md.
+ */
+function ActivityTemplates({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const templates = Object.values(state.model.activityTemplates ?? {})
+
+  const [editing, setEditing] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [phasesText, setPhasesText] = useState('')
+  const [weightsText, setWeightsText] = useState<Record<string, string>>({})
+  const [milestonePhase, setMilestonePhase] = useState('')
+
+  const phases = phasesText.split(',').map((p) => p.trim()).filter(Boolean)
+  const totalWeight = phases.reduce((n, p) => n + (Number(weightsText[p]) || 0), 0)
+  const ready = name.trim() !== '' && phases.length > 0 && Math.abs(totalWeight - 1) <= 0.01
+
+  const startNew = () => {
+    setEditing('new')
+    setName('')
+    setPhasesText('')
+    setWeightsText({})
+    setMilestonePhase('')
+  }
+  const startEdit = (t: ActivityTemplate) => {
+    setEditing(t.id)
+    setName(t.name)
+    setPhasesText(t.phases.join(', '))
+    setWeightsText(Object.fromEntries(t.phases.map((p) => [p, String(t.weights[p] ?? 0)])))
+    setMilestonePhase(t.milestonePhase ?? '')
+  }
+
+  const save = () => {
+    const weights = Object.fromEntries(phases.map((p) => [p, Number(weightsText[p]) || 0]))
+    const ok = onConfig({
+      k: 'upsertActivityTemplate',
+      id: editing === 'new' ? null : editing,
+      patch: { name, phases, weights, milestonePhase: milestonePhase || null },
+    })
+    if (ok) setEditing(null)
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Activity templates</h3>
+      <p className="cfg-note">
+        A named phase sequence for “Build the standard lifecycle” — replaces the one fixed
+        lifecycle every issue used to get. Weights are the share of the SLA window each phase
+        gets and must sum to 100%; the closing phase, if any, is a milestone with no duration.
+      </p>
+
+      {templates.map((t) => (
+        <div className="cfg-card" key={t.id}>
+          <div className="cfg-card-head">
+            <b>{t.name}</b>
+            <span className="grow" />
+            <button className="btn ghost" onClick={() => startEdit(t)}>Edit</button>
+            <button className="btn ghost" onClick={() => onConfig({ k: 'deleteActivityTemplate', id: t.id })}>
+              Remove
+            </button>
+          </div>
+          <p className="cfg-inherit sentence">
+            {t.phases
+              .map((p) => `${p} (${p === t.milestonePhase ? 'milestone' : `${Math.round((t.weights[p] ?? 0) * 100)}%`})`)
+              .join(' → ')}
+          </p>
+        </div>
+      ))}
+
+      {editing ? (
+        <div className="time-form">
+          <div className="time-row">
+            <label className="fld time-fld-person">
+              <span className="fld-label">Name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Standard corrective action" />
+            </label>
+          </div>
+          <div className="time-row">
+            <label className="fld">
+              <span className="fld-label">Phases (comma-separated, in order)</span>
+              <input
+                value={phasesText}
+                onChange={(e) => setPhasesText(e.target.value)}
+                placeholder="Investigation, Root Cause Analysis, Corrective Action, Verification, Closure"
+                style={{ minWidth: 480 }}
+              />
+            </label>
+          </div>
+          {phases.length > 0 && (
+            <div className="time-row" style={{ flexWrap: 'wrap' }}>
+              {phases.map((p) => (
+                <label className="fld" key={p}>
+                  <span className="fld-label">{p} weight</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step="0.01"
+                    value={weightsText[p] ?? ''}
+                    onChange={(e) => setWeightsText({ ...weightsText, [p]: e.target.value })}
+                  />
+                </label>
+              ))}
+              <label className="fld">
+                <span className="fld-label">Closing (milestone) phase</span>
+                <select value={milestonePhase} onChange={(e) => setMilestonePhase(e.target.value)}>
+                  <option value="">None</option>
+                  {phases.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+          {phases.length > 0 && (
+            <p className={`cfg-note${Math.abs(totalWeight - 1) > 0.01 ? ' warn' : ''}`}>
+              Weights sum to {Math.round(totalWeight * 100)}%.
+            </p>
+          )}
+          <button className="btn" disabled={!ready} onClick={save}>Save</button>{' '}
+          <button className="btn ghost" onClick={() => setEditing(null)}>Cancel</button>
+        </div>
+      ) : (
+        <button className="btn" onClick={startNew}>Add an activity template</button>
+      )}
+    </section>
+  )
+}
+
+/**
+ * Default field values for a new issue of a given kind — pre-fills the create form, never
+ * spawns anything on its own. See docs/plans/2026-09-07-issue-activity-templates-design.md.
+ */
+function IssueTemplates({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const templates = Object.values(state.model.issueTemplates ?? {})
+  const activityTemplates = Object.values(state.model.activityTemplates ?? {})
+
+  const [editing, setEditing] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [module, setModule] = useState('')
+  const [discipline, setDiscipline] = useState('')
+  const [type, setType] = useState('')
+  const [severity, setSeverity] = useState('')
+  const [activityTemplateId, setActivityTemplateId] = useState('')
+  const [checklistText, setChecklistText] = useState('')
+
+  const ready = name.trim() !== ''
+
+  const startNew = () => {
+    setEditing('new')
+    setName(''); setModule(''); setDiscipline(''); setType(''); setSeverity('')
+    setActivityTemplateId(''); setChecklistText('')
+  }
+  const startEdit = (t: IssueTemplate) => {
+    setEditing(t.id)
+    setName(t.name)
+    setModule(t.appliesTo.module ?? '')
+    setDiscipline(t.appliesTo.discipline ?? '')
+    setType(t.defaults.type ?? '')
+    setSeverity(t.defaults.severity ?? '')
+    setActivityTemplateId(t.defaults.activityTemplateId ?? '')
+    setChecklistText(t.checklist.join('\n'))
+  }
+
+  const save = () => {
+    const checklist = checklistText.split('\n').map((s) => s.trim()).filter(Boolean)
+    const ok = onConfig({
+      k: 'upsertIssueTemplate',
+      id: editing === 'new' ? null : editing,
+      patch: {
+        name,
+        appliesTo: { module: module || undefined, discipline: discipline || undefined },
+        defaults: {
+          type: type || undefined,
+          severity: severity || undefined,
+          activityTemplateId: activityTemplateId || undefined,
+        },
+        checklist,
+      },
+    })
+    if (ok) setEditing(null)
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Issue templates</h3>
+      <p className="cfg-note">
+        Default field values for a new issue of a given kind — pre-fills the create form, never
+        creates anything on its own. The checklist shown on create is recorded as real checklist
+        items, not a separate thing to keep in sync.
+      </p>
+
+      {templates.map((t) => (
+        <div className="cfg-card" key={t.id}>
+          <div className="cfg-card-head">
+            <b>{t.name}</b>
+            <span className="grow" />
+            <button className="btn ghost" onClick={() => startEdit(t)}>Edit</button>
+            <button className="btn ghost" onClick={() => onConfig({ k: 'deleteIssueTemplate', id: t.id })}>
+              Remove
+            </button>
+          </div>
+          <p className="cfg-inherit sentence">
+            {[
+              t.appliesTo.module && `module: ${t.appliesTo.module}`,
+              t.appliesTo.discipline && `discipline: ${t.appliesTo.discipline}`,
+              t.defaults.type && `type: ${t.defaults.type}`,
+              t.defaults.severity && `severity: ${t.defaults.severity}`,
+              t.defaults.activityTemplateId &&
+                `lifecycle: ${state.model.activityTemplates[t.defaults.activityTemplateId]?.name ?? t.defaults.activityTemplateId}`,
+              t.checklist.length > 0 && `${t.checklist.length} checklist item${t.checklist.length === 1 ? '' : 's'}`,
+            ].filter(Boolean).join(' · ') || 'No defaults set.'}
+          </p>
+        </div>
+      ))}
+
+      {editing ? (
+        <div className="time-form">
+          <div className="time-row">
+            <label className="fld time-fld-person">
+              <span className="fld-label">Name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Configuration defect" />
+            </label>
+            <label className="fld">
+              <span className="fld-label">Applies to module</span>
+              <input value={module} onChange={(e) => setModule(e.target.value)} placeholder="Optional — a suggestion only" />
+            </label>
+            <label className="fld">
+              <span className="fld-label">Applies to discipline</span>
+              <input value={discipline} onChange={(e) => setDiscipline(e.target.value)} placeholder="Optional" />
+            </label>
+          </div>
+          <div className="time-row">
+            <label className="fld">
+              <span className="fld-label">Default type</span>
+              <input value={type} onChange={(e) => setType(e.target.value)} placeholder="Optional" />
+            </label>
+            <label className="fld">
+              <span className="fld-label">Default severity</span>
+              <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
+                <option value="">Not set</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </label>
+            <label className="fld">
+              <span className="fld-label">Default lifecycle</span>
+              <select value={activityTemplateId} onChange={(e) => setActivityTemplateId(e.target.value)}>
+                <option value="">Not set</option>
+                {activityTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="time-row">
+            <label className="fld" style={{ flex: 1 }}>
+              <span className="fld-label">Starting checklist — one item per line</span>
+              <textarea
+                value={checklistText}
+                onChange={(e) => setChecklistText(e.target.value)}
+                rows={4}
+                style={{ minWidth: 480 }}
+              />
+            </label>
+          </div>
+          <button className="btn" disabled={!ready} onClick={save}>Save</button>{' '}
+          <button className="btn ghost" onClick={() => setEditing(null)}>Cancel</button>
+        </div>
+      ) : (
+        <button className="btn" onClick={startNew}>Add an issue template</button>
+      )}
     </section>
   )
 }

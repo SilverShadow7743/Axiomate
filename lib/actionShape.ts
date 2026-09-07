@@ -163,6 +163,10 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteIntake',
   'upsertBlueprint',
   'deleteBlueprint',
+  'upsertActivityTemplate',
+  'deleteActivityTemplate',
+  'upsertIssueTemplate',
+  'deleteIssueTemplate',
   'upsertIntakeForm',
   'deleteIntakeForm',
   'upsertRecurrence',
@@ -704,7 +708,7 @@ const SHAPES = {
   },
   cancelMeeting: { id: req(id), now },
   /* ---- LIFECYCLE ---- */
-  buildLifecycle: { issueId: req(id), slaDays: req(num), now },
+  buildLifecycle: { issueId: req(id), slaDays: req(num), templateId: opt(idOrNull), now },
   addActivity: {
     issueId: req(id),
     phase: req(text),

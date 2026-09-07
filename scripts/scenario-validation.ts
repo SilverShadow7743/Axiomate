@@ -11837,6 +11837,179 @@ scenario(
 )
 
 /* ================================================================== *
+ * Issue and activity templates — docs/plans/2026-09-07-issue-activity-templates-design.md
+ * ================================================================== */
+
+scenario(
+  'TPL1',
+  'upsertActivityTemplate stores a valid template, and refuses weights that do not sum to 100%',
+  'Three phases at 40/30/30 succeeds; the same phases at 40/30/20 (90%) is refused.',
+  () => {
+    const created = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertActivityTemplate', id: null,
+        patch: {
+          name: 'Config change', phases: ['Design', 'Build', 'Verify'],
+          weights: { Design: 0.4, Build: 0.3, Verify: 0.3 }, milestonePhase: null,
+        },
+      },
+      now: NOW,
+    } as Action)
+    const id = created.state.model.activityTemplates
+      ? Object.keys(created.state.model.activityTemplates).find(
+          (k) => created.state.model.activityTemplates[k]?.name === 'Config change',
+        )
+      : undefined
+    const underWeighted = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertActivityTemplate', id: null,
+        patch: {
+          name: 'Broken template', phases: ['Design', 'Build', 'Verify'],
+          weights: { Design: 0.4, Build: 0.3, Verify: 0.2 }, milestonePhase: null,
+        },
+      },
+      now: NOW,
+    } as Action)
+    const passed = id != null && created.state.model.activityTemplates[id]?.phases.length === 3 && !!underWeighted.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `id=${JSON.stringify(id)} underWeighted=${JSON.stringify(underWeighted.error)}`,
+      stops: passed ? '' : 'at the upsertActivityTemplate config op',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an activity template could be stored with phase weights that do not sum to the SLA window',
+    }
+  },
+)
+
+scenario(
+  'TPL2',
+  'deleteActivityTemplate is refused while an issue template still names it',
+  'An issue template pointing at an activity template blocks that activity template\'s removal.',
+  () => {
+    const withActivity = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertActivityTemplate', id: null,
+        patch: { name: 'Quick fix', phases: ['Fix'], weights: { Fix: 1 }, milestonePhase: null },
+      },
+      now: NOW,
+    } as Action)
+    const activityId = Object.values(withActivity.model.activityTemplates).find((t) => t.name === 'Quick fix')!.id
+    const withIssueTemplate = ok(withActivity, {
+      t: 'config',
+      op: {
+        k: 'upsertIssueTemplate', id: null,
+        patch: { name: 'Quick fix issue', appliesTo: {}, defaults: { activityTemplateId: activityId }, checklist: [] },
+      },
+      now: NOW,
+    } as Action)
+    const refused = act(withIssueTemplate, {
+      t: 'config', op: { k: 'deleteActivityTemplate', id: activityId }, now: NOW,
+    } as Action)
+    const passed = !!refused.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `refused=${JSON.stringify(refused.error)}`,
+      stops: passed ? '' : 'at the deleteActivityTemplate config op',
+      severity: 'P2',
+      impact: passed ? 'none' : 'removing an activity template could silently break an issue template that names it',
+    }
+  },
+)
+
+scenario(
+  'TPL3',
+  'buildLifecycle follows a named activity template, and falls back to the shipped default',
+  'A named template with different phases produces those phases; naming none produces the standard five-phase lifecycle.',
+  () => {
+    const withTemplate = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertActivityTemplate', id: null,
+        patch: {
+          name: 'Two-phase', phases: ['Triage', 'Done'],
+          weights: { Triage: 1, Done: 0 }, milestonePhase: 'Done',
+        },
+      },
+      now: NOW,
+    } as Action)
+    const templateId = Object.values(withTemplate.model.activityTemplates).find((t) => t.name === 'Two-phase')!.id
+    const named = ok(withTemplate, {
+      t: 'buildLifecycle', issueId: 'OAPIL-1', slaDays: 10, templateId, now: NOW,
+    } as Action)
+    const namedPhases = Object.values(named.activities)
+      .filter((a) => a.issueId === 'OAPIL-1')
+      .map((a) => a.phase)
+      .sort()
+
+    const defaulted = ok(BASE, {
+      t: 'buildLifecycle', issueId: 'OAPIL-2', slaDays: 10, now: NOW,
+    } as Action)
+    const defaultPhases = Object.values(defaulted.activities)
+      .filter((a) => a.issueId === 'OAPIL-2')
+      .map((a) => a.phase)
+      .sort()
+
+    const passed =
+      namedPhases.length === 2 && namedPhases.includes('Triage') && namedPhases.includes('Done') &&
+      defaultPhases.length === 5 && defaultPhases.includes('Investigation') && defaultPhases.includes('Closure')
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `named=${JSON.stringify(namedPhases)} default=${JSON.stringify(defaultPhases)}`,
+      stops: passed ? '' : 'at the buildLifecycle reducer arm\'s template resolution',
+      severity: 'P2',
+      impact: passed ? 'none' : 'a named activity template is ignored, or the shipped default stops matching what buildLifecycle always produced',
+    }
+  },
+)
+
+scenario(
+  'TPL4',
+  'upsertIssueTemplate refuses a default naming an activity template that does not exist',
+  'Storing defaults.activityTemplateId against a real id succeeds; a made-up id is refused before it is stored.',
+  () => {
+    const withActivity = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'upsertActivityTemplate', id: null,
+        patch: { name: 'Real one', phases: ['Fix'], weights: { Fix: 1 }, milestonePhase: null },
+      },
+      now: NOW,
+    } as Action)
+    const activityId = Object.values(withActivity.model.activityTemplates).find((t) => t.name === 'Real one')!.id
+    const valid = act(withActivity, {
+      t: 'config',
+      op: {
+        k: 'upsertIssueTemplate', id: null,
+        patch: { name: 'Real issue template', appliesTo: {}, defaults: { activityTemplateId: activityId }, checklist: ['Confirm with client'] },
+      },
+      now: NOW,
+    } as Action)
+    const invalid = act(withActivity, {
+      t: 'config',
+      op: {
+        k: 'upsertIssueTemplate', id: null,
+        patch: { name: 'Broken issue template', appliesTo: {}, defaults: { activityTemplateId: 'ACT_NO_SUCH_THING' }, checklist: [] },
+      },
+      now: NOW,
+    } as Action)
+    const created = valid.error
+      ? undefined
+      : Object.values(valid.state.model.issueTemplates).find((t) => t.name === 'Real issue template')
+    const passed = created?.checklist.length === 1 && !!invalid.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `created=${JSON.stringify(created)} invalid=${JSON.stringify(invalid.error)}`,
+      stops: passed ? '' : 'at the upsertIssueTemplate config op',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an issue template could be saved pointing at an activity template that does not exist',
+    }
+  },
+)
+
+/* ================================================================== *
  * Report
  * ================================================================== */
 
