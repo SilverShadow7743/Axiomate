@@ -40,11 +40,14 @@ contradict each other in one:
 artifact would capture — both now checked live against Entra/Azure via `az` (this session had
 tenant access after all):
 
-- **A7 — was stale.** Not "deferred, never sent": the invitation actually went out 31 August
-  (Graph API confirms a real `Guest` user, `externalUserState: PendingAcceptance`, unchanged
-  since). Resent 2026-09-06 at the founder's request, same guest object, no duplicate created.
-  What's left is entirely human: open the invite email in `nishant.ax@gmail.com` and accept it.
-  Nothing further to check or grant from this side.
+- **A7 — a real delivery problem, found 2026-09-07.** The Graph-side story (invited 31 Aug,
+  resent 6 Sep, both confirmed) was only half the check. With the Gmail connector authenticated,
+  a direct search of `nishant.ax@gmail.com` — inbox, spam, trash, all folders, no date bound —
+  found **zero** invitation emails from either send. Not a spam-filter problem (spam is empty
+  too); this points at Entra's outbound invitation mail not reaching Google's servers at all.
+  This is now an email-deliverability investigation on the tenant side, not a "go click accept"
+  task — see `pending-actions.md`'s A7 row for candidates to check (mail-flow/connector config,
+  sender throttling, SPF/DKIM/DMARC on the invitation sender).
 - **I2d — resolved, checked live 2026-09-06.** Checked directly against production via `az`:
   the `axiomate-intake` Logic App is `Enabled`, its trigger is `When_a_new_email_arrives_in_the_
   shared_mailbox` (confirming the required repoint away from an individual's mailbox happened),
@@ -73,8 +76,10 @@ Not person-weeks. Two real constraints:
 ### Now — decisions, not builds
 Things that block other things and need a person, not an agent:
 
-- ~~A7, the guest invite~~ **Resent 2026-09-06.** Now waiting on a two-minute human action
-  (accept the email in `nishant.ax@gmail.com`) rather than anything Entra-side.
+- **A7's invitation email isn't being delivered at all** (found 2026-09-07, checked via the
+  Gmail connector directly) — this needs someone with Entra/Exchange mail-flow visibility to
+  find why, not another resend. A third attempt without changing anything would likely just
+  produce a third non-delivery.
 - Decide whether `pending-actions.md` should be retired in favour of the artifact trail, or kept
   as the record of operational/human-side facts artifacts don't cover (recommendation: the
   latter, scoped down to exactly that — Entra/mailbox/deployment facts, not code status).
@@ -138,11 +143,13 @@ real, what's blocked, and what's still just an idea — and where the actual bot
 
 ## Recommended immediate next step
 
-Client-mail intake is healthy, A7's invitation is resent, and the pillar/suite reconciliation is
-done (all above). What's left with real, immediate value:
+Client-mail intake is healthy and the pillar/suite reconciliation is done (both above). What's
+left with real, immediate value:
 
-1. **Accept the resent invitation** — genuinely the one item left that only the founder, in
-   the `nishant.ax@gmail.com` inbox, can do.
+1. **Diagnose why Entra's invitation mail to `nishant.ax@gmail.com` isn't being delivered** —
+   confirmed absent from every folder including spam, across two separate sends. This needs
+   Exchange/Entra mail-flow visibility this session doesn't have (bounce/NDR logs live on the
+   sender side, not somewhere Graph's `/invitations` API surfaces them).
 2. **The Growth Suite build-vs-buy question** (Someday, above) — a business decision, not
    something for Intent to resolve on its own, and it currently blocks the one blueprint suite
    with the most screens (GRT-001 through GRT-007).
