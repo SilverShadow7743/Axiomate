@@ -1,7 +1,7 @@
 {
   "name": "axiomate-tms",
   "version": "1.0.0",
-  "description": "Axiomate TMS \u2014 Issue Tree & Resolution Schedule",
+  "description": "Axiomate TMS — Issue Tree & Resolution Schedule",
   "private": true,
   "type": "module",
   "scripts": {
@@ -25,7 +25,8 @@
     "audit:rls": "npx tsx --conditions=react-server scripts/rls-proof.ts",
     "audit:integrity": "npx tsx --conditions=react-server scripts/integrity-audit.ts",
     "validate:scenarios": "npx tsx scripts/scenario-validation.ts",
-    "validate:report": "node scripts/build-validation-report.mjs"
+    "validate:report": "node scripts/build-validation-report.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
@@ -58,6 +59,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "husky": "^9.1.7",
     "postcss": "^8.5.16",
     "prisma": "^7.9.1",
     "tailwindcss": "^4.3.2",

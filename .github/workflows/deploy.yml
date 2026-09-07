@@ -22,11 +22,12 @@ permissions:
 
 env:
   # Derived, not copied: the repository states no version. There is no `.nvmrc` and no `engines`
-  # field, so this is the intersection of what the repository's own dependencies demand — Prisma
-  # 7.9 wants ^20.19 || ^22.12 || >=24, Next 16 wants >=20.9 — with what App Service Linux
-  # offers, where NODE|24-lts is the current recommended stack. 24 is the only major that
-  # satisfies all three. It must match the App Service runtime; see docs/deployment.md.
-  NODE_VERSION: '24'
+  # field. Must match the App Service runtime, which is NODE|22-lts (not 24 — this pin and
+  # docs/deployment.md §1 disagreed until corrected 7 Sep; brought down to match what's actually
+  # deployed rather than moving live infrastructure). 22 satisfies Prisma 7.9's
+  # ^20.19 || ^22.12 || >=24 and Next 16's >=20.9. If App Service is later moved to 24, move this
+  # with it.
+  NODE_VERSION: '22'
   AZURE_WEBAPP_NAME: axiomate-tms
   AZURE_RESOURCE_GROUP: axiomate-tms-rg
   # Azure Database for PostgreSQL flexible server holding the production database. The real
@@ -214,33 +215,24 @@ jobs:
         run: npm run build
 
       - name: Assemble the deployment package
-        # Why the tree is rebuilt without dev dependencies rather than shipped whole.
+        # `output: 'standalone'` (next.config.ts) does the pruning this step used to do by hand:
+        # `.next/standalone` is next's own trace of exactly what server.js needs, dev
+        # dependencies and the Prisma CLI excluded, already correct because F2 (7 Sep) moved the
+        # generator to `engineType = "client"` — a pure JS/TS Prisma Client with no downloaded
+        # query-engine binary for the trace to miss, which was the usual way this class of
+        # standalone-plus-Prisma packaging breaks.
         #
-        # `node_modules` is 709 MB with dev dependencies and roughly a third of that without
-        # them, and TypeScript and the Prisma CLI have no business on a production host. The
-        # obstacle is that the generated Prisma client lives in `node_modules/.prisma` and is
-        # produced by the `prisma` CLI, which is itself a dev dependency: pruning removes the
-        # generator, so it cannot be regenerated afterwards. The client is therefore set aside
-        # and put back, which needs no network and pins nothing new.
-        #
-        # Rejected: shipping the whole tree, which doubles the upload and puts a compiler on the
-        # host; and `npx prisma generate` after the prune, which would fetch an unpinned Prisma
-        # from the network and could generate a client for a different version than the one the
-        # gates ran against. The better answer is `output: 'standalone'` in next.config.ts, which
-        # would make this step three lines long. Changing the application's build output is not a
-        # change the deployment pipeline should make on its own, so it is recorded as a
-        # recommendation in docs/deployment.md instead of done here.
+        # Three things standalone tracing deliberately excludes and this step restores by hand,
+        # because Next assumes a CDN serves the first two: `public/`, `.next/static` (the
+        # client-side JS/CSS bundle), and `data/` — runtime input, not documentation: lib/data.ts
+        # reads issues.seed.json and axiomate.internal.json from process.cwd() on every boot.
         run: |
-          cp -r node_modules/.prisma "$RUNNER_TEMP/prisma-client"
-          rm -rf node_modules
-          npm ci --omit=dev --no-audit --no-fund
-          cp -r "$RUNNER_TEMP/prisma-client" node_modules/.prisma
-          # `data/` is runtime input, not documentation: lib/data.ts reads issues.seed.json and
-          # axiomate.internal.json from process.cwd() on every boot, and the app throws on the
-          # first request without them. `.next/cache` is build state and is most of the bulk.
-          zip -qry "$RUNNER_TEMP/app.zip" \
-            .next node_modules data package.json package-lock.json next.config.ts \
-            -x '.next/cache/*'
+          cp -r public .next/standalone/public
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/static
+          cp -r data .next/standalone/data
+          cd .next/standalone
+          zip -qry "$RUNNER_TEMP/app.zip" .
 
       - uses: actions/upload-artifact@v4
         with:

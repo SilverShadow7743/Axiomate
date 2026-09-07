@@ -152,7 +152,6 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteResponsibility',
   'setParties',
   'setAgent',
-  'setWorkflowEnabled',
   'setScopeAgent',
   'setScopeRequired',
   'adoptTemplate',

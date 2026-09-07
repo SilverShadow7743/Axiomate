@@ -1473,7 +1473,6 @@ export type ConfigOp =
   | { k: 'deleteResponsibility'; id: string }
   | { k: 'setParties'; parties: string[] }
   | { k: 'setAgent'; id: string; patch: { enabled?: boolean; autonomy?: Autonomy; requireApproval?: boolean; modelId?: string } }
-  | { k: 'setWorkflowEnabled'; id: string; enabled: boolean }
   /** `null` clears the override so the parent scope decides again. */
   | { k: 'setScopeAgent'; scopeId: string; agentId: string; value: boolean | null }
   | { k: 'setScopeRequired'; scopeId: string; responsibilityId: string; value: boolean | null }
@@ -8332,29 +8331,6 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, agents: { ...m.agents, [op.id]: next } },
         { rowId: op.id, field: 'agent', from, to, at: now, by },
         `${agent.name}: ${to}.`,
-      )
-    }
-
-    case 'setWorkflowEnabled': {
-      const wf = m.workflows[op.id]
-      if (!wf) return { state, error: 'Workflow not found.' }
-      if (wf.runtime === 'declared' && op.enabled) {
-        return {
-          state,
-          error: `“${wf.name}” has no runtime in this build, so enabling it would do nothing.`,
-        }
-      }
-      return done(
-        { ...m, workflows: { ...m.workflows, [op.id]: { ...wf, enabled: op.enabled } } },
-        {
-          rowId: op.id,
-          field: 'workflow',
-          from: wf.enabled ? 'on' : 'off',
-          to: op.enabled ? 'on' : 'off',
-          at: now,
-          by,
-        },
-        `${wf.name} ${op.enabled ? 'enabled' : 'disabled'}.`,
       )
     }
 

@@ -239,6 +239,16 @@ interface Finding {
   stops: string
   severity: Severity
   impact: string
+  /**
+   * The design doc this scenario proves, e.g. `'2026-08-24-row-level-security-design.md'` —
+   * see G4 in docs/pending-actions.md: "makes 'which designs are unproven' a query." Field
+   * added 7 Sep; not yet populated anywhere — most scenarios don't name their design doc in
+   * the text a script could safely infer from, so a mechanical backfill risked wrong
+   * attributions. Tagging scenarios is a fast-follow, done by whoever wrote each design doc
+   * confirming which scenarios prove it, not guessed here. A scenario with no `design` is not
+   * proven to lack one, only untagged so far.
+   */
+  design?: string
 }
 
 const findings: Finding[] = []
@@ -247,10 +257,11 @@ function scenario(
   id: string,
   title: string,
   expected: string,
-  run: () => Omit<Finding, 'id' | 'title' | 'expected' | 'alias'>,
+  run: () => Omit<Finding, 'id' | 'title' | 'expected' | 'alias' | 'design'>,
   alias?: string,
+  design?: string,
 ) {
-  let r: Omit<Finding, 'id' | 'title' | 'expected' | 'alias'>
+  let r: Omit<Finding, 'id' | 'title' | 'expected' | 'alias' | 'design'>
   try {
     r = run()
   } catch (err) {
@@ -263,7 +274,7 @@ function scenario(
       impact: 'unknown — the failure is unhandled',
     }
   }
-  findings.push({ id, alias, title, expected, ...r })
+  findings.push({ id, alias, title, expected, design, ...r })
 }
 
 const ROOT = path.resolve(import.meta.dirname, '..')

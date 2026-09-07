@@ -13,18 +13,18 @@ ordering, which is the part that cannot be repaired afterwards.
 
 | Thing | Where |
 | --- | --- |
-| Application | Azure App Service, Linux, runtime stack `NODE\|24-lts` |
-| Deployment target | The `staging` slot, swapped into production |
+| Application | Azure App Service, Linux, runtime stack `NODE\|22-lts` |
+| Deployment target | The App Service directly — no staging slot exists (B1 Basic doesn't offer one; see §3) |
 | Database | Azure Database for PostgreSQL flexible server |
 | Identity for the pipeline | Entra workload identity federation, no stored secret |
 | Identity for people | Entra ID, configured through `AXIOMATE_ENTRA_*` app settings |
 
-The Node major is 24 in both places and the two must agree. The repository states no version —
-there is no `.nvmrc` and `package.json` has no `engines` field — so 24 is derived: Prisma 7.9
-requires `^20.19 || ^22.12 || >=24`, Next 16 requires `>=20.9`, and App Service Linux offers
-`NODE|24-lts`. If the App Service stack is moved, `NODE_VERSION` in the workflow moves with it,
-and the fact that the repository does not pin this itself is listed in section 9 as something
-worth fixing.
+**Corrected 7 Sep** — this section and §9 item 8 used to disagree about the Node major (24 here,
+22 there); 22 is what's actually deployed, so the workflow's `NODE_VERSION` pin was brought down
+to match rather than the App Service runtime moved up. The repository states no version itself —
+there is no `.nvmrc` and `package.json` has no `engines` field — but 22 satisfies both Prisma 7.9
+(`^20.19 || ^22.12 || >=24`) and Next 16 (`>=20.9`). If the App Service stack is later moved to
+24, `NODE_VERSION` in the workflow should move with it.
 
 ---
 
@@ -483,29 +483,28 @@ or this document.
    Moving it into the `package.json` script — `npx tsx --conditions=react-server
    scripts/persistence-proof.ts` — makes the proof runnable by a developer against their own
    database, which is where it is most useful and where the pipeline cannot help.
-4. **`tsx` is not a dependency.** Five scripts in `package.json` run `npx tsx`, and it appears in
-   neither `dependencies` nor `devDependencies`. Every CI run therefore fetches an unpinned
-   version from the network to execute code that gates deployments. That is a reproducibility gap
-   and a supply-chain one, and it is a one-line fix in `package.json`.
+4. ~~**`tsx` is not a dependency.**~~ **Done.** `package.json` carries `"tsx": "^4.23.12"`,
+   locked to `4.23.12` in `package-lock.json`. Corrected 7 Sep — this item had gone stale.
 5. **Node is not pinned in the repository.** The version is derived in section 1 rather than
    read. An `engines` field or an `.nvmrc` would make CI, App Service and a developer's machine
    agree by construction. Note that `@types/node` is on major 26 while everything else points at
    24, which is worth reconciling at the same time.
-6. **`output: 'standalone'` is now set** in `next.config.ts`, and the workflow's packaging step
-   has not caught up: it still prunes `node_modules` and copies the Prisma client back by hand,
-   shipping `.next node_modules data …` when `.next/standalone` already contains what is needed.
-   The manual path uses standalone and produces 37 MB. The workflow should too.
-8. **The workflow pins `NODE_VERSION: '24'` with a comment saying it must match the App Service
-   runtime. It does not** — the app runs `NODE|22-lts`. It is healthy there, because Prisma 7.9
-   wants `^20.19 || ^22.12 || >=24` and Next 16 wants `>=20.9`, both of which 22-lts satisfies.
-   So this is a correction to make deliberately, in one direction or the other, rather than an
-   incident: either move App Service to 24, or change the workflow to 22 and rewrite the comment.
-9. **Prisma 7 ships a base64 WASM query compiler for every engine it supports** — sqlserver,
-   cockroachdb, mysql, sqlite and postgresql — which is 75 MB of the build output for an
-   application that only ever speaks to PostgreSQL. Dropping the four unused ones would cut the
-   package by roughly 60 MB. Not done, because nothing here has established that Prisma does not
-   enumerate that directory at load time, and a release that boots is worth more than a smaller
-   one that might not.
+6. ~~**`output: 'standalone'` is now set**... the workflow's packaging step has not caught up.~~
+   **Done.** The packaging step now zips `.next/standalone` directly (plus `public`, `.next/static`
+   and `data`, which standalone tracing deliberately excludes — see the workflow's own comment).
+   Verified 7 Sep: `.next/standalone` is 41 MB total, `server.js` boots, `/api/health` returns 200
+   and `/` returns the expected 307 to `/signin`.
+8. ~~**The workflow pins `NODE_VERSION: '24'`... it does not match the App Service runtime.**~~
+   **Done.** Brought the workflow's pin down to 22 to match what's actually deployed, rather than
+   moving App Service infrastructure. See section 1. Corrected 7 Sep.
+9. ~~**Prisma 7 ships a base64 WASM query compiler for every engine it supports**~~ — checked
+   7 Sep, this was never actually reaching the deployed package once item 6 was fixed. Prisma's
+   *generated* client (`node_modules/.prisma/client`) already contains only the one WASM
+   compiler for the declared datasource (postgresql) — the other four live only in the `@prisma/
+   client` npm package's generic `runtime/` folder, and Next's standalone file-tracer (item 6)
+   already excludes them because nothing in the generated client's require graph reaches them.
+   Confirmed empirically: `.next/standalone` carries exactly one Prisma WASM file. No
+   `engineType`/`binaryTargets` change was needed in `prisma/schema.prisma`.
 7. **`/api/health` reports reachability, not readiness.** It answers `SELECT 1`, which succeeds
    against a database whose tables were never created — deliberately, since naming a table in a
    probe makes it go stale silently. That leaves one thing this pipeline would like to assert and

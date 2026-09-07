@@ -1,0 +1,10 @@
+# The two fastest, highest-signal CI gates, run locally before a commit lands rather than only
+# discovered minutes later in .github/workflows/deploy.yml. Both need no database — see the
+# workflow's own comment on which gates fall in that group.
+#
+# Deliberately NOT the full CI gate set here: audit:attribution/restore/estimation/contracts and
+# the scenario suite are slower and stay CI-only, per G3 in docs/pending-actions.md — "seconds,
+# not minutes."
+
+npx tsc --noEmit
+npm run audit:tenancy
