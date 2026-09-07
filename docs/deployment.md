@@ -32,6 +32,14 @@ there is no `.nvmrc` and `package.json` has no `engines` field — but 22 satisf
 
 ### 2.1 In Entra, for the pipeline's own identity
 
+**Status, 7 Sep 2026: done except one role assignment, in progress.** `axiomate-tms-deploy`
+(client ID `74f381dd-fd4e-4fb7-b9b7-421c977566ef`) exists with the federated credential below,
+already scoped exactly as this section specifies. `Website Contributor` on the App Service is
+assigned. The PostgreSQL firewall-rule rights are not yet assigned — granting it is in progress.
+Basic publishing credentials (SCM and FTP) are disabled. What's left after the role assignment:
+§2.2's GitHub environment secrets, and removing the `deploy` job's `workflow_dispatch`-only gate
+in `.github/workflows/deploy.yml`.
+
 The workflow authenticates with `azure/login` using a federated credential, and there is no
 client secret and no publish profile anywhere in this repository. A publish profile is a
 long-lived credential that grants deployment rights to whoever holds it, and it survives every
