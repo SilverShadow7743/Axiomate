@@ -150,6 +150,8 @@ model Tenant {
   snapshots     Snapshot[]
   applications      Application[]
   integrationLinks  IntegrationLink[]
+  invoices          Invoice[]
+  invoiceLineItems  InvoiceLineItem[]
 
   /// Suspension. A suspended tenant keeps every record it owns.
   deletedAt DateTime?
@@ -821,6 +823,7 @@ model Sow {
   changes    ChangeRequest[]
   milestones Milestone[]
   scopeItems ScopeItem[]
+  invoices   Invoice[]
 
   @@id([tenantId, id])
   @@index([tenantId, engagementId])
@@ -1696,6 +1699,58 @@ model IntegrationLink {
   @@id([tenantId, id])
   @@index([tenantId, sourceApplicationId])
   @@index([tenantId, targetApplicationId])
+}
+
+/// A billable milestone turned into a record — see docs/plans/2026-09-07-invoicing-design.md.
+/// Records that an invoice was raised; not a replacement for the accounting system that actually
+/// runs a firm's books. No tax/VAT, no PDF, no payment processing.
+model Invoice {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `inv-12`, minted from the durable workspace counter — same convention as Milestone's `ms-N`.
+  id    String
+  sowId String
+  sow   Sow    @relation(fields: [tenantId, sowId], references: [tenantId, id], onDelete: Restrict)
+
+  /// The client-facing reference. Free text — a firm's numbering scheme (fiscal-year sequence,
+  /// per-client prefix) is a negotiated/accounting-system fact, not this application's to invent.
+  /// Uniqueness NOT enforced at this layer.
+  reference String @default("")
+
+  currency String
+  /// Draft | Sent | Paid | Cancelled. No Overdue — that's computed from sentAt + payment terms,
+  /// never stored. No partial-payment tracking — a part-paid invoice is a second, corrected one.
+  status   String
+
+  raisedAt  DateTime
+  raisedBy  String
+  sentAt    DateTime?
+  paidAt    DateTime?
+
+  deletedAt DateTime?
+
+  lines InvoiceLineItem[]
+
+  @@id([tenantId, id])
+  @@index([tenantId, sowId])
+}
+
+model InvoiceLineItem {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id        String
+  invoiceId String
+  invoice   Invoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
+
+  /// No FK, like ChangeRequest.issueId and Evidence.documentId — a milestone later withdrawn must
+  /// not silently orphan or cascade-delete a financial record that already went to a client.
+  milestoneId String?
+  description String  @db.Text
+  amount      Decimal @db.Decimal(14, 2)
+
+  @@id([tenantId, id])
 }
 
 /// What was true about something, from when, and why it changed.

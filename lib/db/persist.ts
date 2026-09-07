@@ -38,6 +38,8 @@ import {
   milestoneToRow,
   applicationToRow,
   integrationLinkToRow,
+  invoiceToRow,
+  invoiceLineItemToRow,
   scopeItemToRow,
   changeToRow,
   revisionToRow,
@@ -726,6 +728,30 @@ export async function persistSteps(
         if (before.integrationLinks[id] === link) continue
         const row = integrationLinkToRow(tenantId, link)
         await tx.integrationLink.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    /** One action raises both the invoice and its lines together — see `./raiseInvoice`. */
+    case 'raiseInvoice':
+    case 'updateInvoiceStatus': {
+      for (const [id, inv] of Object.entries(after.invoices)) {
+        if (before.invoices[id] === inv) continue
+        const row = invoiceToRow(tenantId, inv)
+        await tx.invoice.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      for (const [id, line] of Object.entries(after.invoiceLineItems)) {
+        if (before.invoiceLineItems[id] === line) continue
+        const row = invoiceLineItemToRow(tenantId, line)
+        await tx.invoiceLineItem.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

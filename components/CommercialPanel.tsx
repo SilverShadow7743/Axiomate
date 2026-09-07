@@ -28,6 +28,14 @@ import {
   type BillingTrigger,
   type Milestone,
 } from '@/lib/milestone'
+import {
+  checkInvoiceStatusChange,
+  invoicePosition,
+  type Invoice,
+  type InvoiceLineItem,
+  type InvoiceStatus,
+  type RaiseInvoiceLine,
+} from '@/lib/invoice'
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
 import { sowCostOf, describeCost } from '@/lib/rates'
 import type { ScheduleRow } from '@/lib/types'
@@ -65,6 +73,8 @@ export default function CommercialPanel({
   onRemoveMilestone,
   onDeliverMilestone,
   onDecideMilestone,
+  onRaiseInvoice,
+  onUpdateInvoiceStatus,
   onUpsertScope,
   onRemoveScope,
   onDecideScope,
@@ -89,6 +99,9 @@ export default function CommercialPanel({
   /** Say the work landed. Separate from accepting it — see lib/milestone.ts. */
   onDeliverMilestone: (id: string) => boolean
   onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
+  /** Raise an invoice against one or more billable milestones, in one act. */
+  onRaiseInvoice: (sowId: string, reference: string, lines: RaiseInvoiceLine[]) => boolean
+  onUpdateInvoiceStatus: (id: string, status: InvoiceStatus) => boolean
   /** A line of what the SOW says it will deliver. */
   onUpsertScope: (sowId: string, id: string | null, patch: Partial<ScopeItem>) => boolean
   onRemoveScope: (id: string) => void
@@ -100,6 +113,7 @@ export default function CommercialPanel({
   const mayDecideChange = can(state.model, actor, 'change.approve')
   const mayEditMilestone = can(state.model, actor, 'milestone.edit')
   const mayAcceptMilestone = can(state.model, actor, 'milestone.accept')
+  const mayManageInvoice = can(state.model, actor, 'invoice.manage')
   const mayEditScope = can(state.model, actor, 'scope.edit')
   const mayApproveScope = can(state.model, actor, 'scope.approve')
   const mayViewRate = can(state.model, actor, 'rate.view')
@@ -311,6 +325,24 @@ export default function CommercialPanel({
               onRemove={onRemoveMilestone}
               onDeliver={onDeliverMilestone}
               onDecide={onDecideMilestone}
+            />
+
+            <Invoices
+              sow={sow}
+              invoices={Object.values(state.invoices).filter((v) => v.sowId === sow.id && !v.deletedAt)}
+              lines={Object.values(state.invoiceLineItems)}
+              milestones={Object.values(state.milestones).filter((m) => m.sowId === sow.id && !m.deletedAt)}
+              contracted={contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt))}
+              billableValue={
+                milestonePosition(
+                  sow.id,
+                  Object.values(state.milestones).filter((m) => m.sowId === sow.id && !m.deletedAt),
+                  contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt)),
+                ).billableValue
+              }
+              mayManage={mayManageInvoice.allowed}
+              onRaise={onRaiseInvoice}
+              onUpdateStatus={onUpdateInvoiceStatus}
             />
 
             <Changes
@@ -1057,6 +1089,200 @@ function Milestones({
         ) : (
           <button className="btn" onClick={() => setOpen(true)}>
             Add a milestone
+          </button>
+        )
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * What has been raised against a payment schedule, and what has not.
+ *
+ * Below the payment schedule, deliberately — an invoice records that somebody acted on a
+ * milestone already shown as billable, so the schedule is what explains the invoice rather than
+ * the other way round. See `docs/plans/2026-09-07-invoicing-design.md`.
+ */
+function Invoices({
+  sow,
+  invoices,
+  lines,
+  milestones,
+  contracted,
+  billableValue,
+  mayManage,
+  onRaise,
+  onUpdateStatus,
+}: {
+  sow: Sow
+  invoices: Invoice[]
+  lines: InvoiceLineItem[]
+  milestones: Milestone[]
+  contracted: ReturnType<typeof contractedPosition>
+  /** `milestonePosition(...).billableValue` from the caller. */
+  billableValue: number
+  mayManage: boolean
+  onRaise: (sowId: string, reference: string, lines: RaiseInvoiceLine[]) => boolean
+  onUpdateStatus: (id: string, status: InvoiceStatus) => boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [reference, setReference] = useState('')
+  const [checked, setChecked] = useState<Record<string, boolean>>({})
+
+  const mine = invoices.filter((i) => i.sowId === sow.id && !i.deletedAt)
+  const linesByInvoice = new Map<string, InvoiceLineItem[]>()
+  for (const l of lines) {
+    if (!linesByInvoice.has(l.invoiceId)) linesByInvoice.set(l.invoiceId, [])
+    linesByInvoice.get(l.invoiceId)!.push(l)
+  }
+  const position = invoicePosition(sow.id, invoices, lines)
+  const stillToInvoice = position.stillToInvoice(billableValue)
+
+  const billableMilestones = milestones.filter((m) => isBillable(m))
+  const alreadyReferenced = new Set(
+    lines
+      .filter((l) => l.milestoneId && linesByInvoice.get(l.invoiceId) !== undefined)
+      .filter((l) => {
+        const inv = mine.find((i) => i.id === l.invoiceId)
+        return inv && inv.status !== 'Cancelled'
+      })
+      .map((l) => l.milestoneId!),
+  )
+
+  const selected = billableMilestones.filter((m) => checked[m.id])
+  const ready = reference.trim() !== '' && selected.length > 0
+
+  return (
+    <section className="comm-changes">
+      <h5 className="est-h">Invoices</h5>
+      <p className="comm-position">
+        {position.invoiced > 0 ? `${sow.currency} ${position.invoiced.toLocaleString()} invoiced. ` : ''}
+        {stillToInvoice > 0
+          ? `${sow.currency} ${stillToInvoice.toLocaleString()} billable and not yet invoiced.`
+          : billableValue > 0
+            ? 'Everything billable has an invoice line against it.'
+            : 'Nothing is billable yet.'}
+      </p>
+
+      {mine.length > 0 && (
+        <table className="cfg-table est-table">
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th>Reference</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Raised</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {mine
+              .slice()
+              .sort((a, b) => a.raisedAt.localeCompare(b.raisedAt))
+              .map((inv) => {
+                const invLines = linesByInvoice.get(inv.id) ?? []
+                const total = invLines.reduce((n, l) => n + l.amount, 0)
+                return (
+                  <tr key={inv.id} title={invLines.map((l) => `${l.description}: ${inv.currency} ${l.amount.toLocaleString()}`).join('\n')}>
+                    <td className="mono">{inv.id}</td>
+                    <td>{inv.reference || '—'}</td>
+                    <td>
+                      <span className={`comm-status st-${inv.status.toLowerCase()}`}>{inv.status}</span>
+                    </td>
+                    <td className="mono">{inv.currency} {total.toLocaleString()}</td>
+                    <td className="mono">{formatIso(inv.raisedAt)}</td>
+                    <td>
+                      {mayManage && !checkInvoiceStatusChange(inv.status, 'Sent') && (
+                        <button className="btn-link" onClick={() => onUpdateStatus(inv.id, 'Sent')}>Mark Sent</button>
+                      )}{' '}
+                      {mayManage && !checkInvoiceStatusChange(inv.status, 'Paid') && (
+                        <button className="btn-link" onClick={() => onUpdateStatus(inv.id, 'Paid')}>Mark Paid</button>
+                      )}{' '}
+                      {mayManage && !checkInvoiceStatusChange(inv.status, 'Cancelled') && (
+                        <button className="btn-link" onClick={() => onUpdateStatus(inv.id, 'Cancelled')}>Cancel</button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+          </tbody>
+        </table>
+      )}
+
+      {mayManage ? (
+        open ? (
+          <div className="time-form">
+            <div className="time-row">
+              <label className="fld time-fld-person">
+                <span className="fld-label">Reference</span>
+                <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="A firm's own invoice number" />
+              </label>
+            </div>
+            {billableMilestones.length === 0 ? (
+              <p className="est-block-note">No milestone is billable yet — nothing to invoice.</p>
+            ) : (
+              <table className="cfg-table est-table">
+                <thead>
+                  <tr>
+                    <th />
+                    <th>Milestone</th>
+                    <th>Worth</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billableMilestones.map((m) => {
+                    const value = milestoneValue(m, contracted)
+                    return (
+                      <tr key={m.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={!!checked[m.id]}
+                            onChange={(e) => setChecked({ ...checked, [m.id]: e.target.checked })}
+                          />
+                        </td>
+                        <td>
+                          {m.name}
+                          {alreadyReferenced.has(m.id) && (
+                            <span className="est-block-note"> · already on an invoice — this would be a re-bill</span>
+                          )}
+                        </td>
+                        <td className="mono">
+                          {value === null ? '—' : `${m.currency} ${Math.round(value).toLocaleString()}`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+            <button
+              className="btn"
+              disabled={!ready}
+              title={ready ? 'Raise it' : 'Needs a reference and at least one milestone checked'}
+              onClick={() => {
+                const raiseLines: RaiseInvoiceLine[] = selected.map((m) => ({
+                  milestoneId: m.id,
+                  description: m.name,
+                  amount: milestoneValue(m, contracted) ?? 0,
+                }))
+                if (onRaise(sow.id, reference, raiseLines)) {
+                  setOpen(false)
+                  setReference('')
+                  setChecked({})
+                }
+              }}
+            >
+              Raise invoice
+            </button>{' '}
+            <button className="btn ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button className="btn" onClick={() => setOpen(true)}>
+            Raise an invoice
           </button>
         )
       ) : null}

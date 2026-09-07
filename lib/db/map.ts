@@ -42,6 +42,8 @@ import type {
   Snapshot as SnapshotRow,
   Application as ApplicationRow,
   IntegrationLink as IntegrationLinkRow,
+  Invoice as InvoiceRow,
+  InvoiceLineItem as InvoiceLineItemRow,
 } from '@prisma/client'
 import type { AccountableParty, DefaultNodeKind, DependencyType, IssueStatus, Severity } from '../types'
 import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../workspace'
@@ -74,6 +76,7 @@ import type {
   IntegrationLink,
   IntegrationStatus,
 } from '../application'
+import type { Invoice, InvoiceLineItem, InvoiceStatus } from '../invoice'
 import type {
   AcceptanceState,
   BillingTrigger,
@@ -1498,6 +1501,61 @@ export function integrationLinkFromRow(r: IntegrationLinkRow): IntegrationLink {
     recordedBy: r.recordedBy,
     recordedAt: r.recordedAt.toISOString(),
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function invoiceToRow(tenantId: TenantId, inv: Invoice): Prisma.InvoiceUncheckedCreateInput {
+  return {
+    tenantId,
+    id: inv.id,
+    sowId: inv.sowId,
+    reference: inv.reference,
+    currency: inv.currency,
+    status: inv.status,
+    raisedAt: new Date(inv.raisedAt),
+    raisedBy: inv.raisedBy,
+    sentAt: inv.sentAt ? new Date(inv.sentAt) : null,
+    paidAt: inv.paidAt ? new Date(inv.paidAt) : null,
+    deletedAt: inv.deletedAt ? new Date(inv.deletedAt) : null,
+  }
+}
+
+export function invoiceFromRow(r: InvoiceRow): Invoice {
+  return {
+    id: r.id,
+    sowId: r.sowId,
+    reference: r.reference,
+    currency: r.currency,
+    status: r.status as InvoiceStatus,
+    raisedAt: r.raisedAt.toISOString(),
+    raisedBy: r.raisedBy,
+    sentAt: r.sentAt ? r.sentAt.toISOString() : null,
+    paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
+  }
+}
+
+export function invoiceLineItemToRow(
+  tenantId: TenantId,
+  l: InvoiceLineItem,
+): Prisma.InvoiceLineItemUncheckedCreateInput {
+  return {
+    tenantId,
+    id: l.id,
+    invoiceId: l.invoiceId,
+    milestoneId: l.milestoneId,
+    description: l.description,
+    amount: l.amount,
+  }
+}
+
+export function invoiceLineItemFromRow(r: InvoiceLineItemRow): InvoiceLineItem {
+  return {
+    id: r.id,
+    invoiceId: r.invoiceId,
+    milestoneId: r.milestoneId,
+    description: r.description,
+    amount: Number(r.amount),
   }
 }
 

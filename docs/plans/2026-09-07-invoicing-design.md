@@ -5,6 +5,12 @@ dependencies (rates, milestones) now exist. Checked directly (7 Sep): that's sli
 `Invoice` isn't schema-only and unwired — it doesn't exist anywhere. No model, no reducer arm, no
 API route, no UI. This design is from zero, not from a partial build.*
 
+**Status: built, 7 September 2026**, same day as the design — schema (migration
+`20260907000002_invoicing`), `raiseInvoice`/`updateInvoiceStatus` reducer arms, and an Invoices
+section in `CommercialPanel.tsx` below the payment schedule. Five scenarios (INV1–INV5) drive the
+real reducer; all PASS, alongside all 231 pre-existing scenarios. `tsc --noEmit`, `npm run build`
+and `npm run audit:tenancy` all clean. Built exactly as designed — nothing changed shape.
+
 ## What already exists, and is the actual foundation
 
 `lib/milestone.ts` already answers "is this billable" precisely, from the firm's own negotiated

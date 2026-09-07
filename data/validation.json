@@ -888,7 +888,7 @@
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 46 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 47 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
@@ -2148,7 +2148,7 @@
       "title": "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
       "expected": "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
       "verdict": "PASS",
-      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 46 keys read the same before and after for both actors; projectView not called.",
+      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 47 keys read the same before and after for both actors; projectView not called.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
@@ -2311,6 +2311,56 @@
       "actual": "refusedForIssue=\"Issues are still linked to this application. Unlink them first.\" refusedForLink=\"Integrations still reference this application. Remove them first.\"",
       "stops": "",
       "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "INV1",
+      "title": "raiseInvoice succeeds against a billable milestone, and inherits the SOW currency",
+      "expected": "One invoice, one line, currency GBP from the SOW — not accepted from the caller.",
+      "verdict": "PASS",
+      "actual": "error=undefined invoice={\"id\":\"inv-5\",\"sowId\":\"sow-2\",\"reference\":\"AXC-INV-001\",\"currency\":\"GBP\",\"status\":\"Draft\",\"raisedAt\":\"2026-08-15T09:00:00.000Z\",\"raisedBy\":\"Validator\",\"sentAt\":null,\"paidAt\":null,\"deletedAt\":null} line={\"id\":\"invl-6\",\"invoiceId\":\"inv-5\",\"milestoneId\":\"ms-3\",\"description\":\"Kickoff (50% upfront)\",\"amount\":10000}",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "INV2",
+      "title": "raiseInvoice refuses a line naming a milestone that is not billable yet",
+      "expected": "The acceptance-triggered milestone is still Pending — refused before anything is written.",
+      "verdict": "PASS",
+      "actual": "refused=\"“Go-live sign-off” is not billable yet.\" emptyLines=\"An invoice needs at least one line.\"",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "INV3",
+      "title": "updateInvoiceStatus follows Draft → Sent → Paid, and refuses an invalid transition",
+      "expected": "Paid → Sent and Draft → Paid are both refused; Draft → Sent → Paid succeeds in order.",
+      "verdict": "PASS",
+      "actual": "skipped=\"An invoice cannot move from Draft to Paid.\" sent=Sent backwards=\"An invoice cannot move from Sent to Draft.\" paid=Paid afterPaid=\"An invoice cannot move from Paid to Sent.\"",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "INV4",
+      "title": "invoicePosition reads still-to-invoice off the lines, and a cancelled invoice does not count",
+      "expected": "Raising the full billable value against a SOW drops stillToInvoice to 0; cancelling that invoice brings it back.",
+      "verdict": "PASS",
+      "actual": "afterRaise={\"sowId\":\"sow-2\",\"invoiced\":10000} afterCancel={\"sowId\":\"sow-2\",\"invoiced\":0}",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "INV5",
+      "title": "raiseInvoice does not refuse re-invoicing an already-invoiced milestone",
+      "expected": "Splitting or re-billing a milestone across a second invoice is a real case, not an accidental double-bill.",
+      "verdict": "PASS",
+      "actual": "error=undefined invoiceCount=2",
+      "stops": "",
+      "severity": "P3",
       "impact": "none"
     }
   ]

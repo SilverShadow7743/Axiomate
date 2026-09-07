@@ -99,6 +99,7 @@ export const PERMISSIONS = [
   { key: 'milestone.edit', label: 'Plan a milestone', what: 'Set out the payment schedule against a statement of work, and record when a milestone is delivered.' },
   { key: 'milestone.accept', label: 'Accept a milestone', what: 'Sign a milestone off, or return it with a reason. Never one you recorded as delivered yourself — acceptance is somebody else’s judgement, and it is what makes a milestone billable.' },
   { key: 'application.edit', label: 'Record an application', what: 'Add or change a client’s application, environment, or the integrations between them.' },
+  { key: 'invoice.manage', label: 'Raise an invoice', what: 'Turn a billable milestone into an invoice, and move it through Draft, Sent, Paid or Cancelled. A separate authority from setting a rate.' },
   /*
    * Two keys, not three. There is deliberately no `document.view`.
    *
@@ -250,7 +251,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff', 'application.edit'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff', 'application.edit', 'invoice.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
@@ -572,6 +573,8 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   removeApplication: 'application.edit',
   upsertIntegrationLink: 'application.edit',
   removeIntegrationLink: 'application.edit',
+  raiseInvoice: 'invoice.manage',
+  updateInvoiceStatus: 'invoice.manage',
   recordDocument: 'document.upload',
   /* Asking rides on upload (whoever may put a deliverable on the record may ask about it);
    * answering needs its own key; withdrawing is the asker's act, gated like asking. */

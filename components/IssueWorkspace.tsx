@@ -2702,6 +2702,12 @@ export default function IssueWorkspace({
           onDecideMilestone={(id, decision, note) =>
             dispatch({ t: 'decideMilestone', id, decision, note, now: new Date().toISOString() })
           }
+          onRaiseInvoice={(sowId, reference, lines) =>
+            dispatch({ t: 'raiseInvoice', sowId, reference, lines, now: new Date().toISOString() })
+          }
+          onUpdateInvoiceStatus={(id, status) =>
+            dispatch({ t: 'updateInvoiceStatus', id, status, now: new Date().toISOString() })
+          }
           onUpsertScope={(sowId, id, patch) =>
             dispatch({ t: 'upsertScopeItem', id, sowId, patch, now: new Date().toISOString() })
           }

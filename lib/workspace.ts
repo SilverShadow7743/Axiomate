@@ -94,6 +94,13 @@ import {
   type IntegrationLink,
 } from './application'
 import {
+  checkInvoiceStatusChange,
+  checkRaiseInvoice,
+  type Invoice,
+  type InvoiceLineItem,
+  type InvoiceStatus,
+} from './invoice'
+import {
   checkChange,
   contractedPosition,
   decideChangeProblem,
@@ -417,6 +424,12 @@ export interface WorkspaceState {
   /** A recorded data flow between two applications. See `./application`. */
   integrationLinks: Record<string, IntegrationLink>
   /**
+   * A billable milestone turned into a record. See `./invoice` and
+   * `docs/plans/2026-09-07-invoicing-design.md`.
+   */
+  invoices: Record<string, Invoice>
+  invoiceLineItems: Record<string, InvoiceLineItem>
+  /**
    * A point-in-time copy of a project or engagement's planned dates and cost, taken
    * deliberately and never changed once taken. See `./snapshot`.
    */
@@ -731,6 +744,8 @@ export function initWorkspace(
     milestones: {},
     applications: {},
     integrationLinks: {},
+    invoices: {},
+    invoiceLineItems: {},
     snapshots: {},
     scopeItems: {},
     /**
@@ -1200,6 +1215,15 @@ export type Action =
       now: string
     }
   | { t: 'removeIntegrationLink'; id: string; now: string }
+  /* ---- INVOICING — see ./invoice ---- */
+  | {
+      t: 'raiseInvoice'
+      sowId: string
+      reference: string
+      lines: { milestoneId: string | null; description: string; amount: number }[]
+      now: string
+    }
+  | { t: 'updateInvoiceStatus'; id: string; status: InvoiceStatus; now: string }
   | { t: 'submitTimesheet'; person: string; weekStarting: string; now: string }
   | {
       t: 'decideTimesheet'
@@ -5424,6 +5448,100 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           }),
         },
         message: 'Integration removed.',
+      }
+    }
+
+    /**
+     * Turn a set of billable milestones into a record.
+     *
+     * One action for the invoice and its lines together, not upsert-then-add-lines — an invoice
+     * with no lines is not a real state this reducer needs to represent. Currency is inherited
+     * from the SOW, not accepted from the caller — see `Invoice.currency`'s own comment.
+     */
+    case 'raiseInvoice': {
+      const sow = state.sows[a.sowId]
+      if (!sow || sow.deletedAt) return { state, error: 'That statement of work no longer exists.' }
+
+      const problem = checkRaiseInvoice(a.sowId, a.lines, state.milestones)
+      if (problem) return { state, error: problem }
+
+      let seq = state.seq + 1
+      const invoiceId = `inv-${seq}`
+      const invoice: Invoice = {
+        id: invoiceId,
+        sowId: a.sowId,
+        reference: a.reference.trim(),
+        currency: sow.currency,
+        status: 'Draft',
+        raisedAt: a.now,
+        raisedBy: by,
+        sentAt: null,
+        paidAt: null,
+        deletedAt: null,
+      }
+
+      const lines: Record<string, InvoiceLineItem> = {}
+      for (const l of a.lines) {
+        seq += 1
+        const lineId = `invl-${seq}`
+        lines[lineId] = {
+          id: lineId,
+          invoiceId,
+          milestoneId: l.milestoneId,
+          description: l.description.trim(),
+          amount: l.amount,
+        }
+      }
+
+      return {
+        state: {
+          ...state,
+          seq,
+          invoices: { ...state.invoices, [invoiceId]: invoice },
+          invoiceLineItems: { ...state.invoiceLineItems, ...lines },
+          audit: log(actor, state, {
+            rowId: a.sowId,
+            field: 'invoice',
+            from: null,
+            to: invoiceId,
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: invoiceId,
+        message: `Invoice ${invoiceId} raised — ${a.lines.length} line${a.lines.length === 1 ? '' : 's'}, ${invoice.currency} ${a.lines.reduce((n, l) => n + l.amount, 0).toLocaleString()}.`,
+      }
+    }
+
+    case 'updateInvoiceStatus': {
+      const existing = state.invoices[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That invoice no longer exists.' }
+
+      const problem = checkInvoiceStatusChange(existing.status, a.status)
+      if (problem) return { state, error: problem }
+      if (existing.status === a.status) return { state }
+
+      const next: Invoice = {
+        ...existing,
+        status: a.status,
+        sentAt: a.status === 'Sent' ? a.now : existing.sentAt,
+        paidAt: a.status === 'Paid' ? a.now : existing.paidAt,
+      }
+
+      return {
+        state: {
+          ...state,
+          invoices: { ...state.invoices, [a.id]: next },
+          audit: log(actor, state, {
+            rowId: existing.sowId,
+            field: 'invoice.status',
+            from: existing.status,
+            to: a.status,
+            at: a.now,
+            by,
+          }),
+        },
+        message: `${a.id} marked ${a.status}.`,
       }
     }
 

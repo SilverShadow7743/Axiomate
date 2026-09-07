@@ -240,6 +240,9 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       // `?? {}` because a mirror written before applications existed has no such key.
       applications: parsed.applications ?? {},
       integrationLinks: parsed.integrationLinks ?? {},
+      // `?? {}` because a mirror written before invoicing existed has no such key.
+      invoices: parsed.invoices ?? {},
+      invoiceLineItems: parsed.invoiceLineItems ?? {},
       // `?? {}` because a mirror written before scope items existed has no such key.
       scopeItems: parsed.scopeItems ?? {},
       // `?? {}` because a mirror written before snapshots existed has no such key.

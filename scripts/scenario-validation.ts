@@ -35,6 +35,7 @@ import { runRecurrences,
   type WorkspaceState,
 } from '../lib/workspace'
 import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
+import { invoicePosition } from '../lib/invoice'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
 import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
@@ -11434,6 +11435,189 @@ scenario(
       stops: passed ? '' : 'at the removeApplication reducer arm',
       severity: 'P2',
       impact: passed ? 'none' : 'removing an application could silently orphan a linked issue or a recorded integration',
+    }
+  },
+)
+
+/* ================================================================== *
+ * Invoicing — docs/plans/2026-09-07-invoicing-design.md
+ * ================================================================== */
+
+function invoicingFixture() {
+  const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+  const withSow = ok(BASE, {
+    t: 'upsertSow', id: null, engagementId,
+    patch: { reference: 'SOW-INV-1', title: 'Invoicing fixture', effortHours: 10, value: 20_000, status: 'Signed', currency: 'GBP' },
+    now: NOW,
+  } as Action)
+  const sowId = Object.values(withSow.sows).find((s) => s.reference === 'SOW-INV-1')!.id
+
+  // Billable immediately — billOn 'signature' needs no delivery or acceptance step.
+  const withSignature = ok(withSow, {
+    t: 'upsertMilestone', id: null, sowId,
+    patch: { name: 'Kickoff (50% upfront)', basis: 'amount', amount: 10_000, billOn: 'signature' },
+    now: NOW,
+  } as Action)
+  const signatureId = Object.values(withSignature.milestones).find((m) => m.sowId === sowId)!.id
+
+  // Not billable yet — billOn 'acceptance', still Pending.
+  const withPending = ok(withSignature, {
+    t: 'upsertMilestone', id: null, sowId,
+    patch: { name: 'Go-live sign-off', basis: 'amount', amount: 10_000, billOn: 'acceptance' },
+    now: NOW,
+  } as Action)
+  const pendingId = Object.values(withPending.milestones).find((m) => m.sowId === sowId && m.id !== signatureId)!.id
+
+  return { state: withPending, sowId, signatureId, pendingId }
+}
+
+scenario(
+  'INV1',
+  'raiseInvoice succeeds against a billable milestone, and inherits the SOW currency',
+  'One invoice, one line, currency GBP from the SOW — not accepted from the caller.',
+  () => {
+    const { state, sowId, signatureId } = invoicingFixture()
+    const raised = act(state, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-001',
+      lines: [{ milestoneId: signatureId, description: 'Kickoff (50% upfront)', amount: 10_000 }],
+      now: NOW,
+    } as Action)
+    const inv = raised.createdId ? raised.state.invoices[raised.createdId] : undefined
+    const line = raised.createdId
+      ? Object.values(raised.state.invoiceLineItems).find((l) => l.invoiceId === raised.createdId)
+      : undefined
+    const passed =
+      !raised.error &&
+      inv?.status === 'Draft' &&
+      inv?.currency === 'GBP' &&
+      inv?.reference === 'AXC-INV-001' &&
+      line?.amount === 10_000 &&
+      line?.milestoneId === signatureId
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `error=${JSON.stringify(raised.error)} invoice=${JSON.stringify(inv)} line=${JSON.stringify(line)}`,
+      stops: passed ? '' : 'at the raiseInvoice reducer arm',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an invoice cannot be raised against a billable milestone, or its currency is not inherited from the SOW',
+    }
+  },
+)
+
+scenario(
+  'INV2',
+  'raiseInvoice refuses a line naming a milestone that is not billable yet',
+  'The acceptance-triggered milestone is still Pending — refused before anything is written.',
+  () => {
+    const { state, sowId, pendingId } = invoicingFixture()
+    const before = state.invoices
+    const refused = act(state, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-002',
+      lines: [{ milestoneId: pendingId, description: 'Go-live sign-off', amount: 10_000 }],
+      now: NOW,
+    } as Action)
+    const emptyLines = act(state, { t: 'raiseInvoice', sowId, reference: 'AXC-INV-003', lines: [], now: NOW } as Action)
+    const passed = !!refused.error && refused.state.invoices === before && !!emptyLines.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `refused=${JSON.stringify(refused.error)} emptyLines=${JSON.stringify(emptyLines.error)}`,
+      stops: passed ? '' : 'at checkRaiseInvoice in lib/invoice.ts',
+      severity: 'P1',
+      impact: passed ? 'none' : 'an invoice could be raised against work nobody has agreed is billable, or with no lines at all',
+    }
+  },
+)
+
+scenario(
+  'INV3',
+  'updateInvoiceStatus follows Draft → Sent → Paid, and refuses an invalid transition',
+  'Paid → Sent and Draft → Paid are both refused; Draft → Sent → Paid succeeds in order.',
+  () => {
+    const { state, sowId, signatureId } = invoicingFixture()
+    const raised = ok(state, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-004',
+      lines: [{ milestoneId: signatureId, description: 'Kickoff', amount: 10_000 }],
+      now: NOW,
+    } as Action)
+    const invId = Object.keys(raised.invoices)[0]!
+
+    const skipped = act(raised, { t: 'updateInvoiceStatus', id: invId, status: 'Paid', now: NOW } as Action)
+    const sent = ok(raised, { t: 'updateInvoiceStatus', id: invId, status: 'Sent', now: NOW } as Action)
+    const backwards = act(sent, { t: 'updateInvoiceStatus', id: invId, status: 'Draft', now: NOW } as Action)
+    const paid = ok(sent, { t: 'updateInvoiceStatus', id: invId, status: 'Paid', now: NOW } as Action)
+    const afterPaid = act(paid, { t: 'updateInvoiceStatus', id: invId, status: 'Sent', now: NOW } as Action)
+
+    const passed =
+      !!skipped.error &&
+      sent.invoices[invId]?.status === 'Sent' &&
+      sent.invoices[invId]?.sentAt === NOW &&
+      !!backwards.error &&
+      paid.invoices[invId]?.status === 'Paid' &&
+      paid.invoices[invId]?.paidAt === NOW &&
+      !!afterPaid.error
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `skipped=${JSON.stringify(skipped.error)} sent=${sent.invoices[invId]?.status} backwards=${JSON.stringify(backwards.error)} paid=${paid.invoices[invId]?.status} afterPaid=${JSON.stringify(afterPaid.error)}`,
+      stops: passed ? '' : 'at checkInvoiceStatusChange or the updateInvoiceStatus reducer arm',
+      severity: 'P2',
+      impact: passed ? 'none' : 'an invoice could skip a status, move backwards, or change after being marked Paid',
+    }
+  },
+)
+
+scenario(
+  'INV4',
+  'invoicePosition reads still-to-invoice off the lines, and a cancelled invoice does not count',
+  'Raising the full billable value against a SOW drops stillToInvoice to 0; cancelling that invoice brings it back.',
+  () => {
+    const { state, sowId, signatureId } = invoicingFixture()
+    const raised = ok(state, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-005',
+      lines: [{ milestoneId: signatureId, description: 'Kickoff', amount: 10_000 }],
+      now: NOW,
+    } as Action)
+    const invId = Object.keys(raised.invoices)[0]!
+    const positionAfterRaise = invoicePosition(sowId, Object.values(raised.invoices), Object.values(raised.invoiceLineItems))
+    const cancelled = ok(raised, { t: 'updateInvoiceStatus', id: invId, status: 'Cancelled', now: NOW } as Action)
+    const positionAfterCancel = invoicePosition(sowId, Object.values(cancelled.invoices), Object.values(cancelled.invoiceLineItems))
+
+    const passed =
+      positionAfterRaise.invoiced === 10_000 &&
+      positionAfterRaise.stillToInvoice(10_000) === 0 &&
+      positionAfterCancel.invoiced === 0 &&
+      positionAfterCancel.stillToInvoice(10_000) === 10_000
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `afterRaise=${JSON.stringify(positionAfterRaise)} afterCancel=${JSON.stringify(positionAfterCancel)}`,
+      stops: passed ? '' : 'at invoicePosition in lib/invoice.ts',
+      severity: 'P2',
+      impact: passed ? 'none' : "a SOW's still-to-invoice figure is wrong, or a cancelled invoice is still counted as money billed",
+    }
+  },
+)
+
+scenario(
+  'INV5',
+  'raiseInvoice does not refuse re-invoicing an already-invoiced milestone',
+  'Splitting or re-billing a milestone across a second invoice is a real case, not an accidental double-bill.',
+  () => {
+    const { state, sowId, signatureId } = invoicingFixture()
+    const first = ok(state, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-006',
+      lines: [{ milestoneId: signatureId, description: 'Kickoff, first half', amount: 6_000 }],
+      now: NOW,
+    } as Action)
+    const second = act(first, {
+      t: 'raiseInvoice', sowId, reference: 'AXC-INV-007',
+      lines: [{ milestoneId: signatureId, description: 'Kickoff, remainder', amount: 4_000 }],
+      now: NOW,
+    } as Action)
+    const passed = !second.error && second.createdId != null && Object.keys(second.state.invoices).length === 2
+    return {
+      verdict: passed ? 'PASS' : 'FAIL',
+      actual: `error=${JSON.stringify(second.error)} invoiceCount=${Object.keys(second.state.invoices).length}`,
+      stops: passed ? '' : 'at checkRaiseInvoice, which should not treat a prior invoice line as a block',
+      severity: 'P3',
+      impact: passed ? 'none' : 'a legitimate partial re-bill or split invoice is refused',
     }
   },
 )

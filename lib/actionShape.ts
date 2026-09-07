@@ -12,6 +12,7 @@ import { SKILL_ORDER, SKILL_SOURCES } from './skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
 import { APPLICATION_STATUSES, INTEGRATION_STATUSES } from './application'
+import { INVOICE_STATUSES } from './invoice'
 import { SCOPE_KINDS, SCOPE_SOURCES } from './scope'
 
 /**
@@ -392,6 +393,29 @@ const configOp: Check = (v) => {
   const k = (v as { k?: unknown }).k
   if (typeof k !== 'string') return `must carry a string 'k', received ${typeOf(k)}`
   return CONFIG_OPS.has(k) ? null : `carries an unrecognised operation '${k}'`
+}
+
+/** `raiseInvoice.lines` — one or more `{milestoneId, description, amount}` entries. */
+const invoiceLines: Check = (v) => {
+  if (!Array.isArray(v)) return `must be an array, received ${typeOf(v)}`
+  if (!v.length) return 'must contain at least one entry'
+  for (let i = 0; i < v.length; i++) {
+    const line = v[i]
+    if (line === null || typeof line !== 'object' || Array.isArray(line)) {
+      return `entry ${i} must be an object, received ${typeOf(line)}`
+    }
+    const { milestoneId, description, amount } = line as Record<string, unknown>
+    if (milestoneId !== null && typeof milestoneId !== 'string') {
+      return `entry ${i}'s milestoneId must be a string or null, received ${typeOf(milestoneId)}`
+    }
+    if (typeof description !== 'string') {
+      return `entry ${i}'s description must be a string, received ${typeOf(description)}`
+    }
+    if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+      return `entry ${i}'s amount must be a finite number, received ${typeOf(amount)}`
+    }
+  }
+  return null
 }
 
 /* ================================================================== *
@@ -933,6 +957,17 @@ const SHAPES = {
     now,
   },
   removeIntegrationLink: { id: req(id), now },
+  raiseInvoice: {
+    sowId: req(id),
+    reference: req(text),
+    lines: req(invoiceLines),
+    now,
+  },
+  updateInvoiceStatus: {
+    id: req(id),
+    status: req(oneOf(new Set(INVOICE_STATUSES))),
+    now,
+  },
   submitTimesheet: {
     person: req(id),
     weekStarting: req(isoDate),
