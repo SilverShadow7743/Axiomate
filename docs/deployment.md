@@ -14,7 +14,7 @@ ordering, which is the part that cannot be repaired afterwards.
 | Thing | Where |
 | --- | --- |
 | Application | Azure App Service, Linux, runtime stack `NODE\|22-lts` |
-| Deployment target | The App Service directly — no staging slot exists (B1 Basic doesn't offer one; see §3) |
+| Deployment target | The App Service directly. A `staging` slot exists (plan moved to P0v3, 7 Sep 2026) but the pipeline doesn't use it yet — see §3 |
 | Database | Azure Database for PostgreSQL flexible server |
 | Identity for the pipeline | Entra workload identity federation, no stored secret |
 | Identity for people | Entra ID, configured through `AXIOMATE_ENTRA_*` app settings |
@@ -162,11 +162,16 @@ Building from `git archive HEAD` rather than the working tree is not fussiness. 
 thing that stops half-finished work reaching production, and it has already earned its place
 once: a UI change that did not typecheck was in the tree at the moment a release was cut.
 
-**There is no staging slot, because the plan is B1 Basic and slots need Standard or better.**
-Everything section 3 says about swapping is therefore aspiration. A manual release restarts the
-site, which takes roughly a minute, and the browser write queue's retry budget is about seven
-and a half seconds — so a user mid-edit during a deploy can have their queue halt. Deploy when
-nobody is working, or move the plan to Standard and use the slot.
+**A `staging` slot now exists** (`axiomate-tms-staging.azurewebsites.net`; the plan moved to
+P0v3 on 7 Sep 2026) — but the `deploy` job is still gated `if: github.event_name ==
+'workflow_dispatch'` and cannot swap into it automatically yet. Two things are still missing,
+named in that job's own comment: an Entra app registration with a federated credential, and the
+GitHub `production` environment's secrets (`DATABASE_URL`, the OIDC client details). Until both
+exist, everything section 3 says about swapping remains aspiration for the automated path. A
+manual release still restarts the site directly, which takes roughly a minute, and the browser
+write queue's retry budget is about seven and a half seconds — so a user mid-edit during a
+manual deploy can have their queue halt. Deploy when nobody is working, until the pipeline can
+use the slot it now has.
 
 The run has two jobs.
 

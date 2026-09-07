@@ -110,18 +110,23 @@ param tags object = {}
  * ============================================================================================ */
 
 /*
-  Why B1 is the default.
+  Why P0v3 is the default (was B1, moved 7 Sep 2026).
 
-  It is the cheapest tier that supports Always On, a custom domain and a free managed
+  B1 was the cheapest tier that supports Always On, a custom domain and a free managed
   certificate — the three things this application actually needs — at roughly the price of a
   single user licence for the tools it replaces. F1 is offered below only so an evaluation
   deployment is possible; it has no Always On, a 60 CPU-minute daily quota and 1 GB of storage,
   and it will not run this app for a working day. It is not a cheaper B1.
 
-  What B1 does not buy, and what the upgrade is for: no deployment slots, so every deploy is a
-  restart (see note 3 above); no autoscale, only manual capacity up to 3. P0v3 is the answer to
-  both and is the recommended step up — S1 costs more than P0v3 for slower cores and less
-  memory, which is why it is not the one named here even though it is the traditional choice.
+  What B1 did not buy, and what this upgrade is for: no deployment slots, so every deploy was a
+  restart (see note 3 above); no autoscale, only manual capacity up to 3. P0v3 buys both and was
+  the recommended step up — S1 costs more than P0v3 for slower cores and less memory, which is
+  why it was not the one chosen even though it is the traditional choice. The production plan
+  (`axiomate-tms-plan`, Axiomate-TMS-RG) was moved to P0v3 and given a `staging` slot on 7 Sep
+  2026 — this file's default now matches what is actually deployed, not the other way round.
+  The deploy job (`.github/workflows/deploy.yml`) still needs two more things before it can use
+  the slot: the Entra app registration + federated credential, and the GitHub environment
+  secrets — see that file's own comment on the `deploy` job.
 
   Indicative pay-as-you-go list prices, Linux, UK South, per instance per month. These are
   estimates from published rates and are not verifiable without a subscription:
@@ -144,7 +149,7 @@ param tags object = {}
   'P1v3'
   'P2v3'
 ])
-param skuName string = 'B1'
+param skuName string = 'P0v3'
 
 @description('Instances to run. Above 1 the first render against an empty database can race itself during initial seeding (see note 2), and each instance opens its own Postgres pool, so raising this without raising the database connection limit trades one bottleneck for another.')
 @minValue(1)

@@ -139,8 +139,8 @@ param tags object = {
  * The web tier
  * ============================================================================================ */
 
-@description('Plan size. B1 is the smallest tier that supports Always On and a custom domain; P0v3 is the step up and is what buys deployment slots, so that a deploy stops interrupting whoever is mid-edit. See app.bicep for what each tier does and does not buy.')
-param appSkuName string = 'B1'
+@description('Plan size. B1 is the smallest tier that supports Always On and a custom domain; P0v3 buys deployment slots, so that a deploy stops interrupting whoever is mid-edit. See app.bicep for what each tier does and does not buy. Moved to P0v3, 7 Sep 2026 — matches what is actually deployed.')
+param appSkuName string = 'P0v3'
 
 @description('Instances. Above 1 the first render against an empty database can race itself while seeding, and each instance opens its own Postgres pool against a server that only offers 35 connections at the default tier.')
 @minValue(1)
