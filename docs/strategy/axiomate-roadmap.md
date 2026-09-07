@@ -76,10 +76,12 @@ Not person-weeks. Two real constraints:
 ### Now — decisions, not builds
 Things that block other things and need a person, not an agent:
 
-- **A7's invitation email isn't being delivered at all** (found 2026-09-07, checked via the
-  Gmail connector directly) — this needs someone with Entra/Exchange mail-flow visibility to
-  find why, not another resend. A third attempt without changing anything would likely just
-  produce a third non-delivery.
+- **A7 — unblocked via a direct redemption link, root cause still open.** The invitation email
+  isn't being delivered (confirmed via Gmail connector) and Entra's own logs (`directoryAudits`,
+  `signIns`, `authorizationPolicy`) show nothing wrong on the tenant side — the failure is
+  between Microsoft's dispatch and Google's mail servers, not fixable from here. A direct
+  `inviteRedeemUrl` was shared with the founder in chat (not committed anywhere — it carries a
+  live redemption credential) as a workaround that skips the email entirely.
 - Decide whether `pending-actions.md` should be retired in favour of the artifact trail, or kept
   as the record of operational/human-side facts artifacts don't cover (recommendation: the
   latter, scoped down to exactly that — Entra/mailbox/deployment facts, not code status).
