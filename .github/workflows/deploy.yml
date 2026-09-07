@@ -337,8 +337,8 @@ jobs:
           echo "rule=gh-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
           az postgres flexible-server firewall-rule create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --rule-name "gh-${GITHUB_RUN_ID}" \
+            --server-name "$POSTGRES_SERVER_NAME" \
+            --name "gh-${GITHUB_RUN_ID}" \
             --start-ip-address "$IP" \
             --end-ip-address "$IP" \
             --output none
@@ -358,8 +358,8 @@ jobs:
         run: |
           az postgres flexible-server firewall-rule delete \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$POSTGRES_SERVER_NAME" \
-            --rule-name "${{ steps.firewall.outputs.rule }}" \
+            --server-name "$POSTGRES_SERVER_NAME" \
+            --name "${{ steps.firewall.outputs.rule }}" \
             --yes --output none || true
 
       - uses: actions/download-artifact@v4
