@@ -14,7 +14,7 @@ ordering, which is the part that cannot be repaired afterwards.
 | Thing | Where |
 | --- | --- |
 | Application | Azure App Service, Linux, runtime stack `NODE\|22-lts` |
-| Deployment target | The App Service directly. A `staging` slot exists (plan moved to P0v3, 7 Sep 2026) but the pipeline doesn't use it yet — see §3 |
+| Deployment target | The `staging` slot (plan moved to P0v3, 7 Sep 2026), swapped into production by the pipeline — see §3. First successful automated run: 7 Sep 2026, workflow run 34137043601 |
 | Database | Azure Database for PostgreSQL flexible server |
 | Identity for the pipeline | Entra workload identity federation, no stored secret |
 | Identity for people | Entra ID, configured through `AXIOMATE_ENTRA_*` app settings |
@@ -176,6 +176,22 @@ removed — the Entra app registration/federated credential and the GitHub `prod
 environment's secrets are both in place (docs/deployment.md §2), so a push to main/master now
 runs `deploy` and swaps into the slot automatically. This manual, `git archive`-based path
 remains documented as a fallback for when the pipeline itself is the thing that's broken.
+
+The first real run (7 Sep 2026) surfaced two bugs that a `workflow_dispatch`-only gate had let
+sit untested for as long as the job existed:
+
+- `az postgres flexible-server firewall-rule create`/`delete` were called with `--name` for the
+  server and a nonexistent `--rule-name` flag; the actual flags are `--server-name` and `--name`.
+  Fixed in the workflow. Caught before any firewall rule was opened — the create step failed
+  first.
+- Creating the `staging` slot does not copy the parent site's app settings or startup command.
+  The slot had none of the 15 `AXIOMATE_*`/`DATABASE_URL`/etc. settings and an empty
+  `appCommandLine`, so the container exited immediately (exit 127 — the default Node startup
+  command doesn't exist in this standalone-only package) and the health check correctly refused
+  to swap. Fixed by copying settings from the production slot
+  (`az webapp config appsettings set --slot staging --settings @<export>`) and setting
+  `az webapp config set --slot staging --startup-file "node server.js"` to match production. A
+  future slot recreation needs the same two steps repeated — neither is automatic.
 
 The run has two jobs.
 

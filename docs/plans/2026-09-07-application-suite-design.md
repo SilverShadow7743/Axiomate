@@ -6,12 +6,13 @@ sitting directly on Axiocloud's own delivery specialism (D365 F&O, Commerce, Azu
 Platform implementations) rather than a generic PM concept. The source pitch itself flags it as
 "a candidate flagship capability."*
 
-**Status: built, 7 September 2026**, same day as the design — schema (migration
+**Status: built and deployed, 7 September 2026**, same day as the design — schema (migration
 `20260907000001_application_suite`), reducer arms, and an `Applications` view
 (`components/ApplicationLandscape.tsx`) with add/edit and integration recording. Six scenarios
-(APP1–APP6) drive the real reducer; all PASS. The migration has not been run against a live
-database from this environment — verify it on the first real deploy. Everything below describes
-what was built exactly as designed; nothing changed shape between design and build.
+(APP1–APP6) drive the real reducer; all PASS. The migration ran against the live production
+database via the automated pipeline's first successful end-to-end run (workflow run 34137043601)
+and production reports healthy afterward. Everything below describes what was built exactly as
+designed; nothing changed shape between design and build.
 
 ## What this actually is, here
 
