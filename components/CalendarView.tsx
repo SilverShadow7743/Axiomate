@@ -42,6 +42,14 @@ export default function CalendarView({
 
   const dayRows = dayIso ? (m.weeks.flat().find((d) => d.date === dayIso)?.rows ?? []) : null
 
+  /**
+   * When the unscheduled majority dominates the filtered set, the rail leads rather than sitting
+   * in a fixed 260px column beside a grid mostly showing empty cells — see the 2026-09-08 UX
+   * audit's own measurement (78% of the width for 9 scheduled items, 22% for 82 unscheduled).
+   * Automatic, not a toggle: nobody has to notice a control exists or remember to flip it.
+   */
+  const unscheduledDominant = rows.length > 0 && m.undated.length / rows.length > 0.5
+
   return (
     <div className="cal" role="region" aria-label="Calendar">
       <div className="cal-head">
@@ -63,7 +71,7 @@ export default function CalendarView({
       <div className="board-sub sentence">{describeCalendar(m)}</div>
 
       <div className="cal-body">
-        <div className="cal-grid-wrap">
+        <div className={`cal-grid-wrap${unscheduledDominant ? ' secondary' : ''}`}>
           <div className="cal-grid">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
               <div key={d} className="cal-dow">
@@ -94,7 +102,7 @@ export default function CalendarView({
           </div>
         </div>
 
-        <aside className="cal-rail">
+        <aside className={`cal-rail${unscheduledDominant ? ' dominant' : ''}`}>
           {dayRows ? (
             <>
               <h3 className="cal-rail-title">
@@ -139,7 +147,7 @@ function RailRow({
       title="Open in the detail panel"
     >
       <span className="board-card-id mono">{row.displayId}</span>
-      <span className="board-card-name">{row.name}</span>
+      <span className="board-card-name" title={row.name}>{row.name}</span>
       <span className="board-card-meta">
         {row.severity && <span>{row.severity}</span>}
         {row.owner && <span>{row.owner}</span>}

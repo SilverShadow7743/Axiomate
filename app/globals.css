@@ -6367,6 +6367,11 @@ select.cell-editor {
   min-width: 0;
   overflow: auto;
 }
+/* When the unscheduled rail dominates the filtered set (see CalendarView's own comment), the
+   grid steps back to a shared basis rather than claiming all remaining space by default. */
+.cal-grid-wrap.secondary {
+  flex: 1 1 320px;
+}
 
 .cal-grid {
   display: grid;
@@ -6449,6 +6454,11 @@ select.cell-editor {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+/* A slightly higher flex-grow than the grid's, from the same 320px basis, so the rail leads
+   rather than merely matching — "at least as prominent" reads as a tie when it grows equally. */
+.cal-rail.dominant {
+  flex: 1.3 1 320px;
 }
 
 .cal-rail-title {
