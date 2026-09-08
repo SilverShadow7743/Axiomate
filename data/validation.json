@@ -594,6 +594,16 @@
       "impact": "A rule fails exactly as safely whether a person triggered it or the scheduled pass did. Time-driven automation already exists — AUTO_OVERDUE below is a shipped, enabled rule bound to the pass's own \"issue.overdue\" event — the one remaining gap is a rule bound to a bare calendar interval with no watched condition at all, which is a different and much narrower thing."
     },
     {
+      "id": "AUTO1",
+      "title": "A rule can move status and reassign an owner, and is bound by the same rules a person is",
+      "expected": "setStatus and setOwner are the same updateIssue patch a person's own edit sends, so a rule can do an allowed move and is refused an illegal one — never silently ignored, never a special path around the transition graph.",
+      "verdict": "PASS",
+      "actual": "Reassigning OAPIL-1's owner fires a rule that moves it to \"In Progress\" (true) — the same updateIssue patch a person's own status change would send. Asked instead to jump straight to \"Closed - confirmed\", the identical rule shape is refused (true refusal, status stays \"Open\") — the transition graph does not carve out an exception for automation. On the scheduled pass's own overdue event, setOwner reassigns OAPIL-2 to Priya (true) exactly as setStatus reassigns status, both new RuleActionKinds and both nothing but the wrapper setNextAction already was.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Hive's rule builder offers \"update status\" and \"change assignee\" with no Axiomate equivalent until now — closed as two thin wrappers around the same reducer arm every other automated and human write already goes through, so nothing new needed validating."
+    },
+    {
       "id": "AA",
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",

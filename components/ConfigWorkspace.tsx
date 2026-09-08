@@ -2182,6 +2182,8 @@ function Automation({
                   <option value="setNextAction">Set the next action</option>
                   <option value="addNote">Add a note</option>
                   <option value="requestApproval">Ask for an approval</option>
+                  <option value="setStatus">Set the status</option>
+                  <option value="setOwner">Set the owner</option>
                 </select>
               </label>
               {step.kind === 'notify' && (
@@ -2226,18 +2228,41 @@ function Automation({
                   </label>
                 </>
               )}
-              <label className="cfg-fld cfg-fld-wide">
-                <span>Saying</span>
-                <input
-                  defaultValue={step.text ?? ''}
-                  placeholder="{id}, {subject}, {from}, {to} and {by} are filled in"
-                  onBlur={(e) =>
-                    put(rule.id, {
-                      then: rule.then.map((a, j) => (j === i ? { ...a, text: e.target.value } : a)),
-                    })
-                  }
-                />
-              </label>
+              {step.kind === 'setStatus' ? (
+                <label className="cfg-fld">
+                  <span>To</span>
+                  <select
+                    value={(step.text ?? '') as IssueStatus | ''}
+                    onChange={(e) =>
+                      put(rule.id, {
+                        then: rule.then.map((a, j) => (j === i ? { ...a, text: e.target.value } : a)),
+                      })
+                    }
+                  >
+                    <option value="">Choose a status…</option>
+                    {ISSUE_STATUSES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label className="cfg-fld cfg-fld-wide">
+                  <span>{step.kind === 'setOwner' ? 'To' : 'Saying'}</span>
+                  <input
+                    defaultValue={step.text ?? ''}
+                    placeholder={
+                      step.kind === 'setOwner'
+                        ? 'A name from the directory'
+                        : '{id}, {subject}, {from}, {to} and {by} are filled in'
+                    }
+                    onBlur={(e) =>
+                      put(rule.id, {
+                        then: rule.then.map((a, j) => (j === i ? { ...a, text: e.target.value } : a)),
+                      })
+                    }
+                  />
+                </label>
+              )}
             </div>
           ))}
 

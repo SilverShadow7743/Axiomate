@@ -3399,6 +3399,87 @@ scenario(
 )
 
 scenario(
+  'AUTO1',
+  'A rule can move status and reassign an owner, and is bound by the same rules a person is',
+  'setStatus and setOwner are the same updateIssue patch a person\'s own edit sends, so a rule can do an allowed move and is refused an illegal one — never silently ignored, never a special path around the transition graph.',
+  () => {
+    /* A rule bound to the owner changing: once reassigned, move the work along and log a note. */
+    const withRule = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_MOVE', label: 'On reassignment, start the work', on: 'issue.owner',
+            when: [], enabled: true,
+            then: [{ kind: 'setStatus', text: 'In Progress' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const moved = applyWithRules(
+      withRule,
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
+      A,
+    )
+    const statusMoved = moved.state.issues['OAPIL-1']!.status === 'In Progress'
+    const ownerSet = moved.state.issues['OAPIL-1']!.owner === 'Sam'
+
+    /* The same rule, asked to make a move the transition graph refuses — not a special path. */
+    const withIllegalRule = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_ILLEGAL', label: 'On reassignment, jump straight to confirmed', on: 'issue.owner',
+            when: [], enabled: true,
+            then: [{ kind: 'setStatus', text: 'Closed - confirmed' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const blocked = applyWithRules(
+      withIllegalRule,
+      { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action,
+      A,
+    )
+    const illegalRefused = blocked.automation.refusals.length === 1
+    const statusUnmoved = blocked.state.issues['OAPIL-1']!.status === 'Open'
+
+    /* setOwner, on a different event, reassigning rather than just noticing an assignment. */
+    const withOwnerRule = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_REASSIGN', label: 'On overdue, hand it to Priya', on: 'issue.overdue',
+            when: [], enabled: true,
+            then: [{ kind: 'setOwner', text: 'Priya' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const overdue = ok(withOwnerRule, { t: 'setDates', id: 'OAPIL-2', start: '2026-08-01', end: '2026-08-10', now: NOW } as Action)
+    const scheduled = runWatch(overdue, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const reassigned = scheduled.state.issues['OAPIL-2']!.owner === 'Priya'
+
+    const good = statusMoved && ownerSet && illegalRefused && statusUnmoved && reassigned
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Reassigning OAPIL-1's owner fires a rule that moves it to "In Progress" (${statusMoved}) — the same updateIssue patch a person's own status change would send. Asked instead to jump straight to "Closed - confirmed", the identical rule shape is refused (${illegalRefused} refusal, status stays "${blocked.state.issues['OAPIL-1']!.status}") — the transition graph does not carve out an exception for automation. On the scheduled pass's own overdue event, setOwner reassigns OAPIL-2 to Priya (${reassigned}) exactly as setStatus reassigns status, both new RuleActionKinds and both nothing but the wrapper setNextAction already was.`,
+      stops: '—',
+      severity: '—',
+      impact: 'Hive\'s rule builder offers "update status" and "change assignee" with no Axiomate equivalent until now — closed as two thin wrappers around the same reducer arm every other automated and human write already goes through, so nothing new needed validating.',
+    }
+  },
+)
+
+scenario(
   'AA',
   'An integration fails',
   'The failure is contained, retried where safe, surfaced, and never leaves records half-written.',

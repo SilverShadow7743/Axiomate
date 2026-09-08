@@ -1,6 +1,7 @@
 import type { DomainEvent, EventType } from './events'
 import type { Channel } from './notifications'
 import type { Action, IssueRecord, WorkspaceState } from './workspace'
+import type { IssueStatus } from './types'
 import { wrapPlainText } from './richText'
 
 /**
@@ -71,7 +72,13 @@ export interface Condition {
  * Actions
  * ================================================================== */
 
-export type RuleActionKind = 'notify' | 'setNextAction' | 'addNote' | 'requestApproval'
+export type RuleActionKind =
+  | 'notify'
+  | 'setNextAction'
+  | 'addNote'
+  | 'requestApproval'
+  | 'setStatus'
+  | 'setOwner'
 
 export interface RuleAction {
   kind: RuleActionKind
@@ -81,7 +88,11 @@ export interface RuleAction {
    */
   audience?: string
   channel?: Channel
-  /** Message or field text. `{id}`, `{subject}`, `{from}`, `{to}` and `{by}` are substituted. */
+  /**
+   * Message or field text. `{id}`, `{subject}`, `{from}`, `{to}` and `{by}` are substituted.
+   * For `setStatus`, the target status name; for `setOwner`, the target owner name — both
+   * literal, and both refused by the same reducer arm a person's own edit goes through.
+   */
   text?: string
   /** For `requestApproval`. */
   ruleId?: string
@@ -308,6 +319,22 @@ export function planActions(
               t: 'updateIssue',
               id: event.subjectId,
               patch: { nextAction: fill(step.text ?? '', event, issue) },
+              now,
+            })
+            break
+          case 'setStatus':
+            actions.push({
+              t: 'updateIssue',
+              id: event.subjectId,
+              patch: { status: fill(step.text ?? '', event, issue) as IssueStatus },
+              now,
+            })
+            break
+          case 'setOwner':
+            actions.push({
+              t: 'updateIssue',
+              id: event.subjectId,
+              patch: { owner: fill(step.text ?? '', event, issue) },
               now,
             })
             break
