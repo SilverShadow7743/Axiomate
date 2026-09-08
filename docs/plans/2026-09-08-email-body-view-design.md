@@ -29,6 +29,10 @@ table (`ƒ /api/mail/message/[id]`); 257 scenarios, unchanged (this is a pure Gr
 with no reducer/`WorkspaceState` logic, the same posture I8 already established — nothing for
 the scenario harness to drive); clean `audit:tenancy`.
 
+**Live-verified in production, 8 Sep**: opened a real message ("AX2012 Access") — full HTML body
+rendered correctly inside the sandboxed iframe, including a mention link and a signature block
+with an inline logo image, confirming the sandbox does not itself strip legitimate content.
+
 **Deferred to a follow-on, as named in the design**: inline images (`cid:` references) render as
 broken-image icons until a per-image Graph fetch is added; attachment download stays out per the
 original `in-mail` non-goal. **Remote-image (tracking-pixel) blocking was flagged for the build
