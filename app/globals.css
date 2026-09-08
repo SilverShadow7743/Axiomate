@@ -6681,3 +6681,7 @@ select.cell-editor {
 .ibx-mode { display: flex; gap: 16px; margin: 8px 0; font-size: 13px; }
 .ibx-mode label, .ibx-attach-hits label { display: flex; gap: 6px; align-items: center; }
 .ibx-attach-hits { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; max-height: 180px; overflow-y: auto; margin-top: 6px; }
+.ibx-toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; flex-wrap: wrap; }
+.ibx-toolbar input { flex: 1; min-width: 160px; }
+.ibx-section { margin: 14px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.ibx-category { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 10px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }

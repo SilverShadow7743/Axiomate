@@ -10,6 +10,12 @@ import { formatIso } from '@/lib/dates'
  * stored. See `docs/plans/2026-08-31-in-mail-design.md`. Filing dispatches server-side as
  * the session actor; a filed mail shows its issue id, and a second filing of the same mail
  * is refused by the route's messageId dedupe.
+ *
+ * Folders, priority and search — `docs/plans/2026-09-08-in-mail-outlook-parity-design.md` —
+ * are the same live passthrough, one call further: a folder picker scopes which mailbox
+ * folder is read, a search box hands `q` straight to Graph's own `$search`, and `focused` is
+ * Microsoft's Focused Inbox classification, read and split into two headed sections rather
+ * than recomputed here.
  */
 
 interface InboxMessage {
@@ -20,6 +26,14 @@ interface InboxMessage {
   preview: string
   receivedAt: string
   internetMessageId: string
+  focused: boolean
+  categories: string[]
+}
+
+interface MailFolder {
+  id: string
+  name: string
+  unreadCount: number
 }
 
 export default function InboxPanel({ state }: { state: WorkspaceState }) {
@@ -121,10 +135,35 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
     }
   }
 
+  /* ---------------- folders, priority, search — personal, same passthrough ---------------- */
+  const [folders, setFolders] = useState<MailFolder[] | null>(null)
+  const [folderId, setFolderId] = useState('inbox')
+  const [searchBox, setSearchBox] = useState('')
+  const [activeQuery, setActiveQuery] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/mail/inbox?listFolders=1')
+        const data = (await res.json()) as { ok: boolean; folders?: MailFolder[] }
+        if (!cancelled && data.ok) setFolders(data.folders ?? [])
+      } catch {
+        // The folder picker just stays empty — messages still load against the default folder.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setError(null)
     try {
-      const res = await fetch('/api/mail/inbox')
+      const params = activeQuery
+        ? `?q=${encodeURIComponent(activeQuery)}`
+        : `?folderId=${encodeURIComponent(folderId)}`
+      const res = await fetch(`/api/mail/inbox${params}`)
       const data = (await res.json()) as {
         ok: boolean
         reconnect?: boolean
@@ -138,10 +177,13 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
       setError(e instanceof Error ? e.message : 'The inbox could not be read.')
       setMessages([])
     }
-  }, [])
+  }, [folderId, activeQuery])
   useEffect(() => {
     void load()
   }, [load])
+
+  const focusedMessages = useMemo(() => (messages ?? []).filter((m) => m.focused), [messages])
+  const otherMessages = useMemo(() => (messages ?? []).filter((m) => !m.focused), [messages])
 
   const moduleNodes = useMemo(
     () =>
@@ -188,6 +230,42 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
     }
   }
 
+  const messageRow = (m: InboxMessage) => (
+    <div key={m.id} className="ibx-row">
+      <div className="ibx-row-main">
+        <span className="ibx-from">{m.fromName || m.fromAddress}</span>
+        <span className="ibx-subject">{m.subject}</span>
+        {m.categories.map((c) => (
+          <span key={c} className="ibx-category">{c}</span>
+        ))}
+        <span className="ibx-preview">{m.preview}</span>
+      </div>
+      <div className="ibx-row-side">
+        <span className="ibx-date">{m.receivedAt ? formatIso(m.receivedAt.slice(0, 10)) : ''}</span>
+        {replied[m.id] && <span className="ibx-filed">replied</span>}
+        <button
+          className="btn"
+          onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: false }) }}
+        >
+          Reply…
+        </button>
+        <button
+          className="btn"
+          onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: true }) }}
+        >
+          Reply all…
+        </button>
+        {filed[m.id] ? (
+          <span className="ibx-filed">filed · {filed[m.id]}</span>
+        ) : (
+          <button className="btn" onClick={() => { setFiling(m); setMode('create') }}>
+            File…
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <section className="ibx" aria-label="Your inbox">
       <div className="ibx-head">
@@ -201,6 +279,37 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
         </button>
       </div>
 
+      <div className="ibx-toolbar">
+        <select
+          aria-label="Folder"
+          value={folderId}
+          disabled={Boolean(activeQuery)}
+          onChange={(e) => { setActiveQuery(''); setSearchBox(''); setFolderId(e.target.value) }}
+        >
+          {(folders ?? [{ id: 'inbox', name: 'Inbox', unreadCount: 0 }]).map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+              {f.unreadCount ? ` (${f.unreadCount})` : ''}
+            </option>
+          ))}
+        </select>
+        <input
+          value={searchBox}
+          onChange={(e) => setSearchBox(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setActiveQuery(searchBox.trim()) }}
+          placeholder="Search your mail…"
+          aria-label="Search your mail"
+        />
+        <button className="btn" onClick={() => setActiveQuery(searchBox.trim())} disabled={!searchBox.trim()}>
+          Search
+        </button>
+        {activeQuery && (
+          <button className="btn" onClick={() => { setActiveQuery(''); setSearchBox('') }}>
+            Clear search
+          </button>
+        )}
+      </div>
+
       {error && <p className="ibx-error">{error}</p>}
       {messages === null && <p className="ibx-note">Loading…</p>}
       {reconnect && (
@@ -211,40 +320,17 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
         </p>
       )}
 
-      {messages?.map((m) => (
-        <div key={m.id} className="ibx-row">
-          <div className="ibx-row-main">
-            <span className="ibx-from">{m.fromName || m.fromAddress}</span>
-            <span className="ibx-subject">{m.subject}</span>
-            <span className="ibx-preview">{m.preview}</span>
-          </div>
-          <div className="ibx-row-side">
-            <span className="ibx-date">{m.receivedAt ? formatIso(m.receivedAt.slice(0, 10)) : ''}</span>
-            {replied[m.id] && <span className="ibx-filed">replied</span>}
-            <button
-              className="btn"
-              onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: false }) }}
-            >
-              Reply…
-            </button>
-            <button
-              className="btn"
-              onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: true }) }}
-            >
-              Reply all…
-            </button>
-            {filed[m.id] ? (
-              <span className="ibx-filed">filed · {filed[m.id]}</span>
-            ) : (
-              <button className="btn" onClick={() => { setFiling(m); setMode('create') }}>
-                File…
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
       {messages?.length === 0 && !reconnect && messages !== null && (
-        <p className="ibx-note">Nothing in the inbox.</p>
+        <p className="ibx-note">{activeQuery ? 'Nothing matches.' : 'Nothing in this folder.'}</p>
+      )}
+
+      {focusedMessages.length > 0 && otherMessages.length > 0 && <h4 className="ibx-section">Focused</h4>}
+      {focusedMessages.map(messageRow)}
+      {otherMessages.length > 0 && (
+        <>
+          {focusedMessages.length > 0 && <h4 className="ibx-section">Other</h4>}
+          {otherMessages.map(messageRow)}
+        </>
       )}
 
       {filing && (
