@@ -266,6 +266,7 @@ export function issueToRow(
     clientImpact: i.clientImpact,
     assignments: i.assignments as Prisma.InputJsonValue,
     requiredSkills: i.requiredSkills as unknown as Prisma.InputJsonValue,
+    customFields: i.customFields as unknown as Prisma.InputJsonValue,
     deletedAt: i.deletedAt ? new Date(i.deletedAt) : null,
   }
 }
@@ -314,6 +315,10 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     scheduleMode: r.scheduleMode,
     assignments: normaliseAssignments(r.assignments),
     requiredSkills: Array.isArray(r.requiredSkills) ? (r.requiredSkills as unknown as Requirement[]) : [],
+    customFields:
+      r.customFields && typeof r.customFields === 'object' && !Array.isArray(r.customFields)
+        ? (r.customFields as unknown as Record<string, string>)
+        : {},
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }

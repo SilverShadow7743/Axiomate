@@ -46,7 +46,7 @@ import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
-  initModel, mergeModel,
+  initModel, mergeModel, customFieldsFor,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -3519,6 +3519,81 @@ scenario(
       stops: '—',
       severity: '—',
       impact: 'The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done.',
+    }
+  },
+)
+
+scenario(
+  'CUSTFLD1',
+  'A custom field is defined once, opted into one project, and appears only where it was opted in',
+  'Defining a field is not the same act as putting it on a project — a field with no projects yet is invisible everywhere, assigning it to one project makes it visible only there, and archiving it is refused while any live issue still carries a value.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const mk = (s: WorkspaceState, parentId: string, kind: string, name: string) =>
+      ok(s, { t: 'create', parentId, kind, draft: { name }, now: NOW } as Action)
+
+    const withProjectA = mk(BASE, engagementId, 'project', 'Project A')
+    const projectAId = Object.values(withProjectA.nodes).find((n) => n.kind === 'project' && n.name === 'Project A')!.id
+    const withProjectB = mk(withProjectA, engagementId, 'project', 'Project B')
+    const projectBId = Object.values(withProjectB.nodes).find((n) => n.kind === 'project' && n.name === 'Project B')!.id
+    const withModA = mk(withProjectB, projectAId, 'module', 'Mod A')
+    const modAId = Object.values(withModA.nodes).find((n) => n.kind === 'module' && n.name === 'Mod A')!.id
+    const withModB = mk(withModA, projectBId, 'module', 'Mod B')
+    const modBId = Object.values(withModB.nodes).find((n) => n.kind === 'module' && n.name === 'Mod B')!.id
+    const withIssueA = mk(withModB, modAId, 'issue', 'Issue A')
+    const issueAId = Object.values(withIssueA.issues).find((i) => i.subject === 'Issue A')!.id
+    const withIssueB = mk(withIssueA, modBId, 'issue', 'Issue B')
+    const issueBId = Object.values(withIssueB.issues).find((i) => i.subject === 'Issue B')!.id
+
+    const withField = ok(withIssueB, {
+      t: 'config',
+      op: { k: 'upsertCustomField', id: null, name: 'Vendor ref', fieldType: 'select', options: ['A', 'B'] },
+      now: NOW,
+    } as Action)
+    const fieldId = Object.values(withField.model.customFieldDefs).find((f) => f.name === 'Vendor ref')!.id
+
+    /* Defined, not yet assigned anywhere — invisible on both projects. */
+    const definedNotAssigned =
+      customFieldsFor(withField.model, projectAId).length === 0 &&
+      customFieldsFor(withField.model, projectBId).length === 0
+
+    /* A second field with the same name is refused — one vocabulary, not two half-answers. */
+    const clash = apply(withField, {
+      t: 'config',
+      op: { k: 'upsertCustomField', id: null, name: 'vendor ref', fieldType: 'text', options: [] },
+      now: NOW,
+    } as Action, A)
+
+    const assigned = ok(withField, {
+      t: 'config', op: { k: 'setCustomFieldProjects', id: fieldId, projectIds: [projectAId] }, now: NOW,
+    } as Action)
+    const visibleOnA = customFieldsFor(assigned.model, projectAId).some((f) => f.id === fieldId)
+    const invisibleOnB = !customFieldsFor(assigned.model, projectBId).some((f) => f.id === fieldId)
+
+    const valued = ok(assigned, {
+      t: 'updateIssue', id: issueAId, patch: { customFields: { [fieldId]: 'A' } }, now: NOW,
+    } as Action)
+    const stored = valued.issues[issueAId]!.customFields[fieldId] === 'A'
+
+    /* Held on a live issue — archiving is refused, not silent. */
+    const deleteHeld = apply(valued, { t: 'config', op: { k: 'deleteCustomField', id: fieldId }, now: NOW } as Action, A)
+    const heldRefused = Boolean(deleteHeld.error)
+
+    /* Cleared, then archived — succeeds, and a deleted field shows nowhere even if still assigned. */
+    const cleared = ok(valued, { t: 'updateIssue', id: issueAId, patch: { customFields: {} }, now: NOW } as Action)
+    const deleted = ok(cleared, { t: 'config', op: { k: 'deleteCustomField', id: fieldId }, now: NOW } as Action)
+    const goneAfterDelete = !customFieldsFor(deleted.model, projectAId).some((f) => f.id === fieldId)
+
+    const good =
+      definedNotAssigned && Boolean(clash.error) && visibleOnA && invisibleOnB && stored &&
+      heldRefused && goneAfterDelete
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `"Vendor ref" defined but not yet assigned to any project shows on neither Project A nor Project B (${definedNotAssigned}). A second field named "vendor ref" is refused ("${clash.error}"). Assigned to Project A only, it appears there (${visibleOnA}) and stays invisible on Project B (${invisibleOnB}) — the same issue-shaped work, scoped by project rather than by workspace. Issue A records "A" against it (${stored}). Archiving while that value stands is refused (${heldRefused ? deleteHeld.error : 'not refused'}); cleared first, archiving succeeds and the field shows nowhere afterward, even though it is still assigned to Project A (${goneAfterDelete}).`,
+      stops: '—',
+      severity: '—',
+      impact: 'Hive\'s Custom fields had no Axiomate equivalent — closed as the deliberately narrow cut (Select/Text/Date/Number, no Formula/Table lookup, since a computed field would be this codebase\'s first stored derived value) scoped per project the same way Hive itself opts a field into individual projects.',
     }
   },
 )
@@ -8870,6 +8945,7 @@ function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string
     subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
     applicationId: null,
     requiredSkills: [],
+    customFields: {},
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
     accountable: 'OAPIL', raised: TODAY, actualEnd: null, statusSince: null,
     pausedDays: 0, age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',

@@ -323,6 +323,11 @@ model Issue {
   /// requirement, and typing one is a person's judgement, never inferred from module or type.
   requiredSkills Json @default("[]")
 
+  /// A firm's own fields, keyed by CustomFieldDef.id (lib/customFields.ts). Only the ones live
+  /// on this issue's project actually render — a retired or unassigned field's value just
+  /// stops appearing, the same lenient stance requiredSkills takes with a retired skill.
+  customFields Json @default("{}")
+
   activities        IssueActivity[]
   relationshipsFrom IssueRelationship[] @relation("RelSource")
   relationshipsTo   IssueRelationship[] @relation("RelTarget")

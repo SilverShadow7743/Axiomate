@@ -1,10 +1,15 @@
 # Custom fields — a minimal, typed extension point for Issue data
 
-**Status: draft, 8 September 2026.** Scoped from the 8 Sep live walkthrough of Hive's
+**Status: built, 8 September 2026.** Scoped from the 8 Sep live walkthrough of Hive's
 Customization → Custom fields (`docs/plans/2026-09-07-hive-comparison.md`'s companion
-granular pass). Not built, and not a small addition — this is a new data-foundation layer,
-scoped deliberately narrow below. Needs a decision from Nishant before Gate 1: see
-"What this is not," and the open questions at the end.
+granular pass). Approved to build the same day, with one change from this draft: fields are
+scoped **per project from day one** (Nishant's explicit choice), not workspace-wide-only as
+originally proposed below — everything else in this doc held. `lib/customFields.ts`,
+`OperatingModel.customFieldDefs`, `Issue.customFields`, a new Configuration → Custom fields
+screen, and a new per-issue "Fields" tab. Scenario CUSTFLD1 proves the full lifecycle: define
+→ invisible until assigned → visible only on the assigned project → valued → archive refused
+while held → archive succeeds once cleared. Formula and Table lookup, discussed in "What this
+is not" below, were not reopened — still out.
 
 ## The gap, and what Hive actually has
 
@@ -62,10 +67,12 @@ interface CustomFieldDef {
 }
 ```
 
-No per-project opt-in in this first cut — Hive's project-scoping is real but adds a second
-axis (which fields, on which projects) this design does not need to solve on day one. Start
-workspace-wide; a project-scoping pass is a legitimate follow-up once there is a firm asking
-for it, not before.
+**Corrected at build time — per-project opt-in from day one.** This section originally argued
+for deferring project-scoping as a second axis not worth solving on day one. Nishant's explicit
+call when approving the build was the opposite: scope it per project immediately, matching
+Hive's own model exactly. `CustomFieldDef` gained a `projectIds: string[]` field for this
+(empty means defined but not yet assigned anywhere — the honest default, not an accident), and
+`customFieldsFor(model, projectId)` is the single read path everything renders through.
 
 **The value** — same shape as `Issue.requiredSkills` (`docs/plans/2026-09-08-*` and the I3
 build): a `Record<fieldId, value>` Json column on `Issue`, written through the existing

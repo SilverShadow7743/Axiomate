@@ -59,6 +59,7 @@ import {
   type WeekState,
 } from './timeWindow'
 import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './skills'
+import { checkCustomFieldDef, type CustomFieldDef, type CustomFieldType } from './customFields'
 import {
   duplicateOf,
   formatBytes,
@@ -203,6 +204,7 @@ import { type IntakeForm,
   liveWorkTypes,
   liveDisciplines,
   liveSkills,
+  liveCustomFields,
   type Discipline,
   type WorkType,
   resolveLabel,
@@ -288,6 +290,10 @@ export interface IssueRecord {
   /** What this piece of work needs — read by `candidatesFor` (`./skills`) to answer "who could
    *  do this." Empty is the honest default; typing one is a person's judgement, never inferred. */
   requiredSkills: Requirement[]
+  /** A firm's own fields, keyed by `CustomFieldDef.id` — see `./customFields`. Only the fields
+   *  live on this issue's project actually render; a retired or unassigned field's value just
+   *  stops appearing, the same lenient stance `requiredSkills` takes with a retired skill. */
+  customFields: Record<string, string>
   severity: Severity
   status: IssueStatus
   owner: string
@@ -722,6 +728,8 @@ export function initWorkspace(
       applicationId: i.applicationId ?? null,
       // Empty, not guessed — same reasoning as discipline. The seed predates this field too.
       requiredSkills: [],
+      // Empty, not guessed — same reasoning again. The seed predates custom fields entirely.
+      customFields: {},
       plannedStart: null,
       plannedEnd: null,
       percentOverride: null,
@@ -1522,6 +1530,17 @@ export type ConfigOp =
    */
   | { k: 'upsertSkill'; id: string | null; name: string; category: string; description: string }
   | { k: 'deleteSkill'; id: string }
+  | {
+      k: 'upsertCustomField'
+      id: string | null
+      name: string
+      fieldType: CustomFieldType
+      /** Ignored unless fieldType is 'select'. */
+      options: string[]
+    }
+  | { k: 'deleteCustomField'; id: string }
+  /** Which projects a defined field is actually live on. Replaces the list wholesale. */
+  | { k: 'setCustomFieldProjects'; id: string; projectIds: string[] }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   | { k: 'setHolidays'; holidays: Holiday[] }
   | { k: 'setSizeBands'; bands: SizeBand[] }
@@ -2217,6 +2236,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // Same reasoning: nobody types a required skill in the same breath as raising the
           // work — it is added afterwards, through `updateIssue`.
           requiredSkills: [],
+          // Same reasoning again: a custom field value is typed in afterwards, through
+          // `updateIssue`, once the field even exists to type into.
+          customFields: {},
           /*
            * Unclassified unless the person creating it said otherwise, and NOT defaulted to the
            * first configured discipline the way `type` is above.
@@ -2492,6 +2514,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         discipline: original.discipline,
         applicationId: original.applicationId,
         requiredSkills: original.requiredSkills,
+        customFields: original.customFields,
         // Created here, so there is no earlier classification to preserve — as in `create`.
         sourceType: '',
         severity: original.severity,
@@ -8343,6 +8366,75 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, skills: { ...m.skills, [op.id]: { ...skill, deletedAt: now } } },
         { rowId: op.id, field: 'skill', from: skill.name, to: '(archived)', at: now, by },
         `Skill "${skill.name}" archived.`,
+      )
+    }
+
+    case 'upsertCustomField': {
+      const name = op.name.trim()
+      const problem = checkCustomFieldDef({ name, fieldType: op.fieldType, options: op.options })
+      if (problem) return { state, error: problem }
+      const id = op.id ?? `customfield-${m.seq}`
+      const existing = m.customFieldDefs?.[id]
+      const clash = liveCustomFields(m).find(
+        (f) => f.id !== id && f.name.toLowerCase() === name.toLowerCase(),
+      )
+      if (clash) return { state, error: `A field called "${clash.name}" already exists.` }
+      const field: CustomFieldDef = {
+        id,
+        name,
+        fieldType: op.fieldType,
+        options: op.fieldType === 'select' ? op.options.map((o) => o.trim()).filter(Boolean) : [],
+        projectIds: existing?.projectIds ?? [],
+        deletedAt: null,
+      }
+      return done(
+        { ...m, customFieldDefs: { ...m.customFieldDefs, [id]: field }, seq: m.seq + (op.id ? 0 : 1) },
+        { rowId: id, field: 'customField', from: existing?.name ?? null, to: name, at: now, by },
+        existing ? `Field "${name}" updated.` : `Field "${name}" added.`,
+      )
+    }
+
+    case 'deleteCustomField': {
+      const field = m.customFieldDefs?.[op.id]
+      if (!field) return { state, error: 'Field not found.' }
+      /*
+       * Refused while any live issue still carries a value for it — the same reasoning
+       * `deleteSkill` applies: retiring a field values are recorded against should make the
+       * field stop appearing, not silently orphan what was already typed into it.
+       */
+      const held = Object.values(state.issues).filter(
+        (i) => !i.deletedAt && i.customFields?.[op.id] !== undefined,
+      )
+      if (held.length) {
+        return {
+          state,
+          error: `${held.length} issue${held.length === 1 ? '' : 's'} still ${held.length === 1 ? 'has' : 'have'} a value for "${field.name}". Clear those first, or leave it in place.`,
+        }
+      }
+      return done(
+        { ...m, customFieldDefs: { ...m.customFieldDefs, [op.id]: { ...field, deletedAt: now } } },
+        { rowId: op.id, field: 'customField', from: field.name, to: '(archived)', at: now, by },
+        `Field "${field.name}" archived.`,
+      )
+    }
+
+    case 'setCustomFieldProjects': {
+      const field = m.customFieldDefs?.[op.id]
+      if (!field) return { state, error: 'Field not found.' }
+      return done(
+        {
+          ...m,
+          customFieldDefs: { ...m.customFieldDefs, [op.id]: { ...field, projectIds: op.projectIds } },
+        },
+        {
+          rowId: op.id,
+          field: 'customFieldProjects',
+          from: field.projectIds.join(', ') || '(none)',
+          to: op.projectIds.join(', ') || '(none)',
+          at: now,
+          by,
+        },
+        `"${field.name}" is now live on ${op.projectIds.length} project${op.projectIds.length === 1 ? '' : 's'}.`,
       )
     }
 

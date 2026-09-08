@@ -614,6 +614,16 @@
       "impact": "The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done."
     },
     {
+      "id": "CUSTFLD1",
+      "title": "A custom field is defined once, opted into one project, and appears only where it was opted in",
+      "expected": "Defining a field is not the same act as putting it on a project — a field with no projects yet is invisible everywhere, assigning it to one project makes it visible only there, and archiving it is refused while any live issue still carries a value.",
+      "verdict": "PASS",
+      "actual": "\"Vendor ref\" defined but not yet assigned to any project shows on neither Project A nor Project B (true). A second field named \"vendor ref\" is refused (\"A field called \"Vendor ref\" already exists.\"). Assigned to Project A only, it appears there (true) and stays invisible on Project B (true) — the same issue-shaped work, scoped by project rather than by workspace. Issue A records \"A\" against it (true). Archiving while that value stands is refused (1 issue still has a value for \"Vendor ref\". Clear those first, or leave it in place.); cleared first, archiving succeeds and the field shows nowhere afterward, even though it is still assigned to Project A (true).",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Hive's Custom fields had no Axiomate equivalent — closed as the deliberately narrow cut (Select/Text/Date/Number, no Formula/Table lookup, since a computed field would be this codebase's first stored derived value) scoped per project the same way Hive itself opts a field into individual projects."
+    },
+    {
       "id": "AA",
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",

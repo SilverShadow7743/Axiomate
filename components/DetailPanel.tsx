@@ -22,6 +22,7 @@ import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
 import ChecklistTab from './ChecklistTab'
 import RequiredSkillsTab from './RequiredSkillsTab'
+import CustomFieldsTab from './CustomFieldsTab'
 import DiscussionTab, { type SuggestWiring } from './DiscussionTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
@@ -78,6 +79,7 @@ export type Tab =
   | 'Discussion'
   | 'Checklist'
   | 'Skills'
+  | 'Fields'
   | 'Notes'
   | 'Estimation'
   | 'Time'
@@ -348,17 +350,20 @@ export default function DetailPanel({
    * these tabs at all — see the next comment.
    */
   /*
-   * Seven, down from twelve, plus Checklist added 7 Sep 2026 and Skills added 8 Sep 2026. The
-   * scheduling story was split across four tabs that cross-referenced each other's empty states;
-   * it is one tab with sections now. Links holds what connects this record to others
-   * (relationships, evidence). Data Source rendered the same app-level import provenance for
-   * every record, so it lives with the empty-selection state instead of costing every record a
-   * tab. Checklist and Skills are both additive rather than a fragmentation this consolidation
-   * would have reversed: nothing else holds a per-issue to-do list or a per-issue skill
-   * requirement, so there was no existing tab to fold either into.
+   * Seven, down from twelve, plus Checklist and Skills added 7-8 Sep 2026 and Fields added
+   * 8 Sep 2026. The scheduling story was split across four tabs that cross-referenced each
+   * other's empty states; it is one tab with sections now. Links holds what connects this
+   * record to others (relationships, evidence). Data Source rendered the same app-level import
+   * provenance for every record, so it lives with the empty-selection state instead of costing
+   * every record a tab. Checklist, Skills and Fields are all additive rather than a
+   * fragmentation this consolidation would have reversed: nothing else holds a per-issue to-do
+   * list, a per-issue skill requirement, or a firm's own per-issue fields, so there was no
+   * existing tab to fold any of them into. Fields shows for every issue, same as Skills — an
+   * issue whose project has no custom fields defined yet reads its own empty state rather than
+   * the tab disappearing, so a tab vanishing never has to be told apart from a tab hiding.
    */
   const TABS: Tab[] = issue
-    ? ['Overview', 'Checklist', 'Skills', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
+    ? ['Overview', 'Checklist', 'Skills', 'Fields', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
       ? ['Capacity', 'Members', 'Discussion', 'History']
       : ['Overview', 'History']
@@ -707,6 +712,13 @@ export default function DetailPanel({
             actor={actor}
             today={today}
             onSave={(requiredSkills) => onSaveIssue(issue.id, { requiredSkills }, null)}
+          />
+        ) : tab === 'Fields' ? (
+          <CustomFieldsTab
+            issueId={issue.id}
+            state={state}
+            actor={actor}
+            onSave={(customFields) => onSaveIssue(issue.id, { customFields }, null)}
           />
         ) : tab === 'Estimation' ? (
           <EstimationTab

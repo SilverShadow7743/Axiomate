@@ -16,6 +16,8 @@ import {
   liveRoles,
   liveSkills,
   skillName,
+  liveCustomFields,
+  customFieldsFor,
   agentEnabledSource,
   blastRadius,
   labelSource,
@@ -47,6 +49,7 @@ import { ISSUE_STATUSES, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
 import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/skills'
+import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@/lib/customFields'
 import { can, directoryPersonFor } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
@@ -92,6 +95,7 @@ type Tab =
   | 'disciplines'
   | 'rates'
   | 'skills'
+  | 'customFields'
   | 'serviceLevels'
   | 'transitions'
   | 'permissions'
@@ -116,6 +120,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'disciplines', label: 'Disciplines', group: 'Operating model' },
   { id: 'rates', label: 'Rates', group: 'Governance' },
   { id: 'skills', label: 'Skills', group: 'Operating model' },
+  { id: 'customFields', label: 'Custom fields', group: 'Operating model' },
   { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
   { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
   { id: 'permissions', label: 'Permissions', group: 'Operating model' },
@@ -330,6 +335,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
           {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onCorrect={onCorrectSkill} onRemove={onRemoveSkill} />}
+          {tab === 'customFields' && <CustomFields state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
@@ -5732,6 +5738,180 @@ function Skills({
             : mayRecord.reason ?? 'Read only.'}
         </p>
       )}
+    </section>
+  )
+}
+
+/* ================================================================== *
+ * Custom fields
+ * ================================================================== */
+
+function CustomFields({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const fields = liveCustomFields(state.model)
+  const projects = useMemo(
+    () =>
+      Object.values(state.nodes)
+        .filter((n) => n.kind === 'project' && !n.deletedAt)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [state.nodes],
+  )
+
+  /** How many live issues carry a value for each field — so archiving one is informed. */
+  const heldCounts = useMemo(() => {
+    const n: Record<string, number> = {}
+    for (const i of Object.values(state.issues)) {
+      if (i.deletedAt) continue
+      for (const id of Object.keys(i.customFields ?? {})) n[id] = (n[id] ?? 0) + 1
+    }
+    return n
+  }, [state.issues])
+
+  const [name, setName] = useState('')
+  const [fieldType, setFieldType] = useState<CustomFieldType>('text')
+  const [options, setOptions] = useState('')
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Custom fields</h3>
+      <p className="cfg-note">
+        A firm&rsquo;s own fields on an issue &mdash; Select, Text, Date or Number. Nothing is
+        shipped in the catalogue: which fields a firm wants recorded is its own shape, the same
+        reasoning the skill catalogue ships empty for.
+      </p>
+      <p className="cfg-note">
+        A field is defined once here, then opted into the projects it should actually appear on
+        &mdash; defined and assigned are two different steps, so a field exists in the library
+        without appearing on every issue in the workspace the moment it is created.
+      </p>
+
+      {fields.length === 0 ? (
+        <p className="cfg-note">Nothing in the catalogue yet. Add the first field below.</p>
+      ) : (
+        fields.map((f) => {
+          const held = heldCounts[f.id] ?? 0
+          return (
+            <div className="cfg-card" key={f.id}>
+              <div className="cfg-card-head">
+                <input
+                  defaultValue={f.name}
+                  aria-label={`Name for ${f.id}`}
+                  onBlur={(e) =>
+                    e.target.value.trim() !== f.name &&
+                    onConfig({ k: 'upsertCustomField', id: f.id, name: e.target.value, fieldType: f.fieldType, options: f.options })
+                  }
+                />
+                <select
+                  value={f.fieldType}
+                  aria-label={`Type for ${f.name}`}
+                  onChange={(e) =>
+                    onConfig({ k: 'upsertCustomField', id: f.id, name: f.name, fieldType: e.target.value as CustomFieldType, options: f.options })
+                  }
+                >
+                  {CUSTOM_FIELD_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <span className="cfg-inherit">{held === 1 ? '1 issue' : `${held} issues`}</span>
+                <span className="grow" />
+                <button
+                  className="btn ghost"
+                  disabled={held > 0}
+                  title={held > 0 ? `${held} issue${held === 1 ? '' : 's'} carry a value for this. Clear those first.` : 'Archive this field'}
+                  onClick={() => onConfig({ k: 'deleteCustomField', id: f.id })}
+                >
+                  Archive
+                </button>
+              </div>
+              {f.fieldType === 'select' && (
+                <input
+                  defaultValue={f.options.join(', ')}
+                  placeholder="Comma-separated options"
+                  aria-label={`Options for ${f.name}`}
+                  onBlur={(e) =>
+                    onConfig({
+                      k: 'upsertCustomField',
+                      id: f.id,
+                      name: f.name,
+                      fieldType: f.fieldType,
+                      options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean),
+                    })
+                  }
+                />
+              )}
+              <div className="cfg-note">
+                <span>Live on: </span>
+                {projects.length === 0 ? (
+                  <span className="est-block-note">no projects exist yet</span>
+                ) : (
+                  projects.map((p) => {
+                    const on = f.projectIds.includes(p.id)
+                    return (
+                      <label key={p.id} style={{ marginRight: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() =>
+                            onConfig({
+                              k: 'setCustomFieldProjects',
+                              id: f.id,
+                              projectIds: on
+                                ? f.projectIds.filter((id) => id !== p.id)
+                                : [...f.projectIds, p.id],
+                            })
+                          }
+                        />{' '}
+                        {p.name}
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          )
+        })
+      )}
+
+      <div className="cfg-inline">
+        <input
+          value={name}
+          placeholder="Add a field — e.g. Vendor reference, Go-live date"
+          aria-label="New field name"
+          onChange={(e) => setName(e.target.value)}
+        />
+        <select value={fieldType} aria-label="New field type" onChange={(e) => setFieldType(e.target.value as CustomFieldType)}>
+          {CUSTOM_FIELD_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        {fieldType === 'select' && (
+          <input
+            value={options}
+            placeholder="Comma-separated options"
+            aria-label="New field options"
+            onChange={(e) => setOptions(e.target.value)}
+          />
+        )}
+        <button
+          className="btn primary"
+          disabled={!name.trim()}
+          onClick={() => {
+            const opts = options.split(',').map((o) => o.trim()).filter(Boolean)
+            if (onConfig({ k: 'upsertCustomField', id: null, name, fieldType, options: opts })) {
+              setName('')
+              setFieldType('text')
+              setOptions('')
+            }
+          }}
+        >
+          Add field
+        </button>
+      </div>
     </section>
   )
 }

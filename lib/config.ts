@@ -45,6 +45,7 @@ import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
 import type { ResourceProfile } from './capacity'
 import type { Skill } from './skills'
+import type { CustomFieldDef } from './customFields'
 import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './staffing'
 
 /* ================================================================== *
@@ -470,6 +471,19 @@ export function skillName(model: OperatingModel, id: string): string {
   return model.skills?.[id]?.name ?? id
 }
 
+/** The custom-field catalogue, live ones only, in a stable order. See `lib/customFields.ts`. */
+export function liveCustomFields(model: OperatingModel): CustomFieldDef[] {
+  return Object.values(model.customFieldDefs ?? {})
+    .filter((f) => !f.deletedAt)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** The fields that actually show on an issue under this project — live and assigned to it. */
+export function customFieldsFor(model: OperatingModel, projectId: string | null): CustomFieldDef[] {
+  if (!projectId) return []
+  return liveCustomFields(model).filter((f) => f.projectIds.includes(projectId))
+}
+
 /**
  * What a responsibility can be filled with.
  *  - `person` resolves against the directory (Owner, Raised By)
@@ -866,6 +880,13 @@ export interface OperatingModel {
    * attributed and dated, and they live in their own table.
    */
   skills: Record<string, Skill>
+  /**
+   * A firm's own fields on an Issue. See `lib/customFields.ts`.
+   *
+   * Ships **empty**, the same reasoning as `skills` — which fields a firm wants recorded is
+   * its own shape, and a shipped one would be a guess presented as a starting point.
+   */
+  customFieldDefs: Record<string, CustomFieldDef>
   /**
    * How long each severity is allowed, in working days from the raised date.
    *
@@ -1324,6 +1345,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   // Empty on purpose — see `OperatingModel.skills`. There is no `SEED_SKILLS`.
   const skills: Record<string, Skill> = {}
 
+  // Empty on purpose — see `OperatingModel.customFieldDefs`. There is no shipped default.
+  const customFieldDefs: Record<string, CustomFieldDef> = {}
+
   const agents: Record<string, AgentRecord> = {}
   for (const a of SEED_AGENTS) agents[a.id] = seedAgent(a)
 
@@ -1351,6 +1375,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     workTypes,
     disciplines,
     skills,
+    customFieldDefs,
     sla: { ...DEFAULT_SLA },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
@@ -1695,6 +1720,8 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // `Object.values(model.skills)` in the UI turns into a crash, in production, on the
     // workspace that has data and never on the seed that does not.
     skills: { ...seed.skills, ...(stored.skills ?? {}) },
+    // Same reasoning, same failure mode: absent on any model stored before this key existed.
+    customFieldDefs: { ...seed.customFieldDefs, ...(stored.customFieldDefs ?? {}) },
     // Explicit, like every other key: a model stored before this existed has no `sla`, and the
     // spread above would set it to undefined — which is not a missing policy, it is a crash
     // the next time anything reads a severity from it.

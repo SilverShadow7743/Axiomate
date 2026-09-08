@@ -136,6 +136,9 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteDiscipline',
   'upsertSkill',
   'deleteSkill',
+  'upsertCustomField',
+  'deleteCustomField',
+  'setCustomFieldProjects',
   'setSla',
   'setHolidays',
   'setSizeBands',
@@ -439,6 +442,23 @@ const requiredSkills: Check = (v) => {
   return null
 }
 
+/**
+ * `updateIssue.patch.customFields` — a plain string-to-string map. Shape only, like
+ * `requiredSkills` above: whether a key names a field that still exists, or whether its value
+ * matches that field's declared type, is a reducer-time question against per-tenant config,
+ * not a wire-shape one — see `lib/customFields.ts`'s own note on why that check is lenient by
+ * design.
+ */
+const customFields: Check = (v) => {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    return `must be an object, received ${typeOf(v)}`
+  }
+  for (const [key, value] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof value !== 'string') return `"${key}" must be a string, received ${typeOf(value)}`
+  }
+  return null
+}
+
 /* ================================================================== *
  * Shapes
  * ================================================================== */
@@ -537,7 +557,7 @@ const SHAPES = {
     patch: req(
       patchOf({
         parentId: idOrNull, client: text, module: text, subject: text, description: richDoc,
-        type: text, sourceType: text, discipline: text, applicationId: idOrNull, requiredSkills, severity: text, status: text, owner: text,
+        type: text, sourceType: text, discipline: text, applicationId: idOrNull, requiredSkills, customFields, severity: text, status: text, owner: text,
         raisedBy: text, accountable: text, raised: textOrNull, lastActivity: textOrNull,
         actualEnd: textOrNull, age: num, daysSinceActivity: num, nextAction: text,
         evidence: text, evidenceDate: textOrNull, verification: text, source: text,
