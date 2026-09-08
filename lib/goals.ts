@@ -8,10 +8,17 @@ import type { WorkspaceState } from './workspace'
  * ---------------------------------------------------------------------------
  * The one rule that makes this worth having
  *
- * **Nobody types the progress.** Every other tool with a goals feature — Hive's included — lets
- * somebody set a target and then periodically say how far along it is. That number is a claim,
- * made by the person being measured, and it drifts from reality in exactly one direction. A
- * goal at "80%" that has been 80% for a month is the normal state of such a screen.
+ * **Nobody types the progress, ever — not as an option.** Corrected 8 Sep 2026 against Hive's
+ * live goal-creation dialog, since the claim below was originally stated more sweepingly than
+ * checked: Hive's "Goal measurement" picker actually defaults to and leads with automatic
+ * options — Actions completed, Overdue actions, and Status (a sub-goal rollup) are all,
+ * verbatim, "Automatically track…". Only one of its four measurement types, "Number," is
+ * manual — and even that one doubles as "a manual OR LINKED numeric value," so a real fraction
+ * of Hive's own goals are already computed, not typed. The honest difference is narrower than
+ * "Hive is typed, this is computed": Hive offers both and lets a person choose either; this
+ * offers only the computed kind and refuses to add the other, on purpose. A goal at "80%" that
+ * has been 80% for a month, with nothing behind the number, is possible in Hive because it
+ * offers that choice — it is structurally impossible here because the choice does not exist.
  *
  * Here a goal names a MEASURE, and the measure is computed from the register on every read. It
  * can be wrong only if the underlying records are wrong, and those are the records the work is
