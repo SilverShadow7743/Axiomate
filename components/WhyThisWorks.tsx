@@ -50,7 +50,7 @@ function WhyThisWorksDialog({ slug, onClose }: { slug: string; onClose: () => vo
   const shell = (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop click-away; keyboard dismissal is Escape (useOverlay)
     <div
-      className="modal-scrim"
+      className="modal-scrim why-scrim"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

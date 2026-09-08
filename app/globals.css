@@ -2741,6 +2741,12 @@ select.cell-editor {
 .why-link {
   white-space: nowrap;
 }
+/* Opened from inside Configuration (.cfg, --z-overlay) and PortfolioPanel (.evi,
+   --z-overlay-stacked) alike, so the base --z-modal (200) is not high enough — it would
+   render behind both. --z-lightbox is the next free tier above --z-overlay-stacked. */
+.modal-scrim.why-scrim {
+  z-index: var(--z-lightbox);
+}
 .why-modal {
   max-width: 640px;
 }
