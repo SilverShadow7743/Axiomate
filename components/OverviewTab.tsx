@@ -143,6 +143,15 @@ export default function OverviewTab({
   const record = state.issues[issue.id]
   const may = canEditIssue(state.model, actor)
   const workTypes = useMemo(() => liveWorkTypes(state.model).map((t) => t.label), [state.model])
+  /** `issue.type` is the stored value — an id on older/discovered records, a label on records
+   *  created since (`upsertIssue`'s `type` write already uses the label). Resolving both
+   *  through the same map means the read-only display never shows a raw `WT_*` code, whichever
+   *  shape this particular record happens to carry. */
+  const workTypeLabelById = useMemo(
+    () => new Map(liveWorkTypes(state.model).map((t) => [t.id, t.label])),
+    [state.model],
+  )
+  const displayType = workTypeLabelById.get(issue.type) ?? issue.type
   const classifications = useMemo(() => classificationsOf(state), [state])
   const rtePeople = useMemo(
     () => Object.values(state.model.people).map((p) => ({ id: p.id, name: p.name })),
@@ -849,8 +858,8 @@ export default function OverviewTab({
             </dd>
             <dt>Type</dt>
             <dd>
-              {issue.type}
-              {issue.sourceType && issue.sourceType !== issue.type && (
+              {displayType}
+              {issue.sourceType && issue.sourceType !== displayType && (
                 <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
               )}
             </dd>

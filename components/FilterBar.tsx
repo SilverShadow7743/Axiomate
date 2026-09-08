@@ -8,7 +8,7 @@ import type { ColumnDef } from '@/lib/columns'
 import UserContext from './UserContext'
 import type { Actor } from '@/lib/actor'
 import { useLabels } from './labels'
-import { liveDisciplines } from '@/lib/config'
+import { liveDisciplines, liveWorkTypes } from '@/lib/config'
 import type { OperatingModel } from '@/lib/config'
 import { isActiveFilter, clientRestingCaption } from '@/lib/filterPresentation'
 
@@ -251,6 +251,18 @@ export default function FilterBar({
    * useful selections are the fourteen that nothing is filed under yet and the "None" that
    * finds all 216. A facet built from the data would offer neither.
    */
+  /*
+   * `facets.types` the way every other data-derived facet works — the filter compares against
+   * what is stored (see `facetsOf`'s own comment on why disciplines do the same) — but the
+   * label shown is resolved through `liveWorkTypes`, not the raw stored value. Without this,
+   * the dropdown read `WT_CHANGE_REQUEST`, `WT_DEFECT`… verbatim: the id IS what filtering
+   * needs, but it is not what a person should have to read. A type string with no live
+   * `WorkType` entry (deleted, or from data older than this resolution existed) falls back to
+   * showing itself — better than a blank option, and no different from what shipped before.
+   */
+  const workTypeLabelById = new Map(liveWorkTypes(model).map((t) => [t.id, t.label]))
+  const workTypeOptions = facets.types.map((t) => ({ value: t, label: workTypeLabelById.get(t) ?? t }))
+
   const disciplineOptions = [
     { value: 'None', label: 'Not yet classified' },
     ...liveDisciplines(model).map((d) => ({ value: d.id, label: d.label })),
@@ -310,7 +322,7 @@ export default function FilterBar({
         onChange={set}
         personResolved={personResolved}
       />
-      <FilterDropdown label="Work Type" name="type" options={facets.types} value={filters.type} onChange={set} />
+      <FilterDropdown label="Work Type" name="type" options={workTypeOptions} value={filters.type} onChange={set} />
       <FilterDropdown
         label="Discipline"
         name="discipline"

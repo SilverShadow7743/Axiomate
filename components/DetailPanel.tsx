@@ -505,19 +505,21 @@ export default function DetailPanel({
         <span className="grip-marks" />
       </div>
       <div className="detail-head">
-        <div className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              className={tab === t ? 'active' : ''}
-              onClick={() => {
-                setTab(t)
-                onTabChange(t)
-              }}
-            >
-              {t}
-            </button>
-          ))}
+        <div className="tabs-wrap">
+          <div className="tabs">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                className={tab === t ? 'active' : ''}
+                onClick={() => {
+                  setTab(t)
+                  onTabChange(t)
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
         <span className="grow" />
         {row && (

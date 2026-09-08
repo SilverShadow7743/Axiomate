@@ -329,12 +329,17 @@ button {
   padding-bottom: 0;
 }
 
-/* Under 900px the rail overlays instead of docking, behind the top bar's hamburger. */
-.nav-burger {
+/* Under 900px the rail overlays instead of docking, behind the top bar's hamburger.
+   `button.nav-burger`, not `.nav-burger` alone: `.btn`'s own `display: inline-flex` (below)
+   is the same one-class specificity, and being later in the file it silently won the tie —
+   the button was visible at every width, and toggling it above 900px did nothing, because the
+   sidebar's mobile overlay CSS never activates outside this same breakpoint. The extra element
+   selector settles the tie without touching `.btn`. */
+button.nav-burger {
   display: none;
 }
 @media (max-width: 900px) {
-  .nav-burger {
+  button.nav-burger {
     display: inline-flex;
   }
   .sidebar {
@@ -1531,16 +1536,39 @@ select.cell-editor {
   flex: 0 0 auto;
   background: var(--surface-2);
 }
+/* When a row's tab list overflows the strip's width, the fade + visible scrollbar are the only
+   hint more tabs exist off-screen — without them, a scrollable-but-clipped-looking strip reads
+   as "that's everything" and the last tabs (Links, History) go undiscovered. */
+.tabs-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: 100%;
+}
+.tabs-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  background: linear-gradient(to right, transparent, var(--surface-2));
+  pointer-events: none;
+}
 .tabs {
   display: flex;
   gap: 2px;
   height: 100%;
   /* Narrow windows scroll the strip instead of silently clipping whole tabs off the edge. */
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 .tabs::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+.tabs::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 2px;
 }
 .tabs button {
   padding: 0 11px;

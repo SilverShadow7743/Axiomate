@@ -646,11 +646,21 @@ export default function IssueWorkspace({
    * Not deleted: it may hold work that was never sent anywhere, and discarding it silently
    * would be the worst possible way to find that out. Not loaded either — the database is the
    * authority now. Said out loud instead, once, so the choice is the user's.
+   *
+   * "Once" was only true in intent: this effect re-ran on every mount with nothing recording
+   * that it had already spoken, so the notice fired on every navigation, indefinitely, long
+   * after anyone had a decision left to make about it. The dismissed flag is what actually
+   * makes it once — set right after the notice fires, checked before it fires again. Per
+   * tenant, same as the mirror itself, so switching tenants in one browser is warned about
+   * each tenant's own leftover mirror rather than only the first one seen.
    */
   useEffect(() => {
     if (!persistence.enabled) return
+    const dismissKey = `axiomate:local-mirror-notice-shown:${tenantId}`
+    if (window.localStorage.getItem(dismissKey)) return
     if (hasLocalWorkspace(tenantId)) {
       notify('Work saved in this browser by an earlier offline session is not being used, now that a database is configured.')
+      window.localStorage.setItem(dismissKey, '1')
     }
   }, [persistence.enabled, notify, tenantId])
 
