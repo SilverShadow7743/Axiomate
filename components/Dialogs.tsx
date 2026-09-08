@@ -250,7 +250,7 @@ function AddForm({
       </Field>
 
       {isStructural && (
-        <Field label={labels.ISSUE_OWNER}>
+        <Field label={labels.ISSUE_OWNER} hint="Optional">
           <input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} />
         </Field>
       )}
@@ -326,13 +326,13 @@ function AddForm({
               </select>
             </Field>
           </div>
-          <Field label={labels.ISSUE_OWNER}>
+          <Field label={labels.ISSUE_OWNER} hint="Optional">
             <input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} />
           </Field>
-          <Field label="Next action">
+          <Field label="Next action" hint="Optional">
             <input value={f.nextAction ?? ''} onChange={(e) => set('nextAction', e.target.value)} />
           </Field>
-          <Field label="Description">
+          <Field label="Description" hint="Optional">
             <textarea
               rows={3}
               value={f.description ?? ''}
