@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type CSSProperties } from 'react'
 import { useOverlay } from './useOverlay'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '@/lib/analytics'
 import { holidaySetOf } from '@/lib/config'
@@ -15,6 +15,18 @@ import type { WorkspaceState } from '@/lib/workspace'
  * right now, the same discipline `lib/portfolio.ts` already applies to its own concern counts —
  * no score, no colour-coded traffic light, a number a reader can go and check.
  */
+/**
+ * A relative "data bar" behind a count — the fill's width is this value against the largest in
+ * its own column, so a reader spots the outlier without reading every row. Pure CSS gradient on
+ * the cell itself, no chart library, no extra DOM: `2026-09-08` UX audit's own proposed shape.
+ * `max <= 0` (an empty or all-zero column) renders no fill rather than dividing by zero.
+ */
+function barStyle(value: number, max: number): CSSProperties {
+  if (max <= 0) return {}
+  const pct = Math.max(0, Math.min(100, (value / max) * 100))
+  return { background: `linear-gradient(to right, var(--accent-soft) ${pct}%, transparent ${pct}%)` }
+}
+
 export default function AnalyticsView({
   state,
   today,
@@ -37,6 +49,12 @@ export default function AnalyticsView({
     [state.issues, today, state.model.holidays],
   )
   const owners = useMemo(() => byOwner(state.issues), [state.issues])
+
+  const maxSeverityStatus = Math.max(0, ...severityStatus.map((c) => c.count))
+  const maxOpen = Math.max(0, ...clients.map((c) => c.open))
+  const maxOpenHigh = Math.max(0, ...clients.map((c) => c.openHigh))
+  const maxAgeBucket = Math.max(0, ...ageBuckets.map((b) => b.count))
+  const maxOwnerOpen = Math.max(0, ...owners.map((o) => o.open))
 
   return (
     <>
@@ -82,7 +100,7 @@ export default function AnalyticsView({
                     <tr key={`${c.severity}-${c.status}`}>
                       <td>{c.severity}</td>
                       <td>{c.status}</td>
-                      <td className="mono">{c.count}</td>
+                      <td className="mono" style={barStyle(c.count, maxSeverityStatus)}>{c.count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -107,8 +125,8 @@ export default function AnalyticsView({
                   {clients.map((c) => (
                     <tr key={c.client}>
                       <td>{c.client}</td>
-                      <td className="mono">{c.open}</td>
-                      <td className="mono">{c.openHigh}</td>
+                      <td className="mono" style={barStyle(c.open, maxOpen)}>{c.open}</td>
+                      <td className="mono" style={barStyle(c.openHigh, maxOpenHigh)}>{c.openHigh}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -131,7 +149,7 @@ export default function AnalyticsView({
                 {ageBuckets.map((b) => (
                   <tr key={b.bucket}>
                     <td>{b.bucket}</td>
-                    <td className="mono">{b.count}</td>
+                    <td className="mono" style={barStyle(b.count, maxAgeBucket)}>{b.count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -154,7 +172,7 @@ export default function AnalyticsView({
                   {owners.map((o) => (
                     <tr key={o.owner}>
                       <td>{o.owner}</td>
-                      <td className="mono">{o.open}</td>
+                      <td className="mono" style={barStyle(o.open, maxOwnerOpen)}>{o.open}</td>
                     </tr>
                   ))}
                 </tbody>
