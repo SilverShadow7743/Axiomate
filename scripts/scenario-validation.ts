@@ -8630,6 +8630,36 @@ scenario(
 )
 
 scenario(
+  'JD1',
+  'upsertPerson: joinedOn and status follow the same absent-versus-cleared rule as email/grade',
+  'A status change is never a deletion — see docs/plans/2026-09-08-people-directory-onboarding-design.md. Proves: joinedOn sets and persists; marking Departed sets status+departedOn without touching anything else; an untouched later upsertPerson call (no status field at all) carries the Departed status forward rather than silently reverting to Active; explicitly setting status back to Active clears both status and departedOn together.',
+  () => {
+    const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
+
+    const joined = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], joinedOn: '2024-03-01' }, now: NOW } as Action)
+    const joinedOk = joined.model.people[priyaId]?.joinedOn === '2024-03-01'
+
+    const departed = ok(joined, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: [], status: 'Departed', departedOn: '2026-09-08' }, now: NOW } as Action)
+    const departedPerson = departed.model.people[priyaId]
+    const departedOk = departedPerson?.status === 'Departed' && departedPerson?.departedOn === '2026-09-08' && departedPerson?.joinedOn === '2024-03-01'
+
+    // An unrelated edit that never mentions status — the same shape every other row edit takes.
+    const untouched = ok(departed, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW } as Action)
+    const untouchedPerson = untouched.model.people[priyaId]
+    const untouchedOk = untouchedPerson?.status === 'Departed' && untouchedPerson?.departedOn === '2026-09-08'
+
+    const reactivated = ok(untouched, { t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'], status: 'Active' }, now: NOW } as Action)
+    const reactivatedPerson = reactivated.model.people[priyaId]
+    const reactivatedOk = reactivatedPerson?.status === undefined && reactivatedPerson?.departedOn === undefined && reactivatedPerson?.joinedOn === '2024-03-01'
+
+    const good = joinedOk && departedOk && untouchedOk && reactivatedOk
+    return good
+      ? { verdict: 'PASS', actual: `joined=${joinedOk} departed=${departedOk} untouched=${untouchedOk} reactivated=${reactivatedOk}`, stops: '', severity: 'P1', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `joined=${joinedOk} departed=${departedOk} untouched=${untouchedOk} reactivated=${reactivatedOk}`, stops: 'the absent-versus-cleared merge for joinedOn/status/departedOn does not match every other field on this same action', severity: 'P1', impact: 'a departure silently reverts on the next unrelated edit, or a re-activation leaves a stale departure date behind' } as const
+  },
+)
+
+scenario(
   'PS1',
   'directReportsOf returns everybody naming a person as manager, and nobody else',
   'A hand-built people record — A manages B and C, and D reports to nobody. Asking for A\'s reports must return exactly B and C.',

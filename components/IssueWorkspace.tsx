@@ -13,6 +13,7 @@ import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ApplicationLandscape from './ApplicationLandscape'
 import AnalyticsView from './AnalyticsView'
+import PeopleDirectory from './PeopleDirectory'
 import { myWork } from '@/lib/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
@@ -127,7 +128,7 @@ import type { ConfigOp } from '@/lib/workspace'
  * show it. The selection itself is kept, exactly as it was then — switching to Timesheets and
  * back to the Tree reopens the record that was open, rather than silently forgetting it.
  */
-const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail'])
+const DETAIL_INCOMPATIBLE_VIEWS = new Set<WorkspaceView>(['timesheet', 'inbox', 'mail', 'people'])
 
 /**
  * How long a refused owner-assignment stays confirmable by repeating it. See `pendingAssign`
@@ -842,6 +843,14 @@ export default function IssueWorkspace({
    *  seat and a client seat) — computed once here and reused at the `mayInternal` prop below,
    *  rather than read twice. */
   const isInternal = can(state.model, actor, 'internal.view').allowed
+  /** `loadStoredView()` restores whatever view a `localStorage` entry names, with no permission
+   *  check of its own — a client seat that ever held `internal.view` (or edited storage directly)
+   *  would otherwise land straight on the People directory. Nav hiding (`AppSidebar`'s
+   *  `CLIENT_GROUPS`) only stops a client from *choosing* the view; this stops a stale or forced
+   *  choice from rendering it. */
+  useEffect(() => {
+    if (view === 'people' && !isInternal) setView('mywork')
+  }, [view, isInternal, setView])
   /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
    *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
    *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
@@ -2398,6 +2407,8 @@ export default function IssueWorkspace({
         />
       ) : view === 'analytics' ? (
         <AnalyticsView state={state} today={today} docked />
+      ) : view === 'people' && isInternal ? (
+        <PeopleDirectory state={state} onOpenProfile={setOpenProfileId} docked />
       ) : view === 'calendar' ? (
         <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
       ) : view === 'board' ? (

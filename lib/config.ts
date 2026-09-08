@@ -301,6 +301,27 @@ export interface Person {
    * who has learned it once should not have to learn it again per field.
    */
   source?: 'stated' | 'default'
+
+  /**
+   * When this person joined the firm. Optional and admin-entered — absent is the honest state
+   * for anyone imported from a log that never carried this, not a gap to paper over with a
+   * guessed date. See `docs/plans/2026-09-08-people-directory-onboarding-design.md`.
+   */
+  joinedOn?: string
+
+  /**
+   * `'Departed'` is a status, never a deletion. Absent means Active (the same
+   * absence-is-the-common-case convention `WorkType.deletedAt`/`Discipline.deletedAt` already
+   * use), because most people in this directory have not left. Departing changes nothing about
+   * the row itself — history that names this person (allocations, time entries, notes) keeps
+   * resolving exactly as it does today. What changes is forward-looking pickers, which this
+   * status is what they read to exclude a departed person going forward. `deletePerson` remains
+   * the separate, hard-delete tool for a mistaken or duplicate entry — reusing it for a real
+   * departure would erase exactly the history a departure needs to keep.
+   */
+  status?: 'Active' | 'Departed'
+  /** Set only alongside `status: 'Departed'`. See `status`. */
+  departedOn?: string
 }
 
 /**

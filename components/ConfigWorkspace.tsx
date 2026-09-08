@@ -567,6 +567,11 @@ function RolesAndPeople({
   const [personFilter, setPersonFilter] = useState('')
   const [newPerson, setNewPerson] = useState('')
   const [newPersonEmail, setNewPersonEmail] = useState('')
+  /** Onboarding: the major details a joiner needs captured together, not found one field-edit
+   *  at a time after the fact. See docs/plans/2026-09-08-people-directory-onboarding-design.md. */
+  const [newPersonJoinedOn, setNewPersonJoinedOn] = useState('')
+  const [newPersonManagerId, setNewPersonManagerId] = useState('')
+  const [newPersonRoleId, setNewPersonRoleId] = useState('')
 
   const people = useMemo(() => {
     const all = Object.values(model.people).sort((a, b) => a.name.localeCompare(b.name))
@@ -886,6 +891,8 @@ function RolesAndPeople({
             <tr>
               <th>Name</th>
               <th>Work address</th>
+              <th>Joined</th>
+              <th>Status</th>
               <th>Client</th>
               <th>Reports to</th>
               <th>Roles</th>
@@ -919,6 +926,64 @@ function RolesAndPeople({
                       }
                     }}
                   />
+                </td>
+                <td>
+                  <input
+                    type="date"
+                    defaultValue={p.joinedOn ?? ''}
+                    aria-label={`Joined date for ${p.name}`}
+                    onBlur={(e) => {
+                      const next = e.target.value
+                      if (next === (p.joinedOn ?? '')) return
+                      if (!onConfig({ k: 'upsertPerson', id: p.id, name: p.name, roleIds: p.roleIds, joinedOn: next })) {
+                        e.target.value = p.joinedOn ?? ''
+                      }
+                    }}
+                  />
+                </td>
+                <td>
+                  {/* A status change, never a deletion — see Person.status. Departing keeps the
+                      row and everything it's referenced by exactly where it is; deletePerson
+                      (below) stays the separate, hard-delete tool for a mistaken entry. */}
+                  <select
+                    value={p.status ?? 'Active'}
+                    aria-label={`Status for ${p.name}`}
+                    onChange={(e) => {
+                      const next = e.target.value as 'Active' | 'Departed'
+                      onConfig({
+                        k: 'upsertPerson',
+                        id: p.id,
+                        name: p.name,
+                        roleIds: p.roleIds,
+                        status: next,
+                        ...(next === 'Departed'
+                          ? { departedOn: p.departedOn ?? new Date().toISOString().slice(0, 10) }
+                          : {}),
+                      })
+                    }}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Departed">Departed</option>
+                  </select>
+                  {p.status === 'Departed' && (
+                    <input
+                      type="date"
+                      defaultValue={p.departedOn ?? ''}
+                      aria-label={`Departure date for ${p.name}`}
+                      onBlur={(e) => {
+                        const next = e.target.value
+                        if (next === (p.departedOn ?? '')) return
+                        onConfig({
+                          k: 'upsertPerson',
+                          id: p.id,
+                          name: p.name,
+                          roleIds: p.roleIds,
+                          status: 'Departed',
+                          departedOn: next,
+                        })
+                      }}
+                    />
+                  )}
                 </td>
                 <td>
                   {p.roleIds.some((r) => ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER'].includes(r)) ? (
@@ -970,12 +1035,18 @@ function RolesAndPeople({
                     }
                   >
                     <option value="">none recorded</option>
+                    {/* A departed person stays offered only if already recorded as this row's
+                        manager — kept selectable rather than silently reclassifying the record,
+                        same reasoning the Type edit select already applies; not offered as a
+                        pick for anyone else, since a departure is exactly the "forward-looking
+                        pickers" case the person's own status change means to affect. */}
                     {Object.values(model.people)
-                      .filter((m) => m.id !== p.id)
+                      .filter((m) => m.id !== p.id && (m.status !== 'Departed' || m.id === p.managerId))
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.name}
+                          {m.status === 'Departed' ? ' (departed)' : ''}
                         </option>
                       ))}
                   </select>
@@ -1058,10 +1129,10 @@ function RolesAndPeople({
             fields make, with the same duplicate-name and duplicate-address checks, so nothing
             about validation lives out here.
 
-            Name only, because a role is attached in the row above like everybody else's and
-            duplicating that select would give two places to look. The address is offered
-            because it is the field a signed-in person is matched on, and adding someone in
-            order to sign them in is the case this exists for. */}
+            Onboarding: joined date, manager and an initial role are captured together here
+            rather than requiring a follow-up trip through every row's own controls afterward —
+            still one upsertPerson dispatch, the same fields the row edits already write, just
+            presented at the moment they're needed. See the 2026-09-08 people-directory design. */}
         <div className="cfg-inline">
           <input
             value={newPerson}
@@ -1076,6 +1147,40 @@ function RolesAndPeople({
             aria-label="New person's work address"
             onChange={(e) => setNewPersonEmail(e.target.value)}
           />
+          <input
+            type="date"
+            value={newPersonJoinedOn}
+            aria-label="New person's joined date"
+            title="Joined date — optional"
+            onChange={(e) => setNewPersonJoinedOn(e.target.value)}
+          />
+          <select
+            value={newPersonManagerId}
+            aria-label="New person's manager"
+            onChange={(e) => setNewPersonManagerId(e.target.value)}
+          >
+            <option value="">Reports to — optional</option>
+            {Object.values(model.people)
+              .filter((m) => m.status !== 'Departed')
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
+          <select
+            value={newPersonRoleId}
+            aria-label="New person's initial role"
+            onChange={(e) => setNewPersonRoleId(e.target.value)}
+          >
+            <option value="">Initial role — optional</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
           <button
             className="btn primary"
             disabled={!newPerson.trim()}
@@ -1089,12 +1194,17 @@ function RolesAndPeople({
                   k: 'upsertPerson',
                   id: null,
                   name: newPerson,
-                  roleIds: [],
+                  roleIds: newPersonRoleId ? [newPersonRoleId] : [],
                   ...(email ? { email } : {}),
+                  ...(newPersonJoinedOn ? { joinedOn: newPersonJoinedOn } : {}),
+                  ...(newPersonManagerId ? { managerId: newPersonManagerId } : {}),
                 })
               ) {
                 setNewPerson('')
                 setNewPersonEmail('')
+                setNewPersonJoinedOn('')
+                setNewPersonManagerId('')
+                setNewPersonRoleId('')
                 // The list above is filtered, and a name that does not match the filter would
                 // be added to a table it is not in — indistinguishable from nothing happening.
                 setPersonFilter('')

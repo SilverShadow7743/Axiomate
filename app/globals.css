@@ -4603,6 +4603,13 @@ select.cell-editor {
   font-style: italic;
 }
 
+/* A departed person's row: muted, same size as an active row's — `.prov` also shrinks and
+   italicizes, which reads wrong stretched across a whole row (the name button included, via
+   the `button { font: inherit }` reset) rather than a single inline note. */
+.pdir-row-departed {
+  color: var(--text-faint);
+}
+
 /* Secondary filters, stacked in a popover so the bar keeps to one row. Wider than the column
    menu because each row holds a full-width select rather than a checkbox. */
 .menu-filters {

@@ -1594,6 +1594,16 @@
       "impact": "none"
     },
     {
+      "id": "JD1",
+      "title": "upsertPerson: joinedOn and status follow the same absent-versus-cleared rule as email/grade",
+      "expected": "A status change is never a deletion — see docs/plans/2026-09-08-people-directory-onboarding-design.md. Proves: joinedOn sets and persists; marking Departed sets status+departedOn without touching anything else; an untouched later upsertPerson call (no status field at all) carries the Departed status forward rather than silently reverting to Active; explicitly setting status back to Active clears both status and departedOn together.",
+      "verdict": "PASS",
+      "actual": "joined=true departed=true untouched=true reactivated=true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
       "id": "PS1",
       "title": "directReportsOf returns everybody naming a person as manager, and nobody else",
       "expected": "A hand-built people record — A manages B and C, and D reports to nobody. Asking for A's reports must return exactly B and C.",

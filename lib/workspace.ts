@@ -1581,6 +1581,12 @@ export type ConfigOp =
       grade?: string
       track?: string
       developingToward?: string
+      /** When this person joined. See `Person.joinedOn`. */
+      joinedOn?: string
+      /** A status change, never a deletion. See `Person.status`. */
+      status?: 'Active' | 'Departed'
+      /** Set only alongside `status: 'Departed'`. See `Person.departedOn`. */
+      departedOn?: string
     }
   | { k: 'deletePerson'; id: string }
   | { k: 'upsertResponsibility'; id: string | null; patch: Partial<ResponsibilityType> }
@@ -8471,11 +8477,14 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
        * TypeError out of a pure reducer, which surfaces as a 500 rather than as a refusal
        * naming the field.
        */
-      for (const f of ['grade', 'track', 'developingToward'] as const) {
+      for (const f of ['grade', 'track', 'developingToward', 'joinedOn', 'departedOn'] as const) {
         const v = op[f]
         if (v !== undefined && typeof v !== 'string') {
           return { state, error: `${f} must be text.` }
         }
+      }
+      if (op.status !== undefined && op.status !== 'Active' && op.status !== 'Departed') {
+        return { state, error: 'status must be Active or Departed.' }
       }
       const id = op.id ?? `PERSON_${m.seq}`
       const existing = m.people[id]
@@ -8548,6 +8557,36 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
          * the shipped fallback means and it is not a claim this action is entitled to make.
          */
         ...career(op, existing),
+        // Same absent-versus-cleared shape as the address.
+        ...(op.joinedOn !== undefined
+          ? op.joinedOn
+            ? { joinedOn: op.joinedOn }
+            : {}
+          : existing?.joinedOn
+            ? { joinedOn: existing.joinedOn }
+            : {}),
+        /*
+         * A status change, never a deletion — see `Person.status`. Explicit `'Active'` clears
+         * both `status` and `departedOn` together (a re-activation has no departure date left to
+         * carry), matching the same "absence is Active" convention the field's own type uses.
+         * Untouched (`op.status === undefined`) carries over whatever was already recorded.
+         */
+        ...(op.status !== undefined
+          ? op.status === 'Departed'
+            ? {
+                status: 'Departed' as const,
+                ...(op.departedOn !== undefined
+                  ? op.departedOn
+                    ? { departedOn: op.departedOn }
+                    : {}
+                  : existing?.departedOn
+                    ? { departedOn: existing.departedOn }
+                    : {}),
+              }
+            : {}
+          : existing?.status === 'Departed'
+            ? { status: existing.status, ...(existing.departedOn ? { departedOn: existing.departedOn } : {}) }
+            : {}),
       }
       const roleNames = person.roleIds.map((r) => m.roles[r].label).join(', ') || 'no role'
       return done(

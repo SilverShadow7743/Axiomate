@@ -18,7 +18,7 @@ import type { SavedView } from '@/lib/savedViews'
 const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
   { title: 'My work', items: ['mywork', 'mycalendar', 'inbox'] },
   { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio', 'applications', 'analytics'] },
-  { title: 'Records', items: ['timesheet', 'mail'] },
+  { title: 'Records', items: ['timesheet', 'mail', 'people'] },
 ]
 
 /**
@@ -46,6 +46,7 @@ const VIEW_LABEL: Record<WorkspaceView, string> = {
   inbox: 'Inbox',
   mycalendar: 'My calendar',
   mail: 'Mail',
+  people: 'People',
 }
 const VIEW_TITLE: Record<WorkspaceView, string> = {
   mywork: 'Everything waiting on you, across every engagement',
@@ -59,6 +60,7 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   inbox: 'What needs a decision, what you’re waiting on, and what the rules have told you',
   mycalendar: 'Your own month — events, leave, allocation and your due dates, private to you',
   mail: 'Your inbox, and what arrived at the project mailbox',
+  people: 'Every colleague in the directory — open a profile for identity, career and skills',
 }
 
 interface Props {

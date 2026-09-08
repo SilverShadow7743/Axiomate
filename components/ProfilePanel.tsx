@@ -70,8 +70,19 @@ export default function ProfilePanel({
             <div className="cfg-empty">That person is no longer in the directory.</div>
           ) : (
             <>
+              {person.status === 'Departed' && (
+                <p className="ov-gate">
+                  Departed{person.departedOn ? ` ${person.departedOn}` : ''} — no longer offered
+                  as a manager for someone else. History that names {person.name}, and any record
+                  still assigned to them, is untouched.
+                </p>
+              )}
               <section className="cfg-section">
                 <div className="profile-facts">
+                  <div>
+                    <span className="cfg-key">Joined</span>
+                    <span>{person.joinedOn ?? <span className="prov">none recorded</span>}</span>
+                  </div>
                   <div>
                     <span className="cfg-key">Work address</span>
                     <span>{person.email ?? <span className="prov">none recorded</span>}</span>
