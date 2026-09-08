@@ -166,6 +166,28 @@ export const DEFAULT_AUTOMATION_RULES: AutomationRule[] = [
     enabled: true,
   },
   {
+    /*
+     * The rollup (`rollUp`, lib/schedule.ts) already computes this and shows it on every parent
+     * row — this is the same fact, noticed rather than merely displayed. Deliberately a notice,
+     * not a close: `Closed - confirmed` needs client-agreement evidence this condition proves
+     * nothing about, so the decision to close stays a person's, exactly as it already is for a
+     * 100%-complete rollup nobody has acted on yet.
+     */
+    id: 'AUTO_SUBWORK_CLOSED',
+    label: 'Tell the owner when every piece of sub-work under it is closed',
+    on: 'issue.allSubworkClosed',
+    when: [],
+    then: [
+      {
+        kind: 'notify',
+        audience: 'owner',
+        channel: 'in-app',
+        text: '{id} — {to}',
+      },
+    ],
+    enabled: true,
+  },
+  {
     id: 'AUTO_OWNER_CHANGED',
     label: 'Tell somebody when work becomes theirs',
     on: 'issue.owner',

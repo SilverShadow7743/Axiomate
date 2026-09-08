@@ -44,6 +44,7 @@ export const WATCH_CONDITIONS = [
   { key: 'stale', label: 'Nothing has happened on it for too long', event: 'issue.stale' },
   { key: 'planImpossible', label: 'Planned work exceeds the people committed to it', event: 'project.planImpossible' },
   { key: 'sowOverConsumed', label: 'More effort spent than was contracted', event: 'sow.overConsumed' },
+  { key: 'allSubworkClosed', label: 'Every piece of sub-work under it is closed', event: 'issue.allSubworkClosed' },
 ] as const
 
 export type ConditionKey = (typeof WATCH_CONDITIONS)[number]['key']
@@ -149,6 +150,23 @@ export function observe(
     const idle = workingDaysBetween(issue.lastActivity, today)
     if (idle >= policy.staleAfterDays) {
       add(row.id, 'stale', `Nothing recorded on it for ${idle} working days — last activity ${issue.lastActivity}.`)
+    }
+
+    /*
+     * Every piece of sub-work closed, and nobody told. `row.percentComplete` already rolls
+     * this up for the screen (`rollUp`, lib/schedule.ts) — this is the same fact, but noticed
+     * rather than merely displayed. Direct children only: an issue parented on another issue
+     * is exactly how Sub-Work sits under Work (lib/workspace.ts's `create` arm). Zero children
+     * raises nothing — a leaf has no sub-work to be "all closed", and treating an empty set as
+     * vacuously true would fire on every leaf in the register.
+     */
+    const subwork = rows.filter((r) => r.parentId === row.id && r.kind === 'issue')
+    if (subwork.length && subwork.every((c) => isTerminal(c.status))) {
+      add(
+        row.id,
+        'allSubworkClosed',
+        `${subwork.length} piece${subwork.length === 1 ? '' : 's'} of sub-work under it, all closed.`,
+      )
     }
   }
 

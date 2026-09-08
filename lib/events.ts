@@ -50,6 +50,7 @@ export const EVENT_TYPES = [
   { key: 'issue.stale', label: 'Nothing has happened on work for too long' },
   { key: 'project.planImpossible', label: 'A plan needs more than has been committed' },
   { key: 'sow.overConsumed', label: 'A statement of work goes over its agreed effort' },
+  { key: 'issue.allSubworkClosed', label: 'Every piece of sub-work under it is closed' },
 ] as const
 
 export type EventType = (typeof EVENT_TYPES)[number]['key']

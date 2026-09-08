@@ -604,6 +604,16 @@
       "impact": "Hive's rule builder offers \"update status\" and \"change assignee\" with no Axiomate equivalent until now — closed as two thin wrappers around the same reducer arm every other automated and human write already goes through, so nothing new needed validating."
     },
     {
+      "id": "AUTO2",
+      "title": "The owner is told when every piece of sub-work under an issue closes — not before, not for a leaf",
+      "expected": "allSubworkClosed only fires once every direct child is terminal, never for an issue with no sub-work at all, and the shipped AUTO_SUBWORK_CLOSED rule notifies the owner exactly then.",
+      "verdict": "PASS",
+      "actual": "A leaf issue with no sub-work never raises the condition (true). With one of two children closed, OAPIL-3 stays silent (true); with both closed, the condition fires (true) and the shipped AUTO_SUBWORK_CLOSED rule notifies its owner Priya (true) — the same rollup the Tree already shows at 100%, now noticed rather than merely displayed. OAPIL-3's own status is untouched (In Progress) — closing it is still a person's decision, never the automation's.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done."
+    },
+    {
       "id": "AA",
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",

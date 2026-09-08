@@ -3480,6 +3480,50 @@ scenario(
 )
 
 scenario(
+  'AUTO2',
+  'The owner is told when every piece of sub-work under an issue closes — not before, not for a leaf',
+  'allSubworkClosed only fires once every direct child is terminal, never for an issue with no sub-work at all, and the shipped AUTO_SUBWORK_CLOSED rule notifies the owner exactly then.',
+  () => {
+    const withKids = [
+      { t: 'create', parentId: 'OAPIL-3', kind: 'issue', draft: { name: 'Sub-work A', type: 'Task' }, now: NOW },
+      { t: 'create', parentId: 'OAPIL-3', kind: 'issue', draft: { name: 'Sub-work B', type: 'Task' }, now: NOW },
+    ].reduce((s, a) => ok(s, a as Action), BASE)
+    const kidA = Object.values(withKids.issues).find((i) => i.subject === 'Sub-work A')!.id
+    const kidB = Object.values(withKids.issues).find((i) => i.subject === 'Sub-work B')!.id
+
+    /* A leaf with no sub-work at all never raises the condition — the empty set is not "all closed". */
+    const leafOnly = runWatch(withKids, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const leafSilent = !Object.keys(leafOnly.observation.subjects).some(
+      (id) => id === 'OAPIL-1' && leafOnly.observation.subjects[id]?.includes('allSubworkClosed'),
+    )
+
+    /* One of two children closed: not yet all of them. */
+    const oneClosed = ok(withKids, { t: 'updateIssue', id: kidA, patch: { status: 'Closed - no defect' }, reason: 'Not reproducible.', now: NOW } as Action)
+    const partial = runWatch(oneClosed, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const notYet = !(partial.observation.subjects['OAPIL-3'] ?? []).includes('allSubworkClosed')
+
+    /* The second closes too: now every direct child is terminal. */
+    const bothClosed = ok(oneClosed, { t: 'updateIssue', id: kidB, patch: { status: 'Closed - no defect' }, reason: 'Not reproducible.', now: NOW } as Action)
+    const scheduled = runWatch(bothClosed, EMPTY_OBSERVATION, TODAY, NOW, SCHEDULE_ACTOR)
+    const fired = (scheduled.observation.subjects['OAPIL-3'] ?? []).includes('allSubworkClosed')
+    const notified = Object.values(scheduled.state.notifications).some(
+      (n) => n.ruleId === 'AUTO_SUBWORK_CLOSED' && n.to === 'Priya' && n.aboutId === 'OAPIL-3',
+    )
+    /* OAPIL-3 itself is untouched by this — still In Progress, its own closure a person's call. */
+    const parentUnmoved = scheduled.state.issues['OAPIL-3']!.status === 'In Progress'
+
+    const good = leafSilent && notYet && fired && notified && parentUnmoved
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A leaf issue with no sub-work never raises the condition (${leafSilent}). With one of two children closed, OAPIL-3 stays silent (${notYet}); with both closed, the condition fires (${fired}) and the shipped AUTO_SUBWORK_CLOSED rule notifies its owner Priya (${notified}) — the same rollup the Tree already shows at 100%, now noticed rather than merely displayed. OAPIL-3's own status is untouched (${scheduled.state.issues['OAPIL-3']!.status}) — closing it is still a person's decision, never the automation's.`,
+      stops: '—',
+      severity: '—',
+      impact: 'The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done.',
+    }
+  },
+)
+
+scenario(
   'AA',
   'An integration fails',
   'The failure is contained, retried where safe, surfaced, and never leaves records half-written.',
