@@ -113,6 +113,38 @@ export function commitmentCounts(c: Commitment): boolean {
 }
 
 /**
+ * A visible caveat, never a rewrite — see `docs/plans/2026-09-08-leave-aware-due-date-design.md`.
+ *
+ * Whether the given owner has approved leave overlapping `[from, to]` — the window between
+ * today and an issue's own planned end. Returns the leave's own recorded date range, not
+ * clipped to the window, so a caveat says exactly what was approved rather than an edited
+ * version of it. Only the CURRENT owner is checked — a future assignee is speculation this
+ * codebase already refuses elsewhere (`candidatesFor` never guesses a best person either), and
+ * the caveat recomputes at read time if ownership changes, the same way everything else here
+ * does rather than needing to anticipate a change that has not happened.
+ */
+export function ownerLeaveCaveat(
+  ownerId: string | null | undefined,
+  commitments: Commitment[],
+  from: string,
+  to: string,
+): { startDate: string; endDate: string } | null {
+  if (!ownerId || to < from) return null
+  const overlapping = commitments
+    .filter(
+      (c) =>
+        !c.deletedAt &&
+        c.kind === 'Leave' &&
+        commitmentCounts(c) &&
+        c.personId === ownerId &&
+        c.startDate <= to &&
+        c.endDate >= from,
+    )
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  return overlapping[0] ?? null
+}
+
+/**
  * The leave-reason redaction, pure so the scenario suite can drive exactly what leaves the
  * server (the same split as `clientView`). Every reader keeps dates, hours and status —
  * availability is the point of the record; the private reason survives only when the reader

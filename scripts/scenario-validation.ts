@@ -64,7 +64,7 @@ import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/assignment'
-import { availabilityFor, redactLeaveReasons } from '../lib/availability'
+import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/availability'
 import { forecastFor, describeForecast } from '../lib/forecast'
 import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
 import { meetingHours } from '../lib/availability'
@@ -12522,6 +12522,66 @@ scenario(
           stops: 'at the FF/SF candidate computation, which mixes a working-day lag with a calendar-day span as one shifted quantity',
           severity: 'P1',
           impact: 'the critical path can show a dependent activity finishing before the work it depends on, undermining every slackDays and scheduleVarianceDays figure downstream',
+        }
+  },
+)
+
+/* ================================================================== *
+ * Leave-aware due-date caveat (design 2026-09-08)
+ * ================================================================== */
+
+scenario(
+  'HOL4',
+  "The Overview due date carries a visible caveat when the owner is on approved leave inside the window — the date itself is never touched",
+  "ownerLeaveCaveat (lib/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
+  () => {
+    const priya = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    let s = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action)
+    // Recorded by someone other than Priya — lands Approved in one step (E1B's rule).
+    s = ok(s, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-08-18', endDate: '2026-08-19', hoursPerDay: 7.5, note: '', now: NOW,
+    } as Action)
+    // Outside the [today, plannedEnd] window entirely — must not surface.
+    s = ok(s, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-09-01', endDate: '2026-09-02', hoursPerDay: 7.5, note: '', now: NOW,
+    } as Action)
+
+    const withinWindow = ownerLeaveCaveat(priya.id, Object.values(s.commitments), TODAY, '2026-08-20')
+    const foundOverlap = withinWindow?.startDate === '2026-08-18' && withinWindow?.endDate === '2026-08-19'
+
+    const noOwner = ownerLeaveCaveat(null, Object.values(s.commitments), TODAY, '2026-08-20') === null
+    const dueDateTooSoon = ownerLeaveCaveat(priya.id, Object.values(s.commitments), TODAY, '2026-08-16') === null
+
+    // A leave Priya requests for herself lands Requested, not Approved (E1B) — earlier than
+    // the already-approved leave, so if it wrongly counted, the earliest-first sort would
+    // return IT instead. It must not change the answer at all.
+    const requested = apply(s, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-08-11', endDate: '2026-08-12', hoursPerDay: 7.5, note: '', now: NOW,
+    } as Action, { id: 'priya-actor', name: 'Priya' })
+    if (requested.error) throw new Error(`self-request refused: ${requested.error}`)
+    const afterRequest = ownerLeaveCaveat(priya.id, Object.values(requested.state.commitments), TODAY, '2026-08-20')
+    const requestedExcluded = afterRequest?.startDate === '2026-08-18'
+
+    const dueDateUntouched = rowFor(s, 'OAPIL-1').plannedEndDate === '2026-08-20'
+
+    const good = foundOverlap && noOwner && dueDateTooSoon && requestedExcluded && dueDateUntouched
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `overlap found ${withinWindow?.startDate}–${withinWindow?.endDate}; no owner and too-early-due-date both null; a self-requested leave changed nothing (still ${afterRequest?.startDate}); the due date itself stayed 2026-08-20`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `foundOverlap=${foundOverlap} noOwner=${noOwner} dueDateTooSoon=${dueDateTooSoon} requestedExcluded=${requestedExcluded} (${afterRequest?.startDate}) dueDateUntouched=${dueDateUntouched}`,
+          stops: 'at ownerLeaveCaveat — either it misses an approved overlap, wrongly counts a Requested one, or (worst) the due date itself moved',
+          severity: 'P2',
+          impact: 'a caveat that is wrong is worse than none — it either hides a real staffing conflict or cries wolf on a date nobody actually has to worry about',
         }
   },
 )

@@ -681,6 +681,7 @@ export default function DetailPanel({
             row={issueRow!}
             issue={issue}
             state={state}
+            today={today}
             actor={actor}
             customResponsibilities={customResponsibilities}
             onSetAssignment={(rid, values) => onSetAssignment(issue.id, rid, values)}

@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
-import { can, isUnresolvedOwnerName } from '@/lib/access'
+import { can, directoryIdByName, isUnresolvedOwnerName } from '@/lib/access'
+import { ownerLeaveCaveat } from '@/lib/availability'
 import { canEditIssue } from '@/lib/permissions'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueNote } from '@/lib/notes'
@@ -94,6 +95,7 @@ export default function OverviewTab({
   row,
   issue,
   state,
+  today,
   actor,
   customResponsibilities,
   onSetAssignment,
@@ -112,6 +114,7 @@ export default function OverviewTab({
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
   state: WorkspaceState
+  today: string
   actor: Actor
   customResponsibilities: { id: string; label: string; requiredHere: boolean; values: string[] }[]
   onSetAssignment: (responsibilityId: string, values: string[]) => void
@@ -149,6 +152,14 @@ export default function OverviewTab({
     () => Object.values(state.issues).map((i) => ({ id: i.id, subject: i.subject, status: i.status })),
     [state.issues],
   )
+  /** A visible caveat beside the due date when the owner is on approved leave inside the
+   *  window — never a rewrite of the date itself. See
+   *  docs/plans/2026-09-08-leave-aware-due-date-design.md. */
+  const leaveCaveat = useMemo(() => {
+    if (!row.plannedEndDate) return null
+    const ownerId = directoryIdByName(state.model, issue.owner)
+    return ownerLeaveCaveat(ownerId, Object.values(state.commitments), today, row.plannedEndDate)
+  }, [state.model, state.commitments, issue.owner, today, row.plannedEndDate])
   const moduleDefault = useMemo(() => moduleOf(state, issue.id), [state, issue.id])
   const projectId = useMemo(() => projectOf(state, issue.id), [state, issue.id])
   /** Suggestions for Owner — who this issue's project actually has staffed, per `ProjectMember`.
@@ -933,6 +944,13 @@ export default function OverviewTab({
               {row.plannedEndDate ? formatIso(row.plannedEndDate) : '—'}
               {row.plannedOrigin === 'derived' && (
                 <span className="prov"> · rolled up from its lifecycle</span>
+              )}
+              {leaveCaveat && (
+                <span className="prov">
+                  {' '}
+                  · {issue.owner} is on leave {formatIso(leaveCaveat.startDate)}–
+                  {formatIso(leaveCaveat.endDate)}, inside this window
+                </span>
               )}
             </dd>
             <dt>Raised</dt>

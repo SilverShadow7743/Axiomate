@@ -2562,6 +2562,16 @@
       "stops": "",
       "severity": "P1",
       "impact": "none"
+    },
+    {
+      "id": "HOL4",
+      "title": "The Overview due date carries a visible caveat when the owner is on approved leave inside the window — the date itself is never touched",
+      "expected": "ownerLeaveCaveat (lib/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
+      "verdict": "PASS",
+      "actual": "overlap found 2026-08-18–2026-08-19; no owner and too-early-due-date both null; a self-requested leave changed nothing (still 2026-08-18); the due date itself stayed 2026-08-20",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
     }
   ]
 }
