@@ -63,6 +63,7 @@ import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, ty
 import ClientPackView from './ClientPackView'
 import FinanceReportDialog from './FinanceReportDialog'
 import FirstRunCard from './FirstRunCard'
+import AdminFirstRunCard from './AdminFirstRunCard'
 import SearchResults from './SearchResults'
 import { searchWorkspace, type SearchHit } from '@/lib/search'
 import { planSlaDates, slaReason } from '@/lib/sla'
@@ -2344,6 +2345,7 @@ export default function IssueWorkspace({
       {view === 'mywork' ? (
         <>
           <FirstRunCard state={state} actor={actor} />
+          <AdminFirstRunCard state={state} actor={actor} />
           <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
         </>
       ) : view === 'portfolio' ? (

@@ -29,6 +29,7 @@ import { runRecurrences,
   scopeChainOf,
   projectOf,
   moduleOf,
+  COMPANY_NODE_ID,
   type Action,
   type IssueRecord,
   type SeedIssueInput,
@@ -129,7 +130,7 @@ import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
 import { searchWorkspace } from '../lib/search'
-import { firstRunState, firstRunVisible } from '../lib/firstRun'
+import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
 import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { resolutionNotices } from '../lib/reports/resolutionNotice'
@@ -2606,6 +2607,80 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A roled, entry-less Priya sees the card; her first entry marks the step and keeps the card until the week goes in; the submitted week retires it; the admin and an unmatched sign-in never see it at all.', stops: '—', severity: '—', impact: 'Onboarding that computes itself from evidence, shown only to the seats that need it.' } as const
       : { verdict: 'FAIL', actual: `eligible=${eligible} stepOne=${stepOne} retired=${retired} adminNever=${adminNever} strangerNever=${strangerNever}`, stops: 'at the helper — the card would nag the wrong seat or vanish before the loop is learned', severity: 'P3', impact: 'onboarding noise for operators, or silence for the consultant it exists for' } as const
+  },
+)
+
+scenario(
+  'AFR1',
+  'Admin first-run shows itself only on a genuinely fresh tenant, and retires once staffed',
+  "adminFirstRunState is pure-driven: a config.manage holder with nobody else in the directory and no project anywhere is eligible; inviting a second person marks that step without retiring the card; giving them a role marks the second step, still visible until a project exists; creating the first project marks the third and retires the card; a consultant without config.manage never sees it; an actor matching nobody never sees it either.",
+  () => {
+    const fresh = initWorkspace([], [])
+    const withAdmin = ok(fresh, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Nishant', roleIds: [ADMIN_ROLE_ID] }, now: NOW,
+    } as Action)
+    const adminId = Object.values(withAdmin.model.people).find((p) => p.name === 'Nishant')!.id
+    const admin: Actor = { id: adminId, name: 'Nishant' }
+
+    const start = adminFirstRunState(withAdmin, admin)
+    const eligible =
+      start.eligible && !start.invitedSomeone && !start.assignedARole && !start.createdFirstProject &&
+      adminFirstRunVisible(start)
+
+    const invited = ok(withAdmin, {
+      t: 'config', op: { k: 'upsertPerson', id: null, name: 'Priya', roleIds: [] }, now: NOW,
+    } as Action)
+    const after1 = adminFirstRunState(invited, admin)
+    const stepOne =
+      !after1.eligible && after1.invitedSomeone && !after1.assignedARole && !after1.createdFirstProject &&
+      adminFirstRunVisible(after1)
+
+    const priyaId = Object.values(invited.model.people).find((p) => p.name === 'Priya')!.id
+    const roled = ok(invited, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaId, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const after2 = adminFirstRunState(roled, admin)
+    const stepTwo = after2.invitedSomeone && after2.assignedARole && !after2.createdFirstProject && adminFirstRunVisible(after2)
+
+    const withClient = ok(roled, {
+      t: 'create', parentId: COMPANY_NODE_ID, kind: 'client', draft: { name: 'A Client' }, now: NOW,
+    } as Action)
+    const clientId = Object.values(withClient.nodes).find((n) => n.kind === 'client')!.id
+    const withEngagement = ok(withClient, {
+      t: 'create', parentId: clientId, kind: 'engagement', draft: { name: 'An Engagement' }, now: NOW,
+    } as Action)
+    const engagementId = Object.values(withEngagement.nodes).find((n) => n.kind === 'engagement')!.id
+    const withProject = ok(withEngagement, {
+      t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'First Project' }, now: NOW,
+    } as Action)
+    const after3 = adminFirstRunState(withProject, admin)
+    const retired =
+      after3.invitedSomeone && after3.assignedARole && after3.createdFirstProject && !adminFirstRunVisible(after3)
+
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const consultant = adminFirstRunState(withProject, priyaActor)
+    const consultantNever = !consultant.eligible && !adminFirstRunVisible(consultant)
+    const stranger = adminFirstRunState(withProject, { id: 'nobody', name: 'No Body' })
+    const strangerNever = !stranger.eligible && !adminFirstRunVisible(stranger)
+
+    const good = eligible && stepOne && stepTwo && retired && consultantNever && strangerNever
+    return good
+      ? {
+          verdict: 'PASS',
+          actual:
+            'A config.manage holder on an empty tenant sees the card; inviting a second person marks step one and keeps the card up; giving them a role marks step two, still visible with no project yet; creating the first project marks step three and retires the card; a consultant without config.manage and an unmatched sign-in never see it.',
+          stops: '—',
+          severity: '—',
+          impact:
+            'Nobody was guided through the handful of things that have to happen before the existing first-run loop has anyone to run — invite, role, first project. This closes that, on the same computed-not-clicked pattern as the consultant card.',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `eligible=${eligible} stepOne=${stepOne} stepTwo=${stepTwo} retired=${retired} consultantNever=${consultantNever} strangerNever=${strangerNever}`,
+          stops: 'at the helper — the card would nag the wrong seat, retire early, or never retire at all',
+          severity: 'P3',
+          impact: 'setup guidance missing or noisy for a fresh tenant\'s admin',
+        }
   },
 )
 

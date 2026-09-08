@@ -45,3 +45,50 @@ export function firstRunState(state: WorkspaceState, actor: Actor): FirstRunStat
 export function firstRunVisible(s: FirstRunState): boolean {
   return s.eligible || (s.recordedFirstHours && !s.submittedFirstWeek)
 }
+
+/**
+ * Admin first-run — a second, narrower checklist. See
+ * `docs/plans/2026-09-08-admin-first-run-design.md`.
+ *
+ * A different job from `firstRunState` above, not a reopening of its exclusion: that card
+ * teaches the daily record→submit loop, and admins are rightly excluded from it because they
+ * already know the product. This one guides the handful of things that must happen before
+ * that loop has anyone to run — invite a second person, give them a role, create the first
+ * project — and only on a tenant where none of that has happened yet.
+ */
+
+export interface AdminFirstRunState {
+  /** A directory-matched config.manage holder on a tenant with nobody else and no project. */
+  eligible: boolean
+  invitedSomeone: boolean
+  assignedARole: boolean
+  createdFirstProject: boolean
+}
+
+export function adminFirstRunState(state: WorkspaceState, actor: Actor): AdminFirstRunState {
+  const person = directoryPersonFor(state.model, actor)
+  const none: AdminFirstRunState = {
+    eligible: false,
+    invitedSomeone: false,
+    assignedARole: false,
+    createdFirstProject: false,
+  }
+  if (!person) return none
+  if (!can(state.model, actor, 'config.manage').allowed) return none
+
+  const others = Object.values(state.model.people).filter((p) => p.id !== person.id)
+  const roledOthers = others.filter((p) => (p.roleIds ?? []).length > 0)
+  const projects = Object.values(state.nodes).filter((n) => n.kind === 'project' && !n.deletedAt)
+
+  return {
+    eligible: others.length === 0 && projects.length === 0,
+    invitedSomeone: others.length > 0,
+    assignedARole: roledOthers.length > 0,
+    createdFirstProject: projects.length > 0,
+  }
+}
+
+/** Show the card until all three steps are done — the fresh-tenant window this exists for. */
+export function adminFirstRunVisible(s: AdminFirstRunState): boolean {
+  return s.eligible || ((s.invitedSomeone || s.assignedARole) && !s.createdFirstProject)
+}

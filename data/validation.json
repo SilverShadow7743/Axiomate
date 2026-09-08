@@ -463,6 +463,16 @@
       "impact": "Onboarding that computes itself from evidence, shown only to the seats that need it."
     },
     {
+      "id": "AFR1",
+      "title": "Admin first-run shows itself only on a genuinely fresh tenant, and retires once staffed",
+      "expected": "adminFirstRunState is pure-driven: a config.manage holder with nobody else in the directory and no project anywhere is eligible; inviting a second person marks that step without retiring the card; giving them a role marks the second step, still visible until a project exists; creating the first project marks the third and retires the card; a consultant without config.manage never sees it; an actor matching nobody never sees it either.",
+      "verdict": "PASS",
+      "actual": "A config.manage holder on an empty tenant sees the card; inviting a second person marks step one and keeps the card up; giving them a role marks step two, still visible with no project yet; creating the first project marks step three and retires the card; a consultant without config.manage and an unmatched sign-in never see it.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Nobody was guided through the handful of things that have to happen before the existing first-run loop has anyone to run — invite, role, first project. This closes that, on the same computed-not-clicked pattern as the consultant card."
+    },
+    {
       "id": "IM1",
       "title": "A mail filed from an inbox becomes a draft the reducer accepts, with honest provenance",
       "expected": "The in-mail mapper pure-driven before any auth or network exists: stacked Re:/Fw: prefixes strip to the real subject; a runaway subject caps at 300 and a runaway body at 2000; Graph HTML becomes readable text (tags gone, entities decoded, structure kept as line breaks); an empty subject falls back rather than refusing; provenance names the FILER's own mailbox and carries the messageId verbatim — and the resulting draft is accepted by the real create arm, because a mapper pinned only against its own output proves nothing.",
