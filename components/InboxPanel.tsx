@@ -286,7 +286,7 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
           disabled={Boolean(activeQuery)}
           onChange={(e) => { setActiveQuery(''); setSearchBox(''); setFolderId(e.target.value) }}
         >
-          {(folders ?? [{ id: 'inbox', name: 'Inbox', unreadCount: 0 }]).map((f) => (
+          {(folders?.length ? folders : [{ id: 'inbox', name: 'Inbox', unreadCount: 0 }]).map((f) => (
             <option key={f.id} value={f.id}>
               {f.name}
               {f.unreadCount ? ` (${f.unreadCount})` : ''}
