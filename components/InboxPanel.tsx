@@ -48,6 +48,45 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
   const [attachId, setAttachId] = useState('')
   const [filed, setFiled] = useState<Record<string, string>>({})
 
+  /* ---------------- open — full content, fetched on demand, see the message route's own doc */
+  const [opened, setOpened] = useState<InboxMessage | null>(null)
+  const [openedContent, setOpenedContent] = useState<{
+    contentType: 'html' | 'text'
+    content: string
+  } | null>(null)
+  const [openedBusy, setOpenedBusy] = useState(false)
+  const [openedError, setOpenedError] = useState<string | null>(null)
+
+  const openMessage = async (m: InboxMessage) => {
+    setOpened(m)
+    setOpenedContent(null)
+    setOpenedError(null)
+    setOpenedBusy(true)
+    try {
+      const res = await fetch(`/api/mail/message/${encodeURIComponent(m.id)}`)
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        reconnect?: boolean
+        error?: string
+        contentType?: 'html' | 'text'
+        content?: string
+      } | null
+      if (!res.ok || !data?.ok) {
+        setOpenedError(data?.error ?? 'The message could not be read.')
+        return
+      }
+      if (data.reconnect) {
+        setOpenedError('Your inbox connection is not active — sign in once to connect it.')
+        return
+      }
+      setOpenedContent({ contentType: data.contentType ?? 'text', content: data.content ?? '' })
+    } catch {
+      setOpenedError('The message could not be read. Check the connection and try again.')
+    } finally {
+      setOpenedBusy(false)
+    }
+  }
+
   /* ---------------- reply / reply-all — personal, see lib/personalGraph.ts ---------------- */
   const [replying, setReplying] = useState<{ message: InboxMessage; all: boolean } | null>(null)
   const [replyText, setReplyText] = useState('')
@@ -234,7 +273,9 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
     <div key={m.id} className="ibx-row">
       <div className="ibx-row-main">
         <span className="ibx-from">{m.fromName || m.fromAddress}</span>
-        <span className="ibx-subject">{m.subject}</span>
+        <button className="ibx-subject ibx-subject-btn" onClick={() => void openMessage(m)}>
+          {m.subject}
+        </button>
         {m.categories.map((c) => (
           <span key={c} className="ibx-category">{c}</span>
         ))}
@@ -243,6 +284,9 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
       <div className="ibx-row-side">
         <span className="ibx-date">{m.receivedAt ? formatIso(m.receivedAt.slice(0, 10)) : ''}</span>
         {replied[m.id] && <span className="ibx-filed">replied</span>}
+        <button className="btn" onClick={() => void openMessage(m)}>
+          Open…
+        </button>
         <button
           className="btn"
           onClick={() => { setReplyError(null); setReplyText(''); setReplying({ message: m, all: false }) }}
@@ -400,6 +444,38 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
               </button>
             </div>
             <p className="ibx-note">A newly created item appears in the tree on the next reload.</p>
+          </div>
+        </div>
+      )}
+
+      {opened && (
+        <div className="modal-scrim" role="dialog" aria-label="Message">
+          <div className="modal ibx-open-modal">
+            <div className="modal-head">
+              <span>{opened.subject}</span>
+              <button className="btn" onClick={() => { setOpened(null); setOpenedContent(null) }}>
+                Close
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="ibx-note">
+                {opened.fromName || opened.fromAddress}
+                {opened.receivedAt ? ` · ${formatIso(opened.receivedAt.slice(0, 10))}` : ''}
+              </p>
+              {openedBusy && <p className="ibx-note">Loading…</p>}
+              {openedError && <p className="ibx-error">{openedError}</p>}
+              {openedContent?.contentType === 'html' && (
+                <iframe
+                  className="ibx-open-frame"
+                  title={opened.subject}
+                  sandbox=""
+                  srcDoc={openedContent.content}
+                />
+              )}
+              {openedContent?.contentType === 'text' && (
+                <pre className="ibx-open-text">{openedContent.content}</pre>
+              )}
+            </div>
           </div>
         </div>
       )}

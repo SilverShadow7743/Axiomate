@@ -6751,3 +6751,8 @@ select.cell-editor {
 .ibx-toolbar input { flex: 1; min-width: 160px; }
 .ibx-section { margin: 14px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .ibx-category { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 10px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+.ibx-subject-btn { background: none; border: 0; padding: 0; margin: 0; font: inherit; font-size: 13.5px; font-weight: 600; color: inherit; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ibx-subject-btn:hover, .ibx-subject-btn:focus-visible { text-decoration: underline; }
+.ibx-open-modal { max-width: 720px; width: 100%; }
+.ibx-open-frame { width: 100%; height: 60vh; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.ibx-open-text { white-space: pre-wrap; font-family: inherit; font-size: 13px; max-height: 60vh; overflow-y: auto; margin: 0; }
