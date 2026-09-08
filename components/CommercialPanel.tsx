@@ -37,6 +37,7 @@ import {
   type RaiseInvoiceLine,
 } from '@/lib/invoice'
 import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
+import { holidaySetOf } from '@/lib/config'
 import { sowCostOf, describeCost } from '@/lib/rates'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -318,6 +319,7 @@ export default function CommercialPanel({
               contracted={contractedPosition(sow, Object.values(state.changes).filter((c) => c.sowId === sow.id && !c.deletedAt))}
               today={today}
               warnBeforeDays={state.model.watch.warnBeforeDays}
+              holidays={holidaySetOf(state.model)}
               mayEdit={mayEditMilestone.allowed}
               mayAccept={mayAcceptMilestone.allowed}
               actorName={actor.name}
@@ -796,6 +798,7 @@ function Milestones({
   contracted,
   today,
   warnBeforeDays,
+  holidays,
   mayEdit,
   mayAccept,
   actorName,
@@ -809,6 +812,7 @@ function Milestones({
   contracted: ReturnType<typeof contractedPosition>
   today: string
   warnBeforeDays: number
+  holidays: ReadonlySet<string>
   mayEdit: boolean
   mayAccept: boolean
   actorName: string
@@ -860,7 +864,7 @@ function Milestones({
               /* The deliverer cannot accept — the reducer refuses it, so the control is not
                  offered either. A button that can never succeed is worse than no button. */
               const theirs = m.deliveredBy?.trim().toLowerCase() === actorName.trim().toLowerCase()
-              const risk = milestoneRisk(m, today, warnBeforeDays)
+              const risk = milestoneRisk(m, today, warnBeforeDays, holidays)
               return [
                 <tr key={m.id} title={describeMilestone(m, value)}>
                   <td className="mono">{m.sequence}</td>
@@ -875,15 +879,15 @@ function Milestones({
                     {risk === 'overdue' && (
                       <span className="est-block-note warn">
                         {' '}
-                        {workingDaysBetween(m.plannedDate!, today)} working day
-                        {workingDaysBetween(m.plannedDate!, today) === 1 ? '' : 's'} overdue
+                        {workingDaysBetween(m.plannedDate!, today, holidays)} working day
+                        {workingDaysBetween(m.plannedDate!, today, holidays) === 1 ? '' : 's'} overdue
                       </span>
                     )}
                     {risk === 'dueSoon' && (
                       <span className="est-block-note">
                         {' '}
-                        {workingDaysBetween(today, m.plannedDate!)} working day
-                        {workingDaysBetween(today, m.plannedDate!) === 1 ? '' : 's'} left
+                        {workingDaysBetween(today, m.plannedDate!, holidays)} working day
+                        {workingDaysBetween(today, m.plannedDate!, holidays) === 1 ? '' : 's'} left
                       </span>
                     )}
                   </td>

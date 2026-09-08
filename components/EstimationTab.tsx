@@ -5,6 +5,7 @@ import { effortVariance } from '@/lib/time'
 import type { Actor } from '@/lib/actor'
 import { canEditIssue } from '@/lib/permissions'
 import { formatIso } from '@/lib/dates'
+import { holidaySetOf } from '@/lib/config'
 import type { WorkspaceState } from '@/lib/workspace'
 import {
   COMPLEXITY_LEVELS,
@@ -65,7 +66,8 @@ export default function EstimationTab({
 
   const estimate: Estimate = stored ?? emptyEstimate(today)
   const effort = useMemo(() => deriveEffort(estimate, bands), [estimate, bands])
-  const timeline = useMemo(() => deriveTimeline(estimate, effort), [estimate, effort])
+  const holidays = useMemo(() => holidaySetOf(state.model), [state.model.holidays])
+  const timeline = useMemo(() => deriveTimeline(estimate, effort, holidays), [estimate, effort, holidays])
 
   const revisions = useMemo(
     () =>
@@ -102,7 +104,7 @@ export default function EstimationTab({
       ],
     })
 
-  const variance = scheduleVarianceDays(timeline.finish, issue?.actualEnd ?? null)
+  const variance = scheduleVarianceDays(timeline.finish, issue?.actualEnd ?? null, holidays)
   /**
    * The other half of "estimated versus actual", which this tab used to say plainly it could
    * not produce. It can now: hours are recorded against the issue, and the comparison is

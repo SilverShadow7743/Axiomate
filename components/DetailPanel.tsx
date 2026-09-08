@@ -888,7 +888,7 @@ export default function DetailPanel({
                   issue was raised and when it last moved, but no commitment date. The SLA policy
                   suggests{' '}
                   <b className="mono">
-                    {formatIso(proposeTargetDate(issue.raised, issue.severity, sla))}
+                    {formatIso(proposeTargetDate(issue.raised, issue.severity, sla, holidaySetOf(state.model)))}
                   </b>{' '}
                   ({sla[issue.severity]} working days for {issue.severity} severity).
                   <div style={{ marginTop: 7 }}>

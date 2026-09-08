@@ -2388,7 +2388,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       )
       const isMilestone = a.kind === 'Milestone'
       const start = a.draft.plannedStart || a.now.slice(0, 10)
-      const end = isMilestone ? start : a.draft.plannedEnd || addWorkingDays(start, 2)
+      const end = isMilestone ? start : a.draft.plannedEnd || addWorkingDays(start, 2, holidaySetOf(state.model))
       const id = `${issueId}#${seq}`
 
       const rec: ActivityRec = {
@@ -3540,13 +3540,14 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       let cursor = issue.raised
       let consumed = 0
       let seq = state.seq
+      const holidays = holidaySetOf(state.model)
 
       phases.forEach((phase, i) => {
         seq += 1
         const isMilestone = phase === milestonePhase
         const wd = Math.max(1, Math.round(a.slaDays * (weights[phase] ?? 0)))
-        const start = i === 0 ? cursor : addWorkingDays(cursor, 1)
-        const end = isMilestone ? start : addWorkingDays(start, wd - 1)
+        const start = i === 0 ? cursor : addWorkingDays(cursor, 1, holidays)
+        const end = isMilestone ? start : addWorkingDays(start, wd - 1, holidays)
 
         let pct = 0
         if (!isMilestone) {

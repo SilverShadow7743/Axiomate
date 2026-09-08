@@ -4,6 +4,7 @@ import { summarise } from './estimation'
 import { planCheck, profilesAt } from './capacity'
 import { sowPosition } from './sow'
 import { buildTree } from './tree'
+import { holidaySetOf } from './config'
 import type { WorkspaceState } from './workspace'
 
 /**
@@ -118,6 +119,7 @@ export function observe(
   const observation: Observation = { watching: [...policy.conditions], subjects: {} }
   const findings: WatchFinding[] = []
   const wanted = new Set(policy.conditions)
+  const holidays = holidaySetOf(state.model)
 
   const add = (subjectId: string, condition: ConditionKey, detail: string) => {
     if (!wanted.has(condition)) return
@@ -135,11 +137,11 @@ export function observe(
 
     const health = computeHealth(row, today)
     if (health === 'Overdue') {
-      add(row.id, 'overdue', `Due ${row.plannedEndDate}, and ${workingDaysBetween(row.plannedEndDate!, today)} working days have passed.`)
+      add(row.id, 'overdue', `Due ${row.plannedEndDate}, and ${workingDaysBetween(row.plannedEndDate!, today, holidays)} working days have passed.`)
     } else if (health === 'At Risk') {
       add(row.id, 'atRisk', `Due ${row.plannedEndDate} and ${row.percentComplete}% complete with most of the window gone.`)
     } else if (row.plannedEndDate) {
-      const left = workingDaysBetween(today, row.plannedEndDate)
+      const left = workingDaysBetween(today, row.plannedEndDate, holidays)
       if (left >= 0 && left <= policy.warnBeforeDays) {
         add(row.id, 'dueSoon', `Due ${row.plannedEndDate} — ${left} working day${left === 1 ? '' : 's'} left.`)
       }
@@ -147,7 +149,7 @@ export function observe(
 
     // Staleness is about attention rather than about dates, so it is checked whatever the
     // health says: an issue can be comfortably inside its window and abandoned.
-    const idle = workingDaysBetween(issue.lastActivity, today)
+    const idle = workingDaysBetween(issue.lastActivity, today, holidays)
     if (idle >= policy.staleAfterDays) {
       add(row.id, 'stale', `Nothing recorded on it for ${idle} working days — last activity ${issue.lastActivity}.`)
     }

@@ -19,6 +19,7 @@ import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
 import {
   ROOT_SCOPE,
+  holidaySetOf,
   liveWorkTypes,
   loadModel,
   resolveAutonomy,
@@ -788,6 +789,9 @@ export default function IssueWorkspace({
    * change is audited like any other configuration edit.
    */
   const sla = state.model.sla
+  /** Threaded into every working-day computation below — SLA targets, the critical path,
+   *  drag-schedule validation — so a declared org holiday is never silently a working day. */
+  const holidays = useMemo(() => holidaySetOf(state.model), [state.model.holidays])
   const [showProposed, setShowProposed] = useState(false)
 
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_VISIBLE)
@@ -920,14 +924,14 @@ export default function IssueWorkspace({
     dates.push(today)
     if (showProposed) {
       for (const i of Object.values(state.issues)) {
-        if (!i.deletedAt) dates.push(proposeTargetDate(i.raised, i.severity, sla))
+        if (!i.deletedAt) dates.push(proposeTargetDate(i.raised, i.severity, sla, holidays))
       }
     }
     const lo = minIso(dates) ?? today
     const hi = maxIso(dates) ?? today
     const pad = DOMAIN_PAD_DAYS[zoom]
     return buildScale(addDays(lo, -pad), addDays(hi, pad), zoom, ganttWidth)
-  }, [sortedRows, today, zoom, showProposed, state.issues, sla, ganttWidth])
+  }, [sortedRows, today, zoom, showProposed, state.issues, sla, holidays, ganttWidth])
 
   const selected = useMemo(
     () => sortedRows.find((r) => r.id === selectedId) ?? null,
@@ -941,8 +945,8 @@ export default function IssueWorkspace({
     const issueRow = sortedRows.find((r) => r.id === issueId)
     if (!issueRow) return null
     const acts = sortedRows.filter((r) => r.parentId === issueId)
-    return criticalResolutionPath(acts, state.dependencies, issueRow.plannedEndDate)
-  }, [selected, sortedRows, state.dependencies])
+    return criticalResolutionPath(acts, state.dependencies, issueRow.plannedEndDate, holidays)
+  }, [selected, sortedRows, state.dependencies, holidays])
 
   const criticalIds = useMemo(() => new Set(crp?.sufficient ? crp.chain : []), [crp])
 
@@ -1252,7 +1256,7 @@ export default function IssueWorkspace({
         notify('Summary rows roll up from their children and cannot be scheduled directly.', true)
         return false
       }
-      const violations = validateChange(row, { start, end }, map, state.dependencies)
+      const violations = validateChange(row, { start, end }, map, state.dependencies, holidays)
       const error = violations.find((v) => v.severity === 'error')
       if (error) {
         notify(error.message, true)
@@ -1270,7 +1274,7 @@ export default function IssueWorkspace({
       if (ok && warn) notify(`Saved with a warning: ${warn.message}`)
       return ok
     },
-    [sortedRows, state.dependencies, dispatch, notify],
+    [sortedRows, state.dependencies, holidays, dispatch, notify],
   )
 
   /**
@@ -1983,8 +1987,9 @@ export default function IssueWorkspace({
         ),
         sla,
         today,
+        holidays,
       ),
-    [sortedRows, filters, scope, sla, today],
+    [sortedRows, filters, scope, sla, today, holidays],
   )
 
   /**
@@ -2563,7 +2568,7 @@ export default function IssueWorkspace({
               if (row.kind !== 'issue' || row.plannedEndDate || !row.issue) return null
               return {
                 start: row.issue.raised,
-                end: proposeTargetDate(row.issue.raised, row.issue.severity, sla),
+                end: proposeTargetDate(row.issue.raised, row.issue.severity, sla, holidays),
               }
             }}
           />
@@ -2651,7 +2656,7 @@ export default function IssueWorkspace({
               t: 'setDates',
               id,
               start: i.raised,
-              end: proposeTargetDate(i.raised, i.severity, sla),
+              end: proposeTargetDate(i.raised, i.severity, sla, holidays),
               now: new Date().toISOString(),
               reason: `Accepted the ${i.severity} SLA proposal (${sla[i.severity]} working days from ${i.raised}).`,
             })

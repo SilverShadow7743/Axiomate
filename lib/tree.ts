@@ -1,6 +1,6 @@
 import type { FilterState, ScheduleRow } from './types'
 import { isGroupRow, NO_CLIENT_CHOSEN } from './types'
-import { disciplineLabel, kindLabel, resolveLabels } from './config'
+import { disciplineLabel, holidaySetOf, kindLabel, resolveLabels } from './config'
 import { raidKindOf } from './raid'
 import type { IssueRecord, WorkspaceState } from './workspace'
 import { computeDurations, computeHealth, isTerminal, pausedCalendarDays, rollUp, STATUS_PROGRESS } from './schedule'
@@ -16,6 +16,7 @@ import { richTextToPlainText } from './richText'
  */
 export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
   const rows: ScheduleRow[] = []
+  const holidays = holidaySetOf(state.model)
 
   /**
    * The terms this workspace uses, for the Type column.
@@ -65,7 +66,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
     const subIssues = childIssues(issue.id)
 
     const activityRows: ScheduleRow[] = acts.map((a, i) => {
-      const { duration, workingDuration } = computeDurations(a.plannedStartDate, a.plannedEndDate)
+      const { duration, workingDuration } = computeDurations(a.plannedStartDate, a.plannedEndDate, holidays)
       const preds = predecessorsOf.get(a.id) ?? []
       // An archived predecessor cannot block anything — it is no longer part of the plan.
       // Without the deletedAt test, archiving a predecessor would leave its successor
@@ -168,7 +169,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
       row.plannedOrigin = issue.plannedEnd ? 'user' : null
     }
 
-    const d = computeDurations(row.plannedStartDate, row.plannedEndDate)
+    const d = computeDurations(row.plannedStartDate, row.plannedEndDate, holidays)
     row.duration = d.duration
     row.workingDuration = d.workingDuration
 
@@ -246,7 +247,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
     row.actualOrigin = 'derived'
     row.percentComplete = r.percentComplete
     row.progressOrigin = 'rolled-up'
-    const d = computeDurations(row.plannedStartDate, row.plannedEndDate)
+    const d = computeDurations(row.plannedStartDate, row.plannedEndDate, holidays)
     row.duration = d.duration
     row.workingDuration = d.workingDuration
     row.scheduleHealth = allDone

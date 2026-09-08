@@ -6,7 +6,16 @@ import type {
   Severity,
   SlaPolicy,
 } from './types'
-import { addWorkingDays, daysBetween, maxIso, minIso, toUtc, workingDaysBetween, addDays } from './dates'
+import {
+  addDays,
+  addWorkingDays,
+  daysBetween,
+  maxIso,
+  minIso,
+  shiftWorkingDays,
+  toUtc,
+  workingDaysBetween,
+} from './dates'
 
 /**
  * Status -> % complete.
@@ -161,17 +170,22 @@ export function proposeTargetDate(
   raised: string,
   severity: Severity,
   policy: SlaPolicy,
+  holidays?: ReadonlySet<string>,
 ): string {
-  return addWorkingDays(raised, policy[severity])
+  return addWorkingDays(raised, policy[severity], holidays)
 }
 
 /** Recompute duration fields for a row with planned dates. */
-export function computeDurations(start: string | null, end: string | null): {
+export function computeDurations(
+  start: string | null,
+  end: string | null,
+  holidays?: ReadonlySet<string>,
+): {
   duration: number | null
   workingDuration: number | null
 } {
   if (!start || !end || end < start) return { duration: null, workingDuration: null }
-  return { duration: daysBetween(start, end), workingDuration: workingDaysBetween(start, end) }
+  return { duration: daysBetween(start, end), workingDuration: workingDaysBetween(start, end, holidays) }
 }
 
 /* ------------------------------------------------------------------ *
@@ -210,6 +224,7 @@ export function criticalResolutionPath(
   activities: ScheduleRow[],
   dependencies: IssueDependency[],
   plannedEnd: string | null,
+  holidays?: ReadonlySet<string>,
 ): CrpResult {
   const empty: CrpResult = {
     sufficient: false,
@@ -284,19 +299,28 @@ export function criticalResolutionPath(
       const pStart = es.get(p.id)!
       const pFinish = ef.get(p.id)!
       let candidate: string
+      // Working-day aware: a successor cannot legally start or finish on a weekend or a
+      // declared holiday, and the lag itself is expressed in working days — the same
+      // working-day semantics the SLA due-date math already uses (lib/dates.ts). The
+      // activity's own span stays calendar-day (ef below is start + span in calendar days,
+      // reproducing an already-fixed planned duration rather than a fresh gap), so FF/SF only
+      // apply the working-day shift to the LAG and subtract span in calendar days afterward —
+      // shifting `lag - span` as one working-day quantity would consume the calendar-day span
+      // as working days too, moving the successor's finish before the predecessor's, which an
+      // FF/SF edge exists specifically to forbid.
       switch (e.dependencyType) {
         case 'FS':
-          candidate = shiftIso(pFinish, 1 + e.lagDays)
+          candidate = shiftWorkingDays(pFinish, 1 + e.lagDays, holidays)
           break
         case 'SS':
-          candidate = shiftIso(pStart, e.lagDays)
+          candidate = shiftWorkingDays(pStart, e.lagDays, holidays)
           break
         case 'FF':
           // Successor must finish no earlier than predecessor finish; express via its own span.
-          candidate = shiftIso(pFinish, e.lagDays - span)
+          candidate = shiftIso(shiftWorkingDays(pFinish, e.lagDays, holidays), -span)
           break
         case 'SF':
-          candidate = shiftIso(pStart, e.lagDays - span)
+          candidate = shiftIso(shiftWorkingDays(pStart, e.lagDays, holidays), -span)
           break
       }
       if (candidate > start) {
@@ -377,6 +401,7 @@ export function validateChange(
   next: { start: string; end: string },
   all: Map<string, ScheduleRow>,
   dependencies: IssueDependency[],
+  holidays?: ReadonlySet<string>,
 ): Violation[] {
   const out: Violation[] = []
   if (next.end < next.start) {
@@ -387,7 +412,10 @@ export function validateChange(
     const pred = all.get(dep.predecessorId)
     if (!pred?.plannedEndDate) continue
     if (dep.dependencyType === 'FS') {
-      const earliest = shiftIso(pred.plannedEndDate, 1 + dep.lagDays)
+      // Same working-day lag semantics criticalResolutionPath's FS candidate uses — a drag
+      // that would satisfy the calendar-day lag but not the working-day one should be caught
+      // by the same rule the critical path is computed with, not a laxer one.
+      const earliest = shiftWorkingDays(pred.plannedEndDate, 1 + dep.lagDays, holidays)
       if (next.start < earliest) {
         out.push({
           severity: 'error',

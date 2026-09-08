@@ -2532,6 +2532,36 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "HOL1",
+      "title": "The SLA due-date proposal and a working-duration count both skip a declared org holiday",
+      "expected": "proposeTargetDate and computeDurations already accepted an optional holidays set (lib/dates.ts) but every caller omitted it; now threaded, a declared org holiday shifts the proposed SLA target one working day later and drops one day from a working-duration count, instead of being silently counted as an ordinary weekday.",
+      "verdict": "PASS",
+      "actual": "proposeTargetDate: bare=2026-08-17 withHoliday=2026-08-18; computeDurations.workingDuration: bare=6 withHoliday=5",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "HOL2",
+      "title": "The critical path skips weekends by default, and a declared holiday pushes it one working day further",
+      "expected": "criticalResolutionPath's own lag arithmetic (shiftIso) had no weekend awareness at all — an FS dependency with no lag, predecessor finishing on a Friday, used to land the successor on Saturday. Now (shiftWorkingDays) it lands on the following Monday, and a holiday declared on that Monday pushes it to Tuesday. validateChange enforces the same working-day rule against a drag.",
+      "verdict": "PASS",
+      "actual": "earliestStart no-holiday=2026-08-17 with-holiday=2026-08-18; Saturday drag refused=true",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "HOL3",
+      "title": "An FF dependency never lets the successor finish before the predecessor, even once the lag is working-day aware",
+      "expected": "FF/SF mix two quantities in different units: the lag (now working-day aware) and the successor's own span (calendar-day, since ef = start + span reproduces an already-fixed planned duration). Shifting `lag - span` as one working-day quantity — rather than shifting the lag alone and subtracting span in calendar days afterward — lets the span's own weekend crossing get double-counted, moving the successor's finish BEFORE the predecessor's. A single-day predecessor finishing on a Monday, linked FF+0 to a 3-calendar-day successor, is the discriminating case: shifting the combined quantity finishes the successor on the preceding Saturday.",
+      "verdict": "PASS",
+      "actual": "predecessor finishes 2026-08-17, successor finishes 2026-08-17 — never earlier",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

@@ -72,7 +72,12 @@ export interface SlaPlan {
  * same rule the daily IMS follows, and for the same reason — a bulk action whose reach differs
  * from what is on screen is one people apply once and then distrust.
  */
-export function planSlaDates(rows: ScheduleRow[], sla: SlaPolicy, today: string): SlaPlan {
+export function planSlaDates(
+  rows: ScheduleRow[],
+  sla: SlaPolicy,
+  today: string,
+  holidays?: ReadonlySet<string>,
+): SlaPlan {
   const issues = rows.filter((r) => r.kind === 'issue')
   const skipped = { closed: 0, alreadyScheduled: 0, noRaisedDate: 0 }
   const out: SlaPlanRow[] = []
@@ -94,7 +99,7 @@ export function planSlaDates(rows: ScheduleRow[], sla: SlaPolicy, today: string)
       continue
     }
     const severity = (r.severity ?? 'Medium') as Severity
-    const target = proposeTargetDate(raised, severity, sla)
+    const target = proposeTargetDate(raised, severity, sla, holidays)
     out.push({
       id: r.displayId || r.id,
       subject: r.name,

@@ -3,6 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { useOverlay } from './useOverlay'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '@/lib/analytics'
+import { holidaySetOf } from '@/lib/config'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -31,7 +32,10 @@ export default function AnalyticsView({
 
   const severityStatus = useMemo(() => bySeverityAndStatus(state.issues), [state.issues])
   const clients = useMemo(() => byClient(state.issues), [state.issues])
-  const ageBuckets = useMemo(() => byAgeBucket(state.issues, today), [state.issues, today])
+  const ageBuckets = useMemo(
+    () => byAgeBucket(state.issues, today, holidaySetOf(state.model)),
+    [state.issues, today, state.model.holidays],
+  )
   const owners = useMemo(() => byOwner(state.issues), [state.issues])
 
   return (

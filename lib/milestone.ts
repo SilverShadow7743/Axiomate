@@ -306,10 +306,15 @@ export type MilestoneRisk = 'overdue' | 'dueSoon'
  * decides `overdue`, `workingDaysBetween` only sizes the warning window for `dueSoon` — never a
  * score, just a date compared against a date.
  */
-export function milestoneRisk(m: Milestone, today: string, warnBeforeDays: number): MilestoneRisk | null {
+export function milestoneRisk(
+  m: Milestone,
+  today: string,
+  warnBeforeDays: number,
+  holidays?: ReadonlySet<string>,
+): MilestoneRisk | null {
   if (!m.plannedDate || m.delivery === 'Delivered') return null
   if (m.plannedDate < today) return 'overdue'
-  const left = workingDaysBetween(today, m.plannedDate)
+  const left = workingDaysBetween(today, m.plannedDate, holidays)
   return left >= 0 && left <= warnBeforeDays ? 'dueSoon' : null
 }
 

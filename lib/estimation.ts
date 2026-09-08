@@ -388,7 +388,11 @@ export function criticalPathHours(steps: EstimateStep[]): number {
   return Math.max(0, ...finish.values())
 }
 
-export function deriveTimeline(e: Estimate, effort: EffortResult): TimelineResult {
+export function deriveTimeline(
+  e: Estimate,
+  effort: EffortResult,
+  holidays?: ReadonlySet<string>,
+): TimelineResult {
   const cap = dailyCapacity(e.capacity)
   const hours = effort.effortHours
   const capacityDays = hours !== null && cap > 0 ? hours / cap : null
@@ -426,7 +430,7 @@ export function deriveTimeline(e: Estimate, effort: EffortResult): TimelineResul
     workingDays === null || !e.plannedStart
       ? null
       : // Rounded up: half a working day of remaining work still occupies a day on a calendar.
-        addWorkingDays(e.plannedStart, Math.max(0, Math.ceil(workingDays) + wait - 1))
+        addWorkingDays(e.plannedStart, Math.max(0, Math.ceil(workingDays) + wait - 1), holidays)
 
   return {
     effortHours: hours,
@@ -448,9 +452,13 @@ export function deriveTimeline(e: Estimate, effort: EffortResult): TimelineResul
  * dates are recorded, hours are not. Effort variance is deliberately absent — see the module
  * comment.
  */
-export function scheduleVarianceDays(estimatedFinish: string | null, actualEnd: string | null): number | null {
+export function scheduleVarianceDays(
+  estimatedFinish: string | null,
+  actualEnd: string | null,
+  holidays?: ReadonlySet<string>,
+): number | null {
   if (!estimatedFinish || !actualEnd) return null
-  return workingDaysBetween(estimatedFinish, actualEnd)
+  return workingDaysBetween(estimatedFinish, actualEnd, holidays)
 }
 
 /* ================================================================== *

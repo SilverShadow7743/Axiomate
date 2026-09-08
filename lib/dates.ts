@@ -67,6 +67,33 @@ export function addWorkingDays(startIso: string, n: number, holidays?: ReadonlyS
   return fromUtc(t)
 }
 
+/**
+ * Shift a date by `days` WORKING days — Mon–Fri minus any listed holiday — where a negative
+ * count moves backward. `addWorkingDays`'s bidirectional counterpart, for the one caller
+ * (`criticalResolutionPath`'s dependency-lag arithmetic) that needs to shift a date the other
+ * way too, since FF/SF dependency offsets are routinely negative.
+ *
+ * `days === 0` returns `iso` unchanged even when `iso` itself falls on a weekend or holiday —
+ * unlike `addWorkingDays`'s `n=0`, this shifts a date a dependency already fixed (a
+ * predecessor's own start or finish), so rolling it onto the next working day would invent a
+ * date nothing asked for.
+ */
+export function shiftWorkingDays(iso: string, days: number, holidays?: ReadonlySet<string>): string {
+  if (days === 0) return iso
+  const isWorking = (t: number): boolean => {
+    const d = new Date(t).getUTCDay()
+    return d !== 0 && d !== 6 && !holidays?.has(fromUtc(t))
+  }
+  const step = days > 0 ? DAY_MS : -DAY_MS
+  let remaining = Math.abs(days)
+  let t = toUtc(iso)
+  while (remaining > 0) {
+    t += step
+    if (isWorking(t)) remaining--
+  }
+  return fromUtc(t)
+}
+
 export function minIso(dates: (string | null | undefined)[]): string | null {
   const valid = dates.filter((d): d is string => !!d)
   if (!valid.length) return null

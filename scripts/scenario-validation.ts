@@ -124,7 +124,15 @@ import { INTAKE_ACTOR } from '../lib/actor'
 import { ISSUE_STATUSES, EMPTY_FILTERS, NO_CLIENT_CHOSEN, ACTIVITY_PHASES, type ScheduleRow, type IssueDetail, type FilterState } from '../lib/types'
 import { activeFilterCount, clientPackProblem, clientRestingCaption, emptyGridReason, isActiveFilter, scopeLabelFor } from '../lib/filterPresentation'
 import { applySavedFilters, parseSavedView } from '../lib/savedViews'
-import { computeHealth, isTerminal, pausedCalendarDays } from '../lib/schedule'
+import {
+  computeDurations,
+  computeHealth,
+  criticalResolutionPath,
+  isTerminal,
+  pausedCalendarDays,
+  proposeTargetDate,
+  validateChange,
+} from '../lib/schedule'
 import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
@@ -12350,6 +12358,171 @@ scenario(
       severity: 'P2',
       impact: passed ? 'none' : 'an issue template could be saved pointing at an activity template that does not exist',
     }
+  },
+)
+
+/* ================================================================== *
+ * Holiday- and weekend-aware scheduling (design 2026-09-08)
+ * ================================================================== */
+
+scenario(
+  'HOL1',
+  'The SLA due-date proposal and a working-duration count both skip a declared org holiday',
+  'proposeTargetDate and computeDurations already accepted an optional holidays set (lib/dates.ts) but every caller omitted it; now threaded, a declared org holiday shifts the proposed SLA target one working day later and drops one day from a working-duration count, instead of being silently counted as an ordinary weekday.',
+  () => {
+    const bare = proposeTargetDate('2026-08-10', 'High', DEFAULT_SLA)
+    const withHoliday = proposeTargetDate('2026-08-10', 'High', DEFAULT_SLA, new Set(['2026-08-12']))
+    const targetShifts = bare === '2026-08-17' && withHoliday === '2026-08-18'
+
+    const bareDuration = computeDurations('2026-08-10', '2026-08-17').workingDuration
+    const holidayDuration = computeDurations('2026-08-10', '2026-08-17', new Set(['2026-08-12'])).workingDuration
+    const durationDrops = bareDuration === 6 && holidayDuration === 5
+
+    const good = targetShifts && durationDrops
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `proposeTargetDate: bare=${bare} withHoliday=${withHoliday}; computeDurations.workingDuration: bare=${bareDuration} withHoliday=${holidayDuration}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `targetShifts=${targetShifts} (bare=${bare} withHoliday=${withHoliday}) durationDrops=${durationDrops} (bare=${bareDuration} withHoliday=${holidayDuration})`,
+          stops: 'at proposeTargetDate/computeDurations — a declared org holiday still counts as a working day',
+          severity: 'P2',
+          impact: 'an SLA target or a shown working-duration silently ignores a day the firm has already declared non-working',
+        }
+  },
+)
+
+scenario(
+  'HOL2',
+  'The critical path skips weekends by default, and a declared holiday pushes it one working day further',
+  "criticalResolutionPath's own lag arithmetic (shiftIso) had no weekend awareness at all — an FS dependency with no lag, predecessor finishing on a Friday, used to land the successor on Saturday. Now (shiftWorkingDays) it lands on the following Monday, and a holiday declared on that Monday pushes it to Tuesday. validateChange enforces the same working-day rule against a drag.",
+  () => {
+    const withPred = act(BASE, {
+      t: 'create',
+      parentId: 'OAPIL-1',
+      kind: 'Investigation',
+      draft: { name: 'Investigation', plannedStart: '2026-08-10', plannedEnd: '2026-08-14' },
+      now: NOW,
+    } as Action)
+    if (withPred.error) throw new Error(`predecessor refused: ${withPred.error}`)
+    const predId = withPred.createdId!
+
+    const withSucc = act(withPred.state, {
+      t: 'create',
+      parentId: 'OAPIL-1',
+      kind: 'Root Cause Analysis',
+      draft: { name: 'Root Cause Analysis', plannedStart: '2026-08-17', plannedEnd: '2026-08-18' },
+      now: NOW,
+    } as Action)
+    if (withSucc.error) throw new Error(`successor refused: ${withSucc.error}`)
+    const succId = withSucc.createdId!
+
+    const withDep = ok(withSucc.state, {
+      t: 'addDependency',
+      predecessorId: predId,
+      successorId: succId,
+      dependencyType: 'FS',
+      lagDays: 0,
+      now: NOW,
+    } as Action)
+
+    const rows = rowsOf(withDep, TODAY)
+    const acts = rows.filter((r) => r.parentId === 'OAPIL-1' && (r.kind === 'activity' || r.kind === 'milestone'))
+
+    const noHolidays = criticalResolutionPath(acts, withDep.dependencies, null)
+    const skipsWeekend = noHolidays.sufficient && noHolidays.nodes[succId]?.earliestStart === '2026-08-17'
+
+    const withHoliday = criticalResolutionPath(acts, withDep.dependencies, null, new Set(['2026-08-17']))
+    const skipsHoliday = withHoliday.sufficient && withHoliday.nodes[succId]?.earliestStart === '2026-08-18'
+
+    const succRow = rows.find((r) => r.id === succId)!
+    const allRows = new Map(rows.map((r) => [r.id, r]))
+    const violations = validateChange(succRow, { start: '2026-08-15', end: '2026-08-16' }, allRows, withDep.dependencies)
+    const refusesWeekendDrag = violations.some((v) => v.severity === 'error')
+
+    const good = skipsWeekend && skipsHoliday && refusesWeekendDrag
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `earliestStart no-holiday=${noHolidays.nodes[succId]?.earliestStart} with-holiday=${withHoliday.nodes[succId]?.earliestStart}; Saturday drag refused=${refusesWeekendDrag}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `skipsWeekend=${skipsWeekend} skipsHoliday=${skipsHoliday} refusesWeekendDrag=${refusesWeekendDrag}`,
+          stops: 'at the critical-path lag arithmetic, which still treats a weekend or a declared holiday as an ordinary working day',
+          severity: 'P2',
+          impact: 'a dependency chain quietly promises a Saturday, Sunday or holiday delivery date',
+        }
+  },
+)
+
+scenario(
+  'HOL3',
+  'An FF dependency never lets the successor finish before the predecessor, even once the lag is working-day aware',
+  "FF/SF mix two quantities in different units: the lag (now working-day aware) and the successor's own span (calendar-day, since ef = start + span reproduces an already-fixed planned duration). Shifting `lag - span` as one working-day quantity — rather than shifting the lag alone and subtracting span in calendar days afterward — lets the span's own weekend crossing get double-counted, moving the successor's finish BEFORE the predecessor's. A single-day predecessor finishing on a Monday, linked FF+0 to a 3-calendar-day successor, is the discriminating case: shifting the combined quantity finishes the successor on the preceding Saturday.",
+  () => {
+    const withPred = act(BASE, {
+      t: 'create',
+      parentId: 'OAPIL-2',
+      kind: 'Investigation',
+      draft: { name: 'Investigation', plannedStart: '2026-08-17', plannedEnd: '2026-08-17' },
+      now: NOW,
+    } as Action)
+    if (withPred.error) throw new Error(`predecessor refused: ${withPred.error}`)
+    const predId = withPred.createdId!
+
+    const withSucc = act(withPred.state, {
+      t: 'create',
+      parentId: 'OAPIL-2',
+      kind: 'Root Cause Analysis',
+      draft: { name: 'Root Cause Analysis', plannedStart: '2026-08-01', plannedEnd: '2026-08-03' },
+      now: NOW,
+    } as Action)
+    if (withSucc.error) throw new Error(`successor refused: ${withSucc.error}`)
+    const succId = withSucc.createdId!
+
+    const withDep = ok(withSucc.state, {
+      t: 'addDependency',
+      predecessorId: predId,
+      successorId: succId,
+      dependencyType: 'FF',
+      lagDays: 0,
+      now: NOW,
+    } as Action)
+
+    const rows = rowsOf(withDep, TODAY)
+    const acts = rows.filter((r) => r.parentId === 'OAPIL-2' && (r.kind === 'activity' || r.kind === 'milestone'))
+    const crp = criticalResolutionPath(acts, withDep.dependencies, null)
+
+    const predFinish = crp.nodes[predId]?.earliestFinish
+    const succFinish = crp.nodes[succId]?.earliestFinish
+    // The FF invariant itself: the successor may never finish earlier than the predecessor
+    // plus the lag — this is what the buggy combined shift violated.
+    const invariantHolds = crp.sufficient && !!predFinish && !!succFinish && succFinish >= predFinish
+
+    return invariantHolds
+      ? {
+          verdict: 'PASS',
+          actual: `predecessor finishes ${predFinish}, successor finishes ${succFinish} — never earlier`,
+          stops: '',
+          severity: 'P1',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `predecessor finishes ${predFinish}, successor finishes ${succFinish} — the FF edge exists specifically to forbid this`,
+          stops: 'at the FF/SF candidate computation, which mixes a working-day lag with a calendar-day span as one shifted quantity',
+          severity: 'P1',
+          impact: 'the critical path can show a dependent activity finishing before the work it depends on, undermining every slackDays and scheduleVarianceDays figure downstream',
+        }
   },
 )
 
