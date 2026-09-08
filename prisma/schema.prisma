@@ -318,6 +318,11 @@ model Issue {
   /// responsibility type id. The three seeded types keep their own columns above.
   assignments Json @default("{}")
 
+  /// {skillId, level}[] — what this piece of work needs, read by candidatesFor (lib/skills.ts)
+  /// to answer "who could do this." Empty is the honest default: the imported log names no
+  /// requirement, and typing one is a person's judgement, never inferred from module or type.
+  requiredSkills Json @default("[]")
+
   activities        IssueActivity[]
   relationshipsFrom IssueRelationship[] @relation("RelSource")
   relationshipsTo   IssueRelationship[] @relation("RelTarget")

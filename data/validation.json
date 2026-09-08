@@ -704,6 +704,16 @@
       "impact": "A level is a claim with somebody’s name on it. This is what keeps the name attached to the person who made the claim, in both directions — nobody can award themselves a credential, and nobody can quietly delete one written about them."
     },
     {
+      "id": "REQ1",
+      "title": "A deliverable states what it needs, and candidatesFor reads that instead of a constructed list",
+      "expected": "updateIssue writes requiredSkills on a real issue, create and duplicate both default it to empty, and candidatesFor fed straight from the stored issue produces the same shortlist SK1 built by hand — closing the gap SK1 itself named.",
+      "verdict": "PASS",
+      "actual": "updateIssue wrote [{skillId: skill-4, level: practitioner}] onto OAPIL-1 through the same patch path every other Overview field uses — no new action, no new permission, gated on the existing work.edit. A freshly created issue carries requiredSkills: [] rather than inheriting or guessing one; duplicating OAPIL-1 carries the requirement forward onto the copy, since a duplicate of a piece of work needing a skill still needs it. Reading the requirement straight off the stored issue and feeding it to candidatesFor produces exactly one qualified candidate, Priya — the same shape SK1 proved with a hand-built Requirement[], now driven from a real field on a real record.",
+      "stops": "at the UI's own read of the match — RequiredSkillsTab calls candidatesFor with exactly this shape, but nothing in this harness renders a component, so the tab itself is unverified here",
+      "severity": "—",
+      "impact": "SK1 could answer \"who could do this\" but nothing produced a \"this\" to ask about — the requirement had to be constructed by the scenario, not read off a work item. That was the stated stop; this closes it."
+    },
+    {
       "id": "DOC1",
       "title": "A file is attached to an issue, and a record only ever exists when the bytes do",
       "expected": "Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.",

@@ -21,6 +21,7 @@ import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
 import ChecklistTab from './ChecklistTab'
+import RequiredSkillsTab from './RequiredSkillsTab'
 import DiscussionTab, { type SuggestWiring } from './DiscussionTab'
 import EstimationTab from './EstimationTab'
 import TimeTab from './TimeTab'
@@ -76,6 +77,7 @@ export type Tab =
   | 'Members'
   | 'Discussion'
   | 'Checklist'
+  | 'Skills'
   | 'Notes'
   | 'Estimation'
   | 'Time'
@@ -346,16 +348,17 @@ export default function DetailPanel({
    * these tabs at all — see the next comment.
    */
   /*
-   * Seven, down from twelve, plus Checklist added 7 Sep 2026. The scheduling story was split
-   * across four tabs that cross-referenced each other's empty states; it is one tab with
-   * sections now. Links holds what connects this record to others (relationships, evidence).
-   * Data Source rendered the same app-level import provenance for every record, so it lives
-   * with the empty-selection state instead of costing every record a tab. Checklist is additive
-   * rather than a fragmentation this consolidation would have reversed: nothing else holds a
-   * per-issue to-do list, so there was no existing tab to fold it into.
+   * Seven, down from twelve, plus Checklist added 7 Sep 2026 and Skills added 8 Sep 2026. The
+   * scheduling story was split across four tabs that cross-referenced each other's empty states;
+   * it is one tab with sections now. Links holds what connects this record to others
+   * (relationships, evidence). Data Source rendered the same app-level import provenance for
+   * every record, so it lives with the empty-selection state instead of costing every record a
+   * tab. Checklist and Skills are both additive rather than a fragmentation this consolidation
+   * would have reversed: nothing else holds a per-issue to-do list or a per-issue skill
+   * requirement, so there was no existing tab to fold either into.
    */
   const TABS: Tab[] = issue
-    ? ['Overview', 'Checklist', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
+    ? ['Overview', 'Checklist', 'Skills', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
       ? ['Capacity', 'Members', 'Discussion', 'History']
       : ['Overview', 'History']
@@ -696,6 +699,14 @@ export default function DetailPanel({
             onAdd={(text) => onAddChecklistItem(issue.id, text)}
             onToggle={onToggleChecklistItem}
             onRemove={onRemoveChecklistItem}
+          />
+        ) : tab === 'Skills' ? (
+          <RequiredSkillsTab
+            issueId={issue.id}
+            state={state}
+            actor={actor}
+            today={today}
+            onSave={(requiredSkills) => onSaveIssue(issue.id, { requiredSkills }, null)}
           />
         ) : tab === 'Estimation' ? (
           <EstimationTab

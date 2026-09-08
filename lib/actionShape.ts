@@ -422,6 +422,23 @@ const invoiceLines: Check = (v) => {
   return null
 }
 
+/** `updateIssue.patch.requiredSkills` — zero or more `{skillId, level}` entries. */
+const requiredSkills: Check = (v) => {
+  if (!Array.isArray(v)) return `must be an array, received ${typeOf(v)}`
+  for (let i = 0; i < v.length; i++) {
+    const entry = v[i]
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return `entry ${i} must be an object, received ${typeOf(entry)}`
+    }
+    const { skillId, level } = entry as Record<string, unknown>
+    if (typeof skillId !== 'string' || !skillId) return `entry ${i}'s skillId must be a non-empty string`
+    if (typeof level !== 'string' || !(SKILL_ORDER as readonly string[]).includes(level)) {
+      return `entry ${i}'s level must be one of ${SKILL_ORDER.join(', ')}`
+    }
+  }
+  return null
+}
+
 /* ================================================================== *
  * Shapes
  * ================================================================== */
@@ -520,7 +537,7 @@ const SHAPES = {
     patch: req(
       patchOf({
         parentId: idOrNull, client: text, module: text, subject: text, description: richDoc,
-        type: text, sourceType: text, discipline: text, applicationId: idOrNull, severity: text, status: text, owner: text,
+        type: text, sourceType: text, discipline: text, applicationId: idOrNull, requiredSkills, severity: text, status: text, owner: text,
         raisedBy: text, accountable: text, raised: textOrNull, lastActivity: textOrNull,
         actualEnd: textOrNull, age: num, daysSinceActivity: num, nextAction: text,
         evidence: text, evidenceDate: textOrNull, verification: text, source: text,

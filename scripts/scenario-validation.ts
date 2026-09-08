@@ -4386,6 +4386,73 @@ scenario(
 )
 
 scenario(
+  'REQ1',
+  'A deliverable states what it needs, and candidatesFor reads that instead of a constructed list',
+  'updateIssue writes requiredSkills on a real issue, create and duplicate both default it to empty, and candidatesFor fed straight from the stored issue produces the same shortlist SK1 built by hand — closing the gap SK1 itself named.',
+  () => {
+    const withSkill = ok(BASE, {
+      t: 'config', op: { k: 'upsertSkill', id: null, name: 'Intercompany', category: 'D365 Finance', description: '' }, now: NOW,
+    } as Action)
+    const sk = Object.values(withSkill.model.skills)[0]!
+
+    const priyaRow = Object.values(withSkill.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(withSkill, {
+      t: 'config', op: { k: 'upsertPerson', id: priyaRow.id, name: 'Priya', roleIds: ['ROLE_FUNCTIONAL'] }, now: NOW,
+    } as Action)
+    const withHer = ok(staffed, {
+      t: 'recordPersonSkill', personId: priyaRow.id, skillId: sk.id, level: 'practitioner', source: 'self',
+      assessedBy: null, lastUsedOn: '2026-06-01', note: '', now: NOW,
+    } as Action)
+
+    const need: Requirement[] = [{ skillId: sk.id, level: 'practitioner' }]
+    const withReq = ok(withHer, {
+      t: 'updateIssue', id: 'OAPIL-1', patch: { requiredSkills: need }, now: NOW,
+    } as Action)
+    const stored = withReq.issues['OAPIL-1']!.requiredSkills
+
+    /* A fresh issue and a duplicate both start with nothing required, never inherited or guessed. */
+    const moduleId = Object.values(withReq.nodes).find((n) => n.kind === 'module')!.id
+    const created = ok(withReq, {
+      t: 'create', parentId: moduleId, kind: 'issue',
+      draft: { name: 'A new one', description: '', type: 'Defect', severity: 'Low', raisedBy: 'Client', status: 'Open' },
+      now: NOW,
+    } as Action)
+    const newIssueId = Object.keys(created.issues).find((id) => created.issues[id]!.subject === 'A new one')!
+
+    /* A duplicate of OAPIL-1 (requiredSkills already set above) carries the requirement forward. */
+    const duplicated = ok(withReq, { t: 'duplicate', issueId: 'OAPIL-1', note: '', now: NOW } as Action)
+    const dupId = Object.keys(duplicated.issues).find(
+      (id) => id !== 'OAPIL-1' && duplicated.issues[id]!.subject === withReq.issues['OAPIL-1']!.subject,
+    )!
+
+    /* candidatesFor, fed the requirement off the issue itself rather than constructed in-scenario. */
+    const m = candidatesFor(
+      withReq.issues['OAPIL-1']!.requiredSkills,
+      Object.values(withReq.personSkills),
+      Object.values(withReq.model.skills),
+      TODAY,
+    )
+
+    const good =
+      JSON.stringify(stored) === JSON.stringify(need) &&
+      created.issues[newIssueId]!.requiredSkills.length === 0 &&
+      JSON.stringify(duplicated.issues[dupId]!.requiredSkills) === JSON.stringify(need) &&
+      m.qualified.length === 1 &&
+      m.qualified[0]!.personId === priyaRow.id &&
+      m.partial.length === 0
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `updateIssue wrote [{skillId: ${sk.id}, level: practitioner}] onto OAPIL-1 through the same patch path every other Overview field uses — no new action, no new permission, gated on the existing work.edit. A freshly created issue carries requiredSkills: [] rather than inheriting or guessing one; duplicating OAPIL-1 carries the requirement forward onto the copy, since a duplicate of a piece of work needing a skill still needs it. Reading the requirement straight off the stored issue and feeding it to candidatesFor produces exactly one qualified candidate, Priya — the same shape SK1 proved with a hand-built Requirement[], now driven from a real field on a real record.`,
+      stops: 'at the UI\'s own read of the match — RequiredSkillsTab calls candidatesFor with exactly this shape, but nothing in this harness renders a component, so the tab itself is unverified here',
+      severity: '—',
+      impact:
+        'SK1 could answer "who could do this" but nothing produced a "this" to ask about — the requirement had to be constructed by the scenario, not read off a work item. That was the stated stop; this closes it.',
+    }
+  },
+)
+
+scenario(
   'DOC1',
   'A file is attached to an issue, and a record only ever exists when the bytes do',
   'Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.',
@@ -8602,6 +8669,7 @@ function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string
     parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
     subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
     applicationId: null,
+    requiredSkills: [],
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
     accountable: 'OAPIL', raised: TODAY, actualEnd: null, statusSince: null,
     pausedDays: 0, age: 0, daysSinceActivity: 0, nextAction: '', evidence: '',

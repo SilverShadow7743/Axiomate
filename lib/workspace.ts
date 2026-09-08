@@ -58,7 +58,7 @@ import {
   type TimePolicy,
   type WeekState,
 } from './timeWindow'
-import { checkPersonSkill, type PersonSkill, type Skill, type SkillLevel, type SkillSource } from './skills'
+import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './skills'
 import {
   duplicateOf,
   formatBytes,
@@ -285,6 +285,9 @@ export interface IssueRecord {
   /** A real Application this issue is about, when one has been recorded. Additive to `module`
    *  above, never a replacement — see `./application`. */
   applicationId: string | null
+  /** What this piece of work needs — read by `candidatesFor` (`./skills`) to answer "who could
+   *  do this." Empty is the honest default; typing one is a person's judgement, never inferred. */
+  requiredSkills: Requirement[]
   severity: Severity
   status: IssueStatus
   owner: string
@@ -717,6 +720,8 @@ export function initWorkspace(
       discipline: i.discipline ?? '',
       // Null, not guessed — same reasoning as discipline. The seed predates this field.
       applicationId: i.applicationId ?? null,
+      // Empty, not guessed — same reasoning as discipline. The seed predates this field too.
+      requiredSkills: [],
       plannedStart: null,
       plannedEnd: null,
       percentOverride: null,
@@ -2209,6 +2214,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // Not settable on create — an application link is added afterwards, through
           // `updateIssue`, the same way `discipline` usually is.
           applicationId: null,
+          // Same reasoning: nobody types a required skill in the same breath as raising the
+          // work — it is added afterwards, through `updateIssue`.
+          requiredSkills: [],
           /*
            * Unclassified unless the person creating it said otherwise, and NOT defaulted to the
            * first configured discipline the way `type` is above.
@@ -2483,6 +2491,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         // description.
         discipline: original.discipline,
         applicationId: original.applicationId,
+        requiredSkills: original.requiredSkills,
         // Created here, so there is no earlier classification to preserve — as in `create`.
         sourceType: '',
         severity: original.severity,

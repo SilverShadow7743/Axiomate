@@ -67,7 +67,7 @@ import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
 import type { PersonRate, RateKind } from '../rates'
 import type { ChangeRequest, ChangeStatus } from '../changeRequest'
-import type { PersonSkill, SkillLevel, SkillSource } from '../skills'
+import type { PersonSkill, Requirement, SkillLevel, SkillSource } from '../skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
 import type { ScopeItem, ScopeKind, ScopeSource } from '../scope'
@@ -265,6 +265,7 @@ export function issueToRow(
     reference: i.reference,
     clientImpact: i.clientImpact,
     assignments: i.assignments as Prisma.InputJsonValue,
+    requiredSkills: i.requiredSkills as unknown as Prisma.InputJsonValue,
     deletedAt: i.deletedAt ? new Date(i.deletedAt) : null,
   }
 }
@@ -312,6 +313,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     percentOverride: r.percentOverride,
     scheduleMode: r.scheduleMode,
     assignments: normaliseAssignments(r.assignments),
+    requiredSkills: Array.isArray(r.requiredSkills) ? (r.requiredSkills as unknown as Requirement[]) : [],
     deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
