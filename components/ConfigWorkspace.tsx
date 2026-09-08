@@ -59,6 +59,7 @@ import { CHANNELS, type Channel } from '@/lib/notifications'
 import { WATCH_CONDITIONS, observe, type ConditionKey } from '@/lib/watch'
 import { bandForScore, bandProblems, isScored, normaliseScore, totalComplexity, type SizeBand } from '@/lib/estimation'
 import { useLabels } from './labels'
+import WhyThisWorks from './WhyThisWorks'
 
 /**
  * The operating-model editor.
@@ -2059,7 +2060,10 @@ function Automation({
 
   return (
     <section className="cfg-section">
-      <h3 className="cfg-h">Automation</h3>
+      <div className="hdr-with-why">
+        <h3 className="cfg-h">Automation</h3>
+        <WhyThisWorks slug="automation-actions" />
+      </div>
       <p className="cfg-note">
         What happens on its own when something changes. A rule reacts to an event, checks a
         condition, and does something — and the something is dispatched as an ordinary action,
@@ -2708,7 +2712,10 @@ function Goals({
 
   return (
     <section className="cfg-section">
-      <h3 className="cfg-h">Goals</h3>
+      <div className="hdr-with-why">
+        <h3 className="cfg-h">Goals</h3>
+        <WhyThisWorks slug="goals" />
+      </div>
       <p className="cfg-note">{describeGoals(rows)}</p>
       <p className="cfg-note">
         A goal names a <b>measure</b> and a part of the tree, and the number is computed from the
@@ -5421,7 +5428,10 @@ function Skills({
 
   return (
     <section className="cfg-section">
-      <h3 className="cfg-h">Skills</h3>
+      <div className="hdr-with-why">
+        <h3 className="cfg-h">Skills</h3>
+        <WhyThisWorks slug="skills-candidates" />
+      </div>
       <p className="cfg-note">
         What people can do, how well, and how recently. A level is dated by when the skill was
         last <em>used</em>, not by when it was recorded &mdash; a consultant who last touched a

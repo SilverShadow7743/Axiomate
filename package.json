@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-help-docs.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-help-docs.mjs",
     "build": "next build",
     "start": "next start",
     "transform": "node scripts/transform-issues.mjs",
@@ -42,6 +44,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "jose": "^6.2.9",
+    "marked": "^18.0.12",
     "next": "^16.2.9",
     "pdfkit": "^0.20.2",
     "pg": "^8.22.0",

@@ -8,6 +8,7 @@ import ReplanningDrawer from './ReplanningDrawer'
 import { narrationFigures } from '@/lib/assist'
 import { describePortfolio, portfolio, type Concern, type PortfolioLine } from '@/lib/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
+import WhyThisWorks from './WhyThisWorks'
 
 /**
  * Every engagement at once.
@@ -92,7 +93,10 @@ export default function PortfolioPanel({
       >
         <header className="evi-head">
           <div className="evi-head-top">
-            <h2 id="portfolio-title">Portfolio</h2>
+            <div className="hdr-with-why">
+              <h2 id="portfolio-title">Portfolio</h2>
+              <WhyThisWorks slug="portfolio-concerns" />
+            </div>
             {!docked && (
               <button className="btn ghost" onClick={onClose} aria-label="Close portfolio">
                 ✕

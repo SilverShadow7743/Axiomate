@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { WorkspaceState } from '@/lib/workspace'
 import type { Actor } from '@/lib/actor'
 import { adminFirstRunState, adminFirstRunVisible } from '@/lib/firstRun'
+import WhyThisWorks from './WhyThisWorks'
 
 /**
  * A second, narrower first-run checklist — for a config.manage holder on a genuinely fresh
@@ -49,7 +50,10 @@ export default function AdminFirstRunCard({ state, actor }: { state: WorkspaceSt
   return (
     <section className="fr-card" aria-label="Set up your workspace">
       <div className="fr-head">
-        <h3>Set up your workspace</h3>
+        <div className="hdr-with-why">
+          <h3>Set up your workspace</h3>
+          <WhyThisWorks slug="admin-first-run" />
+        </div>
         <button className="btn" onClick={dismiss} aria-label="Dismiss the setup guide">
           ×
         </button>

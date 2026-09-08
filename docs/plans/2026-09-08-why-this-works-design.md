@@ -1,10 +1,42 @@
 # "Why this works this way" — surfacing design docs in the app, not writing new content
 
-**Status: draft, 8 September 2026.** Brainstormed from a comparison against Hive University
+**Status: built, 8 September 2026.** Brainstormed from a comparison against Hive University
 (`university.hive.com` — a separate LMS site: video courses, webinars, an Admin Learning
 Track, and a "Center of Excellence" of best-practice content), refined at Nishant's request
 into something that could actually be native to Axiomate rather than a content-production
-project. Not built. Two open questions for Nishant before this goes further, at the end.
+project. Both open questions below are resolved: markdown rendering (`marked`), and the six
+docs named in the "First curation pass" section, taken as the actual list rather than as
+candidates.
+
+**One addition beyond the draft.** Three of the six named sources — the Goals reasoning, the
+skills/`candidatesFor` module note, and `lib/portfolio.ts`'s "name the concerns, count them" —
+are `lib/*.ts` header comments, not `docs/plans/*.md` files. Rather than fork a second, static
+copy of that reasoning into a new doc (which would drift from the comment the way
+`AccessPolicy.grants`/`DEFAULT_AUTOMATION_RULES` already showed a stored snapshot can),
+`scripts/copy-help-docs.mjs` reads the file's leading `/** */` block directly for those three,
+so the code comment stays the one source of truth. The other three curated entries copy their
+`docs/plans/*.md` file whole, unchanged from the shape this doc proposed.
+
+**Build summary:**
+- `scripts/copy-help-docs.mjs` — the curated allowlist (six entries: doc-file or ts-comment,
+  slug, title, source path), writes `public/help/<slug>.md` + a `manifest.json`. Wired as
+  `predev`/`prebuild` in `package.json` (runs before every `next dev`/`next build`, local and
+  CI), so `docs/` still never ships — only the six copies do.
+- `public/help/` is gitignored (generated, like `data/validation-report.html`).
+- `components/WhyThisWorks.tsx` — the link + modal. Fetches `/help/<slug>.md` client-side,
+  renders via `marked` (new dependency — the "add a small markdown renderer" option, chosen
+  over plain text), inside the same `.modal`/`.modal-scrim`/`useOverlay` shape every other
+  dialog in this codebase uses. Content is this repository's own, not user input, so
+  `dangerouslySetInnerHTML` carries no injection risk here.
+- Wired onto all six named screens: `FirstRunCard` (`first-run`), `AdminFirstRunCard`
+  (`admin-first-run`), Configuration → Goals (`goals`), Configuration → Automation
+  (`automation-actions`), Configuration → Skills (`skills-candidates`), `PortfolioPanel`
+  (`portfolio-concerns`) — each a `link-btn` beside the screen's own heading, per this doc's
+  "one small affordance per curated screen" shape.
+- No scenario added: this is rendering only, with no reducer, action, or wire-shape change
+  behind it — nothing the scenario harness's event/condition/action model tests.
+- Verified: `tsc --noEmit`, full scenario suite (253 scenarios, no PASS lost), `npm run build`
+  (prebuild step confirmed writing the six files), `npm run audit:tenancy`.
 
 ## Why not build a Hive University clone
 
@@ -84,8 +116,7 @@ reading the code, not for someone using the product — that is real signal the 
 needs a lighter, user-facing rewrite before shipping, not that the shipping mechanism was wrong.
 Surfaces the first time somebody actually reads one of these in the app and it doesn't land.
 
-## Open questions for Nishant
+## Open questions for Nishant — resolved 8 September 2026
 
-1. **Markdown rendering: add a dependency, or plain text for v1?**
-2. **Which docs make the first curated list?** The five named above are candidates from this
-   session's own work, not a decision — Nishant knows which explanations actually get asked for.
+1. **Markdown rendering: add a dependency, or plain text for v1?** Add a dependency (`marked`).
+2. **Which docs make the first curated list?** The six named above, taken as-is.

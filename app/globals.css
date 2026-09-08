@@ -2737,6 +2737,62 @@ select.cell-editor {
   color: #fff;
 }
 
+/* ---------- why this works this way ---------- */
+.why-link {
+  white-space: nowrap;
+}
+.why-modal {
+  max-width: 640px;
+}
+.why-body {
+  padding: 14px 18px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.why-doc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.why-doc h1,
+.why-doc h2,
+.why-doc h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 18px 0 6px;
+}
+.why-doc h1:first-child,
+.why-doc h2:first-child,
+.why-doc h3:first-child {
+  margin-top: 0;
+}
+.why-doc p {
+  margin: 0 0 10px;
+}
+.why-doc ul,
+.why-doc ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.why-doc li {
+  margin: 3px 0;
+}
+.why-doc code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.why-doc hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+.why-doc strong {
+  font-weight: 600;
+}
+
 /* ================================================================== *
  * Client pack — print-ready screen (ClientPackView)
  *
@@ -6656,6 +6712,10 @@ select.cell-editor {
 }
 .fr-head { display: flex; justify-content: space-between; align-items: center; }
 .fr-head h3 { margin: 0; font-size: 15px; }
+/* Wraps a heading and its WhyThisWorks link so they sit together in a space-between row
+   alongside a dismiss/close control — used wherever a curated screen's own heading carries the
+   affordance (FirstRunCard, AdminFirstRunCard, PortfolioPanel, and inline after a cfg-h). */
+.hdr-with-why { display: flex; align-items: baseline; gap: 10px; }
 .fr-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .fr-steps li { display: flex; gap: 9px; font-size: 13px; color: var(--text-muted); }
 .fr-steps li b { color: var(--text); }

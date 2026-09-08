@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { WorkspaceState } from '@/lib/workspace'
 import type { Actor } from '@/lib/actor'
 import { firstRunState, firstRunVisible } from '@/lib/firstRun'
+import WhyThisWorks from './WhyThisWorks'
 
 /**
  * The first-run checklist — computes itself from state and retires on evidence. See
@@ -47,7 +48,10 @@ export default function FirstRunCard({ state, actor }: { state: WorkspaceState; 
   return (
     <section className="fr-card" aria-label="Your first week here">
       <div className="fr-head">
-        <h3>Your first week here</h3>
+        <div className="hdr-with-why">
+          <h3>Your first week here</h3>
+          <WhyThisWorks slug="first-run" />
+        </div>
         <button className="btn" onClick={dismiss} aria-label="Dismiss the first-week guide">
           ×
         </button>
