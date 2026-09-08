@@ -2102,6 +2102,12 @@ function Automation({
               />
               <span>Firing</span>
             </label>
+            <button
+              className="btn ghost"
+              onClick={() => onConfig({ k: 'setAutomationRules', rules: rules.filter((r) => r.id !== rule.id) })}
+            >
+              Remove
+            </button>
           </div>
 
           <div className="cfg-fld-row">
@@ -2279,6 +2285,31 @@ function Automation({
           </p>
         </div>
       ))}
+
+      <button
+        className="btn primary"
+        onClick={() =>
+          onConfig({
+            k: 'setAutomationRules',
+            rules: [
+              ...rules,
+              {
+                id: `AUTO_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+                label: 'New rule',
+                on: EVENT_TYPES[0]!.key,
+                when: [],
+                // Off until configured — an untouched new rule has no meaningful trigger or
+                // action yet, and firing on the first live event it happens to match would be
+                // worse than doing nothing.
+                enabled: false,
+                then: [{ kind: 'notify', audience: 'owner', channel: 'in-app', text: '' }],
+              },
+            ],
+          })
+        }
+      >
+        Add rule
+      </button>
 
       <p className="cfg-inherit">
         There is no schedule. Every rule reacts to something that happened, so &ldquo;every
