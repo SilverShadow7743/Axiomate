@@ -1389,6 +1389,11 @@ function FieldStrip({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           }}
           aria-label={labels.ISSUE_OWNER}
+          // A native <input> never applies text-overflow: ellipsis to its own value text — it
+          // just hard-clips, silently, with no indication anything is hidden. A dual owner like
+          // "Michael Thomas (POS) / Amolak (D365)" is exactly the shape this strip is too narrow
+          // for; title gives the one thing a clipped input can offer for free, a hover tooltip.
+          title={ownerDraft}
         />
       </label>
       <label className="fs-fld">
