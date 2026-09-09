@@ -198,15 +198,27 @@ once the `max-height` clamp genuinely clipped the description, "Show more" never
 all — `document.querySelector('.ov-desc-toggle')` came back null even though the DOM directly
 confirmed real overflow (`scrollHeight` 196 vs `clientHeight` 60). Cause: the one-shot
 measurement `useEffect` (deps `[issue.id, issue.description, descExpanded]`) races
-`RichTextEditor`, which mounts its content through its own effect — the measurement can run
-before the rich text has painted, read a near-empty box, and never re-run afterward since
-nothing in its dependency list changes again. Fixed by replacing the one-shot measurement with
-a `ResizeObserver` on the clamp div's children (not the clamp div itself, whose height
-`max-height` pins regardless of what grows inside it) — it re-measures whenever the real
-content's size actually changes, whatever the timing. This is the same class of "verified, not
-assumed" discipline the earlier two bugs were caught by, applied to the FIX this time, not just
-the original build — a fix that looks right by reasoning about the code is not the same as one
-confirmed against the live DOM.
+`RichTextEditor` — TipTap with `immediatelyRender: false`, whose content DOM is inserted later
+by TipTap's own logic — so the measurement can run before the rich text has painted, read a
+near-empty box, and never re-run afterward since nothing in its dependency list changes again.
+
+**First fix attempt (`ResizeObserver` on the clamp div's children) also failed, and was caught
+by re-verifying rather than trusting the reasoning that produced it.** Re-deployed, re-checked
+live: `descOverflows` was *still* stuck `false`. A `ResizeObserver` only reports size changes on
+nodes it was told to watch — if TipTap's content node does not exist yet at the moment the
+effect calls `el.children`, there is nothing to attach to, and a node inserted afterward is
+never observed. Confirmed the mechanism, not just the symptom, with a direct console test
+against the live page before writing a second fix: a `MutationObserver` on the same subtree
+fired on a genuine content change; an ad-hoc `ResizeObserver` set up the same way did not — the
+discriminating check `ResizeObserver` itself cannot pass, because it needs an existing node to
+watch and `MutationObserver` does not. **Fixed by switching to a `MutationObserver`** on the
+clamp div's whole subtree (`childList`/`subtree`/`characterData`), which fires on the insertion
+itself regardless of what shape TipTap's content node turns out to have, no existing node
+required at attach time.
+
+This is the same "verified, not assumed" discipline the earlier two bugs were caught by, applied
+twice over here — a fix that looks right by reasoning about the code is not the same as one
+confirmed against the live DOM, and that held even for the fix meant to correct the first miss.
 
 ### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
 

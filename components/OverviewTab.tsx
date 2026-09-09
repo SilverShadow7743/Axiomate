@@ -312,13 +312,15 @@ export default function OverviewTab({
   const descRef = useRef<HTMLDivElement>(null)
   /** Whether the clamped description actually hides anything — measured, not assumed, so
       "Show more" never appears on a description that already fits in three lines.
-      `RichTextEditor` mounts its content asynchronously (its own effect, live-checked in
-      production), so a one-shot measurement effect races it: it can run before the rich text
-      has painted, read a near-empty box, and never fire again since nothing else changes
-      `[issue.id, descExpanded]` afterward — confirmed live, `descOverflows` stuck `false` on a
-      description that was genuinely nine lines. A `ResizeObserver` on the clamp's own children
-      (not the clamp div itself, whose height `max-height` pins regardless of what grows inside
-      it) re-measures whenever the real content's size actually changes, whenever that happens. */
+      `RichTextEditor` is TipTap with `immediatelyRender: false` (`RichTextEditor.tsx`'s own
+      `useEditor` call) — its editor is `null` on the first render and its content DOM is
+      inserted later, by TipTap's own effect, as nodes that do not exist yet when this
+      component's effects first run. A `ResizeObserver` attached to those not-yet-existing
+      children (tried first, live-checked in production) never fires, because there is nothing
+      to observe at attach time — confirmed by `descOverflows` still stuck `false` after the
+      overflow itself was independently confirmed real (`scrollHeight` 196 vs `clientHeight`
+      60). A `MutationObserver` on the whole subtree has no such gap: it fires on the insertion
+      itself, whatever shape TipTap's content node turns out to have. */
   const [descOverflows, setDescOverflows] = useState(false)
   useEffect(() => {
     const el = descRef.current
@@ -328,9 +330,9 @@ export default function OverviewTab({
     }
     const measure = () => setDescOverflows(el.scrollHeight > el.clientHeight + 1)
     measure()
-    const ro = new ResizeObserver(measure)
-    for (const child of el.children) ro.observe(child)
-    return () => ro.disconnect()
+    const mo = new MutationObserver(measure)
+    mo.observe(el, { childList: true, subtree: true, characterData: true })
+    return () => mo.disconnect()
   }, [issue.id])
 
   const [composing, setComposing] = useState(false)
