@@ -2739,7 +2739,7 @@ scenario(
       internetMessageId: '<verbatim-id@example.com>',
       conversationId: 'conv-1',
     }
-    const mapped = mapGraphMessage(msg, filer, { module: 'Inventory' })
+    const mapped = mapGraphMessage(msg, filer, { module: 'Inventory' }, BASE.model)
 
     const prefixes = mapped.createDraft.name === 'PM item quality order'
     const htmlText =
@@ -2756,7 +2756,7 @@ scenario(
     const longSubject = cleanSubject('x'.repeat(400))
     const subjectCaps = longSubject.length <= 300 && longSubject.endsWith('…')
     const noSubject = cleanSubject('  ') === '(no subject)'
-    const longBody = mapGraphMessage({ ...msg, body: { contentType: 'text', content: 'y'.repeat(5000) } }, filer, { module: 'Inventory' })
+    const longBody = mapGraphMessage({ ...msg, body: { contentType: 'text', content: 'y'.repeat(5000) } }, filer, { module: 'Inventory' }, BASE.model)
     const bodyCaps = longBody.inboundMailFields.body.length <= 2000
 
     const parent = Object.values(BASE.nodes).find((n) => n.kind === 'module')

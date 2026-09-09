@@ -1,7 +1,39 @@
 # Turning one read email into an issue, on purpose
 
-**Status: draft, 8 September 2026.** User's direct request — *"create actions from it"* (from
-mail). Not built.
+**Status: reconciled, 9 September 2026 — see "What this design missed" below. Only the
+classification half is built; the review-dialog half is a question put to the user, not yet
+decided.** User's direct request — *"create actions from it"* (from mail). Originally drafted
+8 September 2026.
+
+## What this design missed
+
+This draft was written without checking whether mail-filing already existed. It already did —
+`2026-08-31-in-mail-design.md`'s "File-to-issue", built more than a week before this draft, is a
+"File as work item" action on `InboxPanel.tsx` (`POST /api/mail/file`, `mode: 'create'` →
+`lib/mailFile.ts`'s `mapGraphMessage`) that creates an issue directly from an opened message —
+the exact trigger this design proposes a *second* "Create issue…" button for. Building this
+design as written would have put two create-from-this-message buttons on the same panel.
+
+The real gap, found while reconciling: `mapGraphMessage` didn't classify at all — it hardcoded
+`type: 'Request'` and `severity: 'Medium'` on every filed mail, an invented default this repo's
+own operating principle 2 rules out. **That half is fixed** (9 Sept): `mapGraphMessage` now
+calls `draftFor` (`lib/intake.ts`) — the same rule-matching and severity/type guessing routed
+mail already gets — instead of the two constants. Not `classify`: `classify` resolves a mailbox
+from `message.to`, and a personal inbox's `to` is the filer's own address, essentially never a
+configured shared intake mailbox, so it would refuse `no-mailbox` for nearly every message filed
+this way — a gap in classification-reuse this draft's own "What would send this back" section
+did not anticipate, because it assumed `classify` would be the entry point. `draftFor` is called
+directly with the parent scope the person already chose in the filing dialog, sidestepping the
+mailbox lookup entirely — the same pattern `classifyForm` already uses for the intake form's own
+non-mailbox entry point.
+
+**Still open**: this draft's other half — routing the create through the "Add Work" dialog for
+review instead of creating immediately — is a real UX change to a shipped feature (one click
+becomes two; someone filing mail fast today may be relying on the instant create). That's a
+product tradeoff, not a technical call, and is being put to the user rather than decided here.
+`provenanceNote` is already attached via `recordInboundMail`'s honest-provenance fields
+(`mailbox`, `from`, `subject`, `body`, `messageId`) regardless of which way that question goes —
+it was never missing, just under a different name than this draft assumed.
 
 ## What exists today, and why this is the safer direction, not a repeat
 

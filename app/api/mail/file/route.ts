@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     name: session.actor.name,
     email: session.email ?? session.actor.email ?? '',
   }
-  const mapped = mapGraphMessage(msg, filer, { module: body.module ?? 'Inventory' })
+  const mapped = mapGraphMessage(msg, filer, { module: body.module ?? 'Inventory' }, state.model)
   const now = new Date().toISOString()
 
   if (body.mode === 'create') {

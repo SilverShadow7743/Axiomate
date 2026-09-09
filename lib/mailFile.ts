@@ -5,7 +5,17 @@
  * Pinned by IM1 against the real `create` arm before any auth or network existed: the
  * mapper's draft must be a draft the reducer ACCEPTS, not merely a plausible one. HTML is
  * stripped by a local stripper — the richText helpers parse RichDoc, not HTML.
+ *
+ * `type` and `severity` come from `draftFor` (`lib/intake.ts`) — the same rule-matching and
+ * severity/type guessing a routed mailbox gets — rather than the invented `'Request'`/`'Medium'`
+ * constants this used to hardcode (principle 2: never invent information). `draftFor` is called
+ * directly, not `classify`, because `classify` resolves a mailbox from `message.to`, and a
+ * personal inbox's `to` is the filer's own address — essentially never a configured shared
+ * intake mailbox — so it would refuse `no-mailbox` for nearly every message filed this way.
  */
+
+import type { OperatingModel } from './config'
+import { draftFor } from './intake'
 
 export interface GraphMessageLike {
   subject?: string | null
@@ -68,6 +78,7 @@ export function mapGraphMessage(
   msg: GraphMessageLike,
   filer: { name: string; email: string },
   opts: { module: string; discipline?: string },
+  model: OperatingModel,
 ): MailFileResult {
   const subject = cleanSubject(msg.subject)
   const senderName = msg.from?.emailAddress?.name?.trim() || msg.from?.emailAddress?.address?.trim() || 'Unknown sender'
@@ -80,11 +91,19 @@ export function mapGraphMessage(
   const bodyText = rawBody || (msg.bodyPreview ?? '').trim()
   const capped = bodyText.length > BODY_CAP ? bodyText.slice(0, BODY_CAP - 1).trimEnd() + '…' : bodyText
 
+  // scopeId is thrown away below — mapGraphMessage doesn't own placement, the route's own
+  // `parentId` does. Only draftFor's guessed `type`/`severity` are taken from this call.
+  const classified = draftFor(
+    'unscoped',
+    { to: filer.email, from: senderName, subject, body: capped, messageId: msg.internetMessageId ?? '', receivedAt: msg.receivedDateTime ?? '', conversationId: msg.conversationId ?? null },
+    model,
+  )
+
   return {
     createDraft: {
       name: subject,
-      type: 'Request',
-      severity: 'Medium',
+      type: classified.type,
+      severity: classified.severity,
       raisedBy: senderName,
       module: opts.module,
       discipline: opts.discipline ?? 'Functional',
