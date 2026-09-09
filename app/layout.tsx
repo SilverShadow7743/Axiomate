@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import RegisterSW from '@/components/RegisterSW'
 import './globals.css'
 
@@ -26,8 +27,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Runs before paint so a stored 'light'/'dark' choice never flashes the OS-default
             theme first — the CSS this sets `data-theme` for already exists (globals.css), this
             is only the earliest possible place to read the choice back. Silently gives up if
-            storage is blocked; the OS-preference CSS branch is the fallback either way. */}
-        <script
+            storage is blocked; the OS-preference CSS branch is the fallback either way.
+            `next/script` with `beforeInteractive`, not a raw `<script>` — a raw tag still runs
+            fine on the initial server-rendered HTML, but React logs "scripts inside React
+            components are never executed" on every render because a plain `<script>` isn't a
+            construct it manages; `next/script` is built for exactly this early-inline case and
+            carries no such warning. */}
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `try{var t=localStorage.getItem('axiomate.tms.theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}}catch(e){}`,
           }}

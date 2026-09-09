@@ -1,6 +1,8 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useOverlay } from './useOverlay'
 import type {
   AuditEntry,
   IssueDependency,
@@ -362,8 +364,15 @@ export default function DetailPanel({
    * issue whose project has no custom fields defined yet reads its own empty state rather than
    * the tab disappearing, so a tab vanishing never has to be told apart from a tab hiding.
    */
+  /*
+   * Order is priority order (I25 Tier 2, item 8) — `TabsBar` below shows as many of these, in
+   * this order, as the available width holds, and collapses the rest into a trailing `⋯ More`.
+   * Overview, Checklist, Discussion and Time lead as the proposed most-touched four; nothing in
+   * this codebase tracks per-tab usage to check that against, so it is a stated assumption, not
+   * a measured one — reorder here if that assumption turns out wrong.
+   */
   const TABS: Tab[] = issue
-    ? ['Overview', 'Checklist', 'Skills', 'Fields', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']
+    ? ['Overview', 'Checklist', 'Discussion', 'Time', 'Skills', 'Fields', 'Notes', 'Estimation', 'Schedule', 'Links', 'History']
     : row?.kind === 'project'
       ? ['Capacity', 'Members', 'Discussion', 'History']
       : ['Overview', 'History']
@@ -523,20 +532,15 @@ export default function DetailPanel({
       )}
       <div className="detail-head">
         <div className="tabs-wrap">
-          <div className="tabs">
-            {TABS.map((t) => (
-              <button
-                key={t}
-                className={tab === t ? 'active' : ''}
-                onClick={() => {
-                  setTab(t)
-                  onTabChange(t)
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          <TabsBar
+            key={TABS.join('|')}
+            tabs={TABS}
+            active={tab}
+            onSelect={(t) => {
+              setTab(t)
+              onTabChange(t)
+            }}
+          />
         </div>
         <span className="grow" />
         {/* Explicit size controls, so the pane never has to be dragged to be usable. */}
@@ -1300,6 +1304,169 @@ function ResolutionPath({
       </dl>
     </div>
   )
+}
+
+/**
+ * Priority navigation (I25 Tier 2, item 8): render `tabs` in the order given, show as many as
+ * the available width holds, collapse the rest under a trailing `⋯ More`. Chosen over a
+ * hardcoded primary/secondary split because nothing in this codebase tracks per-tab usage to
+ * check a permanent cutoff against — width is the only signal that can be measured honestly.
+ *
+ * Measurement, and why it is safe to trust a `ResizeObserver` here where Tier 1's did not work:
+ * every tab button is real, static text — "Checklist" is exactly as wide on every render, with
+ * nothing async inserting content into it later the way TipTap's editor did. So each button's
+ * width is measured once, on the first paint (`useLayoutEffect`, before the browser paints —
+ * the user never sees the unfiltered set flash by), cached by tab name, and every later
+ * decision — including the `ResizeObserver`'s own re-fires — reads the cache rather than
+ * re-measuring possibly-unmounted buttons. Without the cache, a tab hidden into the menu could
+ * never be measured again to decide whether a WIDER wrap should show it once more.
+ *
+ * The active tab is always forced into the visible set, even if it falls outside the fitted
+ * count — the one thing worse than a tab bar that hides seven tabs is one that hides the tab
+ * you are currently looking at.
+ */
+function TabsBar({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: Tab[]
+  active: Tab
+  onSelect: (t: Tab) => void
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLButtonElement>(null)
+  const widths = useRef<Partial<Record<Tab, number>>>({})
+  const [visibleCount, setVisibleCount] = useState(tabs.length)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [moreAt, setMoreAt] = useState({ top: 0, left: 0 })
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    const bar = barRef.current
+    if (!wrap || !bar) return
+    const measure = () => {
+      // The first pass, with every tab still rendered (`visibleCount` starts at `tabs.length`),
+      // is the only time real widths exist to read — cache them before anything gets hidden.
+      Array.from(bar.children).forEach((el, i) => {
+        const t = tabs[i]
+        if (t && el instanceof HTMLElement) widths.current[t] = el.offsetWidth
+      })
+      const available = wrap.clientWidth
+      // `moreRef` has nothing to measure on the very first pass — nothing is hidden yet, so the
+      // `⋯ More` button isn't rendered. 64px is a deliberate overestimate for that one pass
+      // (better to under-fit by one tab than let a real, later-rendered More button clip).
+      const moreWidth = moreRef.current?.offsetWidth ?? 64
+      let used = 0
+      let count = 0
+      for (let i = 0; i < tabs.length; i++) {
+        const w = widths.current[tabs[i]] ?? 0
+        const reserve = i < tabs.length - 1 ? moreWidth : 0
+        if (used + w + reserve > available) break
+        used += w
+        count++
+      }
+      const activeIdx = tabs.indexOf(active)
+      setVisibleCount(activeIdx >= 0 && activeIdx >= count ? activeIdx + 1 : Math.max(count, 1))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(wrap)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs.join('|'), active])
+
+  const visible = tabs.slice(0, visibleCount)
+  const overflowed = tabs.slice(visibleCount)
+
+  return (
+    <div ref={wrapRef} style={{ minWidth: 0, width: '100%' }}>
+      <div className="tabs" ref={barRef}>
+        {visible.map((t) => (
+          <button
+            key={t}
+            className={active === t ? 'active' : ''}
+            onClick={() => onSelect(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      {overflowed.length > 0 && (
+        <button
+          ref={moreRef}
+          type="button"
+          className={`tabs-more${overflowed.includes(active) ? ' active' : ''}`}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setMoreAt({ top: r.bottom + 4, left: r.left })
+            setMoreOpen(true)
+          }}
+        >
+          ⋯ More
+        </button>
+      )}
+      {moreOpen && (
+        <MoreTabsMenu
+          tabs={overflowed}
+          active={active}
+          at={moreAt}
+          onSelect={(t) => {
+            setMoreOpen(false)
+            onSelect(t)
+          }}
+          onClose={() => setMoreOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The overflow list `TabsBar` opens — same portal/`useOverlay` shape `RowMenu` establishes. */
+function MoreTabsMenu({
+  tabs,
+  active,
+  at,
+  onSelect,
+  onClose,
+}: {
+  tabs: Tab[]
+  active: Tab
+  at: { top: number; left: number }
+  onSelect: (t: Tab) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useOverlay(ref, true, onClose)
+
+  const body = (
+    <>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
+      <div className="row-menu-scrim" onMouseDown={onClose} />
+      <div
+        className="menu tabs-more-menu"
+        ref={ref}
+        role="menu"
+        tabIndex={-1}
+        aria-label="More tabs"
+        style={{ top: at.top, left: at.left }}
+      >
+        {tabs.map((t) => (
+          <button
+            key={t}
+            role="menuitem"
+            className={`menu-item${t === active ? ' active' : ''}`}
+            onClick={() => onSelect(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+
+  return typeof document === 'undefined' ? body : createPortal(body, document.body)
 }
 
 /**

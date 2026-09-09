@@ -1586,7 +1586,9 @@ select.cell-editor {
   display: flex;
   gap: 2px;
   height: 100%;
-  /* Narrow windows scroll the strip instead of silently clipping whole tabs off the edge. */
+  /* `TabsBar` (DetailPanel.tsx) now decides which tabs render at all, sized to fit — this is a
+     defensive fallback for sub-pixel rounding in that measurement, not the primary mechanism
+     it was before I25 Tier 2 item 8. */
   overflow-x: auto;
   scrollbar-width: thin;
 }
@@ -1610,6 +1612,31 @@ select.cell-editor {
   color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: 500;
+}
+/* The `⋯ More` trigger — same look as a tab button, since it lives in the same row and reads
+   as part of the same control, but never a tab itself. `.active` when the currently-open tab
+   is one of the ones it holds, so the bar never reads as "nothing selected" just because the
+   selection is hidden behind it. */
+.tabs-more {
+  padding: 0 11px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tabs-more:hover {
+  color: var(--text);
+}
+.tabs-more.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+/* Viewport-fixed, same reasoning `.row-menu` already established: `at` is computed from
+   `getBoundingClientRect()`, so `position: fixed` is what those coordinates mean. */
+.tabs-more-menu {
+  position: fixed;
+  min-width: 160px;
 }
 .detail-body {
   overflow: auto;
@@ -2850,6 +2877,10 @@ select.cell-editor {
 }
 .menu-item:hover {
   background: var(--surface-2);
+}
+.menu-item.active {
+  color: var(--accent);
+  font-weight: 500;
 }
 .menu-item.danger {
   color: var(--h-overdue);
