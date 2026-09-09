@@ -1381,7 +1381,10 @@ function TabsBar({
   const overflowed = tabs.slice(visibleCount)
 
   return (
-    <div ref={wrapRef} style={{ minWidth: 0, width: '100%' }}>
+    <div
+      ref={wrapRef}
+      style={{ display: 'flex', alignItems: 'center', minWidth: 0, width: '100%', height: '100%' }}
+    >
       <div className="tabs" ref={barRef}>
         {visible.map((t) => (
           <button
