@@ -424,13 +424,13 @@
     },
     {
       "id": "DL2",
-      "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement, or is refused if it names nothing live",
-      "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's one narrowing control, unlike the packs, which already fan out per client. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds.",
+      "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
+      "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",
       "verdict": "PASS",
-      "actual": "scoped=true cleared=true deletedRefused=true missingRefused=true",
+      "actual": "scoped=true cleared=true deletedRefused=true missingRefused=true perEngagementOk=true perEngagementOffOk=true",
       "stops": "—",
       "severity": "—",
-      "impact": "the daily IMS can be pointed at one engagement instead of the whole workspace, and a stale or invented scope is caught at config time rather than mailing an empty report"
+      "impact": "the daily IMS can be pointed at one engagement, fanned out to every engagement, or left as today, and a stale or invented scope is caught at config time rather than mailing an empty report"
     },
     {
       "id": "RN1",
@@ -538,7 +538,7 @@
       "title": "The persistence layer is exercised at all",
       "expected": "Writes reach Postgres and reload correctly.",
       "verdict": "PASS",
-      "actual": "74 of 74 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-09-06. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
+      "actual": "74 of 74 persistence checks passed against postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms, recorded 2026-09-09. The run writes values chosen to break careless mapping and reads the whole workspace back through the ordinary load path: quarter hours as a decimal rather than a float, a zero that must not return as null, money with pennies, a date written as a day, a note keeping its quotes and its newline, an audit reason keeping its punctuation. It also covers the two things only a database can show — that a capped trail keeps the newest entries rather than the oldest, and that the id counter is stored so a restart cannot re-mint an id.",
       "stops": "—",
       "severity": "—",
       "impact": "Twenty-one tables, fourteen mapper pairs and a write path with an arm per action have now executed against Postgres rather than only typechecked."
@@ -648,7 +648,7 @@
       "title": "The same write is delivered twice",
       "expected": "The second delivery is recognised and ignored, rather than creating a second record.",
       "verdict": "PASS",
-      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-09-06: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
+      "actual": "Three writes are delivered, then re-delivered with a fourth appended — the overlap a closing tab produces. The second delivery applies 1 and recognises 3 as already done, leaving 4 notes. Without the key the same delivery leaves 7. A key repeated inside one batch collapses to one, an unkeyed action always applies — intake and the scheduled pass write without one — and a malformed key is refused at the route rather than dropped, so protection can never be silently off. Against Postgres on 2026-09-09: the same batch delivered twice left the second delivery writing nothing, the keys are stored so the skip survives a restart, and a refused keyed batch named exactly the key that committed.",
       "stops": "—",
       "severity": "—",
       "impact": "Hiding a tab mid-save no longer duplicates notes, evidence and dependencies. The rule is proven; the storage behind it is still unexercised, like every other database claim in this repository."

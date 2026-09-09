@@ -2342,7 +2342,7 @@ scenario(
   'Scheduled report delivery knows what is due and stamps what it sent',
   "The delivery phase's pure halves, driven before the live pass may call them: due-logic (weekday IMS, Monday sends the PRIOR week, the 1st sends the PRIOR month, stamps dedupe, off-by-default, empty recipients silence) and the PDF renderers (checked by the async block at the end of this suite: report objects in, %PDF buffers out, a bad logo skipped rather than thrown).",
   () => {
-    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, resolutionNoticeEnabled: false, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com', imsScopeNodeId: null }
+    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, resolutionNoticeEnabled: false, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com', imsScopeNodeId: null, imsPerEngagement: false }
 
     const wednesday = deliveryDue(on, {}, '2026-08-26')
     const midweek = wednesday.ims === true && wednesday.weeklyFor === null && wednesday.monthlyFor === null
@@ -2369,8 +2369,8 @@ scenario(
     const off = deliveryDue(DEFAULT_REPORT_DELIVERY, {}, '2026-08-24')
     const offByDefault = off.ims === false && off.weeklyFor === null && off.monthlyFor === null
     const noRecipients = deliveryDue({ ...on, imsRecipients: [] }, {}, '2026-08-26').ims === false
-    const parsed = parseReportDelivery({ imsEnabled: 'yes', imsRecipients: 'ops@x.com', junk: 1 })
-    const failsClosed = parsed.imsEnabled === false && parsed.imsRecipients.length === 0 && parsed.packsEnabled === false
+    const parsed = parseReportDelivery({ imsEnabled: 'yes', imsRecipients: 'ops@x.com', imsPerEngagement: 'yes', junk: 1 })
+    const failsClosed = parsed.imsEnabled === false && parsed.imsRecipients.length === 0 && parsed.packsEnabled === false && parsed.imsPerEngagement === false
 
     const good = midweek && priorWeek && priorMonth && yearRollover && weekendQuiet && stampHolds && weekStampHolds && monthStampHolds && offByDefault && noRecipients && failsClosed
     return good
@@ -2381,8 +2381,8 @@ scenario(
 
 scenario(
   'DL2',
-  'setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement, or is refused if it names nothing live',
-  "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's one narrowing control, unlike the packs, which already fan out per client. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds.",
+  "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
+  "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",
   () => {
     const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
 
@@ -2399,10 +2399,15 @@ scenario(
     const refusedMissing = act(BASE, { t: 'config', op: { k: 'setReportDelivery', patch: { imsScopeNodeId: 'no-such-node' } }, now: NOW } as Action)
     const missingRefused = Boolean(refusedMissing.error)
 
-    const good = scopedOk && clearedOk && deletedRefused && missingRefused
+    const perEngagementOn = ok(scoped, { t: 'config', op: { k: 'setReportDelivery', patch: { imsPerEngagement: true } }, now: NOW } as Action)
+    const perEngagementOk = perEngagementOn.model.reportDelivery.imsPerEngagement === true && perEngagementOn.model.reportDelivery.imsScopeNodeId === engagementId
+    const perEngagementOff = ok(perEngagementOn, { t: 'config', op: { k: 'setReportDelivery', patch: { imsPerEngagement: false } }, now: NOW } as Action)
+    const perEngagementOffOk = perEngagementOff.model.reportDelivery.imsPerEngagement === false
+
+    const good = scopedOk && clearedOk && deletedRefused && missingRefused && perEngagementOk && perEngagementOffOk
     return good
-      ? { verdict: 'PASS', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused}`, stops: '—', severity: '—', impact: 'the daily IMS can be pointed at one engagement instead of the whole workspace, and a stale or invented scope is caught at config time rather than mailing an empty report' } as const
-      : { verdict: 'FAIL', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused}`, stops: "at setReportDelivery's imsScopeNodeId validation", severity: 'P1', impact: 'a deleted or invented scope silently narrows the daily IMS to nothing, and nobody who reads an empty report knows why' } as const
+      ? { verdict: 'PASS', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused} perEngagementOk=${perEngagementOk} perEngagementOffOk=${perEngagementOffOk}`, stops: '—', severity: '—', impact: 'the daily IMS can be pointed at one engagement, fanned out to every engagement, or left as today, and a stale or invented scope is caught at config time rather than mailing an empty report' } as const
+      : { verdict: 'FAIL', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused} perEngagementOk=${perEngagementOk} perEngagementOffOk=${perEngagementOffOk}`, stops: "at setReportDelivery's imsScopeNodeId/imsPerEngagement validation or merge", severity: 'P1', impact: 'a deleted or invented scope silently narrows the daily IMS to nothing, or the per-engagement toggle does not persist independently of the single scope' } as const
   },
 )
 

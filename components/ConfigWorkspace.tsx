@@ -2040,10 +2040,23 @@ function Watch({
             }}
           />
         </label>
+        <label className="cfg-check" style={{ marginTop: '8px' }}>
+          <input
+            type="checkbox"
+            checked={state.model.reportDelivery.imsPerEngagement}
+            onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { imsPerEngagement: e.target.checked } })}
+          />
+          <span>
+            <b>Send one automatically for every engagement</b> — the same shape as the client
+            packs below: each recipient gets one PDF per live engagement, none for an engagement
+            with nothing under it. Overrides the single scope below.
+          </span>
+        </label>
         <label className="cfg-fld" style={{ marginTop: '8px' }}>
-          <span>Scope the IMS to</span>
+          <span>Or scope the single IMS to</span>
           <select
             value={state.model.reportDelivery.imsScopeNodeId ?? ''}
+            disabled={state.model.reportDelivery.imsPerEngagement}
             onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { imsScopeNodeId: e.target.value || null } })}
           >
             <option value="">All clients (unscoped)</option>

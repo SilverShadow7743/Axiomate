@@ -27,9 +27,13 @@ export interface ReportDeliveryConfig {
   packDestination: string
   /** null = the whole workspace ("All clients"), the original and still the default. Set to a
    *  node id to narrow the daily IMS to that node's subtree — one engagement, say, rather than
-   *  everything. The weekly/monthly packs already fan out per client; the IMS does not, so this
-   *  narrows the one email rather than multiplying it. */
+   *  everything. Ignored when `imsPerEngagement` is on. */
   imsScopeNodeId: string | null
+  /** true fans the daily IMS out one-per-live-engagement, the same shape the weekly/monthly
+   *  packs already use for clients — every recipient gets one email per engagement, an
+   *  engagement with nothing under it is skipped (an empty report to eyeball is noise, the same
+   *  reasoning the packs' own `disclosure.shown === 0` skip uses). Overrides `imsScopeNodeId`. */
+  imsPerEngagement: boolean
 }
 
 export const DEFAULT_REPORT_DELIVERY: ReportDeliveryConfig = {
@@ -39,6 +43,7 @@ export const DEFAULT_REPORT_DELIVERY: ReportDeliveryConfig = {
   imsRecipients: [],
   packDestination: '',
   imsScopeNodeId: null,
+  imsPerEngagement: false,
 }
 
 export function parseReportDelivery(raw: unknown): ReportDeliveryConfig {
@@ -53,6 +58,7 @@ export function parseReportDelivery(raw: unknown): ReportDeliveryConfig {
       : [],
     packDestination: typeof r.packDestination === 'string' ? r.packDestination.trim() : '',
     imsScopeNodeId: typeof r.imsScopeNodeId === 'string' && r.imsScopeNodeId.trim() !== '' ? r.imsScopeNodeId : null,
+    imsPerEngagement: r.imsPerEngagement === true,
   }
 }
 

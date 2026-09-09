@@ -1,8 +1,12 @@
-# Scoping the auto-emailed daily IMS to one engagement
+# Scoping the auto-emailed daily IMS to one engagement — or every engagement, automatically
 
 **Status: built, 9 September 2026.** User's direct request — *"I need a daily report on progress
-of engagement"* — followed by *"Yes, check the toggle and scope it to one engagement"* once the
-research below was reported back.
+of engagement"* — followed by *"Yes, check the toggle and scope it to one engagement"*, then,
+once a single-scope selector was built and shown live, *"Automate for every engagement with
+proper indentation"*. That phrase was ambiguous between two real shapes (one combined report with
+indented per-engagement sections, or one separate email per engagement) — asked directly rather
+than guessed, given this touches a feature that emails people automatically. Answer: **one email
+per engagement**, the same shape the weekly/monthly client packs already use.
 
 ## What already existed, checked before building anything
 
@@ -26,39 +30,59 @@ hardcoded, no way to narrow it. That's what this change adds.
 
 ## Shape
 
-**Not the client-packs' fan-out pattern.** The weekly/monthly packs already send one email per
-client automatically (`lib/reports/clientPack.ts`'s loop over every external-party node). The
-user's own words — "scope it to **one** engagement" — asked for narrowing the existing single
-IMS email, not multiplying it into one-per-engagement. Fanning out was considered and set aside:
-it changes recipients' inbox volume from 1/day to N/day without being asked, and the manual
-on-screen export already covers "I want today's numbers for engagement X" for anyone who wants a
-different one on demand.
+Two delivery shapes now exist for the daily IMS, both off the same underlying data:
+
+**1. A single, optionally scoped email** (built first, from "scope it to one engagement"):
 
 - `ReportDeliveryConfig` (`lib/reports/delivery.ts`) gains `imsScopeNodeId: string | null` —
-  `null` (default) keeps today's unscoped behaviour byte-identical; a node id narrows the IMS to
-  that node's subtree.
+  `null` (default) keeps the original unscoped behaviour byte-identical; a node id narrows the
+  IMS to that node's subtree.
 - `setReportDelivery`'s reducer arm (`lib/workspace.ts`) validates the id against `state.nodes`
   when set — a deleted or invented scope is refused outright (*"That scope no longer exists in
   the tree"*), rather than silently mailing an empty report. Proven by scenario `DL2`.
-- `lib/db/schedule.ts`'s `runDelivery` filters rows to the scope's subtree via `underScopeOf`
-  (exported from `lib/reports/clientPack.ts`, where the identical ancestry-walk already existed
-  for the packs' pre-boundary total — reused rather than a third copy) and passes the node's own
-  name as the report's `scope` label instead of the hardcoded string. The email subject also
-  names the engagement (`Daily IMS — <name> — <date>`) so a scoped report doesn't read
-  identically to an unscoped one in an inbox.
-- Configuration → Scheduled pass → Report delivery gains a **"Scope the IMS to"** selector,
-  listing live engagement-tier nodes (`kind === 'engagement'`) — deliberately narrower than the
-  "Files under" picker elsewhere in Configuration, which offers every tier: the one control this
-  feature needs answers "which engagement", not "which node at any tier".
+- Configuration → Scheduled pass → Report delivery gains an **"Or scope the single IMS to"**
+  selector, listing live engagement-tier nodes (`kind === 'engagement'`) — deliberately narrower
+  than the "Files under" picker elsewhere in Configuration, which offers every tier: the one
+  control this half needs answers "which engagement", not "which node at any tier".
+
+**2. Fanned out one email per engagement** (built second, from "automate for every engagement"):
+
+- `ReportDeliveryConfig` gains `imsPerEngagement: boolean` (default `false`). When `true` it
+  overrides `imsScopeNodeId` — `lib/db/schedule.ts`'s `runDelivery` loops every live
+  engagement-tier node, same shape `sendPacks` already uses for clients: one PDF per engagement
+  per recipient, an engagement with nothing under it skipped rather than mailing an empty report
+  to eyeball, and the whole batch's `imsSentOn` stamp only advances once every non-empty
+  engagement's send succeeded (`allOk` starting `true` and only ever set `false` by a real
+  failure — the same "all-empty is a complete outcome and must still stamp" reasoning
+  `sendPacks`'s own `allOk || !any` already encodes, without needing a second flag here). Each
+  email's subject and attachment filename name their own engagement
+  (`Daily IMS — <name> — <date>`), so two engagements' reports never collide in an inbox or a
+  downloads folder.
+- Configuration gains a **"Send one automatically for every engagement"** checkbox, right above
+  the single-scope selector, which it disables when checked.
+
+Both share `underScopeOf` (exported from `lib/reports/clientPack.ts`, where the identical
+ancestry-walk already existed for the packs' pre-boundary total — reused rather than a third
+copy) and the same `buildDailyIms`/`renderImsPdf` pipeline; only which rows go in and how many
+emails come out differ.
 
 ## What this does not change
 
 The weekly/monthly client packs, the resolution-notice prompt, and the manual on-screen Daily IMS
 export are all untouched — each already had its own correct scope (per-client fan-out, or
-whatever the screen's live filters say). Only the scheduled Daily IMS's single hardcoded scope
-changes.
+whatever the screen's live filters say). Only the scheduled Daily IMS's delivery shape changes.
+
+## A verification limit, named rather than glossed over
+
+Scenario `DL2` proves the reducer half — `imsScopeNodeId`/`imsPerEngagement` set, clear, and
+refuse correctly. The *send-time* fan-out logic in `lib/db/schedule.ts` (which engagements get
+skipped, whether the stamp advances, what each subject line says) is not reachable by the pure
+scenario harness — the same limit the packs' own fan-out has always had, never claimed to be
+covered by a scenario either. It was checked by direct code reading against the packs' proven
+pattern, not by running it against production, since running it would mean actually emailing
+people.
 
 ## Verification
 
 Clean `tsc`, clean build, scenario `DL2` (259 scenarios total, +1, zero regressions), clean
-`audit:tenancy`/`audit:attribution`/`audit:restore`.
+`audit:tenancy`/`audit:attribution`/`audit:restore`/`audit:persistence`.

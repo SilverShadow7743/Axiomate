@@ -201,28 +201,50 @@ async function runDelivery(
 
   if (due.ims) {
     try {
-      const scopeNode = config.imsScopeNodeId ? state.nodes[config.imsScopeNodeId] : null
       const allRows = buildTree(state, today).filter((r) => r.kind === 'issue')
-      // A configured scope narrows the one email rather than fanning it out — see
-      // ReportDeliveryConfig.imsScopeNodeId. A scope id the config validator would have
-      // refused (deleted since, or never existed) falls back to unscoped rather than silently
-      // emailing nothing — the same "fail visible, not empty" posture the rest of this file uses.
-      const rows = scopeNode ? allRows.filter((r) => underScopeOf(state, r.parentId, scopeNode.id)) : allRows
-      const ims = buildDailyIms(state, rows, today, scopeNode ? scopeNode.name : 'All clients')
-      const pdf = (await renderImsPdf(ims, org)).toString('base64')
-      let allOk = true
-      for (const to of config.imsRecipients) {
-        const subject = scopeNode ? `Daily IMS — ${scopeNode.name} — ${today}` : `Daily IMS — ${today}`
-        const res = await sendAsMailbox(mailbox, to, subject, 'The daily issue management status is attached.', [
-          { name: `daily-ims-${today}.pdf`, contentType: 'application/pdf', contentBytes: pdf },
-        ])
-        if (res.ok) sent.push(`IMS to ${to}`)
-        else {
-          allOk = false
-          refused.push({ what: `IMS to ${to}`, status: res.status, detail: res.detail })
+
+      const sendIms = async (rows: typeof allRows, label: string, subjectSuffix: string) => {
+        const ims = buildDailyIms(state, rows, today, label)
+        const pdf = (await renderImsPdf(ims, org)).toString('base64')
+        let allOk = true
+        for (const to of config.imsRecipients) {
+          const res = await sendAsMailbox(mailbox, to, `Daily IMS${subjectSuffix} — ${today}`, 'The daily issue management status is attached.', [
+            { name: `daily-ims${subjectSuffix ? `-${subjectSuffix.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}-${today}.pdf`, contentType: 'application/pdf', contentBytes: pdf },
+          ])
+          if (res.ok) sent.push(`IMS${subjectSuffix} to ${to}`)
+          else {
+            allOk = false
+            refused.push({ what: `IMS${subjectSuffix} to ${to}`, status: res.status, detail: res.detail })
+          }
         }
+        return allOk
       }
-      if (allOk) next.imsSentOn = today
+
+      if (config.imsPerEngagement) {
+        // The same shape the weekly/monthly packs already use for clients: one email per live
+        // engagement, every recipient gets one per engagement, an engagement with nothing under
+        // it is skipped rather than mailing an empty report to eyeball.
+        const engagements = Object.values(state.nodes).filter((n) => n.kind === 'engagement' && !n.deletedAt)
+        let allOk = true
+        for (const eng of engagements) {
+          const rows = allRows.filter((r) => underScopeOf(state, r.parentId, eng.id))
+          if (!rows.length) continue
+          if (!(await sendIms(rows, eng.name, ` — ${eng.name}`))) allOk = false
+        }
+        // allOk starts true and is only ever set false by a real send failure, so an
+        // all-empty workspace stamps too — the same "nothing visible is a complete outcome"
+        // reasoning sendPacks's own `allOk || !any` uses, without needing a second flag here.
+        if (allOk) next.imsSentOn = today
+      } else {
+        // A configured single scope narrows the one email rather than fanning it out — see
+        // ReportDeliveryConfig.imsScopeNodeId. A scope id the config validator would have
+        // refused (deleted since, or never existed) falls back to unscoped rather than silently
+        // emailing nothing — the same "fail visible, not empty" posture the rest of this file uses.
+        const scopeNode = config.imsScopeNodeId ? state.nodes[config.imsScopeNodeId] : null
+        const rows = scopeNode ? allRows.filter((r) => underScopeOf(state, r.parentId, scopeNode.id)) : allRows
+        const allOk = await sendIms(rows, scopeNode ? scopeNode.name : 'All clients', scopeNode ? ` — ${scopeNode.name}` : '')
+        if (allOk) next.imsSentOn = today
+      }
     } catch (err) {
       refused.push({ what: 'IMS', status: 0, detail: err instanceof Error ? err.message : String(err) })
     }
