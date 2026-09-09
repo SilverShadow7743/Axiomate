@@ -115,12 +115,23 @@ browser) mean unconfirmed work exists — the recovery view opens on its own.
 
 ## Testing
 
-- New scenarios (`scripts/scenario-validation.ts`) covering the pending-actions log's own
-  save/load roundtrip, and the reapply/discard flows.
-- Live verification against production once deployed, the same discipline used for every other
-  change this session: actually trigger a halt, reload, confirm the recovery view shows the
-  right items with the right plain-language description, confirm reapply genuinely re-saves and
-  clears the entry, confirm discard removes it without dispatching anything.
+- **Checked before writing this section, not assumed**: `scripts/scenario-validation.ts` runs
+  in Node, which has no `window` — `lib/autosave.ts`'s existing local-mirror functions
+  (`saveWorkspaceLocally`/`loadWorkspaceLocally`), the closest precedent for this exact category
+  of code, have no scenario coverage today and are verified live only. `lib/pendingActions.ts`
+  will follow the same convention (hardcoded to `window.localStorage`, matching
+  `lib/autosave.ts`'s style rather than introducing a new dependency-injection pattern this
+  codebase doesn't otherwise use) — so it inherits the same limit honestly, rather than this
+  design claiming scenario coverage that would not actually exercise anything.
+- What scenario coverage *can* reach: the reapply mechanism's core logic — stripping a stale
+  `expected` so `dispatch`'s own `withExpectation` (`components/IssueWorkspace.tsx:374-386`)
+  recomputes it fresh against current state — is plain object logic once separated from
+  `localStorage`, and gets a scenario.
+- Everything storage-shaped (save, load, clear, and the boot-time "found leftovers" check) is
+  live verification against production, the same discipline used for every other change this
+  session: actually trigger a halt, reload, confirm the recovery view shows the right items with
+  the right plain-language description, confirm reapply genuinely re-saves and clears the entry,
+  confirm discard removes it without dispatching anything.
 
 ## Open question for the implementation pass
 
