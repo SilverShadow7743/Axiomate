@@ -459,6 +459,48 @@ alone**:
 **Confirmed working, 9 September 2026, all three items live together on SLG-001.** Item 8 (tab
 consolidation) is the only Tier 2 item left to build.
 
+## Item 8 build summary — 9 September 2026
+
+Built as specified: `TabsBar` (`DetailPanel.tsx`) replaces the flat, always-all-11 tab row with
+priority navigation — `TABS` reordered to lead with `Overview, Checklist, Discussion, Time`,
+tab widths cached once on first paint (`useLayoutEffect`), a `ResizeObserver` on the wrap
+re-decides the visible count from the cache on every resize, the active tab is always forced
+into the visible set, and the rest collapse under a portal-rendered `⋯ More` menu reusing
+`RowMenu`'s `useOverlay`/`createPortal` shape. Clean `tsc`, clean build, clean `eslint`, 259
+scenarios unchanged (no reducer touched).
+
+**Two real bugs found live-verifying against production (SLG-001), neither caught by
+`tsc`/build/eslint — both are CSS cascade bugs, not logic bugs, and the underlying adaptive
+width-fitting mechanism was correct from the first deploy**:
+
+1. **The wrapper div around `.tabs` and the `⋯ More` button had no `display: flex`.** The core
+   logic was already right — shrinking the wrap to 160px correctly cut the visible set down to
+   just "Overview" — but with no flex on the wrapper, `⋯ More` fell onto its own line below the
+   tabs instead of sitting inline with them. Confirmed via screenshot (this one genuinely needed
+   a screenshot — the layout bug is about visual position, not something a DOM query would
+   catch). Fixed with `display: flex; align-items: center` on the wrapper.
+2. **`.tabs-more-menu` was computing `position: absolute`, not the `fixed` it was written to
+   have.** `.menu` (declared later in `globals.css`, same 0,1,0 specificity as `.tabs-more-menu`
+   alone) was winning the position property on source order — a different flavor of the same
+   specificity-adjacent class of bug Tier 1 hit with `.fs-sev`, this time by ordering rather than
+   raw specificity. Caught by reading `getComputedStyle(menu).position` directly rather than
+   trusting the written CSS — the menu was still fully functional at the wrong position value
+   (confirmed via `elementFromPoint` hit-testing and a real click-through to select "History"
+   from the menu, which worked end to end even before the fix), so this was a real but latent
+   bug: harmless at zero page-scroll, would have misbehaved once the page actually scrolled.
+   Fixed by targeting `.menu.tabs-more-menu` (both classes, matching what the element actually
+   carries) rather than depending on staying above `.menu` in the file.
+
+**Both resize directions confirmed working on the final pass**: shrinking the wrap to 160px
+correctly reduced the bar to "Overview" + a correctly-inline, correctly-fixed-position `⋯ More`
+listing the other ten; widening back restored the natural 8-visible/3-overflowed split without
+needing to re-render the hidden tabs to re-measure them (the width cache holding up under a
+real resize, not just in the reasoning). Clicking a tab inside the More menu correctly closed
+the menu, switched the active tab, and rendered that tab's real content.
+
+**All four Tier 2 items (7, 8, 9, 10) now built and confirmed working live.** I25 Tier 1 and
+Tier 2 are both complete.
+
 ### Non-goals — explicitly not building, and why
 
 - **"Next Best Action" / "Delivery Risk" AI insight cards.** No data source, no computation
