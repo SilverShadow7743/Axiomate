@@ -416,6 +416,49 @@ returns `'refused'`, so the `'evidence'` kind can be told apart from the (here, 
 practice, since the table only ever proposes an already-allowed route) `'route'` kind and routed
 to `onManageEvidence` instead of a plain message.
 
+## Tier 2 build summary — items 7, 9, 10 — 9 September 2026
+
+Built as specified above, with two issues caught and fixed before the first live check rather
+than discovered by one. Clean `tsc`, clean build, 259 scenarios unchanged (this suite covers
+reducer/business logic — `chooseStatus` is component-internal, so it was never going to be
+exercised here; the real check was live), clean `audit:a11y` on the touched files.
+
+**Two specificity/inheritance issues caught in review before shipping**: `.fs-time-val` sits in
+the same position `.fs-sev` did in Tier 1 — a direct `span` child of `.fs-fld` — so it would
+have inherited the generic `.field-strip .fs-fld > span` label rule's color (losing to it on
+specificity, the exact Tier 1 bug) and its `text-transform: uppercase` (rendering "18h / 32h" as
+"18H / 32H", which `.fs-sev`/`.fs-status` don't suffer because they wrap word-shaped `<select>`
+option text, not numerals). Both fixed with explicit overrides before any deploy.
+
+**Live-verified against production (SLG-001) after deploy, not assumed from the reasoning
+alone**:
+- **Item 7**: `.fs-status` carries class `st-ontrack` for "In Progress", computed `color: rgb(21,
+  127, 92)` (exactly `--h-ontrack`), 28%-alpha `currentColor` background, `border: 0px` —
+  matches the spec exactly. Severity's tag re-checked alongside it and still correctly bordered
+  and colored (`sev-High` → `--sev-high`, `1px solid` border) — no regression from adding the
+  new selectors.
+- **Item 9**: confirmed both branches. SLG-001 genuinely has no estimate yet, and `.fs-time`
+  correctly does not render at all (the "hide, don't show an empty slot" decision working as
+  intended, not a bug). The has-an-estimate branch was verified by injecting a synthetic
+  `.fs-time-val`/`.fs-time-note` pair into the live page and reading real computed styles off
+  the actual cascade (rather than fabricating estimate data through the Estimation tab's
+  five-dimension complexity scorer, which resisted scripted input) — confirmed `color: rgb(26,
+  24, 21)` (`--text`, not the muted label grey), `text-transform: none`, `font-size: 12px`, and
+  the note rendering in `--text-faint` beside it. Both specificity fixes hold under the real
+  cascade, not just in isolation.
+- **Item 10, the riskiest piece — exercised end to end, not just inspected**: moved SLG-001
+  Open-adjacent "In Progress" → "Awaiting client confirmation" (reason prompt opened and
+  committed correctly, confirming the `'reason'`-kind path is untouched), confirmed the
+  suggested-action label updated to "Confirm closed", then clicked it with zero evidence
+  attached. Result: no `.fs-refusal` dead-end message, no reason prompt — a portal-mounted
+  `<aside class="evi">` "Evidence & Documents" panel for SLG-001 opened directly, exactly the
+  fix as decided. Reverted both the status and the reason-prompt test data back to "In Progress"
+  afterward so the live record was left clean; the two test transitions remain in SLG-001's own
+  History as an honest audit trail, not scrubbed.
+
+**Confirmed working, 9 September 2026, all three items live together on SLG-001.** Item 8 (tab
+consolidation) is the only Tier 2 item left to build.
+
 ### Non-goals — explicitly not building, and why
 
 - **"Next Best Action" / "Delivery Risk" AI insight cards.** No data source, no computation
