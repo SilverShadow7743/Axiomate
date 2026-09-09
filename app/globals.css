@@ -2219,6 +2219,65 @@ select.cell-editor {
   border: none;
   padding: 0;
 }
+/* Status's tag, differentiated from severity by weight rather than hue — several `--h-*`
+   tokens sit close to their `--sev-*` counterparts (`--h-complete` near `--sev-low`), so a
+   second outlined-and-lightly-tinted tag next to severity's would read as one restated signal.
+   A heavier fill with no border reads as a different kind of tag even where the hue is close.
+   `currentColor` keeps this to one rule for both themes, same mechanism `.fs-sev` proved live —
+   a solid `background: var(--h-*)` was tried first and rejected: `--h-*` is a foreground-only
+   color in both themes (see the AA-contrast comment where it's defined), so a solid fill would
+   need the token to flip roles per theme, which is exactly the isolated-rule-vs-cascade pattern
+   that caused the Tier 1 severity bug. */
+.fs-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 28%, transparent);
+}
+.field-strip .fs-fld > .fs-status.st-unsched {
+  color: var(--h-unsched);
+}
+.field-strip .fs-fld > .fs-status.st-ontrack {
+  color: var(--h-ontrack);
+}
+.field-strip .fs-fld > .fs-status.st-blocked {
+  color: var(--h-blocked);
+}
+.field-strip .fs-fld > .fs-status.st-complete {
+  color: var(--h-complete);
+}
+.fs-status select {
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.field-strip .fs-suggest {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+/* `.fs-time-val` is itself a direct `span` child of `.fs-fld` (`.fs-time` carries both
+   classes) — the same specificity trap `.fs-sev` hit in Tier 1: `.field-strip .fs-fld > span`
+   (0,2,1) would otherwise outrank a plain `.field-strip .fs-time-val` (0,2,0) and paint the
+   figure in the same muted label grey as the note beside it. Matched here before it shipped,
+   not after — same class-stacking fix as `.fs-sev`'s.
+   `text-transform`/`font-size` need the same override, for a different reason than color:
+   `.fs-sev` and `.fs-status` are fine inheriting the generic label's small-caps look, because
+   they wrap a `<select>` whose option text (word-shaped, e.g. "In Progress") reads fine
+   upper-cased — that's the existing, already-live look. `.fs-time-val` is a numeric readout
+   ("18h / 32h"), not a label or a select; inherited uppercase would render it "18H / 32H",
+   which reads as a unit error, not a style. */
+.field-strip .fs-fld > .fs-time-val {
+  color: var(--text);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.field-strip .fs-time-note {
+  color: var(--text-faint);
+}
 .field-strip .fs-refusal {
   color: var(--h-overdue);
   font-size: 11.5px;

@@ -9,13 +9,12 @@ import type {
   SlaPolicy,
 } from '@/lib/types'
 import type { CrpResult } from '@/lib/schedule'
-import { allowedNext } from '@/lib/statusPolicy'
-import { dropOutcome } from '@/lib/board'
+import { allowedNext, checkTransition, suggestedAction } from '@/lib/statusPolicy'
 import { can } from '@/lib/access'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
-import { proposeTargetDate } from '@/lib/schedule'
+import { proposeTargetDate, statusColorClass } from '@/lib/schedule'
 import { formatIso } from '@/lib/dates'
 import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
@@ -31,7 +30,7 @@ import CommercialPanel from './CommercialPanel'
 import CapacityPanel from './CapacityPanel'
 import ProjectMembersPanel from './ProjectMembersPanel'
 import type { Sow } from '@/lib/sow'
-import type { TimeActivity } from '@/lib/time'
+import { effortVariance, type TimeActivity } from '@/lib/time'
 import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/estimation'
 import type { Actor } from '@/lib/actor'
@@ -579,7 +578,13 @@ export default function DetailPanel({
           edit mode, four clicks from the Time tab — and the fields a delivery manager touches
           most must never be more than one click away, whichever tab is open. */}
       {issue && issueRow && panelState !== 'compact' && (
-        <FieldStrip row={issueRow} issue={issue} state={state} onCommitCell={onCommitCell} />
+        <FieldStrip
+          row={issueRow}
+          issue={issue}
+          state={state}
+          onCommitCell={onCommitCell}
+          onManageEvidence={onManageEvidence}
+        />
       )}
 
       {/*
@@ -1308,18 +1313,25 @@ function FieldStrip({
   issue,
   state,
   onCommitCell,
+  onManageEvidence,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
   state: WorkspaceState
   onCommitCell: (rowId: string, colKey: string, raw: string, reason?: string) => boolean
+  onManageEvidence: (issueId: string) => void
 }) {
   const labels = useLabels()
   const policy = state.model.statusPolicy
   const routes = allowedNext(policy, issue.status)
+  const suggested = suggestedAction(policy, issue.status)
   const hasEvidence = useMemo(
     () => Object.values(state.evidence).some((e) => e.issueId === issue.id && !e.deletedAt),
     [state.evidence, issue.id],
+  )
+  const variance = useMemo(
+    () => effortVariance(state.timeEntries, issue.id, state.estimates[issue.id], state.model.sizeBands),
+    [state.timeEntries, state.estimates, issue.id, state.model.sizeBands],
   )
   const [pendingStatus, setPendingStatus] = useState<IssueStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
@@ -1332,16 +1344,29 @@ function FieldStrip({
     setOwnerDraft(issue.owner)
   }, [issue.id, issue.owner, issue.status])
 
+  /**
+   * `checkTransition` directly, not `dropOutcome` — `dropOutcome` collapses `'route'` and
+   * `'evidence'` problems into one `'refused'` kind, which is right for a drag (nothing to do
+   * but say no) but wrong here: `'evidence'` has a real next step (add evidence), and folding
+   * it into a dead-end refusal string is exactly the gap the Tier 2 design review caught.
+   */
   const chooseStatus = (to: IssueStatus) => {
     setRefusal(null)
     if (to === issue.status) {
       setPendingStatus(null)
       return
     }
-    const out = dropOutcome(policy, row, to, hasEvidence)
-    if (out.kind === 'refused') {
+    const problem = checkTransition(policy, row.status, to, { hasEvidence })
+    if (problem?.kind === 'evidence') {
       setPendingStatus(null)
-      setRefusal(out.message)
+      onManageEvidence(issue.id)
+      return
+    }
+    if (problem && problem.kind !== 'reason') {
+      // 'route' — defensive only; every `to` this component offers (the select's own options,
+      // and `suggested.to`) already comes from `allowedNext`, so this should be unreachable.
+      setPendingStatus(null)
+      setRefusal(problem.message)
       return
     }
     setPendingStatus(to)
@@ -1359,15 +1384,36 @@ function FieldStrip({
     <div className="field-strip">
       <label className="fs-fld">
         <span>{labels.FIELD_STATUS}</span>
-        <select
-          value={pendingStatus ?? issue.status}
-          onChange={(e) => chooseStatus(e.target.value as IssueStatus)}
-        >
-          {[issue.status, ...routes.filter((sx) => sx !== issue.status)].map((sx) => (
-            <option key={sx}>{sx}</option>
-          ))}
-        </select>
+        {/* Colored by the committed `issue.status`, not `pendingStatus` — a draft awaiting a
+            reason (or bounced to the evidence manager) hasn't happened yet, and coloring ahead
+            of the commit would read as though it had. Composes `TERMINAL_STATUSES`/
+            `BLOCKED_STATUSES` with the `--h-*` schedule-health tokens (`statusColorClass`,
+            `lib/schedule.ts`) rather than a new palette. */}
+        <span className={`fs-status ${statusColorClass(issue.status)}`}>
+          <select
+            value={pendingStatus ?? issue.status}
+            onChange={(e) => chooseStatus(e.target.value as IssueStatus)}
+          >
+            {[issue.status, ...routes.filter((sx) => sx !== issue.status)].map((sx) => (
+              <option key={sx}>{sx}</option>
+            ))}
+          </select>
+        </span>
       </label>
+      {/* The one ordinary next move, read off the transition table's own ordering
+          (`suggestedAction`, `lib/statusPolicy.ts`) — calls the same `chooseStatus` the select
+          above uses, so the reason prompt and the evidence redirect both apply here too, with
+          no second implementation to keep in sync. Hidden while a reason is already pending, to
+          avoid a redundant control next to the prompt it would open. */}
+      {suggested && !pendingStatus && (
+        <button
+          type="button"
+          className="btn primary fs-suggest"
+          onClick={() => chooseStatus(suggested.to)}
+        >
+          {suggested.label}
+        </button>
+      )}
       {pendingStatus && (
         <span className="fs-ask">
           <input
@@ -1439,6 +1485,25 @@ function FieldStrip({
           </select>
         </span>
       </label>
+      {/* Only once there is something to compare against — an issue with no estimate yet has
+          nothing this field would say, and a permanent "0h / —h" slot on every such issue would
+          be noise rather than a KPI. Data and phrasing both already exist (`effortVariance`,
+          `TimeTab.tsx`'s own over/under-by wording) — no new computation. */}
+      {variance.estimated !== null && (
+        <span className="fs-fld fs-time">
+          <span>{labels.FIELD_TIME_KPI}</span>
+          <span className="fs-time-val mono">
+            {variance.actual}h / {variance.estimated}h
+            <span className="fs-time-note">
+              {variance.varianceHours === 0
+                ? ' · exactly on it'
+                : variance.varianceHours! > 0
+                  ? ` · over by ${variance.varianceHours}h`
+                  : ` · ${Math.abs(variance.varianceHours!)}h left`}
+            </span>
+          </span>
+        </span>
+      )}
     </div>
   )
 }

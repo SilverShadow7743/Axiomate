@@ -118,6 +118,35 @@ export function allowedNext(policy: StatusPolicy, from: IssueStatus | null): Iss
   return [from, ...next.filter((s) => s !== from)]
 }
 
+/** What a "primary action" button should say for each status, before it names the transition. */
+const SUGGESTED_ACTION_LABELS: Partial<Record<IssueStatus, string>> = {
+  Open: 'Start',
+  'In Progress': 'Send to client',
+  'Needs clarification': 'Resume',
+  'Awaiting client confirmation': 'Confirm closed',
+  'Closed - confirmed': 'Reopen',
+  'Closed - no defect': 'Reopen',
+  Superseded: 'Reopen',
+}
+
+/**
+ * The one ordinary next move for a status, read off `DEFAULT_STATUS_POLICY.transitions`'
+ * existing ordering rather than a second table — see the comment on that constant. `null` when
+ * there is nothing to suggest: no status, an unenforced policy (where `allowedNext` falls back
+ * to the full, unordered `ISSUE_STATUSES` and position no longer means anything), or a status
+ * this table has no label for.
+ */
+export function suggestedAction(
+  policy: StatusPolicy,
+  from: IssueStatus | null,
+): { to: IssueStatus; label: string } | null {
+  if (!from || !policy.enforced) return null
+  const to = allowedNext(policy, from)[1]
+  if (!to) return null
+  const label = SUGGESTED_ACTION_LABELS[from]
+  return label ? { to, label } : null
+}
+
 /**
  * Check a proposed move.
  *

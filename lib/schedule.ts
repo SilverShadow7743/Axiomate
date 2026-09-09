@@ -57,6 +57,18 @@ export function isTerminal(status: IssueStatus | null): boolean {
 }
 
 /**
+ * Which schedule-health color a status tag renders in — composes `TERMINAL_STATUSES` and
+ * `BLOCKED_STATUSES` above with the `--h-*` tokens already driving the Gantt and Calendar,
+ * rather than a fourth copy of the grouping. Open and In Progress are kept visually distinct
+ * (`st-unsched` vs `st-ontrack`) rather than collapsed into one "nothing wrong" color.
+ */
+export function statusColorClass(status: IssueStatus): string {
+  if (isTerminal(status)) return 'st-complete'
+  if (BLOCKED_STATUSES.includes(status)) return 'st-blocked'
+  return status === 'In Progress' ? 'st-ontrack' : 'st-unsched'
+}
+
+/**
  * Schedule health (spec §10).
  *
  * Deliberately NOT computed from percentage alone. Inputs: today, planned start/end,

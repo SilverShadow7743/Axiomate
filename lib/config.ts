@@ -114,6 +114,7 @@ export const LABEL_KEYS = {
   FIELD_SCHEDULE_HEALTH: 'Schedule Health',
   FIELD_DUE_DATE: 'Due Date',
   FIELD_START_DATE: 'Start Date',
+  FIELD_TIME_KPI: 'Time',
 } as const
 
 export type LabelKey = keyof typeof LABEL_KEYS
@@ -145,6 +146,7 @@ export const LABEL_GROUPS: { title: string; note: string; keys: LabelKey[] }[] =
       'FIELD_NEXT_ACTION',
       'FIELD_START_DATE',
       'FIELD_DUE_DATE',
+      'FIELD_TIME_KPI',
     ],
   },
 ]
