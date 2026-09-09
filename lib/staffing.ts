@@ -64,6 +64,39 @@ export const DEFAULT_PROJECT_ROLES: Record<string, ProjectRole> = Object.fromEnt
   ]),
 )
 
+/**
+ * The project-facing roles that put someone on the client's side of a project rather than the
+ * delivery team's — Sponsor/Customer/Stakeholder, the three seeded roles that read as "the
+ * client is here", not "the firm is here". A firm-added custom role is not classified either
+ * way; this only sorts the shipped vocabulary.
+ */
+export const CLIENT_PROJECT_ROLES = ['PROJROLE_SPONSOR', 'PROJROLE_CUSTOMER', 'PROJROLE_STAKEHOLDER']
+
+export interface OwnerCandidates {
+  team: ProjectMember[]
+  client: ProjectMember[]
+}
+
+/**
+ * Active members of one project, split into delivery team and client-facing roles — for an
+ * owner picker that wants to offer both groups distinctly (I25 Tier 3, the owner dropdown).
+ * Empty on both sides when `projectId` is null (a record with no project ancestor) or the
+ * project has no staffing recorded yet — a picker built on this degrades to showing whatever
+ * is already set, the same "empty state, not a missing control" convention `Fields`/`Skills`
+ * already follow for an issue whose project has nothing configured.
+ */
+export function ownerCandidatesFor(
+  members: Record<string, ProjectMember>,
+  projectId: string | null,
+): OwnerCandidates {
+  if (!projectId) return { team: [], client: [] }
+  const active = Object.values(members).filter((m) => m.projectId === projectId && !m.removedAt)
+  return {
+    team: active.filter((m) => !CLIENT_PROJECT_ROLES.includes(m.projectRoleId)),
+    client: active.filter((m) => CLIENT_PROJECT_ROLES.includes(m.projectRoleId)),
+  }
+}
+
 export interface MemberProblem {
   field: 'person' | 'projectRoleId'
   message: string

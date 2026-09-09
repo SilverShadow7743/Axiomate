@@ -49,7 +49,8 @@ import { describeForecast, forecastFor } from '@/lib/forecast'
 import { profileAt } from '@/lib/capacity'
 import { directoryIdByName } from '@/lib/access'
 import { severityGlyph } from '@/lib/severity'
-import { readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
+import { projectOf, readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
+import { ownerCandidatesFor } from '@/lib/staffing'
 import {
   KIND_ICON,
   KIND_LABEL,
@@ -1503,16 +1504,33 @@ function FieldStrip({
     () => effortVariance(state.timeEntries, issue.id, state.estimates[issue.id], state.model.sizeBands),
     [state.timeEntries, state.estimates, issue.id, state.model.sizeBands],
   )
+  /**
+   * Project team and client-side candidates for the owner picker — `projectOf` walks the same
+   * tree `parentOf`/`scopeChainOf` already use, so an activity resolves through its issue the
+   * same way every other project-scoped lookup in this panel does. `ownerCandidatesFor`
+   * (`lib/staffing.ts`) does the role split, one definition shared with anywhere else that
+   * needs "who's staffed here, client side vs. team side".
+   */
+  const projectId = useMemo(
+    () => projectOf(state, row.id),
+    [state.nodes, state.issues, state.activities, row.id],
+  )
+  const ownerCandidates = useMemo(
+    () => ownerCandidatesFor(state.projectMembers, projectId),
+    [state.projectMembers, projectId],
+  )
   const [pendingStatus, setPendingStatus] = useState<IssueStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [refusal, setRefusal] = useState<string | null>(null)
   const [ownerDraft, setOwnerDraft] = useState(issue.owner)
   useEffect(() => {
+    setOwnerDraft(issue.owner)
+  }, [issue.id, issue.owner])
+  useEffect(() => {
     setPendingStatus(null)
     setStatusNote('')
     setRefusal(null)
-    setOwnerDraft(issue.owner)
-  }, [issue.id, issue.owner, issue.status])
+  }, [issue.id, issue.status])
 
   /**
    * `checkTransition` directly, not `dropOutcome` — `dropOutcome` collapses `'route'` and
@@ -1608,7 +1626,19 @@ function FieldStrip({
       {refusal && <span className="fs-refusal">{refusal}</span>}
       <label className="fs-fld">
         <span>{labels.ISSUE_OWNER}</span>
+        {/* Project team / client suggestions (I25 Tier 3) via `list`, not a `<select>` —
+            checked against live data before committing to a hard picker: SLG-001 itself (this
+            session's own test issue) carries "Michael Thomas (POS) / Amolak (D365)", and the
+            live register has eight more open issues shaped the same way — a real, established
+            pattern, not a hypothetical one, for splitting ownership across systems within one
+            project. A `<select>` would make that shape permanently unrepresentable going
+            forward (display-only, via a fallback option); an `<input list>` keeps the free-text
+            path fully open while still surfacing `ownerCandidatesFor`'s (`lib/staffing.ts`)
+            project-team and client-role names as real, clickable suggestions — the same
+            `<input list>` + `<datalist>` pattern `ProjectMembersPanel`'s own member picker
+            already uses for this exact "suggest from a list, don't force it" shape. */}
         <input
+          list={`fs-owner-list-${issue.id}`}
           value={ownerDraft}
           onChange={(e) => setOwnerDraft(e.target.value)}
           onBlur={() => {
@@ -1624,6 +1654,14 @@ function FieldStrip({
           // for; title gives the one thing a clipped input can offer for free, a hover tooltip.
           title={ownerDraft}
         />
+        <datalist id={`fs-owner-list-${issue.id}`}>
+          {ownerCandidates.team.map((m) => (
+            <option key={m.id} value={m.person} />
+          ))}
+          {ownerCandidates.client.map((m) => (
+            <option key={m.id} value={m.person} />
+          ))}
+        </datalist>
       </label>
       <label className="fs-fld">
         <span>{labels.FIELD_DUE_DATE}</span>
