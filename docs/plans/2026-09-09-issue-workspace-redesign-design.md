@@ -280,10 +280,31 @@ same hex — `--h-overdue` = `--sev-high` in both themes, `--h-atrisk` ≈ `--se
 `--h-complete` ≈ `--sev-low` (`app/globals.css` light/dark blocks). None of the seven statuses
 above map to `--h-overdue` or `--h-atrisk`, so no status tag will literally match a severity
 tag's color — but `--h-complete` (used by all three terminal statuses) sits close enough to
-`--sev-low` that a Low-severity issue in a Closed state shows two adjacent grey-ish pills that
-read as restating each other rather than two distinct signals. Not a blocker, but worth a
-visual check once both tags are built together, not assumed fine because each was checked in
-isolation.
+`--sev-low` that a Low-severity issue in a Closed state would show two adjacent grey-ish pills
+reading as one restated signal rather than two.
+
+**Decided, 9 September 2026, revised once against the actual tokens**: differentiate by shape,
+not by color, since the color budget is already spent reusing the `--h-*` set. A first pass at
+this proposed a solid `background: var(--h-*)` fill with a theme-flipped foreground (white text
+on the darker light-mode tokens, token-color text in dark mode). Checked against the tokens
+themselves before committing to it: both light mode (`app/globals.css:36-44`, values like
+`#8f5500`, explicitly documented as tuned for *text* contrast against white — see the AA
+comment at line 37) and dark mode (`:104-109`, `#3fb086` etc., same role, text against dark)
+define `--h-*` as **foreground colors in both themes**, never as a background. A solid-fill
+treatment would need the token to switch roles per theme — background in light, foreground in
+dark — which means two structurally different rules to keep in sync across three
+token-redefinition sites (bare `:root`, the dark media query, the `[data-theme="dark"]` stamp),
+the exact pattern that produced the Tier 1 severity bug (a rule reasoned about in isolation lost
+to something else in the cascade).
+
+**What's actually specified**: keep `.fs-sev`'s `currentColor`-based approach — it already
+works in both themes with one rule, since `currentColor` resolves to whichever token is
+assigned regardless of theme — but raise the fill weight and drop the border for `.fs-status`:
+`background: color-mix(in srgb, currentColor 28%, transparent)`, `border: none`, text color the
+`--h-*` token via the same per-status class pattern `.sev-High` etc. already establish. Fill
+weight and border-presence are independent axes; a heavier untinted-vs-tinted, bordered-vs-not
+pairing reads as two different kinds of tag without inverting anything per theme. Covers every
+near-collision in the table, not just Closed+Low, with the one rule this needs.
 
 **8. Tab consolidation — still a real open question, not decided here.**
 
@@ -337,14 +358,32 @@ exactly the "Confirm closed" row, since `requireEvidence: ['Closed - confirmed']
 `'reason'`, so `dropOutcome` maps it to `{kind: 'refused', message}` instead — `chooseStatus`
 just sets `refusal` and stops; no prompt opens. Built as specified, the one row this table
 calls "already the answer" would be the one row that dead-ends the button with a refusal
-string instead of a way to comply. Two ways to close this, neither built yet: suppress the
-"Confirm closed" suggestion when `hasEvidence` is false (fall back to the ordinary dropdown,
-which already shows the same refusal today), or point the refusal at the evidence manager
-instead of a plain message. Pick one before building item 10, not after.
-**What still needs a decision, but a small one**: whether
-this renders as a real second button next to Edit (`OverviewTab.tsx:582`, the `ov-actions` row
-at the top of Overview) or folds into `FieldStrip` itself as a fifth element — a placement
-call, not a logic one, since the logic above is complete either way.
+string instead of a way to comply. **Decided, 9 September 2026**: point the refusal at the
+evidence manager rather than suppress the suggestion. Suppressing it makes "Confirm closed"
+silently vanish exactly when the transition-table logic is proudest of itself (the ordinary
+next move is known, but the button that would say so just isn't there) — worse than showing
+it and explaining what's missing. `onManageEvidence(issue.id)` (`components/DetailPanel.tsx:135`,
+opens `EvidencePanel` via `IssueWorkspace.tsx`'s `evidenceFor` state) is exactly this action,
+already built.
+
+**Placement, corrected after a first pass got this backwards**: an earlier draft of this
+decision put the button in `OverviewTab` because `onManageEvidence` is already a prop there.
+That reasoning didn't survive a second check — `chooseStatus`, `pendingStatus`, and the inline
+`fs-ask` reason prompt (`DetailPanel.tsx:1335-1384`) are private to `FieldStrip`, not reachable
+from `OverviewTab`. Four of the five rows in the table above resolve to `kind: 'reason'`, not
+`kind: 'evidence'` — putting the button in `OverviewTab` would mean either reimplementing
+`checkTransition`/`dropOutcome`/the reason-prompt UI a second time (a divergent copy of rules
+that must stay in lockstep with `FieldStrip`'s), or the button silently not handling the more
+common case at all. **The button lives inside `FieldStrip`, next to the status `<select>` it
+already contains**, and calls `chooseStatus(suggested)` directly — the exact same function,
+not a parallel one, so the reason prompt keeps working for all four `'reason'` rows with no new
+code. The only genuinely new plumbing is threading `onManageEvidence` as a new prop into
+`FieldStrip` (currently `DetailPanel.tsx:582` passes only `row`/`issue`/`state`/`onCommitCell`)
+and one small change inside `chooseStatus`: call `checkTransition` (`lib/statusPolicy.ts:130`,
+not currently imported into `DetailPanel.tsx` — only `dropOutcome` is) directly when `dropOutcome`
+returns `'refused'`, so the `'evidence'` kind can be told apart from the (here, unreachable in
+practice, since the table only ever proposes an already-allowed route) `'route'` kind and routed
+to `onManageEvidence` instead of a plain message.
 
 ### Non-goals — explicitly not building, and why
 
