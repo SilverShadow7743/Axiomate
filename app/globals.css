@@ -5264,6 +5264,39 @@ select.cell-editor {
 .sla-modal {
   width: min(680px, 92vw);
 }
+
+/* The stuck-changes recovery panel — a plain list, one row per queued-but-unconfirmed action. */
+.stuck-changes-modal {
+  width: min(620px, 92vw);
+}
+.stuck-changes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.stuck-change-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.stuck-change-desc {
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.stuck-change-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
 .sla-summary dd {
   font-size: 12.5px;
 }

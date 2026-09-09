@@ -5,7 +5,7 @@ import type { Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 import type { SaveState } from '@/lib/autosave'
 import { shouldResume, verdictFor, type Halt, type ResumeTrigger, type Verdict } from '@/lib/queue'
-import { clearPendingAction, savePendingAction } from '@/lib/pendingActions'
+import { clearHalted, clearPendingAction, markHalted, savePendingAction } from '@/lib/pendingActions'
 
 /**
  * The autosave queue.
@@ -124,21 +124,28 @@ export function useAutosave(enabled: boolean, tenantId: string): Autosave {
    * would produce a queue that is paused and never eligible to resume — which is the bug this
    * whole change exists to remove.
    */
-  const settle = useCallback((verdict: Verdict) => {
-    halt.current = verdict.halt
-    if (!verdict.keepQueue) queue.current = []
-    if (verdict.halt === 'paused') {
-      pausedAt.current = Date.now()
-      pauses.current += 1
-    }
-    if (!alive.current) return
-    setState((s) => ({
-      ...s,
-      status: verdict.status,
-      pending: queue.current.length,
-      error: verdict.message,
-    }))
-  }, [])
+  const settle = useCallback(
+    (verdict: Verdict) => {
+      halt.current = verdict.halt
+      if (!verdict.keepQueue) queue.current = []
+      if (verdict.halt === 'paused') {
+        pausedAt.current = Date.now()
+        pauses.current += 1
+      }
+      // The only marker `lib/pendingActions.ts`'s boot-time recovery check trusts: a queue
+      // that stopped here is a genuine, never-auto-resuming halt, not the ordinary in-flight
+      // gap every queued action sits in for the second or so before its response lands.
+      if (verdict.halt === 'stopped') markHalted(tenantId)
+      if (!alive.current) return
+      setState((s) => ({
+        ...s,
+        status: verdict.status,
+        pending: queue.current.length,
+        error: verdict.message,
+      }))
+    },
+    [tenantId],
+  )
 
   const drain = useCallback(async () => {
     if (draining.current || halt.current !== 'running' || !enabled) return
@@ -211,6 +218,10 @@ export function useAutosave(enabled: boolean, tenantId: string): Autosave {
               // A batch that got through means whatever was wrong is over. The ladder resets
               // so the next outage waits thirty seconds rather than four minutes.
               pauses.current = 0
+              // Nothing left owed to the server — whatever halt this tenant's log was marked
+              // with (if any) is resolved. Left set, it would misclassify the next ordinary
+              // in-flight gap as a stuck change on a future boot.
+              if (!queue.current.length) clearHalted(tenantId)
               if (alive.current) {
                 setState({
                   status: queue.current.length ? 'saving' : 'saved',

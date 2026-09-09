@@ -108,6 +108,7 @@ const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
 const TimesheetPanel = dynamic(() => import('./TimesheetPanel'), { ssr: false })
 const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
 const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
+const StuckChangesPanel = dynamic(() => import('./StuckChangesPanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {
   describeSave,
@@ -116,6 +117,9 @@ import {
   loadWorkspaceLocally,
   saveWorkspaceLocally,
 } from '@/lib/autosave'
+import { clearHalted, clearPendingAction, loadPendingActions, wasHalted } from '@/lib/pendingActions'
+import { reapplyable } from '@/lib/reapplyPendingAction'
+import type { SubmittedAction } from '@/lib/idempotency'
 import type { ConfigOp } from '@/lib/workspace'
 
 /**
@@ -332,14 +336,52 @@ export default function IssueWorkspace({
    * are different in kind, not just severity.
    */
   const wasSaveError = useRef(false)
+  /**
+   * What was queued but never confirmed, shown plainly rather than left to the corner badge —
+   * `null` closed, an array (possibly empty only transiently) open. Read fresh from
+   * `loadPendingActions` rather than threaded through `useAutosave`'s own state, which stays
+   * unchanged (`Autosave`'s public shape carries no queue contents) — the persisted log is the
+   * single source of truth for what to show, whether the panel opened from a live halt just now
+   * or from finding leftovers on boot (below).
+   */
+  const [stuckActions, setStuckActions] = useState<SubmittedAction[] | null>(null)
   useEffect(() => {
     const isError = saveStatus.status === 'error'
     if (isError && !wasSaveError.current) {
       notify(describeSaveDetail(saveStatus, persistence.enabled), true, 15000)
+      if (persistence.enabled) setStuckActions(loadPendingActions(tenantId))
     }
     wasSaveError.current = isError
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveStatus.status])
+
+  /**
+   * A session that ended without clearing its queue — reload, crash, a tab discarded in the
+   * background — leaves entries behind. Modeled directly on the local-mirror leftover notice
+   * below (`hasLocalWorkspace`): checked once per mount, not re-checked on every render.
+   *
+   * Gated on `wasHalted`, not just on an entry existing. `savePendingAction` writes at enqueue
+   * and `clearPendingAction` at confirmation — a real network round trip apart — so an entry
+   * existing only means "queued, not yet confirmed", the ordinary state of every action for
+   * that gap. Ending a session inside that ordinary gap (closing a tab right after an edit) is
+   * routine, not a halt; showing it as a lost change would be a false alarm on a change that in
+   * fact saved fine, and would train the exact ignore-reflex the toast fix exists to avoid. Only
+   * `useAutosave.ts`'s `settle` marks a tenant halted, and only for a genuine `Halt: 'stopped'`.
+   */
+  useEffect(() => {
+    if (!persistence.enabled) return
+    const leftover = loadPendingActions(tenantId)
+    if (!leftover.length) return
+    if (wasHalted(tenantId)) {
+      setStuckActions(leftover)
+    } else {
+      // Stray entries from the ordinary enqueue-to-confirm gap, not a real halt — most likely
+      // already committed server-side (a beacon flush the tab closed before seeing the
+      // response). Nothing to show; clear them so they don't linger indefinitely.
+      for (const a of leftover) if (a.key) clearPendingAction(tenantId, a.key)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistence.enabled, tenantId])
 
 /**
    * How wide the timeline pane actually is.
@@ -3101,6 +3143,40 @@ export default function IssueWorkspace({
           </div>
         ))}
       </div>
+
+      {stuckActions && (
+        <StuckChangesPanel
+          actions={stuckActions}
+          onReapply={(action) => {
+            // `dispatch` returns false when `applyWithRules` refuses the reapplied action
+            // (e.g. the current record has since changed again and this now conflicts for
+            // real). Clearing the stuck entry on a refusal would delete the only record of a
+            // change that is still unsaved — exactly the loss this panel exists to prevent.
+            // Only a genuine accepted-and-queued dispatch clears it; a refusal leaves the row
+            // in place so the notify() toast the refusal fires is not the only trace left.
+            if (!dispatch(reapplyable(action))) return
+            // The reapply is its own new dispatch — persist re-enters enqueueAll, which stamps
+            // a fresh key and re-adds it to the pending log under that key, tracked and cleared
+            // normally like any other edit. Clearing the OLD key here is what removes the stuck
+            // entry itself; it is not the same key a subsequent server confirmation would clear.
+            if (action.key) clearPendingAction(tenantId, action.key)
+            setStuckActions((prev) => {
+              const next = prev?.filter((a) => a.key !== action.key) ?? null
+              if (next && !next.length) clearHalted(tenantId)
+              return next
+            })
+          }}
+          onDiscard={(key) => {
+            clearPendingAction(tenantId, key)
+            setStuckActions((prev) => {
+              const next = prev?.filter((a) => a.key !== key) ?? null
+              if (next && !next.length) clearHalted(tenantId)
+              return next
+            })
+          }}
+          onClose={() => setStuckActions(null)}
+        />
+      )}
     </div>
     </LabelProvider>
   )
