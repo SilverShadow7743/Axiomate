@@ -423,6 +423,16 @@
       "impact": "The pass can only ever send a complete period, once."
     },
     {
+      "id": "DL2",
+      "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement, or is refused if it names nothing live",
+      "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's one narrowing control, unlike the packs, which already fan out per client. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds.",
+      "verdict": "PASS",
+      "actual": "scoped=true cleared=true deletedRefused=true missingRefused=true",
+      "stops": "—",
+      "severity": "—",
+      "impact": "the daily IMS can be pointed at one engagement instead of the whole workspace, and a stale or invented scope is caught at config time rather than mailing an empty report"
+    },
+    {
       "id": "RN1",
       "title": "An internal reviewer is prompted when an issue moves to Awaiting client confirmation",
       "expected": "resolutionNotices() reads the audit rows a real updateIssue transition writes, resolves the issue's client and an optional directory-backed contact, and produces nothing for an unrelated status change or a no-op patch.",

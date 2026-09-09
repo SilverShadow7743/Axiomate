@@ -9,7 +9,7 @@ import { runRecurrences, runWatch, type WorkspaceState } from '../workspace'
 import { EMPTY_OBSERVATION, describeRun, type Observation, type WatchDiff } from '../watch'
 import { buildTree } from '../tree'
 import { buildDailyIms } from '../reports/dailyIms'
-import { buildWeeklyClientPack, buildMonthlyGovernancePack } from '../reports/clientPack'
+import { buildWeeklyClientPack, buildMonthlyGovernancePack, underScopeOf } from '../reports/clientPack'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../reports/pdf'
 import { deliveryDue, parseReportDelivery, type DeliveryStamps } from '../reports/delivery'
 import { resolveOperatorAddress } from '../reports/notifyBundle'
@@ -201,12 +201,19 @@ async function runDelivery(
 
   if (due.ims) {
     try {
-      const rows = buildTree(state, today).filter((r) => r.kind === 'issue')
-      const ims = buildDailyIms(state, rows, today, 'All clients')
+      const scopeNode = config.imsScopeNodeId ? state.nodes[config.imsScopeNodeId] : null
+      const allRows = buildTree(state, today).filter((r) => r.kind === 'issue')
+      // A configured scope narrows the one email rather than fanning it out — see
+      // ReportDeliveryConfig.imsScopeNodeId. A scope id the config validator would have
+      // refused (deleted since, or never existed) falls back to unscoped rather than silently
+      // emailing nothing — the same "fail visible, not empty" posture the rest of this file uses.
+      const rows = scopeNode ? allRows.filter((r) => underScopeOf(state, r.parentId, scopeNode.id)) : allRows
+      const ims = buildDailyIms(state, rows, today, scopeNode ? scopeNode.name : 'All clients')
       const pdf = (await renderImsPdf(ims, org)).toString('base64')
       let allOk = true
       for (const to of config.imsRecipients) {
-        const res = await sendAsMailbox(mailbox, to, `Daily IMS — ${today}`, 'The daily issue management status is attached.', [
+        const subject = scopeNode ? `Daily IMS — ${scopeNode.name} — ${today}` : `Daily IMS — ${today}`
+        const res = await sendAsMailbox(mailbox, to, subject, 'The daily issue management status is attached.', [
           { name: `daily-ims-${today}.pdf`, contentType: 'application/pdf', contentBytes: pdf },
         ])
         if (res.ok) sent.push(`IMS to ${to}`)

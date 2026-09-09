@@ -2342,7 +2342,7 @@ scenario(
   'Scheduled report delivery knows what is due and stamps what it sent',
   "The delivery phase's pure halves, driven before the live pass may call them: due-logic (weekday IMS, Monday sends the PRIOR week, the 1st sends the PRIOR month, stamps dedupe, off-by-default, empty recipients silence) and the PDF renderers (checked by the async block at the end of this suite: report objects in, %PDF buffers out, a bad logo skipped rather than thrown).",
   () => {
-    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, resolutionNoticeEnabled: false, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com' }
+    const on: ReportDeliveryConfig = { imsEnabled: true, packsEnabled: true, resolutionNoticeEnabled: false, imsRecipients: ['ops@x.com'], packDestination: 'me@x.com', imsScopeNodeId: null }
 
     const wednesday = deliveryDue(on, {}, '2026-08-26')
     const midweek = wednesday.ims === true && wednesday.weeklyFor === null && wednesday.monthlyFor === null
@@ -2376,6 +2376,33 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. PDF smoke is appended by the async block below.', stops: '—', severity: '—', impact: 'The pass can only ever send a complete period, once.' } as const
       : { verdict: 'FAIL', actual: `midweek=${midweek} priorWeek=${priorWeek} (${monday.weeklyFor}) priorMonth=${priorMonth} (${first.monthlyFor}) yearRollover=${yearRollover} weekendQuiet=${weekendQuiet} stampHolds=${stampHolds} weekStampHolds=${weekStampHolds} monthStampHolds=${monthStampHolds} offByDefault=${offByDefault} noRecipients=${noRecipients} failsClosed=${failsClosed}`, stops: 'at the due-logic — a period still in flight would be mailed, a send repeated, or a disabled workspace would email', severity: 'P1', impact: 'unattended automation that spams, goes silent, or mails an incomplete week to be forwarded to a client' } as const
+  },
+)
+
+scenario(
+  'DL2',
+  'setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement, or is refused if it names nothing live',
+  "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's one narrowing control, unlike the packs, which already fan out per client. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds.",
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    const scoped = ok(BASE, { t: 'config', op: { k: 'setReportDelivery', patch: { imsScopeNodeId: engagementId } }, now: NOW } as Action)
+    const scopedOk = scoped.model.reportDelivery.imsScopeNodeId === engagementId
+
+    const cleared = ok(scoped, { t: 'config', op: { k: 'setReportDelivery', patch: { imsScopeNodeId: null } }, now: NOW } as Action)
+    const clearedOk = cleared.model.reportDelivery.imsScopeNodeId === null
+
+    const deleted = ok(BASE, { t: 'softDelete', id: engagementId, mode: 'reparent', now: NOW } as Action)
+    const refusedDeleted = act(deleted, { t: 'config', op: { k: 'setReportDelivery', patch: { imsScopeNodeId: engagementId } }, now: NOW } as Action)
+    const deletedRefused = Boolean(refusedDeleted.error)
+
+    const refusedMissing = act(BASE, { t: 'config', op: { k: 'setReportDelivery', patch: { imsScopeNodeId: 'no-such-node' } }, now: NOW } as Action)
+    const missingRefused = Boolean(refusedMissing.error)
+
+    const good = scopedOk && clearedOk && deletedRefused && missingRefused
+    return good
+      ? { verdict: 'PASS', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused}`, stops: '—', severity: '—', impact: 'the daily IMS can be pointed at one engagement instead of the whole workspace, and a stale or invented scope is caught at config time rather than mailing an empty report' } as const
+      : { verdict: 'FAIL', actual: `scoped=${scopedOk} cleared=${clearedOk} deletedRefused=${deletedRefused} missingRefused=${missingRefused}`, stops: "at setReportDelivery's imsScopeNodeId validation", severity: 'P1', impact: 'a deleted or invented scope silently narrows the daily IMS to nothing, and nobody who reads an empty report knows why' } as const
   },
 )
 

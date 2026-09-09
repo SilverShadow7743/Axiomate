@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-06T08:10:31.641Z",
+  "at": "2026-09-09T03:12:51.932Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 74,
   "failed": 0,
@@ -117,7 +117,7 @@
     {
       "what": "a cancellation survives reload and its mint lands with it",
       "ok": true,
-      "detail": "deletedAt=2026-09-06T09:00:00.000Z note=Cancelled: Proof sync"
+      "detail": "deletedAt=2026-09-09T09:00:00.000Z note=Cancelled: Proof sync"
     },
     {
       "what": "an allocation and a commitment keep their dates",
@@ -232,7 +232,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 39449 chars · 1 visible issues · 9 audit rows"
+      "detail": "payload 38908 chars · 1 visible issues · 11 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -242,7 +242,7 @@
     {
       "what": "a rename is one field edit and the renamed person still owns their records",
       "ok": true,
-      "detail": "1 items, first PROOF-2"
+      "detail": "1 items, first PROOF-1"
     },
     {
       "what": "a review round-trips with its pinned checksum, and a replaced verdict replaces",
@@ -257,7 +257,7 @@
     {
       "what": "a stored file comes back out of Postgres with its checksum and the locator that finds it",
       "ok": true,
-      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-2"
+      "detail": "Signed SOW.pdf · 240000 bytes · graph:graph-item-proof-1 · on issue PROOF-1"
     },
     {
       "what": "and a copy whose locator was stripped for reading cannot be written back",
@@ -267,7 +267,7 @@
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-09-06T09:00:00.000Z"
+      "detail": "deletedAt 2026-09-09T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",

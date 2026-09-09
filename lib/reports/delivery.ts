@@ -25,6 +25,11 @@ export interface ReportDeliveryConfig {
   imsRecipients: string[]
   /** Where the packs land for eyeballing. '' = resolve the operator's directory email at send time. */
   packDestination: string
+  /** null = the whole workspace ("All clients"), the original and still the default. Set to a
+   *  node id to narrow the daily IMS to that node's subtree — one engagement, say, rather than
+   *  everything. The weekly/monthly packs already fan out per client; the IMS does not, so this
+   *  narrows the one email rather than multiplying it. */
+  imsScopeNodeId: string | null
 }
 
 export const DEFAULT_REPORT_DELIVERY: ReportDeliveryConfig = {
@@ -33,6 +38,7 @@ export const DEFAULT_REPORT_DELIVERY: ReportDeliveryConfig = {
   resolutionNoticeEnabled: false,
   imsRecipients: [],
   packDestination: '',
+  imsScopeNodeId: null,
 }
 
 export function parseReportDelivery(raw: unknown): ReportDeliveryConfig {
@@ -46,6 +52,7 @@ export function parseReportDelivery(raw: unknown): ReportDeliveryConfig {
       ? r.imsRecipients.filter((x): x is string => typeof x === 'string' && x.trim() !== '')
       : [],
     packDestination: typeof r.packDestination === 'string' ? r.packDestination.trim() : '',
+    imsScopeNodeId: typeof r.imsScopeNodeId === 'string' && r.imsScopeNodeId.trim() !== '' ? r.imsScopeNodeId : null,
   }
 }
 

@@ -7999,6 +7999,12 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       }
       next.imsRecipients = next.imsRecipients.map((a) => a.trim()).filter(Boolean)
       next.packDestination = next.packDestination.trim()
+      /* A scope that no longer exists would silently narrow the IMS to nothing rather than
+       * report the mistake — refuse instead, the same posture every other stored node
+       * reference in this file takes. */
+      if (next.imsScopeNodeId && (!state.nodes[next.imsScopeNodeId] || state.nodes[next.imsScopeNodeId].deletedAt)) {
+        return { state, error: 'That scope no longer exists in the tree.' }
+      }
       return done(
         { ...m, reportDelivery: next },
         {

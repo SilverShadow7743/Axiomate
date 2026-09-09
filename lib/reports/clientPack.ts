@@ -151,8 +151,10 @@ export function clientScopeIdFor(state: WorkspaceState, clientName: string): str
 }
 
 /** Duplicates `clientView`'s own inline `underScope` — the pre-boundary total needs to ask the
- *  same ancestry question, since `clientView` never returns what it withheld. */
-function underScopeOf(
+ *  same ancestry question, since `clientView` never returns what it withheld. Exported: the
+ *  daily IMS's own scope narrowing (`lib/db/schedule.ts`) asks the identical ancestry question
+ *  over a node that need not be client-tier, so it reuses this rather than a third copy. */
+export function underScopeOf(
   state: WorkspaceState,
   parentId: string | null | undefined,
   clientScopeId: string,

@@ -1898,6 +1898,17 @@ function Watch({
   const [result, setResult] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
 
+  /** Engagements the daily IMS can be narrowed to — see ReportDeliveryConfig.imsScopeNodeId.
+   *  Engagement-tier only, not every node: the packs already fan out per client, so the IMS's
+   *  one narrowing control answers "which engagement", not "which node at any tier". */
+  const engagements = useMemo(
+    () =>
+      Object.values(state.nodes)
+        .filter((n) => n.kind === 'engagement' && !n.deletedAt)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [state.nodes],
+  )
+
   /** How many records each condition would raise if the pass ran right now, with no memory. */
   const preview = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
@@ -2028,6 +2039,20 @@ function Watch({
               }
             }}
           />
+        </label>
+        <label className="cfg-fld" style={{ marginTop: '8px' }}>
+          <span>Scope the IMS to</span>
+          <select
+            value={state.model.reportDelivery.imsScopeNodeId ?? ''}
+            onChange={(e) => onConfig({ k: 'setReportDelivery', patch: { imsScopeNodeId: e.target.value || null } })}
+          >
+            <option value="">All clients (unscoped)</option>
+            {engagements.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="cfg-check" style={{ marginTop: '10px' }}>
           <input
