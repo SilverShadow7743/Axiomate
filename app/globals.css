@@ -2199,6 +2199,20 @@ select.cell-editor {
   border: 1px solid currentColor;
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
+/* `.fs-sev` is itself a direct `span` child of `.fs-fld` (same as the field's label span), so
+   `.field-strip .fs-fld > span` above (specificity 0,3,0) was winning over `.sev-High` etc.
+   (0,1,0) and painting every severity the same muted label grey — caught live, not assumed,
+   by checking computed color against `--sev-high` and finding `--text-faint` instead. These
+   three outrank it on specificity alone, reusing the same `--sev-*` tokens, not a new palette. */
+.field-strip .fs-fld > .fs-sev.sev-High {
+  color: var(--sev-high);
+}
+.field-strip .fs-fld > .fs-sev.sev-Medium {
+  color: var(--sev-medium);
+}
+.field-strip .fs-fld > .fs-sev.sev-Low {
+  color: var(--sev-low);
+}
 .fs-sev select {
   color: inherit;
   background: transparent;
@@ -4794,12 +4808,16 @@ select.cell-editor {
 .ov-prose {
   white-space: pre-wrap;
 }
-/* Caps the read-only description at 3 lines; `descOverflows` (OverviewTab.tsx) decides whether
-   "Show more" appears at all, so this clamp alone never hides content with no way back to it. */
+/* Caps the read-only description at ~3 lines; `descOverflows` (OverviewTab.tsx) decides whether
+   "Show more" appears at all, so this clamp alone never hides content with no way back to it.
+   A pixel `max-height`, not `-webkit-line-clamp`: verified live that line-clamp does not clip
+   here — `RichTextEditor`'s read-only output is a block (`.rte` > `<p>`), and line-clamp counts
+   the clamped box's own child boxes, not the wrapped text lines two levels down, so it measured
+   1 block child against a limit of 3 and clipped nothing. A height cap works regardless of the
+   nested structure. 58px is 3 × the description's measured line-height (19.375px at this
+   context's 12.5px font) with a little room. */
 .ov-desc-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: 60px;
   overflow: hidden;
 }
 .ov-desc-toggle {

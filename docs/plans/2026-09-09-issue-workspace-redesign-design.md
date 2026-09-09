@@ -170,6 +170,29 @@ regressions — expected, since nothing here touches the reducer), clean `audit:
 pre-existing `audit:a11y` failures in `AnalyticsView.tsx`/`PeopleDirectory.tsx` confirmed
 unrelated (`git status` shows neither file touched by this change).
 
+**Live verification in production found two real bugs the build-time checks above could not
+catch — both fixed same day, before this was called done:**
+
+- **The description clamp didn't clamp.** `-webkit-line-clamp` was applied to the wrapper
+  `<div>` around `RichTextEditor`, but its read-only output is `.rte` > a single `<p>` — one
+  block child, not inline text the clamp mechanism could count lines within. Confirmed live:
+  `scrollHeight === clientHeight` (196px both) on a description that visibly ran ~9 wrapped
+  lines. Fixed by switching to a plain pixel `max-height: 60px` (3 × the description's measured
+  19.375px line-height) — a height cap works regardless of nested DOM structure, where
+  line-clamp does not.
+- **The severity tag rendered every severity in the same muted grey**, not the `--sev-high`/
+  `--sev-medium`/`--sev-low` colors it was built to reuse. Cause: `.fs-sev` is itself a direct
+  `span` child of `.fs-fld` — the same shape as the field's own label span — so
+  `.field-strip .fs-fld > span` (specificity 0,3,0) was silently outranking `.sev-High` etc.
+  (0,1,0). Confirmed by reading computed `color` and finding `--text-faint` instead of
+  `--sev-high`. Fixed with three selectors specific enough to win
+  (`.field-strip .fs-fld > .fs-sev.sev-High`, etc.), still reusing the same tokens.
+
+Both were found by direct DOM/computed-style inspection against a real production issue
+(SLG-001), not by looking at a screenshot — the description bug in particular rendered
+visually plausible (text simply didn't look clipped, which reads as "fine" at a glance) and
+only showed up as a bug once `scrollHeight`/`clientHeight` were actually compared.
+
 ### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
 
 7. **A status color palette — checked and confirmed genuinely absent, unlike severity's.**
