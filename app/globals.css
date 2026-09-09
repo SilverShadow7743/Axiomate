@@ -1632,9 +1632,15 @@ select.cell-editor {
   border-bottom-color: var(--accent);
   font-weight: 500;
 }
-/* Viewport-fixed, same reasoning `.row-menu` already established: `at` is computed from
+/* `.menu.tabs-more-menu`, not `.tabs-more-menu` alone — caught live: the element carries both
+   classes, and `.menu`'s own `position: absolute` (declared later in this file, same 0,1,0
+   specificity) was winning on source order alone, silently discarding this `fixed` — the same
+   class of bug as the `.fs-fld > span` specificity trap, just by ordering instead of
+   specificity. Stacking both classes here, rather than relying on staying below `.menu` in the
+   file, is the fix that survives the next edit to either rule.
+   Viewport-fixed, same reasoning `.row-menu` already established: `at` is computed from
    `getBoundingClientRect()`, so `position: fixed` is what those coordinates mean. */
-.tabs-more-menu {
+.menu.tabs-more-menu {
   position: fixed;
   min-width: 160px;
 }
