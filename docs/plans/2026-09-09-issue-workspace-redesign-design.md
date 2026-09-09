@@ -306,16 +306,47 @@ weight and border-presence are independent axes; a heavier untinted-vs-tinted, b
 pairing reads as two different kinds of tag without inverting anything per theme. Covers every
 near-collision in the table, not just Closed+Low, with the one rule this needs.
 
-**8. Tab consolidation — still a real open question, not decided here.**
+**8. Tab consolidation — mechanism now recommended; the actual tab order still stays Nishant's call.**
 
-Primary/secondary split proposed unchanged: `Overview, Checklist, Discussion, Time` primary;
-`Skills, Fields, Notes, Estimation, Schedule, Links, History` under a `⋯ More` dropdown (reuse
-the `useOverlay`/`createPortal` pattern `RowMenu.tsx` already establishes). Checked again for a
-usage signal to base the choice on rather than guess — none exists (`lib/analytics.ts` reports
-issue-count aggregates, not per-tab click data; nothing in this codebase tracks which
-`DetailPanel` tab gets opened). **This stays Nishant's call**: confirm the four, or name
-different ones, before any of this gets built — a real navigation change (tabs reached in one
-click move to two) is not something to guess at.
+**What's there today, checked directly**: `TABS` is a flat 11-item array for an issue
+(`DetailPanel.tsx:366-370`) rendered as a flat row of buttons (`:527-539`). It already has an
+overflow behavior — `.tabs` is `overflow-x: auto` with a fade-gradient hint on `.tabs-wrap::after`
+(`app/globals.css:1569-1613`) — but that overflow is horizontal *scroll*, not consolidation: every
+tab is still reachable in one click, just not all visible at once, which is a different problem
+from the one the pasted critique and this doc's own diagnosis raised (eleven flat, equally-weighted
+tabs read as a database form regardless of whether they fit on screen).
+
+**Recommended mechanism, sourced from established UX guidance and real precedent, not invented
+here**: a *priority navigation* / overflow-tab pattern — render tabs in a fixed priority order,
+show as many as fit the available width, collapse the rest under a trailing `⋯ More` (reusing
+the `useOverlay`/`createPortal` pattern `RowMenu.tsx` already establishes). Two independent
+sources converge on roughly the same visible-tab count: Apple's Human Interface Guidelines cap
+tab bars at 5, with the 5th slot becoming the word "More" past that; Nielsen Norman Group's
+navigation guidance trends toward ~5 for scannability, inside the broader 7±2 (Miller's Law)
+ceiling. Real precedent for the *adaptive* version specifically (collapse by available width,
+not a hardcoded cutoff): GitHub's repo nav bar (Code/Issues/PRs/.../Settings collapses into a
+`⋯` kebab as the window narrows) and Salesforce Lightning's tabset component (same behavior,
+out of the box, on record pages).
+
+**Why adaptive over a hardcoded split, specifically**: a fixed "these 4 are primary, forever"
+list is a permanent guess with nothing to check it against — `lib/analytics.ts` reports
+issue-count aggregates, not per-tab click data, and nothing in this codebase tracks which
+`DetailPanel` tab gets opened, so a hardcoded cutoff can never be revisited with real usage
+later. Measuring available width and collapsing only what doesn't fit turns "pick 4 of 11,
+permanently" into "confirm the priority order" — order still matters (whichever tabs sort
+first are the ones that stay visible), but the decision shrinks and stops being irreversible.
+Implementation note, from the Tier 1 lesson on trusting an observer without checking what it's
+actually attached to: `TABS`' 11 entries are static per row (unlike TipTap's async-mounted
+content that broke a `ResizeObserver` in Tier 1), so a `ResizeObserver` on `.tabs-wrap` measuring
+against each button's offset width is the right tool here and doesn't carry that same race — but
+still wants a live-verification pass once built, same discipline as everything else this session,
+not assumed correct from the reasoning alone.
+
+**Still Nishant's call, narrowed**: the priority order itself. `Overview, Checklist, Discussion,
+Time` remains the proposed default first four (unchanged from the original draft) — confirm
+those four, or reorder/rename them, before this gets built. What's no longer open is *whether*
+the mechanism is a hardcoded split or an adaptive one — recommended as adaptive, for the reasons
+above.
 
 **9. A "Time" KPI strip — placement narrowed to one recommendation.**
 
