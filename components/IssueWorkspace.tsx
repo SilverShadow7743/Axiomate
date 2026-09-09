@@ -320,6 +320,27 @@ export default function IssueWorkspace({
     ? autosave.state
     : { status: 'local' as const, pending: 0, savedAt: null }
 
+  /**
+   * A stopped queue (`SaveStatus: 'error'`) was reported only in the corner badge and its
+   * hover tooltip — easy to miss while heads-down editing, and everything after the halt
+   * (including a brand new issue, not just an edit to the conflicting record) silently stops
+   * reaching the server until the page is reloaded. Fires once on the transition INTO 'error',
+   * not on every render while it stays there — `wasSaveError` is the guard, since `pending`
+   * keeps climbing as more local-only actions queue up behind the halt and would otherwise
+   * retrigger this on every one of them. `'paused'` (a network hiccup that resumes on its own)
+   * deliberately does not get this treatment — see `lib/queue.ts`'s `Halt` type for why the two
+   * are different in kind, not just severity.
+   */
+  const wasSaveError = useRef(false)
+  useEffect(() => {
+    const isError = saveStatus.status === 'error'
+    if (isError && !wasSaveError.current) {
+      notify(describeSaveDetail(saveStatus, persistence.enabled), true, 15000)
+    }
+    wasSaveError.current = isError
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveStatus.status])
+
 /**
    * How wide the timeline pane actually is.
    *
