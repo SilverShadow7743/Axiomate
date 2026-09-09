@@ -1,9 +1,11 @@
 # Turning one read email into an issue, on purpose
 
-**Status: reconciled, 9 September 2026 — see "What this design missed" below. Only the
-classification half is built; the review-dialog half is a question put to the user, not yet
-decided.** User's direct request — *"create actions from it"* (from mail). Originally drafted
-8 September 2026.
+**Status: closed, 9 September 2026 — see "What this design missed" below.** User's direct
+request — *"create actions from it"* (from mail). Originally drafted 8 September 2026.
+Reconciled the same day the classification gap was fixed; the review-dialog question below was
+put to the user, who answered **"instant create"** — the existing one-click filing behaviour is
+kept as-is, no dialog added. Nothing further to build; this design is superseded by
+`2026-08-31-in-mail-design.md`'s already-shipped filing feature, now correctly classified.
 
 ## What this design missed
 
@@ -27,12 +29,11 @@ directly with the parent scope the person already chose in the filing dialog, si
 mailbox lookup entirely — the same pattern `classifyForm` already uses for the intake form's own
 non-mailbox entry point.
 
-**Still open**: this draft's other half — routing the create through the "Add Work" dialog for
-review instead of creating immediately — is a real UX change to a shipped feature (one click
-becomes two; someone filing mail fast today may be relying on the instant create). That's a
-product tradeoff, not a technical call, and is being put to the user rather than decided here.
-`provenanceNote` is already attached via `recordInboundMail`'s honest-provenance fields
-(`mailbox`, `from`, `subject`, `body`, `messageId`) regardless of which way that question goes —
+**Decided**: this draft's other half — routing the create through the "Add Work" dialog for
+review instead of creating immediately — was put to the user as a real UX change to a shipped
+feature (one click becomes two). Answer: **keep instant create**. `provenanceNote` is already
+attached via `recordInboundMail`'s honest-provenance fields (`mailbox`, `from`, `subject`,
+`body`, `messageId`) regardless of which way that question went —
 it was never missing, just under a different name than this draft assumed.
 
 ## What exists today, and why this is the safer direction, not a repeat
