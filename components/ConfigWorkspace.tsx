@@ -886,7 +886,8 @@ function RolesAndPeople({
           />
         </div>
 
-        <table className="cfg-table">
+        <div className="cfg-table-scroll">
+        <table className="cfg-table people-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -1120,6 +1121,7 @@ function RolesAndPeople({
             ))}
           </tbody>
         </table>
+        </div>
         {!people.length && <div className="cfg-empty">Nobody matches that filter.</div>}
 
         {/* The directory could only ever be read here, so the one column that already says

@@ -4191,6 +4191,21 @@ select.cell-editor {
   padding-right: 0;
 }
 
+/* The People table alone needs more than `.cfg-section`'s 900px cap once Joined/Status join
+   Name, Work address, Client, Reports to, Roles and Source — at 900px `overflow-wrap: anywhere`
+   was wrapping a name into single-syllable lines instead of leaving the table to scroll. Scoped
+   to this one table rather than raising the section cap for every config screen. */
+.cfg-table-scroll {
+  overflow-x: auto;
+}
+.people-table {
+  min-width: 900px;
+}
+.people-table td:first-child,
+.people-table th:first-child {
+  white-space: nowrap;
+}
+
 /* ---------- assignment chips ---------- */
 .cfg-chips {
   display: flex;
