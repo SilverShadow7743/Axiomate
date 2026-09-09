@@ -229,41 +229,122 @@ items now confirmed live together on SLG-001 in one screenshot: the title, the r
 tag, the clamped/expandable description, the compact Schedule/Teams row, and all four named
 `<dl>` groups (Record, Classification, Ownership & timeline, Progress).
 
-### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
+### Tier 2 — scoped 9 September 2026, ready for review before any build
 
-7. **A status color palette — checked and confirmed genuinely absent, unlike severity's.**
-   `--sev-high`/`--sev-medium`/`--sev-low` exist and are live; nothing equivalent exists for
-   status. `.status-select.st-closing`/`.st-active` (`app/globals.css:2484-2492`) look like a
-   prior attempt at exactly this, but a repo-wide grep found zero component references to
-   either class — dead CSS, not a usable palette. `BoardView.tsx`'s lanes render status as plain
-   text with no color at all (`components/BoardView.tsx:96`). And status isn't a four-state
-   open/in-progress/blocked/done model as the pasted critique assumed — `ISSUE_STATUSES`
-   (`lib/types.ts:112-120`) is seven real values (`Open, In Progress, Needs clarification,
-   Awaiting client confirmation, Closed - confirmed, Closed - no defect, Superseded`), so this
-   is a genuine small design decision — which of the seven read as "active" vs "waiting on
-   someone else" vs "closed," and what three (or more) colors represent that — not a mechanical
-   restyle. Scoped here as Tier 2 specifically because Tier 1 item 2 initially assumed this
-   existed and it doesn't.
-8. **Reduce eleven tabs to fewer, with the rest under a "More" menu.** Primary:
-   `Overview, Checklist, Discussion, Time`. Secondary, under a `⋯ More` dropdown (reuse the
-   `useOverlay`/`createPortal` pattern `RowMenu.tsx` already establishes, not a new dropdown
-   implementation): `Skills, Fields, Notes, Estimation, Schedule, Links, History`. This is a
-   real navigation change — tabs currently reached in one click move to two — so it needs its
-   own before/after check on which tabs people actually use, not a guess. **Open question**,
-   not decided here: is there any usage signal (even informal — "which tab do people open most
-   after Overview") to base the primary-four choice on, or is it Nishant's judgment call?
-9. **A "Time" KPI strip**, reading the existing `effortVariance()` — Estimated / Logged /
-   Remaining / a progress bar — placed either in `FieldStrip` (visible on every tab, cheapest)
-   or as a small always-visible section at the top of Overview. Needs a decision on which,
-   since `FieldStrip` today is exactly four fields and this would be a fifth, differently-shaped
-   element (a bar, not a form control) — a real layout decision, not a data one (the data is
-   already there, per the tier-0 finding above).
-10. **Context-sensitive primary action** (the critique's "Update status" / "Resolve blocker" /
-    "Close" idea). This needs a rule: which status maps to which suggested next action, and
-    whether "suggested" ever writes anything without a click. `lib/statusPolicy.ts`'s
-    `allowedNext` already knows the legal transitions from a given status — the action-labeling
-    layer on top of it is new, but the legality check it would sit on already exists and is
-    already used by `FieldStrip`'s own status dropdown (`DetailPanel.tsx`, `chooseStatus`).
+Re-scoped from four open bullets to concrete specs, by reading further into what the codebase
+already has. Three of the four turned out to reduce to composing EXISTING code — no new
+modeling, no new decision beyond a label — and are ready to build once reviewed. One
+(item 8, tab consolidation) is a genuine, unresolved decision that stays open, named as such
+rather than guessed.
+
+**7. A status color palette — fully specified, ready to build.**
+
+Checked and confirmed genuinely absent, unlike severity's — `--sev-high`/`--sev-medium`/
+`--sev-low` exist and are live; nothing equivalent exists for status.
+`.status-select.st-closing`/`.st-active` (`app/globals.css:2484-2492`) look like a prior
+attempt at exactly this, but a repo-wide grep found zero component references to either
+class — dead CSS. `BoardView.tsx`'s lanes render status as plain text with no color at all.
+And status is not the four-state open/in-progress/blocked/done model the pasted critique
+assumed — `ISSUE_STATUSES` (`lib/types.ts:112-120`) is seven real values.
+
+The grouping this needs already exists, twice over, and does not need inventing:
+`lib/schedule.ts` already exports `TERMINAL_STATUSES` (`Closed - confirmed`, `Closed - no
+defect`, `Superseded`) and `BLOCKED_STATUSES` (`Awaiting client confirmation`, `Needs
+clarification` — cited to "Spec §10" in the source), the exact same three-way split a status
+palette needs. And the color TOKENS this needs already exist too — `--h-ontrack`/`--h-atrisk`/
+`--h-overdue`/`--h-blocked`/`--h-complete`/`--h-unsched` (`app/globals.css:36-143`), the
+theme-aware "schedule health" palette already driving the Gantt and Calendar. Composing the
+two, nothing invented:
+
+| Status | Group (existing) | Token (existing) |
+|---|---|---|
+| Open | — | `--h-unsched` (not yet actively worked) |
+| In Progress | — | `--h-ontrack` |
+| Needs clarification | `BLOCKED_STATUSES` | `--h-blocked` |
+| Awaiting client confirmation | `BLOCKED_STATUSES` | `--h-blocked` |
+| Closed - confirmed | `TERMINAL_STATUSES` | `--h-complete` |
+| Closed - no defect | `TERMINAL_STATUSES` | `--h-complete` |
+| Superseded | `TERMINAL_STATUSES` | `--h-complete` |
+
+Same pill treatment as Tier 1's severity tag (`.fs-sev`-shaped, reusing the pattern, not a new
+one) — `FieldStrip`'s status `<select>` gets a `.fs-status` wrapper colored by this table via
+`lib/schedule.ts`'s own `isTerminal`/`BLOCKED_STATUSES`, not a fourth copy of the grouping
+logic. **One thing to confirm, not decide from scratch**: Open vs. In Progress both read as
+"nothing wrong" — `--h-unsched`/`--h-ontrack` gives them a visible difference (grey vs. green)
+rather than collapsing to one active color; flag if a plainer 3-color version (Open folded into
+the same active color as In Progress) is preferred instead.
+
+**Checked for collision with the severity palette, since the two tags now sit side by side in
+the same strip**: the `--h-*` and `--sev-*` tokens are not just similar, several are the exact
+same hex — `--h-overdue` = `--sev-high` in both themes, `--h-atrisk` ≈ `--sev-medium`,
+`--h-complete` ≈ `--sev-low` (`app/globals.css` light/dark blocks). None of the seven statuses
+above map to `--h-overdue` or `--h-atrisk`, so no status tag will literally match a severity
+tag's color — but `--h-complete` (used by all three terminal statuses) sits close enough to
+`--sev-low` that a Low-severity issue in a Closed state shows two adjacent grey-ish pills that
+read as restating each other rather than two distinct signals. Not a blocker, but worth a
+visual check once both tags are built together, not assumed fine because each was checked in
+isolation.
+
+**8. Tab consolidation — still a real open question, not decided here.**
+
+Primary/secondary split proposed unchanged: `Overview, Checklist, Discussion, Time` primary;
+`Skills, Fields, Notes, Estimation, Schedule, Links, History` under a `⋯ More` dropdown (reuse
+the `useOverlay`/`createPortal` pattern `RowMenu.tsx` already establishes). Checked again for a
+usage signal to base the choice on rather than guess — none exists (`lib/analytics.ts` reports
+issue-count aggregates, not per-tab click data; nothing in this codebase tracks which
+`DetailPanel` tab gets opened). **This stays Nishant's call**: confirm the four, or name
+different ones, before any of this gets built — a real navigation change (tabs reached in one
+click move to two) is not something to guess at.
+
+**9. A "Time" KPI strip — placement narrowed to one recommendation.**
+
+The data was already free (`effortVariance()`, established in the Tier 1 build summary above).
+Recommendation: place it in `FieldStrip`, not as a separate Overview section — the whole point
+of `FieldStrip`'s own original design (*"the fields a delivery manager touches most must never
+be more than one click away, whichever tab is open"*) applies exactly as much to "how much of
+the estimate is left" as it does to status or owner. Render as a compact inline readout — e.g.
+`18h / 32h · 14h left` with `TimeTab.tsx:453-460`'s own established over/under-by phrasing —
+rather than a bar, since `FieldStrip` is a single-line strip today and a progress bar would be
+the one element in it that isn't text-height; a bar is worth adding only if this reads as too
+terse in practice, which is a call to make after seeing it built, not before.
+
+**10. Context-sensitive primary action — the suggestion already exists in the transition table.**
+
+`DEFAULT_STATUS_POLICY.transitions` (`lib/statusPolicy.ts:69-85`) is not an unordered set —
+its own comment says so directly: *"Read it as the route work actually takes: something
+arrives Open, someone picks it up, it may bounce to the client and back, and it ends in one of
+three places."* Each status's transition array already lists the ordinary next step FIRST.
+`allowedNext(policy, from)` returns `[from, ...next]` (`lib/statusPolicy.ts:112-119`), so
+`allowedNext(policy, status)[1]` is already, by construction, "the one ordinary next move" —
+no new rule to invent, no mapping to design from scratch, just a label per status reading that
+existing first element:
+
+| From | `[1]` resolves to | Suggested label |
+|---|---|---|
+| Open | In Progress | "Start" |
+| In Progress | Awaiting client confirmation | "Send to client" |
+| Needs clarification | In Progress | "Resume" |
+| Awaiting client confirmation | Closed - confirmed | "Confirm closed" |
+| Closed - confirmed / Closed - no defect / Superseded | In Progress | "Reopen" |
+
+The button calls the exact same `chooseStatus`/`onCommitCell` path `FieldStrip`'s own status
+`<select>` already uses (`DetailPanel.tsx`). **Checked, and this is not uniform across rows** —
+`checkTransition` (`lib/statusPolicy.ts:130-153`) returns two different problem kinds, and
+`dropOutcome` (`lib/board.ts:53-67`) routes them differently: `kind: 'reason'` becomes
+`{kind: 'ask', ...}`, which `chooseStatus` (`DetailPanel.tsx:1335-1348`) turns into the inline
+`fs-ask` text prompt — a real path forward. But `kind: 'evidence'` (the one that fires for
+exactly the "Confirm closed" row, since `requireEvidence: ['Closed - confirmed']`) is NOT
+`'reason'`, so `dropOutcome` maps it to `{kind: 'refused', message}` instead — `chooseStatus`
+just sets `refusal` and stops; no prompt opens. Built as specified, the one row this table
+calls "already the answer" would be the one row that dead-ends the button with a refusal
+string instead of a way to comply. Two ways to close this, neither built yet: suppress the
+"Confirm closed" suggestion when `hasEvidence` is false (fall back to the ordinary dropdown,
+which already shows the same refusal today), or point the refusal at the evidence manager
+instead of a plain message. Pick one before building item 10, not after.
+**What still needs a decision, but a small one**: whether
+this renders as a real second button next to Edit (`OverviewTab.tsx:582`, the `ov-actions` row
+at the top of Overview) or folds into `FieldStrip` itself as a fifth element — a placement
+call, not a logic one, since the logic above is complete either way.
 
 ### Non-goals — explicitly not building, and why
 
