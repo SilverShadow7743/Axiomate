@@ -1,9 +1,36 @@
 # 134 issues carry a raw work-type code instead of its label — and a duplicate registry to match
 
-**Status: draft, 8 September 2026.** Surfaced during I20's re-verification of the Add Work
+**Status: built, 9 September 2026.** Surfaced during I20's re-verification of the Add Work
 dialog, after the original UX-audit fix for raw `WT_*` codes leaking into the UI (I20) turned out
-to have fixed the *display* without the underlying data actually matching. Not built. **No
-production data has been touched** — the near-miss below is exactly why.
+to have fixed the *display* without the underlying data actually matching. User's direct
+instruction ("Put a clean data foundation") resolved the open question toward **Option A**.
+
+## Build summary
+
+`scripts/migrate-worktype-labels.ts` (new) — dry-run by default, `--apply` to write. Needs no
+hardcoded list of the nine pairs: a raw code and the clean entry's id are the same string by
+construction (`workTypeId("Epic")` produces `"WT_EPIC"`, the exact code the source data already
+used), so the script looks up `state.model.workTypes[issue.type]` for every issue and corrects
+whatever resolves to an entry whose `label` differs from the stored `type` — safe to re-run,
+since an already-clean value resolves to itself. Runs through `persistActions`/`updateIssue`,
+the same as `convert-modules-to-labels.ts`'s precedent, so the correction is 134 ordinary,
+attributable edits, not a silent rewrite.
+
+**Dependency check** (the "what would send this back" clause below) found no other report,
+export or analytics path comparing `issue.type` literally — and one genuine bonus fix: `lib/raid.ts`'s
+`raidKindOf` resolves a stored `type` to a `WorkType` by *label* match, then checks that entry's
+*id* against `RISK_TYPE_ID`/`DECISION_TYPE_ID`. Before this migration, the 3 raw-coded Risk and
+14 raw-coded Decision issues resolved to the *duplicate* entry (`label: "WT_RISK"`, id:
+`WT_WT_RISK`) — which fails that id check — so **these 17 issues were silently not being
+recognized as RAID records at all**. The migration fixes this as a side effect.
+
+**Production run, 9 September 2026**: 134 issues corrected (Task 64, Epic 21, Issue 15, Decision
+14, Request 8, Deliverable 5, Risk 3, Defect 2, Change Request 2), verified 0 remaining
+afterward. All 9 duplicate `WorkType` entries then showed 0 records and were archived through the
+normal Configuration → Work types UI (its own `disabled={used > 0}` guard the only thing
+standing between a premature archive and a real one — the same guard that protected the earlier
+near-miss). Live-verified: `WT_EPIC` now correctly shows 21 records, `WT_RISK` 3, `WT_TASK` 64,
+etc.; the "All settings" summary card now reads "11 types" (down from 20).
 
 ## What's actually happening, traced precisely
 
