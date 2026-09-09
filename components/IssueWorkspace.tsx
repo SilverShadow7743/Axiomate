@@ -307,7 +307,7 @@ export default function IssueWorkspace({
    * would all read the same pre-change snapshot. `dispatch` stays synchronous either way: its
    * callers read the folded state back in the same tick, and queueing is instant.
    */
-  const autosave = useAutosave(persistence.enabled)
+  const autosave = useAutosave(persistence.enabled, tenantId)
   const persist = autosave.enqueue
 
   /**

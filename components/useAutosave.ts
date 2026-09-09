@@ -5,6 +5,7 @@ import type { Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 import type { SaveState } from '@/lib/autosave'
 import { shouldResume, verdictFor, type Halt, type ResumeTrigger, type Verdict } from '@/lib/queue'
+import { clearPendingAction, savePendingAction } from '@/lib/pendingActions'
 
 /**
  * The autosave queue.
@@ -90,7 +91,7 @@ export interface Autosave {
   enqueueAll: (actions: Action[]) => void
 }
 
-export function useAutosave(enabled: boolean): Autosave {
+export function useAutosave(enabled: boolean, tenantId: string): Autosave {
   const [state, setState] = useState<SaveState>({ status: 'idle', pending: 0, savedAt: null })
 
   const queue = useRef<SubmittedAction[]>([])
@@ -204,6 +205,9 @@ export function useAutosave(enabled: boolean): Autosave {
 
             if (data.ok) {
               queue.current = withoutKeys(queue.current, batch)
+              // Confirmed by the server, so this shadow copy's job for these is done — left in
+              // place they would read as still-stuck on a future boot that never happens.
+              for (const a of batch) if (a.key) clearPendingAction(tenantId, a.key)
               // A batch that got through means whatever was wrong is over. The ladder resets
               // so the next outage waits thirty seconds rather than four minutes.
               pauses.current = 0
@@ -248,6 +252,10 @@ export function useAutosave(enabled: boolean): Autosave {
                 queue.current,
                 data.committedKeys.map((key) => ({ key }) as SubmittedAction),
               )
+              // These landed before the refusal that stopped the rest of the batch — already
+              // safe in Postgres. Leaving them here would show real, saved work as stuck on
+              // every future boot, which is worse than not tracking it at all.
+              for (const key of data.committedKeys) clearPendingAction(tenantId, key)
             }
 
             settle(verdict)
@@ -282,7 +290,7 @@ export function useAutosave(enabled: boolean): Autosave {
     } finally {
       draining.current = false
     }
-  }, [enabled])
+  }, [enabled, tenantId])
 
   /**
    * Start a paused queue again, if the policy agrees this is the moment.
@@ -370,7 +378,11 @@ export function useAutosave(enabled: boolean): Autosave {
        * already have committed. Stamped at enqueue, both deliveries carry the same key and
        * the server applies the action once.
        */
-      queue.current.push(...actions.map((action) => ({ ...action, key: mintKey() })))
+      const keyed = actions.map((action) => ({ ...action, key: mintKey() }))
+      queue.current.push(...keyed)
+      // Written the moment a change is at risk, not after — a tab that goes away between here
+      // and the server's answer is exactly the case this exists to cover.
+      for (const a of keyed) savePendingAction(tenantId, a)
       /**
        * "Saving" only if something is actually going to be sent.
        *
@@ -392,7 +404,7 @@ export function useAutosave(enabled: boolean): Autosave {
       )
       void drain()
     },
-    [enabled, drain],
+    [enabled, drain, tenantId],
   )
 
   const enqueue = useCallback((action: Action) => enqueueAll([action]), [enqueueAll])

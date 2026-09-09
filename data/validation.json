@@ -2592,6 +2592,16 @@
       "stops": "",
       "severity": "P2",
       "impact": "none"
+    },
+    {
+      "id": "PA1",
+      "title": "reapplyable strips a stale expected and the transport key, keeping the edit itself intact",
+      "expected": "A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.",
+      "verdict": "PASS",
+      "actual": "stripped: expected=true key=true; edit preserved: true; non-updateIssue action handled: true",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
     }
   ]
 }

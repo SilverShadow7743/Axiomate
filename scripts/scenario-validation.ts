@@ -233,6 +233,7 @@ import {
 } from '../lib/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
+import { reapplyable } from '../lib/reapplyPendingAction'
 
 /* ================================================================== *
  * Harness
@@ -12644,6 +12645,58 @@ scenario(
           stops: 'at ownerLeaveCaveat — either it misses an approved overlap, wrongly counts a Requested one, or (worst) the due date itself moved',
           severity: 'P2',
           impact: 'a caveat that is wrong is worse than none — it either hides a real staffing conflict or cries wolf on a date nobody actually has to worry about',
+        }
+  },
+)
+
+scenario(
+  'PA1',
+  'reapplyable strips a stale expected and the transport key, keeping the edit itself intact',
+  'A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.',
+  () => {
+    const stuck = {
+      t: 'updateIssue',
+      id: 'OAPIL-1',
+      patch: { owner: 'Nishant Sekhar' },
+      now: NOW,
+      expected: { owner: 'Someone Else' },
+      key: 'stuck-key-123',
+    } as Action & { expected: unknown; key: string }
+
+    const result = reapplyable(stuck)
+    const noExpected = !('expected' in result)
+    const noKey = !('key' in result)
+    const editIntact =
+      result.t === 'updateIssue' &&
+      result.id === 'OAPIL-1' &&
+      (result as { patch: Record<string, unknown> }).patch.owner === 'Nishant Sekhar' &&
+      result.now === NOW
+
+    // A non-updateIssue action never carried `expected` to begin with — reapplyable must be a
+    // safe no-op shape for it too, not something that only works for the one type it was
+    // designed against.
+    const otherType = {
+      t: 'addNote', issueId: 'OAPIL-1', body: wrapPlainText('test'), noteType: 'General Update', pinned: false, now: NOW,
+      key: 'k2',
+    } as Action & { key: string }
+    const otherResult = reapplyable(otherType)
+    const otherIntact = otherResult.t === 'addNote' && !('key' in otherResult)
+
+    const good = noExpected && noKey && editIntact && otherIntact
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `stripped: expected=${noExpected} key=${noKey}; edit preserved: ${editIntact}; non-updateIssue action handled: ${otherIntact}`,
+          stops: '',
+          severity: 'P1',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `noExpected=${noExpected} noKey=${noKey} editIntact=${editIntact} otherIntact=${otherIntact}`,
+          stops: 'at reapplyable in lib/reapplyPendingAction.ts',
+          severity: 'P1',
+          impact: 'a reapplied change would either resend a stale conflict check (never actually recovers) or lose part of the original edit',
         }
   },
 )
