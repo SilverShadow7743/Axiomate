@@ -8,7 +8,6 @@ import { canEditIssue } from '@/lib/permissions'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueNote } from '@/lib/notes'
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow, type Severity } from '@/lib/types'
-import { severityGlyph } from '@/lib/severity'
 import { allowedNext } from '@/lib/statusPolicy'
 import { blockingRule } from '@/lib/approval'
 import type { ApprovalDecision } from '@/lib/approval'
@@ -305,6 +304,23 @@ export default function OverviewTab({
   const latestEvidence = useMemo(() => latestOf(evidenceItems), [evidenceItems])
   const sourceDoc = useMemo(() => detectSourceDocument(issue), [issue])
 
+  /** Read-only render only — editing already opens the full form, where truncation would be
+      actively wrong. Reset per issue so switching rows never carries the last one's expansion
+      state onto a description that hasn't been read yet. */
+  const [descExpanded, setDescExpanded] = useState(false)
+  useEffect(() => setDescExpanded(false), [issue.id])
+  const descRef = useRef<HTMLDivElement>(null)
+  /** Whether the clamped description actually hides anything — measured, not assumed, so
+      "Show more" never appears on a description that already fits in three lines. Depends on
+      `descExpanded` so a short description's stale `true` reading (measured before the reset
+      effect above re-renders it clamped) self-corrects on the very next pass rather than
+      sticking. */
+  const [descOverflows, setDescOverflows] = useState(false)
+  useEffect(() => {
+    const el = descRef.current
+    setDescOverflows(el ? el.scrollHeight > el.clientHeight + 1 : false)
+  }, [issue.id, issue.description, descExpanded])
+
   const [composing, setComposing] = useState(false)
   const [mailBody, setMailBody] = useState('')
   const [sending, setSending] = useState(false)
@@ -576,441 +592,467 @@ export default function OverviewTab({
           )}
         </div>
 
-        {/* Absent entirely without the grant — a control someone may not use is not shown
-            disabled, the same choice ApprovalsBlock makes about self-approval. Absent too
-            when no database backs the workspace: a send that can never be recorded is not
-            offered a button that can never succeed. */}
-        {mailEnabled && maySendMail && (
-          <section className="appr-block">
-            <h4 className="est-h">Reply to client</h4>
-            {isOutboundRefusal(outbound) ? (
-              <p className="prov">{outbound.reason}</p>
-            ) : !composing ? (
-              <div className="ov-actions">
-                <button className="btn" onClick={() => { setSentLine(null); setComposing(true) }}>
-                  {mailBody.trim() ? 'Continue the reply…' : 'Write a reply'}
-                </button>
-                {sentLine && <span className="prov">{sentLine}</span>}
-              </div>
+        {/* Reply, Schedule and Teams collapse to one row when idle instead of three stacked
+            `appr-block` sections each paying for its own header before anything happens — the
+            forms below (unchanged) still open in full on a click. Reply's own visibility rule
+            carries over unchanged: absent entirely without the grant, the same choice
+            ApprovalsBlock makes about self-approval, and absent too with no database backing
+            the workspace, where a send could never be recorded. Schedule and Teams need no such
+            gate — neither writes to the workspace (see /api/calendar/schedule and
+            connected-workspace-design.md §4), so both are always offered. */}
+        <div className="ov-comms-row">
+          {mailEnabled && maySendMail && (
+            isOutboundRefusal(outbound) ? (
+              <span className="prov">{outbound.reason}</span>
             ) : (
               <>
-                <dl className="kv">
-                  <dt>From</dt>
-                  <dd className="mono">
-                    {outbound.mailbox.address}
-                    <span className="prov"> · the intake mailbox that covers this record</span>
-                  </dd>
-                  <dt>To</dt>
-                  <dd className="mono">
-                    {outbound.recipient}
-                    <span className="prov"> · whoever raised it, as they stated</span>
-                  </dd>
-                  <dt>Subject</dt>
-                  <dd>
-                    {outbound.subject}
-                    <span className="prov"> · the reference threads their answer back here</span>
-                  </dd>
-                  <dt>Message</dt>
-                  <dd>
-                    <textarea
-                      rows={6}
-                      value={mailBody}
-                      onChange={(e) => setMailBody(e.target.value)}
-                      aria-label="Message to the client"
-                      placeholder="Sent as plain text, exactly as written here."
-                      readOnly={sentUnrecorded}
-                    />
-                    {mailError && <p className="ov-gate">{mailError}</p>}
-                    {sentUnrecorded && (
-                      <p className="ov-gate">
-                        This message DID reach {outbound.recipient} — do not send it again. Only
-                        the note failed to write: copy the text above into a note on the Notes
-                        tab, then discard it here.
-                      </p>
-                    )}
-                  </dd>
-                </dl>
-                <div className="ov-actions">
-                  {sentUnrecorded ? (
-                    /* Send is gone, not disabled: pressing it again would mail the client twice. */
-                    <button
-                      className="btn"
-                      onClick={() => {
-                        setSentUnrecorded(false)
-                        setMailBody('')
-                        setComposing(false)
-                      }}
-                    >
-                      Done — discard text
-                    </button>
-                  ) : (
-                    <>
-                      {/* Close keeps the draft; only a successful send clears it. */}
-                      <button className="btn" disabled={sending} onClick={() => setComposing(false)}>
-                        Close
-                      </button>
-                      <button
-                        className="btn primary"
-                        disabled={sending || !mailBody.trim()}
-                        onClick={sendMail}
-                      >
-                        {sending ? 'Sending…' : 'Send'}
-                      </button>
-                    </>
-                  )}
-                </div>
+                <button className="btn" onClick={() => { setSentLine(null); setComposing(true) }}>
+                  {mailBody.trim() ? 'Continue the reply…' : 'Reply'}
+                </button>
+                {sentLine && <span className="prov">{sentLine}</span>}
               </>
-            )}
-          </section>
-        )}
-
-        {/* Personal — dispatched through the signed-in person's own Outlook, not the firm's
-            intake mailbox. Always offered; unlike "Reply to client" this needs no workspace
-            permission, because it writes nothing to the workspace — see /api/calendar/schedule. */}
-        <section className="appr-block">
-          <h4 className="est-h">Schedule a meeting</h4>
-          <p className="prov">
-            Personal — goes on your own Outlook calendar with a Teams link, not recorded on
-            this record.
-          </p>
-          {!scheduling ? (
-            <div className="ov-actions">
-              <button className="btn" onClick={() => { setMeetResult(null); setScheduling(true) }}>
-                Schedule…
-              </button>
-              {meetResult && (
-                <span className="prov">
-                  Scheduled —{' '}
-                  <a href={meetResult.onlineMeetingUrl ?? meetResult.webLink} target="_blank" rel="noreferrer">
-                    {meetResult.onlineMeetingUrl ? 'join link' : 'view in Outlook'}
-                  </a>
-                </span>
-              )}
-            </div>
-          ) : (
-            <>
-              <dl className="kv">
-                <dt>Subject</dt>
-                <dd>
-                  <input
-                    value={meetSubject}
-                    onChange={(e) => setMeetSubject(e.target.value)}
-                    aria-label="Meeting subject"
-                    placeholder={issue.subject}
-                  />
-                </dd>
-                <dt>Starts</dt>
-                <dd>
-                  <input
-                    type="datetime-local"
-                    value={meetStart}
-                    onChange={(e) => setMeetStart(e.target.value)}
-                    aria-label="Meeting start"
-                  />
-                </dd>
-                <dt>Ends</dt>
-                <dd>
-                  <input
-                    type="datetime-local"
-                    value={meetEnd}
-                    onChange={(e) => setMeetEnd(e.target.value)}
-                    aria-label="Meeting end"
-                  />
-                </dd>
-                <dt>Attendees</dt>
-                <dd>
-                  <input
-                    value={meetAttendees}
-                    onChange={(e) => setMeetAttendees(e.target.value)}
-                    aria-label="Attendee email addresses, comma-separated"
-                    placeholder="name@client.com, name@axiocloudsolutions.com"
-                  />
-                  <span className="prov"> · comma-separated addresses</span>
-                </dd>
-              </dl>
-              {meetError && <p className="ov-gate">{meetError}</p>}
-              <div className="ov-actions">
-                <button className="btn" disabled={meetBusy} onClick={() => setScheduling(false)}>
-                  Close
-                </button>
-                <button
-                  className="btn primary"
-                  disabled={
-                    meetBusy ||
-                    !(meetSubject.trim() || issue.subject) ||
-                    !meetStart ||
-                    !meetEnd ||
-                    !meetAttendees.trim()
-                  }
-                  onClick={async () => {
-                    // Close only on success — a failure must leave the form (and meetError)
-                    // visible, not vanish it the instant the person needs to read why.
-                    if (await scheduleOnMyCalendar()) setScheduling(false)
-                  }}
-                >
-                  {meetBusy ? 'Scheduling…' : 'Schedule'}
-                </button>
-              </div>
-            </>
+            )
           )}
-        </section>
-
-        {/* Personal, and the most sensitive of the three — see connected-workspace-design.md
-            §4. No default recipient beyond the same client contact the mail actions default
-            to; nothing here is offered pre-filled toward a colleague. */}
-        <section className="appr-block">
-          <h4 className="est-h">Message on Teams</h4>
-          <p className="prov">Personal — sent from your own Teams as you, not recorded here.</p>
-          {!messaging ? (
-            <div className="ov-actions">
-              <button className="btn" onClick={() => { setChatSent(false); setChatError(null); setMessaging(true) }}>
-                Message…
-              </button>
-              {chatSent && <span className="prov">Sent.</span>}
-            </div>
-          ) : (
-            <>
-              <dl className="kv">
-                <dt>To</dt>
-                <dd>
-                  <input
-                    value={chatTo}
-                    onChange={(e) => setChatTo(e.target.value)}
-                    aria-label="Recipient's work address"
-                    placeholder="name@axiocloudsolutions.com"
-                  />
-                </dd>
-                <dt>Message</dt>
-                <dd>
-                  <textarea
-                    rows={4}
-                    value={chatText}
-                    onChange={(e) => setChatText(e.target.value)}
-                    aria-label="Teams message"
-                    readOnly={chatBusy}
-                  />
-                </dd>
-              </dl>
-              {chatError && <p className="ov-gate">{chatError}</p>}
-              <div className="ov-actions">
-                <button className="btn" disabled={chatBusy} onClick={() => setMessaging(false)}>
-                  Close
-                </button>
-                <button
-                  className="btn primary"
-                  disabled={chatBusy || !chatTo.trim() || !chatText.trim()}
-                  onClick={async () => {
-                    if (await sendTeamsMessage()) setMessaging(false)
-                  }}
-                >
-                  {chatBusy ? 'Sending…' : 'Send'}
-                </button>
-              </div>
-            </>
+          <button className="btn" onClick={() => { setMeetResult(null); setScheduling(true) }}>
+            Schedule
+          </button>
+          {meetResult && (
+            <span className="prov">
+              Scheduled —{' '}
+              <a href={meetResult.onlineMeetingUrl ?? meetResult.webLink} target="_blank" rel="noreferrer">
+                {meetResult.onlineMeetingUrl ? 'join link' : 'view in Outlook'}
+              </a>
+            </span>
           )}
-        </section>
+          <button className="btn" onClick={() => { setChatSent(false); setChatError(null); setMessaging(true) }}>
+            Teams
+          </button>
+          {chatSent && <span className="prov">Sent.</span>}
+        </div>
 
-        <div className="cols-2">
-          <dl className="kv">
-            <dt>Issue</dt>
-            <dd className="mono">{issue.id}</dd>
-            <dt>Subject</dt>
-            <dd>{issue.subject}</dd>
-            <dt>Description</dt>
-            <dd className="ov-prose">
-              {isEmptyRichDoc(issue.description) ? (
-                '—'
-              ) : (
-                <RichTextEditor
-                  value={issue.description}
-                  onChange={() => {}}
-                  editable={false}
-                  people={rtePeople}
-                  issues={rteIssues}
-                  onUploadImage={async () => null}
+        {/* `composing` can only be set true from the non-refusal branch above, but the guard is
+            repeated here rather than assumed — it's what lets TypeScript narrow `outbound` to
+            `OutboundResolution` for the fields below, not just a runtime nicety. */}
+        {composing && !isOutboundRefusal(outbound) && (
+          <section className="appr-block">
+            <h4 className="est-h">Reply to client</h4>
+            <dl className="kv">
+              <dt>From</dt>
+              <dd className="mono">
+                {outbound.mailbox.address}
+                <span className="prov"> · the intake mailbox that covers this record</span>
+              </dd>
+              <dt>To</dt>
+              <dd className="mono">
+                {outbound.recipient}
+                <span className="prov"> · whoever raised it, as they stated</span>
+              </dd>
+              <dt>Subject</dt>
+              <dd>
+                {outbound.subject}
+                <span className="prov"> · the reference threads their answer back here</span>
+              </dd>
+              <dt>Message</dt>
+              <dd>
+                <textarea
+                  rows={6}
+                  value={mailBody}
+                  onChange={(e) => setMailBody(e.target.value)}
+                  aria-label="Message to the client"
+                  placeholder="Sent as plain text, exactly as written here."
+                  readOnly={sentUnrecorded}
                 />
-              )}
-            </dd>
-            {sourceDoc && (
-              <>
-                <dt>Source artifact</dt>
-                <dd>
-                  {sourceDoc.fileName}
-                  <span className="prov">
-                    {' '}
-                    · detected in the issue {sourceDoc.detectedIn} · file not held by this app
-                  </span>
-                </dd>
-              </>
-            )}
-            <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
-            <dd>
-              {issue.client} · {issue.module || moduleDefault || '—'}
-              <span className="prov"> · follows its place in the tree</span>
-              {onMove && (
+                {mailError && <p className="ov-gate">{mailError}</p>}
+                {sentUnrecorded && (
+                  <p className="ov-gate">
+                    This message DID reach {outbound.recipient} — do not send it again. Only
+                    the note failed to write: copy the text above into a note on the Notes
+                    tab, then discard it here.
+                  </p>
+                )}
+              </dd>
+            </dl>
+            <div className="ov-actions">
+              {sentUnrecorded ? (
+                /* Send is gone, not disabled: pressing it again would mail the client twice. */
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setSentUnrecorded(false)
+                    setMailBody('')
+                    setComposing(false)
+                  }}
+                >
+                  Done — discard text
+                </button>
+              ) : (
                 <>
-                  {' '}
-                  <button type="button" className="btn-link" onClick={onMove}>
-                    Move…
+                  {/* Close keeps the draft; only a successful send clears it. */}
+                  <button className="btn" disabled={sending} onClick={() => setComposing(false)}>
+                    Close
+                  </button>
+                  <button
+                    className="btn primary"
+                    disabled={sending || !mailBody.trim()}
+                    onClick={sendMail}
+                  >
+                    {sending ? 'Sending…' : 'Send'}
                   </button>
                 </>
               )}
-            </dd>
-            <dt>Type</dt>
-            <dd>
-              {displayType}
-              {issue.sourceType && issue.sourceType !== displayType && (
-                <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
-              )}
-            </dd>
-            <dt>{labels.FIELD_SEVERITY}</dt>
-            <dd className={`sev-${issue.severity}`}>
-              <span className="sev-glyph" aria-hidden="true">{severityGlyph(issue.severity)}</span>
-              {issue.severity}
-            </dd>
-            <dt>{labels.FIELD_STATUS}</dt>
-            <dd>{issue.status}</dd>
-            {raidKind === 'risk' && record && (
-              <>
-                <dt>Exposure</dt>
-                <dd>
-                  {may.allowed ? (
-                    <>
-                      <select
-                        value={record.riskLikelihood ?? ''}
-                        aria-label="Likelihood, 1 to 5"
-                        onChange={(e) =>
-                          onSave(
-                            { riskLikelihood: e.target.value === '' ? null : Number(e.target.value) },
-                            null,
-                          )
-                        }
-                      >
-                        <option value="">not judged</option>
-                        {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
-                          <option key={n + 1} value={n + 1}>
-                            L{n + 1}
-                          </option>
-                        ))}
-                      </select>{' '}
-                      ×{' '}
-                      <select
-                        value={record.riskImpact ?? ''}
-                        aria-label="Impact, 1 to 5"
-                        onChange={(e) =>
-                          onSave(
-                            { riskImpact: e.target.value === '' ? null : Number(e.target.value) },
-                            null,
-                          )
-                        }
-                      >
-                        <option value="">not judged</option>
-                        {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
-                          <option key={n + 1} value={n + 1}>
-                            I{n + 1}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  ) : (
-                    <span>
-                      {record.riskLikelihood ?? '—'} × {record.riskImpact ?? '—'}
+            </div>
+          </section>
+        )}
+
+        {scheduling && (
+          <section className="appr-block">
+            <h4 className="est-h">Schedule a meeting</h4>
+            <p className="prov">
+              Personal — goes on your own Outlook calendar with a Teams link, not recorded on
+              this record.
+            </p>
+            <dl className="kv">
+              <dt>Subject</dt>
+              <dd>
+                <input
+                  value={meetSubject}
+                  onChange={(e) => setMeetSubject(e.target.value)}
+                  aria-label="Meeting subject"
+                  placeholder={issue.subject}
+                />
+              </dd>
+              <dt>Starts</dt>
+              <dd>
+                <input
+                  type="datetime-local"
+                  value={meetStart}
+                  onChange={(e) => setMeetStart(e.target.value)}
+                  aria-label="Meeting start"
+                />
+              </dd>
+              <dt>Ends</dt>
+              <dd>
+                <input
+                  type="datetime-local"
+                  value={meetEnd}
+                  onChange={(e) => setMeetEnd(e.target.value)}
+                  aria-label="Meeting end"
+                />
+              </dd>
+              <dt>Attendees</dt>
+              <dd>
+                <input
+                  value={meetAttendees}
+                  onChange={(e) => setMeetAttendees(e.target.value)}
+                  aria-label="Attendee email addresses, comma-separated"
+                  placeholder="name@client.com, name@axiocloudsolutions.com"
+                />
+                <span className="prov"> · comma-separated addresses</span>
+              </dd>
+            </dl>
+            {meetError && <p className="ov-gate">{meetError}</p>}
+            <div className="ov-actions">
+              <button className="btn" disabled={meetBusy} onClick={() => setScheduling(false)}>
+                Close
+              </button>
+              <button
+                className="btn primary"
+                disabled={
+                  meetBusy ||
+                  !(meetSubject.trim() || issue.subject) ||
+                  !meetStart ||
+                  !meetEnd ||
+                  !meetAttendees.trim()
+                }
+                onClick={async () => {
+                  // Close only on success — a failure must leave the form (and meetError)
+                  // visible, not vanish it the instant the person needs to read why.
+                  if (await scheduleOnMyCalendar()) setScheduling(false)
+                }}
+              >
+                {meetBusy ? 'Scheduling…' : 'Schedule'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {messaging && (
+          <section className="appr-block">
+            <h4 className="est-h">Message on Teams</h4>
+            {/* The most sensitive of the three — see connected-workspace-design.md §4. No
+                default recipient beyond the same client contact the mail action defaults to;
+                nothing here is offered pre-filled toward a colleague. */}
+            <p className="prov">Personal — sent from your own Teams as you, not recorded here.</p>
+            <dl className="kv">
+              <dt>To</dt>
+              <dd>
+                <input
+                  value={chatTo}
+                  onChange={(e) => setChatTo(e.target.value)}
+                  aria-label="Recipient's work address"
+                  placeholder="name@axiocloudsolutions.com"
+                />
+              </dd>
+              <dt>Message</dt>
+              <dd>
+                <textarea
+                  rows={4}
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  aria-label="Teams message"
+                  readOnly={chatBusy}
+                />
+              </dd>
+            </dl>
+            {chatError && <p className="ov-gate">{chatError}</p>}
+            <div className="ov-actions">
+              <button className="btn" disabled={chatBusy} onClick={() => setMessaging(false)}>
+                Close
+              </button>
+              <button
+                className="btn primary"
+                disabled={chatBusy || !chatTo.trim() || !chatText.trim()}
+                onClick={async () => {
+                  if (await sendTeamsMessage()) setMessaging(false)
+                }}
+              >
+                {chatBusy ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/*
+          * Subject, Severity, Status and Owner used to repeat here — the exact duplication I24
+          * flagged (9 Sep) against the header strip and never resolved. Now that the panel has
+          * a real title (Subject) and `FieldStrip` carries Status/Severity/Owner above every
+          * tab, these four rows would say nothing the reader hasn't already seen one scroll up.
+          * Removed rather than restyled — see `docs/plans/2026-09-09-issue-workspace-redesign-
+          * design.md` Tier 1 item 3 for the row-by-row accounting of what stays and why (Start/
+          * Due stays because it also carries Start Date, which the strip doesn't; Raised by and
+          * Accountable stay because neither appears in the strip at all).
+          *
+          * Each column is now two named groups instead of one long list — the same fields,
+          * split where they were already conceptually split (record identity vs.
+          * classification; ownership/timeline vs. progress/state).
+          */}
+        <div className="cols-2">
+          <div className="kv-col">
+            <h5 className="kv-heading">Record</h5>
+            <dl className="kv">
+              <dt>Issue</dt>
+              <dd className="mono">{issue.id}</dd>
+              <dt>Description</dt>
+              <dd className="ov-prose">
+                {isEmptyRichDoc(issue.description) ? (
+                  '—'
+                ) : (
+                  <>
+                    <div ref={descRef} className={descExpanded ? undefined : 'ov-desc-clamp'}>
+                      <RichTextEditor
+                        value={issue.description}
+                        onChange={() => {}}
+                        editable={false}
+                        people={rtePeople}
+                        issues={rteIssues}
+                        onUploadImage={async () => null}
+                      />
+                    </div>
+                    {descExpanded ? (
+                      <button type="button" className="btn-link ov-desc-toggle" onClick={() => setDescExpanded(false)}>
+                        Show less
+                      </button>
+                    ) : (
+                      descOverflows && (
+                        <button type="button" className="btn-link ov-desc-toggle" onClick={() => setDescExpanded(true)}>
+                          Show more
+                        </button>
+                      )
+                    )}
+                  </>
+                )}
+              </dd>
+              {sourceDoc && (
+                <>
+                  <dt>Source artifact</dt>
+                  <dd>
+                    {sourceDoc.fileName}
+                    <span className="prov">
+                      {' '}
+                      · detected in the issue {sourceDoc.detectedIn} · file not held by this app
                     </span>
-                  )}{' '}
-                  {judged ? (
-                    <b className={`raid-band raid-${judged.band.toLowerCase()}`}>
-                      = {judged.score} · {judged.band}
-                    </b>
-                  ) : (
-                    <span className="prov">not yet judged — exposure is computed, never stored</span>
-                  )}
-                </dd>
-              </>
-            )}
-            {raidKind === 'decision' && (
-              <>
-                <dt>Outcome</dt>
-                <dd className="ov-prose">
-                  {record?.decisionOutcome || (
-                    <span className="prov">no outcome recorded yet — Edit to record it</span>
-                  )}
-                </dd>
-              </>
-            )}
-          </dl>
-          <dl className="kv">
-            <dt>{labels.ISSUE_OWNER}</dt>
-            <dd>{issue.owner}</dd>
-            <dt>{labels.ISSUE_RAISED_BY}</dt>
-            <dd>{issue.raisedBy || '—'}</dd>
-            <dt>{labels.ISSUE_ACCOUNTABLE}</dt>
-            <dd>{issue.accountable}</dd>
-            <dt>{labels.FIELD_NEXT_ACTION}</dt>
-            <dd className="ov-prose">{issue.nextAction || '—'}</dd>
-            <dt>{labels.FIELD_START_DATE} / {labels.FIELD_DUE_DATE}</dt>
-            <dd className="mono">
-              {row.plannedStartDate ? formatIso(row.plannedStartDate) : '—'} ·{' '}
-              {row.plannedEndDate ? formatIso(row.plannedEndDate) : '—'}
-              {row.plannedOrigin === 'derived' && (
-                <span className="prov"> · rolled up from its lifecycle</span>
+                  </dd>
+                </>
               )}
-              {leaveCaveat && (
+            </dl>
+            <h5 className="kv-heading">Classification</h5>
+            <dl className="kv">
+              <dt>{labels.TIER_ORGANIZATION} / {labels.TIER_MODULE}</dt>
+              <dd>
+                {issue.client} · {issue.module || moduleDefault || '—'}
+                <span className="prov"> · follows its place in the tree</span>
+                {onMove && (
+                  <>
+                    {' '}
+                    <button type="button" className="btn-link" onClick={onMove}>
+                      Move…
+                    </button>
+                  </>
+                )}
+              </dd>
+              <dt>Type</dt>
+              <dd>
+                {displayType}
+                {issue.sourceType && issue.sourceType !== displayType && (
+                  <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
+                )}
+              </dd>
+              {raidKind === 'risk' && record && (
+                <>
+                  <dt>Exposure</dt>
+                  <dd>
+                    {may.allowed ? (
+                      <>
+                        <select
+                          value={record.riskLikelihood ?? ''}
+                          aria-label="Likelihood, 1 to 5"
+                          onChange={(e) =>
+                            onSave(
+                              { riskLikelihood: e.target.value === '' ? null : Number(e.target.value) },
+                              null,
+                            )
+                          }
+                        >
+                          <option value="">not judged</option>
+                          {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
+                            <option key={n + 1} value={n + 1}>
+                              L{n + 1}
+                            </option>
+                          ))}
+                        </select>{' '}
+                        ×{' '}
+                        <select
+                          value={record.riskImpact ?? ''}
+                          aria-label="Impact, 1 to 5"
+                          onChange={(e) =>
+                            onSave(
+                              { riskImpact: e.target.value === '' ? null : Number(e.target.value) },
+                              null,
+                            )
+                          }
+                        >
+                          <option value="">not judged</option>
+                          {Array.from({ length: RAID_SCALE_MAX }, (_, n) => (
+                            <option key={n + 1} value={n + 1}>
+                              I{n + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <span>
+                        {record.riskLikelihood ?? '—'} × {record.riskImpact ?? '—'}
+                      </span>
+                    )}{' '}
+                    {judged ? (
+                      <b className={`raid-band raid-${judged.band.toLowerCase()}`}>
+                        = {judged.score} · {judged.band}
+                      </b>
+                    ) : (
+                      <span className="prov">not yet judged — exposure is computed, never stored</span>
+                    )}
+                  </dd>
+                </>
+              )}
+              {raidKind === 'decision' && (
+                <>
+                  <dt>Outcome</dt>
+                  <dd className="ov-prose">
+                    {record?.decisionOutcome || (
+                      <span className="prov">no outcome recorded yet — Edit to record it</span>
+                    )}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </div>
+          <div className="kv-col">
+            <h5 className="kv-heading">Ownership &amp; timeline</h5>
+            <dl className="kv">
+              <dt>{labels.ISSUE_RAISED_BY}</dt>
+              <dd>{issue.raisedBy || '—'}</dd>
+              <dt>{labels.ISSUE_ACCOUNTABLE}</dt>
+              <dd>{issue.accountable}</dd>
+              <dt>{labels.FIELD_NEXT_ACTION}</dt>
+              <dd className="ov-prose">{issue.nextAction || '—'}</dd>
+              <dt>{labels.FIELD_START_DATE} / {labels.FIELD_DUE_DATE}</dt>
+              <dd className="mono">
+                {row.plannedStartDate ? formatIso(row.plannedStartDate) : '—'} ·{' '}
+                {row.plannedEndDate ? formatIso(row.plannedEndDate) : '—'}
+                {row.plannedOrigin === 'derived' && (
+                  <span className="prov"> · rolled up from its lifecycle</span>
+                )}
+                {leaveCaveat && (
+                  <span className="prov">
+                    {' '}
+                    · {issue.owner} is on leave {formatIso(leaveCaveat.startDate)}–
+                    {formatIso(leaveCaveat.endDate)}, inside this window
+                  </span>
+                )}
+              </dd>
+              <dt>Raised</dt>
+              <dd className="mono">
+                {formatIso(issue.raised)}{' '}
+                <span style={{ color: 'var(--text-faint)' }}>({issue.age}d ago)</span>
+              </dd>
+              <dt>Last activity</dt>
+              <dd className="mono">
+                {formatIso(issue.lastActivity)}{' '}
+                <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
+              </dd>
+            </dl>
+            <h5 className="kv-heading">Progress</h5>
+            <dl className="kv">
+              <dt>Progress</dt>
+              <dd>
+                {row.percentComplete}%
                 <span className="prov">
                   {' '}
-                  · {issue.owner} is on leave {formatIso(leaveCaveat.startDate)}–
-                  {formatIso(leaveCaveat.endDate)}, inside this window
+                  ·{' '}
+                  {row.progressOrigin === 'user'
+                    ? 'manually overridden'
+                    : row.progressOrigin === 'rolled-up'
+                      ? `rolled up from ${activityCount} lifecycle ${activityCount === 1 ? 'activity' : 'activities'}`
+                      : `derived from status`}
                 </span>
-              )}
-            </dd>
-            <dt>Raised</dt>
-            <dd className="mono">
-              {formatIso(issue.raised)}{' '}
-              <span style={{ color: 'var(--text-faint)' }}>({issue.age}d ago)</span>
-            </dd>
-            <dt>Last activity</dt>
-            <dd className="mono">
-              {formatIso(issue.lastActivity)}{' '}
-              <span style={{ color: 'var(--text-faint)' }}>({issue.daysSinceActivity}d ago)</span>
-            </dd>
-            <dt>Progress</dt>
-            <dd>
-              {row.percentComplete}%
-              <span className="prov">
-                {' '}
-                ·{' '}
-                {row.progressOrigin === 'user'
-                  ? 'manually overridden'
-                  : row.progressOrigin === 'rolled-up'
-                    ? `rolled up from ${activityCount} lifecycle ${activityCount === 1 ? 'activity' : 'activities'}`
-                    : `derived from status`}
-              </span>
-            </dd>
-            <dt>Lifecycle</dt>
-            <dd>{activityCount ? `${activityCount} activities` : 'Not planned'}</dd>
-            <dt>Relationships</dt>
-            <dd>{relationshipCount ? `${relationshipCount} linked` : 'None'}</dd>
-            {customResponsibilities.map((t) => (
-              <Fragment key={t.id}>
-                <dt>
-                  {t.label}
-                  {t.requiredHere && <span style={{ color: 'var(--h-overdue)' }}> *</span>}
-                </dt>
-                <dd>
-                  <input
-                    className="resp-input"
-                    defaultValue={t.values.join(', ')}
-                    onBlur={(e) => {
-                      const next = e.target.value
-                        .split(',')
-                        .map((v) => v.trim())
-                        .filter(Boolean)
-                      if (next.join(', ') !== t.values.join(', ')) onSetAssignment(t.id, next)
-                    }}
-                  />
-                </dd>
-              </Fragment>
-            ))}
-          </dl>
+              </dd>
+              <dt>Lifecycle</dt>
+              <dd>{activityCount ? `${activityCount} activities` : 'Not planned'}</dd>
+              <dt>Relationships</dt>
+              <dd>{relationshipCount ? `${relationshipCount} linked` : 'None'}</dd>
+              {customResponsibilities.map((t) => (
+                <Fragment key={t.id}>
+                  <dt>
+                    {t.label}
+                    {t.requiredHere && <span style={{ color: 'var(--h-overdue)' }}> *</span>}
+                  </dt>
+                  <dd>
+                    <input
+                      className="resp-input"
+                      defaultValue={t.values.join(', ')}
+                      onBlur={(e) => {
+                        const next = e.target.value
+                          .split(',')
+                          .map((v) => v.trim())
+                          .filter(Boolean)
+                        if (next.join(', ') !== t.values.join(', ')) onSetAssignment(t.id, next)
+                      }}
+                    />
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </div>
         </div>
 
         {/* A summary and a way in, not a document library — managing files happens in the

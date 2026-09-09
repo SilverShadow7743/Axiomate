@@ -1526,6 +1526,33 @@ select.cell-editor {
   height: 22px;
 }
 
+/* The pane's title, above the tab bar so `compact` still names what's selected. */
+.detail-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 0;
+  flex: 0 0 auto;
+}
+.dt-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.dt-idtag {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .detail-head {
   display: flex;
   align-items: center;
@@ -1612,6 +1639,28 @@ select.cell-editor {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
   gap: 18px;
+}
+/* One `.kv-col` per `.cols-2` cell, so splitting each column's fields into named groups (below)
+   doesn't also change how many grid columns there are — the heading + `.kv` pairs stack inside
+   a single cell instead of becoming cells of their own. */
+.kv-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.kv-col .kv:not(:first-child) {
+  margin-top: 10px;
+}
+.kv-heading {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
 }
 .panel-note {
   font-size: 11.5px;
@@ -2137,6 +2186,24 @@ select.cell-editor {
 }
 .field-strip .fs-ask input {
   width: 240px;
+}
+/* Severity's colored-tag treatment inside the strip — `color: currentColor` lets the same
+   `.sev-High`/`.sev-Medium`/`.sev-Low` text-color classes (already applied to this span) drive
+   the border/background/select text too, without a second palette. */
+.fs-sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.fs-sev select {
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 .field-strip .fs-refusal {
   color: var(--h-overdue);
@@ -4705,6 +4772,16 @@ select.cell-editor {
   border-bottom: 1px solid var(--grid-line);
   margin-bottom: 10px;
 }
+/* Reply/Schedule/Teams, collapsed: one row instead of three full-width section headers. */
+.ov-comms-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--grid-line);
+}
 /* Unsaved changes have to be visible without being read: colour first, words second. */
 .ov-dirty {
   font-size: 11px;
@@ -4716,6 +4793,19 @@ select.cell-editor {
 }
 .ov-prose {
   white-space: pre-wrap;
+}
+/* Caps the read-only description at 3 lines; `descOverflows` (OverviewTab.tsx) decides whether
+   "Show more" appears at all, so this clamp alone never hides content with no way back to it. */
+.ov-desc-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ov-desc-toggle {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11.5px;
 }
 .kv dd input,
 .kv dd select,

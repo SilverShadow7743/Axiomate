@@ -47,6 +47,7 @@ import { holidaySetOf, isExternalPartyKind, liveResponsibilities, resolveRequire
 import { describeForecast, forecastFor } from '@/lib/forecast'
 import { profileAt } from '@/lib/capacity'
 import { directoryIdByName } from '@/lib/access'
+import { severityGlyph } from '@/lib/severity'
 import { readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
 import {
   KIND_ICON,
@@ -504,6 +505,23 @@ export default function DetailPanel({
       >
         <span className="grip-marks" />
       </div>
+      {/* The visual anchor for the whole pane, above the tab bar so it survives `compact` too —
+          a collapsed panel used to name nothing but its tabs. `row.name` (not `issue.subject`
+          directly) because it already carries the right value for every row kind, not just
+          issues: `lib/tree.ts` sets an issue row's `name` from `issue.subject` at construction,
+          so this reads identically for an issue and correctly for a project/client/engagement,
+          which have no `issue` at all. Replaces the old right-aligned `.idtag` below, which said
+          the same thing in 11px muted text easy to miss entirely. */}
+      {row && (
+        <div className="detail-title">
+          <h2 className="dt-name">{row.name}</h2>
+          {row.displayId && (
+            <span className="dt-idtag">
+              {row.displayId} · {row.type}
+            </span>
+          )}
+        </div>
+      )}
       <div className="detail-head">
         <div className="tabs-wrap">
           <div className="tabs">
@@ -522,11 +540,6 @@ export default function DetailPanel({
           </div>
         </div>
         <span className="grow" />
-        {row && (
-          <span className="idtag">
-            {row.displayId || row.name} · {row.type}
-          </span>
-        )}
         {/* Explicit size controls, so the pane never has to be dragged to be usable. */}
         <div className="panel-controls">
           <button
@@ -1409,15 +1422,22 @@ function FieldStrip({
       </label>
       <label className="fs-fld">
         <span>{labels.FIELD_SEVERITY}</span>
-        <select
-          value={issue.severity}
-          onChange={(e) => onCommitCell(row.id, 'severity', e.target.value)}
-          aria-label={labels.FIELD_SEVERITY}
-        >
-          {['High', 'Medium', 'Low'].map((sx) => (
-            <option key={sx}>{sx}</option>
-          ))}
-        </select>
+        {/* The same colored-tag treatment Overview's own severity row already uses
+            (`sev-${severity}` + the color-blind-safe glyph, `lib/severity.ts`) — reused here
+            rather than a second palette, so a select that looked like every other plain field
+            control now reads as the flagged, at-a-glance value it actually is. */}
+        <span className={`fs-sev sev-${issue.severity}`}>
+          <span className="sev-glyph" aria-hidden="true">{severityGlyph(issue.severity)}</span>
+          <select
+            value={issue.severity}
+            onChange={(e) => onCommitCell(row.id, 'severity', e.target.value)}
+            aria-label={labels.FIELD_SEVERITY}
+          >
+            {['High', 'Medium', 'Low'].map((sx) => (
+              <option key={sx}>{sx}</option>
+            ))}
+          </select>
+        </span>
       </label>
     </div>
   )

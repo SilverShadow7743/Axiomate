@@ -1,10 +1,12 @@
 # The issue detail panel reads like a database form — closing the gap
 
-**Status: draft, 9 September 2026.** Nishant pasted a UX critique of the issue detail panel
-(source not this codebase — written against generic mockup screenshots, not against
-`DetailPanel.tsx`/`OverviewTab.tsx` as they actually are) and asked for a full design doc
-before any code. This reconciles that critique against what is actually built — some of it
-holds, some of it doesn't apply, and one structural premise it assumed is wrong.
+**Status: Tier 1 built, 9 September 2026 — Tier 2 still a design, not started.** Nishant pasted
+a UX critique of the issue detail panel (source not this codebase — written against generic
+mockup screenshots, not against `DetailPanel.tsx`/`OverviewTab.tsx` as they actually are) and
+asked for a full design doc before any code. This reconciles that critique against what is
+actually built — some of it holds, some of it doesn't apply, and one structural premise it
+assumed is wrong. Once the doc was reviewed, Nishant said "Build the Tier 1 items" — see
+"Tier 1 build summary" below for what shipped and how it was verified.
 
 ## What exists today — read directly from the code, not assumed
 
@@ -121,6 +123,52 @@ supporting data today, not built, not designed further here** — see Non-goals.
 None of tier 1 touches the reducer, `lib/workspace.ts`, or any action shape. Verification is
 `tsc`/`build`/live browser check only, the same posture I20's and I24's CSS-only fixes used —
 no new scenario needed for a pure display change.
+
+## Tier 1 build summary — 9 September 2026
+
+All six items built as scoped, in `components/DetailPanel.tsx`, `components/OverviewTab.tsx`
+and `app/globals.css`. No reducer, action-shape or `lib/workspace.ts` change — confirmed by
+`git status` touching only those three files.
+
+1. **Title**: a `.detail-title` block (`<h2 className="dt-name">{row.name}</h2>` +
+   `.dt-idtag` subline) added above `.detail-head`, outside the `panelState !== 'compact'` gate
+   so it survives collapse. `row.name`, not `issue.subject` directly — confirmed identical for
+   an issue row (`lib/tree.ts:124` sets `name: issue.subject` at construction) and correct for
+   non-issue rows, which have no `issue` at all. The old right-aligned `.idtag` span in
+   `.detail-head` removed (its class stays — still used by `TreeGrid.tsx:780`, unrelated).
+2. **Severity tag**: `FieldStrip`'s severity `<select>` wrapped in a `.fs-sev` span carrying
+   `sev-${issue.severity}` and the same color-blind-safe glyph (`severityGlyph`,
+   `lib/severity.ts`) Overview's own severity row already used — one palette, not two.
+3. **I24's duplication resolved**: `Subject`, `Severity`, `Status` and `Owner` rows removed
+   from Overview's `<dl>`. Checked precisely, not assumed identical to `FieldStrip`'s four
+   fields: `Start Date / Due Date` stays (carries Start Date, which the strip doesn't) and
+   `Raised by`/`Accountable` stay (neither is in the strip at all) — only the four rows that
+   are genuinely redundant came out.
+4. **Collapsible description**: a `.ov-desc-clamp` (`-webkit-line-clamp: 3`) wraps the
+   read-only `RichTextEditor`; a ref-measured `descOverflows` state (`scrollHeight >
+   clientHeight`) decides whether "Show more" renders at all, so the toggle never appears on a
+   description that already fits — the same "don't claim what isn't there" discipline this
+   session's other work has held to. Resets per issue via `useEffect` keyed on `issue.id`.
+5. **Communication row**: Reply/Schedule/Teams collapse to one `.ov-comms-row` of buttons
+   (plus inline status text — `sentLine`/`meetResult`/`chatSent`) when idle; each button still
+   opens its full, untouched form in a separate `{composing/scheduling/messaging && (...)}`
+   block below. One TypeScript-relevant change beyond pure layout: the expanded reply form's
+   `isOutboundRefusal(outbound)` guard is now repeated on the block itself
+   (`composing && !isOutboundRefusal(outbound)`) rather than assumed from the button that set
+   `composing` — needed so TypeScript narrows `outbound` to `OutboundResolution` for
+   `.mailbox`/`.recipient`/`.subject`, not just a runtime nicety.
+6. **Named `<dl>` groups**: each `.cols-2` column is now a `.kv-col` wrapping two
+   heading+`<dl>` pairs instead of one bare `<dl>` — `.cols-2` itself still has exactly two grid
+   children, so the two-column layout is unchanged. Left: "Record" (Issue/Description/Source
+   artifact) and "Classification" (Tier/Type/Exposure or Outcome). Right: "Ownership &
+   timeline" (Raised by/Accountable/Next action/Start-Due/Raised/Last activity) and "Progress"
+   (Progress/Lifecycle/Relationships/custom responsibilities) — the exact split point this
+   design doc's Tier 1 item 6 named.
+
+**Verification**: clean `tsc`, clean build, scenario suite unchanged (259 scenarios, zero
+regressions — expected, since nothing here touches the reducer), clean `audit:tenancy`. Two
+pre-existing `audit:a11y` failures in `AnalyticsView.tsx`/`PeopleDirectory.tsx` confirmed
+unrelated (`git status` shows neither file touched by this change).
 
 ### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
 
