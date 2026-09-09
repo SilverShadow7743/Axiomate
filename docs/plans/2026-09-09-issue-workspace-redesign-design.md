@@ -220,6 +220,15 @@ This is the same "verified, not assumed" discipline the earlier two bugs were ca
 twice over here — a fix that looks right by reasoning about the code is not the same as one
 confirmed against the live DOM, and that held even for the fix meant to correct the first miss.
 
+**Confirmed working, 9 September 2026, on a true fresh page load** (not a re-selection of an
+already-mounted issue, which is the scenario that matters — a real user's first click after
+opening the app): `.ov-desc-clamp` showed `scrollHeight` 196 vs `clientHeight` 60 (genuinely
+clamped) and `.ov-desc-toggle` read "Show more" — present this time, unlike every prior check.
+Clicking it un-clamped the description and flipped the label to "Show less." All six Tier 1
+items now confirmed live together on SLG-001 in one screenshot: the title, the red severity
+tag, the clamped/expandable description, the compact Schedule/Teams row, and all four named
+`<dl>` groups (Record, Classification, Ownership & timeline, Progress).
+
 ### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
 
 7. **A status color palette — checked and confirmed genuinely absent, unlike severity's.**
