@@ -193,6 +193,21 @@ Both were found by direct DOM/computed-style inspection against a real productio
 visually plausible (text simply didn't look clipped, which reads as "fine" at a glance) and
 only showed up as a bug once `scrollHeight`/`clientHeight` were actually compared.
 
+**A third bug, found re-verifying the fix above rather than assuming the fix was complete**:
+once the `max-height` clamp genuinely clipped the description, "Show more" never appeared at
+all — `document.querySelector('.ov-desc-toggle')` came back null even though the DOM directly
+confirmed real overflow (`scrollHeight` 196 vs `clientHeight` 60). Cause: the one-shot
+measurement `useEffect` (deps `[issue.id, issue.description, descExpanded]`) races
+`RichTextEditor`, which mounts its content through its own effect — the measurement can run
+before the rich text has painted, read a near-empty box, and never re-run afterward since
+nothing in its dependency list changes again. Fixed by replacing the one-shot measurement with
+a `ResizeObserver` on the clamp div's children (not the clamp div itself, whose height
+`max-height` pins regardless of what grows inside it) — it re-measures whenever the real
+content's size actually changes, whatever the timing. This is the same class of "verified, not
+assumed" discipline the earlier two bugs were caught by, applied to the FIX this time, not just
+the original build — a fix that looks right by reasoning about the code is not the same as one
+confirmed against the live DOM.
+
 ### Tier 2 — real work, scoped here, needs its own build pass (not "while we're at it")
 
 7. **A status color palette — checked and confirmed genuinely absent, unlike severity's.**

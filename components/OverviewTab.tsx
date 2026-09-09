@@ -311,15 +311,27 @@ export default function OverviewTab({
   useEffect(() => setDescExpanded(false), [issue.id])
   const descRef = useRef<HTMLDivElement>(null)
   /** Whether the clamped description actually hides anything — measured, not assumed, so
-      "Show more" never appears on a description that already fits in three lines. Depends on
-      `descExpanded` so a short description's stale `true` reading (measured before the reset
-      effect above re-renders it clamped) self-corrects on the very next pass rather than
-      sticking. */
+      "Show more" never appears on a description that already fits in three lines.
+      `RichTextEditor` mounts its content asynchronously (its own effect, live-checked in
+      production), so a one-shot measurement effect races it: it can run before the rich text
+      has painted, read a near-empty box, and never fire again since nothing else changes
+      `[issue.id, descExpanded]` afterward — confirmed live, `descOverflows` stuck `false` on a
+      description that was genuinely nine lines. A `ResizeObserver` on the clamp's own children
+      (not the clamp div itself, whose height `max-height` pins regardless of what grows inside
+      it) re-measures whenever the real content's size actually changes, whenever that happens. */
   const [descOverflows, setDescOverflows] = useState(false)
   useEffect(() => {
     const el = descRef.current
-    setDescOverflows(el ? el.scrollHeight > el.clientHeight + 1 : false)
-  }, [issue.id, issue.description, descExpanded])
+    if (!el) {
+      setDescOverflows(false)
+      return
+    }
+    const measure = () => setDescOverflows(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    const ro = new ResizeObserver(measure)
+    for (const child of el.children) ro.observe(child)
+    return () => ro.disconnect()
+  }, [issue.id])
 
   const [composing, setComposing] = useState(false)
   const [mailBody, setMailBody] = useState('')
