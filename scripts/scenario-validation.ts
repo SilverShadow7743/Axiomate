@@ -138,6 +138,7 @@ import { planSlaDates } from '../lib/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
+import { buildLeaveReport } from '../lib/reports/leave'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
@@ -12783,6 +12784,110 @@ scenario(
           stops: 'at ownerLeaveCaveat — either it misses an approved overlap, wrongly counts a Requested one, or (worst) the due date itself moved',
           severity: 'P2',
           impact: 'a caveat that is wrong is worse than none — it either hides a real staffing conflict or cries wolf on a date nobody actually has to worry about',
+        }
+  },
+)
+
+/* ================================================================== *
+ * Leave report, month on month (design 2026-09-08, resolved 2026-09-10)
+ * ================================================================== */
+
+scenario(
+  'LV1',
+  'buildLeaveReport counts only Approved working days per month, holiday-aware, clips correctly at a month boundary, surfaces Requested leave separately, drops Returned leave entirely, and never leaks a reason or a note',
+  "Priya's leave 2026-06-29 to 2026-07-03 (recorded by a non-subject approver, landing Approved in one step per E1B) crosses the June/July boundary and overlaps a declared 2026-07-03 holiday — proving both the per-month clip and holiday-awareness in the same commitment (June: Mon+Tue=2 working days; July: Wed+Thu+Fri minus the Friday holiday=2). Sam's 2026-06-01 to 2026-06-03 (Mon-Wed, also non-subject-recorded) is a single-month control (3 days). Priya separately self-requests 2026-05-04 to 2026-05-05, landing Requested — it must appear only in `pending`, contributing nothing to any `byMonth`. Sam separately self-requests 2026-04-10 to 2026-04-11, then a second approver declines it (`decideLeave`, decision 'returned') — that commitment must appear nowhere in the report at all, not even as a zero, and specifically must not inflate Sam's April figure (April sits inside the 6-month window, so a bug that still counted it would show up there). A distinctive marker string is planted in both a `reason` and a `note` on these commitments and asserted absent from the serialized report.",
+  () => {
+    let s = ok(BASE, { t: 'config', op: { k: 'setHolidays', holidays: [{ date: '2026-07-03', name: 'Independence Day (test)' }] }, now: NOW } as Action)
+
+    const APPROVER: Actor = { id: 'lv1-approver', name: 'Leave Approver' }
+    const SECOND_APPROVER: Actor = { id: 'lv1-approver-2', name: 'Second Leave Approver' }
+    const PRIYA: Actor = { id: 'lv1-priya', name: 'Priya' }
+    const SAM: Actor = { id: 'lv1-sam', name: 'Sam' }
+    const SECRET = 'lv1-do-not-leak-this-reason'
+
+    // Approved, crosses the June/July boundary, overlaps the declared holiday.
+    let r = apply(s, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-06-29', endDate: '2026-07-03', hoursPerDay: 7.5,
+      note: SECRET, reason: SECRET, now: NOW,
+    } as Action, APPROVER)
+    if (r.error) throw new Error(`Priya boundary leave refused: ${r.error}`)
+    s = r.state
+
+    // Approved, single month, no boundary — the control case.
+    r = apply(s, {
+      t: 'upsertCommitment', id: null, person: 'Sam', kind: 'Leave',
+      startDate: '2026-06-01', endDate: '2026-06-03', hoursPerDay: 7.5,
+      note: '', now: NOW,
+    } as Action, APPROVER)
+    if (r.error) throw new Error(`Sam June leave refused: ${r.error}`)
+    s = r.state
+
+    // Self-requested: lands Requested, must surface only in `pending`.
+    r = apply(s, {
+      t: 'upsertCommitment', id: null, person: 'Priya', kind: 'Leave',
+      startDate: '2026-05-04', endDate: '2026-05-05', hoursPerDay: 7.5,
+      note: '', now: NOW,
+    } as Action, PRIYA)
+    if (r.error) throw new Error(`Priya self-request refused: ${r.error}`)
+    s = r.state
+
+    // Self-requested, then declined: must appear nowhere in the report.
+    r = apply(s, {
+      t: 'upsertCommitment', id: null, person: 'Sam', kind: 'Leave',
+      startDate: '2026-04-10', endDate: '2026-04-11', hoursPerDay: 7.5,
+      note: '', now: NOW,
+    } as Action, SAM)
+    if (r.error) throw new Error(`Sam self-request refused: ${r.error}`)
+    s = r.state
+    const returnedId = Object.values(s.commitments).find(
+      (c) => c.person === 'Sam' && c.startDate === '2026-04-10',
+    )!.id
+    r = apply(s, { t: 'decideLeave', id: returnedId, decision: 'returned', now: NOW } as Action, SECOND_APPROVER)
+    if (r.error) throw new Error(`decline refused: ${r.error}`)
+    s = r.state
+
+    const report = buildLeaveReport(s, '2026-08')
+
+    const monthsCorrect =
+      JSON.stringify(report.months) === JSON.stringify(['2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08'])
+
+    const priya = report.rows.find((row) => row.person === 'Priya')
+    const priyaCorrect =
+      !!priya && priya.byMonth['2026-06'] === 2 && priya.byMonth['2026-07'] === 2 && priya.total === 4
+
+    const sam = report.rows.find((row) => row.person === 'Sam')
+    const samCorrect =
+      !!sam && sam.byMonth['2026-06'] === 3 && sam.byMonth['2026-04'] === 0 && sam.total === 3
+
+    // Busiest first: Priya (4) before Sam (3).
+    const sortedCorrect = report.rows[0]?.person === 'Priya' && report.rows[1]?.person === 'Sam'
+
+    const pendingCorrect =
+      report.pending.length === 1 &&
+      report.pending[0].person === 'Priya' &&
+      report.pending[0].startDate === '2026-05-04' &&
+      report.pending[0].endDate === '2026-05-05'
+
+    const returnedExcluded = report.rows.length === 2 // only Priya and Sam's approved rows — nothing for the declined one
+
+    const noLeak = !JSON.stringify(report).includes(SECRET)
+
+    const good = monthsCorrect && priyaCorrect && samCorrect && sortedCorrect && pendingCorrect && returnedExcluded && noLeak
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `months=${JSON.stringify(report.months)}; Priya byMonth=${JSON.stringify(priya?.byMonth)} total=${priya?.total}; Sam byMonth=${JSON.stringify(sam?.byMonth)} total=${sam?.total}; pending=${JSON.stringify(report.pending)}; rows.length=${report.rows.length}; no reason/note leak`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `monthsCorrect=${monthsCorrect} priyaCorrect=${priyaCorrect} (${JSON.stringify(priya)}) samCorrect=${samCorrect} (${JSON.stringify(sam)}) sortedCorrect=${sortedCorrect} pendingCorrect=${pendingCorrect} (${JSON.stringify(report.pending)}) returnedExcluded=${returnedExcluded} (rows.length=${report.rows.length}) noLeak=${noLeak}`,
+          stops: 'at buildLeaveReport — a month-boundary clip, a holiday, the Requested/Returned split, or the reason/note exclusion is wrong',
+          severity: 'P2',
+          impact: 'a leave report handed to finance/HR would show the wrong days, the wrong person, a declined request as if it were real, or — worst — a reason nobody outside the Capacity tab is meant to see',
         }
   },
 )

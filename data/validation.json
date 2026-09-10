@@ -2604,6 +2604,16 @@
       "impact": "none"
     },
     {
+      "id": "LV1",
+      "title": "buildLeaveReport counts only Approved working days per month, holiday-aware, clips correctly at a month boundary, surfaces Requested leave separately, drops Returned leave entirely, and never leaks a reason or a note",
+      "expected": "Priya's leave 2026-06-29 to 2026-07-03 (recorded by a non-subject approver, landing Approved in one step per E1B) crosses the June/July boundary and overlaps a declared 2026-07-03 holiday — proving both the per-month clip and holiday-awareness in the same commitment (June: Mon+Tue=2 working days; July: Wed+Thu+Fri minus the Friday holiday=2). Sam's 2026-06-01 to 2026-06-03 (Mon-Wed, also non-subject-recorded) is a single-month control (3 days). Priya separately self-requests 2026-05-04 to 2026-05-05, landing Requested — it must appear only in `pending`, contributing nothing to any `byMonth`. Sam separately self-requests 2026-04-10 to 2026-04-11, then a second approver declines it (`decideLeave`, decision 'returned') — that commitment must appear nowhere in the report at all, not even as a zero, and specifically must not inflate Sam's April figure (April sits inside the 6-month window, so a bug that still counted it would show up there). A distinctive marker string is planted in both a `reason` and a `note` on these commitments and asserted absent from the serialized report.",
+      "verdict": "PASS",
+      "actual": "months=[\"2026-03\",\"2026-04\",\"2026-05\",\"2026-06\",\"2026-07\",\"2026-08\"]; Priya byMonth={\"2026-03\":0,\"2026-04\":0,\"2026-05\":0,\"2026-06\":2,\"2026-07\":2,\"2026-08\":0} total=4; Sam byMonth={\"2026-03\":0,\"2026-04\":0,\"2026-05\":0,\"2026-06\":3,\"2026-07\":0,\"2026-08\":0} total=3; pending=[{\"person\":\"Priya\",\"startDate\":\"2026-05-04\",\"endDate\":\"2026-05-05\"}]; rows.length=2; no reason/note leak",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "PA1",
       "title": "reapplyable strips a stale expected and the transport key, keeping the edit itself intact",
       "expected": "A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.",
