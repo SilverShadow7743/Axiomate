@@ -1,8 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useOverlay } from './useOverlay'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type {
   AuditEntry,
   IssueDependency,
@@ -369,7 +367,7 @@ export default function DetailPanel({
    * the tab disappearing, so a tab vanishing never has to be told apart from a tab hiding.
    */
   /*
-   * Order is priority order (I25 Tier 2, item 8) — `TabsBar` below shows as many of these, in
+   * Order is priority order (I25 Tier 2, item 8) — `FastTabs` below stacks these sections in
    * this order, as the available width holds, and collapses the rest into a trailing `⋯ More`.
    * Overview, Checklist, Discussion and Time lead as the proposed most-touched four; nothing in
    * this codebase tracks per-tab usage to check that against, so it is a stated assumption, not
@@ -380,6 +378,51 @@ export default function DetailPanel({
     : row?.kind === 'project'
       ? ['Capacity', 'Members', 'Discussion', 'History']
       : ['Overview', 'History']
+
+  /*
+   * One line per FastTab header — F&O: "FastTabs should display summary information." Every
+   * value is a count or a date over records that already exist; nothing is computed here that
+   * the section beneath does not already show. Absent where a section has no honest one-liner
+   * (Discussion is fetched by its own tab; Capacity is a table).
+   */
+  const summaries: Partial<Record<Tab, string>> = (() => {
+    if (!row) return {}
+    const s: Partial<Record<Tab, string>> = {}
+    const lastAt = (rowId: string) => {
+      const ats = audit.filter((e) => e.rowId === rowId).map((e) => e.at).sort()
+      const at = ats[ats.length - 1]
+      return at ? formatIso(at.slice(0, 10)) : undefined
+    }
+    if (issue) {
+      s.Overview = issue.owner ? `Owner ${issue.owner}` : 'Unassigned'
+      const items = Object.values(state.checklistItems).filter((c) => c.issueId === issue.id && !c.deletedAt)
+      if (items.length) s.Checklist = `${items.filter((c) => c.done).length} / ${items.length} done`
+      const noteCount = Object.values(state.notes).filter((n) => n.issueId === issue.id && !n.deletedAt).length
+      if (noteCount) s.Notes = `${noteCount} note${noteCount === 1 ? '' : 's'}`
+      const entries = Object.values(state.timeEntries).filter((e) => e.issueId === issue.id).length
+      if (entries) s.Time = `${entries} entr${entries === 1 ? 'y' : 'ies'}`
+      // `issue` is the row's derived detail; the two lists below live on the full record.
+      const record = state.issues[issue.id]
+      if (record?.requiredSkills.length) s.Skills = `${record.requiredSkills.length} required`
+      const filled = Object.values(record?.customFields ?? {}).filter((v) => String(v).trim()).length
+      if (filled) s.Fields = `${filled} set`
+      if (issueRow?.plannedEndDate) s.Schedule = `Due ${formatIso(issueRow.plannedEndDate)}`
+      const links =
+        relationships.filter((r) => r.sourceIssueId === issue.id || r.targetIssueId === issue.id).length +
+        dependencies.filter((d) => d.predecessorId.split('#')[0] === issue.id || d.successorId.split('#')[0] === issue.id).length
+      if (links) s.Links = `${links} linked`
+      const est = state.estimates[issue.id]
+      if (est?.baselinedAt) s.Estimation = 'Baselined'
+      const at = lastAt(issue.id)
+      if (at) s.History = `Last ${at}`
+    } else if (row.kind === 'project') {
+      const members = Object.values(state.projectMembers).filter((m) => m.projectId === row.id && !m.removedAt).length
+      if (members) s.Members = `${members} staffed`
+      const at = lastAt(row.id)
+      if (at) s.History = `Last ${at}`
+    }
+    return s
+  })()
 
   /**
    * Land on a tab this row actually has.
@@ -526,26 +569,22 @@ export default function DetailPanel({
           the same thing in 11px muted text easy to miss entirely. */}
       {row && (
         <div className="detail-title">
-          <h2 className="dt-name">{row.name}</h2>
-          {row.displayId && (
-            <span className="dt-idtag">
-              {row.displayId} · {row.type}
-            </span>
-          )}
+          {/* F&O's page-title area (docs/plans/2026-09-10-fno-page-grammar-design.md §2):
+              `<ID> : <Subject>` on the left, the record's status pinned upper-right — "the entity
+              status must appear in the upper-right of the form, to the right of the title
+              fields." Non-issue rows keep their type tag where the status would be. */}
+          <h2 className="dt-name">{row.displayId ? `${row.displayId} : ${row.name}` : row.name}</h2>
+          <span className="grow" />
+          {issue && row.status ? (
+            <span className="dt-status" title="Status">{row.status}</span>
+          ) : row.displayId ? (
+            <span className="dt-idtag">{row.type}</span>
+          ) : null}
         </div>
       )}
       <div className="detail-head">
-        <div className="tabs-wrap">
-          <TabsBar
-            key={TABS.join('|')}
-            tabs={TABS}
-            active={tab}
-            onSelect={(t) => {
-              setTab(t)
-              onTabChange(t)
-            }}
-          />
-        </div>
+        {/* The tab strip that used to live here is now the FastTabs in the body — F&O's
+            sections, stacked, each with a summary — so the head holds the pane controls only. */}
         <span className="grow" />
         {/* Explicit size controls, so the pane never has to be dragged to be usable. */}
         <div className="panel-controls">
@@ -615,6 +654,16 @@ export default function DetailPanel({
         ) : null
       ) : (
       <div className="detail-body">
+        <FastTabs
+          tabs={TABS}
+          active={tab}
+          summaries={summaries}
+          enabled={Boolean(row)}
+          onSelect={(t) => {
+            setTab(t)
+            onTabChange(t)
+          }}
+        >
         {!row ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>
             {/*
@@ -983,6 +1032,7 @@ export default function DetailPanel({
         ) : (
           <History audit={audit} forId={issue.id} />
         )}
+        </FastTabs>
       </div>
       )}
     </div>
@@ -1312,169 +1362,61 @@ function ResolutionPath({
 }
 
 /**
- * Priority navigation (I25 Tier 2, item 8): render `tabs` in the order given, show as many as
- * the available width holds, collapse the rest under a trailing `⋯ More`. Chosen over a
- * hardcoded primary/secondary split because nothing in this codebase tracks per-tab usage to
- * check a permanent cutoff against — width is the only signal that can be measured honestly.
- *
- * Measurement, and why it is safe to trust a `ResizeObserver` here where Tier 1's did not work:
- * every tab button is real, static text — "Checklist" is exactly as wide on every render, with
- * nothing async inserting content into it later the way TipTap's editor did. So each button's
- * width is measured once, on the first paint (`useLayoutEffect`, before the browser paints —
- * the user never sees the unfiltered set flash by), cached by tab name, and every later
- * decision — including the `ResizeObserver`'s own re-fires — reads the cache rather than
- * re-measuring possibly-unmounted buttons. Without the cache, a tab hidden into the menu could
- * never be measured again to decide whether a WIDER wrap should show it once more.
- *
- * The active tab is always forced into the visible set, even if it falls outside the fitted
- * count — the one thing worse than a tab bar that hides seven tabs is one that hides the tab
- * you are currently looking at.
+ * F&O FastTabs, single-open. Section headers in `TABS` order, each carrying a one-line
+ * summary; the open section's body renders beneath its header. Single-open on purpose — F&O
+ * allows several at once, but this pane mounts exactly one body at a time and `onDirtyChange`,
+ * the editors and the two `tab` effects above all depend on that: presentation changed, state
+ * machine untouched. The open header is scrolled into view on change, which is what makes
+ * `requestTab` (Log time from My week) reveal its section from a collapsed pane rather than
+ * switching to one nobody can see. `enabled` false (no row selected) renders the children bare.
  */
-function TabsBar({
+function FastTabs({
   tabs,
   active,
+  summaries,
   onSelect,
+  enabled,
+  children,
 }: {
   tabs: Tab[]
   active: Tab
+  summaries: Partial<Record<Tab, string>>
   onSelect: (t: Tab) => void
+  enabled: boolean
+  children: ReactNode
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const barRef = useRef<HTMLDivElement>(null)
-  const moreRef = useRef<HTMLButtonElement>(null)
-  const widths = useRef<Partial<Record<Tab, number>>>({})
-  const [visibleCount, setVisibleCount] = useState(tabs.length)
-  const [moreOpen, setMoreOpen] = useState(false)
-  const [moreAt, setMoreAt] = useState({ top: 0, left: 0 })
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current
-    const bar = barRef.current
-    if (!wrap || !bar) return
-    const measure = () => {
-      // The first pass, with every tab still rendered (`visibleCount` starts at `tabs.length`),
-      // is the only time real widths exist to read — cache them before anything gets hidden.
-      Array.from(bar.children).forEach((el, i) => {
-        const t = tabs[i]
-        if (t && el instanceof HTMLElement) widths.current[t] = el.offsetWidth
-      })
-      const available = wrap.clientWidth
-      // `moreRef` has nothing to measure on the very first pass — nothing is hidden yet, so the
-      // `⋯ More` button isn't rendered. 64px is a deliberate overestimate for that one pass
-      // (better to under-fit by one tab than let a real, later-rendered More button clip).
-      const moreWidth = moreRef.current?.offsetWidth ?? 64
-      let used = 0
-      let count = 0
-      for (let i = 0; i < tabs.length; i++) {
-        const w = widths.current[tabs[i]] ?? 0
-        const reserve = i < tabs.length - 1 ? moreWidth : 0
-        if (used + w + reserve > available) break
-        used += w
-        count++
-      }
-      const activeIdx = tabs.indexOf(active)
-      setVisibleCount(activeIdx >= 0 && activeIdx >= count ? activeIdx + 1 : Math.max(count, 1))
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(wrap)
-    return () => ro.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs.join('|'), active])
-
-  const visible = tabs.slice(0, visibleCount)
-  const overflowed = tabs.slice(visibleCount)
-
+  const heads = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({})
+  useEffect(() => {
+    if (!enabled) return
+    heads.current[active]?.scrollIntoView({ block: 'nearest' })
+  }, [active, enabled])
+  if (!enabled) return <>{children}</>
   return (
-    <div
-      ref={wrapRef}
-      style={{ display: 'flex', alignItems: 'center', minWidth: 0, width: '100%', height: '100%' }}
-    >
-      <div className="tabs" ref={barRef}>
-        {visible.map((t) => (
-          <button
-            key={t}
-            className={active === t ? 'active' : ''}
-            onClick={() => onSelect(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-      {overflowed.length > 0 && (
-        <button
-          ref={moreRef}
-          type="button"
-          className={`tabs-more${overflowed.includes(active) ? ' active' : ''}`}
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setMoreAt({ top: r.bottom + 4, left: r.left })
-            setMoreOpen(true)
-          }}
-        >
-          ⋯ More
-        </button>
-      )}
-      {moreOpen && (
-        <MoreTabsMenu
-          tabs={overflowed}
-          active={active}
-          at={moreAt}
-          onSelect={(t) => {
-            setMoreOpen(false)
-            onSelect(t)
-          }}
-          onClose={() => setMoreOpen(false)}
-        />
-      )}
+    <div className="fasttabs">
+      {tabs.map((t) => {
+        const open = t === active
+        return (
+          <section key={t} className={`fasttab${open ? ' open' : ''}`}>
+            <button
+              type="button"
+              className="fasttab-head"
+              aria-expanded={open}
+              ref={(el) => {
+                heads.current[t] = el
+              }}
+              onClick={() => onSelect(t)}
+            >
+              <span className="fasttab-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+              <span className="fasttab-name">{t}</span>
+              <span className="grow" />
+              {summaries[t] && <span className="fasttab-sum">{summaries[t]}</span>}
+            </button>
+            {open && <div className="fasttab-body">{children}</div>}
+          </section>
+        )
+      })}
     </div>
   )
-}
-
-/** The overflow list `TabsBar` opens — same portal/`useOverlay` shape `RowMenu` establishes. */
-function MoreTabsMenu({
-  tabs,
-  active,
-  at,
-  onSelect,
-  onClose,
-}: {
-  tabs: Tab[]
-  active: Tab
-  at: { top: number; left: number }
-  onSelect: (t: Tab) => void
-  onClose: () => void
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  useOverlay(ref, true, onClose)
-
-  const body = (
-    <>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
-      <div className="row-menu-scrim" onMouseDown={onClose} />
-      <div
-        className="menu tabs-more-menu"
-        ref={ref}
-        role="menu"
-        tabIndex={-1}
-        aria-label="More tabs"
-        style={{ top: at.top, left: at.left }}
-      >
-        {tabs.map((t) => (
-          <button
-            key={t}
-            role="menuitem"
-            className={`menu-item${t === active ? ' active' : ''}`}
-            onClick={() => onSelect(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-    </>
-  )
-
-  return typeof document === 'undefined' ? body : createPortal(body, document.body)
 }
 
 /**

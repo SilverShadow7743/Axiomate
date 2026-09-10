@@ -73,7 +73,15 @@ says what it is not counting. Money is not a concern kind, so nothing new is wit
 regressions.
 
 **4. The details drawer becomes a details page — `components/DetailPanel.tsx`,
-`components/DetailDrawer.tsx`, `app/globals.css`.**
+`components/DetailDrawer.tsx`, `app/globals.css`.** *Split at implementation (10 Sep) into 4a —
+FastTabs and the page-title area — and 4b — the record action pane — because 4b needs
+callbacks (`onMarkComplete`, `onDelete`) that live on the row-actions toolbar today, not on
+`DetailPanel`, and moving them is its own wiring. Two fidelity points found in 4a: the FastTabs
+are **single-open** (F&O allows several) because the pane mounts exactly one body at a time and
+`onDirtyChange`, the editors and the two `tab` effects depend on that — the `FastTabs` wrapper
+changes presentation and leaves that invariant and the body chain byte-for-byte; and in the
+`compact` pane state the old tab strip was the only affordance, so compact now shows the title
+and controls only, which is what "collapsed" means.*
 
 - **FastTabs.** `TABS` (`DetailPanel.tsx:375-379`) stays the single source of order — the two
   effects that depend on it (`:400-408` landing on a tab the row has; `:417-419` honouring

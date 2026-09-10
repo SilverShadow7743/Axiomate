@@ -1649,6 +1649,36 @@ select.cell-editor {
   padding: 12px;
   flex: 1 1 auto;
 }
+
+/* The record's status, pinned upper-right of the page-title area (F&O's entity-status rule). */
+.dt-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+/* F&O FastTabs (DetailPanel's FastTabs) — stacked sections, one open, summary on each header.
+   Density matches the grid: a header is one 30px row, not a card. */
+.fasttabs { display: flex; flex-direction: column; gap: 4px; }
+.fasttab { border: 1px solid var(--border); border-radius: var(--radius-default); background: var(--surface); }
+.fasttab.open { border-color: var(--border-strong); }
+.fasttab-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 0 10px;
+  background: var(--surface-2); border: 0; border-radius: inherit; color: var(--text); font: inherit;
+  font-size: 12px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.fasttab.open .fasttab-head { border-bottom: 1px solid var(--border); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.fasttab-head:hover { color: var(--accent); }
+.fasttab-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fasttab-caret { width: 10px; color: var(--text-faint); font-size: 10px; }
+.fasttab-sum { font-weight: 400; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.fasttab-body { padding: 12px; }
 .kv {
   display: grid;
   grid-template-columns: 150px 1fr;
