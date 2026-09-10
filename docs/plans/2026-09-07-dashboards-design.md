@@ -1,5 +1,17 @@
 # Dashboards — an arrangement of what already exists, never a new number
 
+> **Status, 10 September 2026 — reopened, in part, by the F&O page-grammar design.** The
+> refusal below was reversed on two points and kept on the rest. Count tiles now exist as the
+> home workspace (My work's summary row, Portfolio's score tiles — F&O's workspace pattern), and
+> an engagement **health score** was admitted on the objection's own terms: its components are
+> the six existing concern kinds, its weights are configuration (Configuration → Health score),
+> every rendering prints the terms beside the number, and the client-pack score excludes
+> `capacity` and says so. Nothing is stored. What stays refused: any number a `lib/` function
+> does not already produce, and any score whose weights a reader cannot see. The per-person
+> `DashboardLayout` arrangement proposed below was **not** built; it is superseded by the two
+> workspaces. See `docs/plans/2026-09-10-fno-page-grammar-design.md` §5 and
+> `lib/portfolio.ts`'s header for the reversal and its conditions.
+
 *7 September 2026. From the Hive gap survey's "Dashboards" line. The obvious shape — tiles with
 traffic-light colours and a blended score — is exactly what this codebase has refused twice
 already, in writing.*

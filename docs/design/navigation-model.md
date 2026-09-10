@@ -1,9 +1,12 @@
 # Axiomate Navigation Model
 
-**Status:** Proposal — four navigation patterns, extracted from the shipped shell. Three are
-genuinely distinct jobs; the fourth (Configuration's rail) is the SAME pattern as the first,
+**Status:** Proposal — five navigation patterns, extracted from the shipped shell. Three are
+genuinely distinct jobs; the third (Configuration's rail) is the SAME pattern as the first,
 restyled to match after it drifted (commit `47239f1`) — documented here as one spec with two
-instantiations, not two specs, so the next contributor doesn't reintroduce the drift.
+instantiations, not two specs, so the next contributor doesn't reintroduce the drift. The
+fifth, the FactBox blade, arrived with the F&O page-grammar work (10 Sep,
+`docs/plans/2026-09-10-fno-page-grammar-design.md`) and is the one genuinely new element that
+work added; the drawer's entry (pattern 4) was updated for the same work.
 
 ## 1. Primary rail — "where am I"
 
@@ -80,10 +83,22 @@ surface needs internal navigation, reuse this exact spec — do not invent a thi
 **Component:** `DetailDrawer.tsx`. **CSS:** `.drawer` / `.drawer-scrim`.
 
 **Anatomy:** right-side overlay, `width: min(720px, 92vw)` (or `92vw` in "wide" mode via the
-panel's own ⤢ control). `role="dialog" aria-modal="true"`. Slides in over
+panel's own ⤢ control; `min(1020px, 92vw)` while the FactBox blade is open — the drawer widens
+so the page keeps its width). `role="dialog" aria-modal="true"`. Laid out as a row:
+`.drawer-main` holds the page, an optional blade sits beside it (pattern 5). Slides in over
 `--duration-entrance` (0.16s), guarded by `prefers-reduced-motion`.
 
-**Opening:** row selection on Tree, Board, or Calendar.
+**The page inside it is an F&O details page** (`DetailPanel.tsx`, since 10 Sep): title
+`<ID> : <Subject>`, the record's status pinned upper-right as a chip, exactly one
+`.btn.primary` on the record (the suggested status transition in `FieldStrip`; `Add` on a
+structural row, where no strip renders), and the former tab strip as **single-open FastTabs**
+in `TABS` order, each header carrying a summary (open checklist count, latest note date, logged
+hours, planned end). Single-open is deliberate — the pane mounts one body at a time and
+`onDirtyChange`, the editors and the two `tab` effects depend on it. The first FastTab is open
+by default and fits without scrolling; `requestTab` opens *and reveals* its section.
+
+**Opening:** row selection on Tree, Board, or Calendar — the row click, or the subject's own
+link in the first column (both routed through `requestSelect`).
 
 **Closing:** scrim click OR Escape (via `DetailPanel`'s own key handler, deferring to any
 focused input first) — **both routed through the same `requestSelect(null)` dirty-check gate
@@ -99,6 +114,32 @@ above it, and the assistant stays usable beside an open record.
 grid context. This is not primary navigation and not a route change — closer to a focused
 workspace than a page.
 
+## 5. FactBox blade — related information beside the record
+
+**Component:** `FactBoxBlade.tsx`, rendered into `DetailDrawer`'s `blade` slot by the
+workspace. **CSS:** `.factbox-tab` (collapsed), `.factbox-blade` / `.factbox` (open),
+`.drawer.blade-open`.
+
+**Anatomy:** collapsed by default to a labelled vertical tab on the drawer's right edge
+("Related information"); opened, a column of FactBoxes for the selected row in F&O's two
+shapes — a **card** (a set of related fields: Owner with I14's leave caveat, Schedule from the
+row) and a **grid** (a child collection capped at five with a "More" that opens the section
+holding the full list: Related records → Links, Recent activity → Notes). The drawer widens
+to hold it (pattern 4) rather than the page narrowing.
+
+**The one rule, checked at review:** every figure in the blade is an existing record or an
+existing pure function's output. No `useMemo` in the file computes a number `lib/` does not
+already produce — the same constraint the dashboards design placed on widgets, for the same
+reason. If a FactBox needs a number nothing provides, build the function under its module's
+doctrine first; the blade never computes.
+
+**Closing:** the tab toggles it; nothing routes through `requestSelect` because the blade holds
+no edits — it is a reading surface. Stacks with the drawer at `--z-drawer`, below `--z-dock`.
+
+**Use for:** read-only context about the record that is open — never for actions (those belong
+on the record action pane or in a FastTab's local toolbar) and never for a figure that exists
+nowhere else.
+
 ## Decision table — which pattern for a new capability
 
 | The new thing is... | Use |
@@ -107,4 +148,5 @@ workspace than a page.
 | A global action available from anywhere | Top bar — but only if no `.btn.primary` already exists there for this context |
 | Internal navigation within a new full-screen admin/settings surface | Configuration rail's spec (reuse, don't reinvent) |
 | Inspecting/editing one record from a list | Detail drawer's spec (reuse — route closing through `requestSelect`-equivalent) |
+| Read-only context beside the record that is open | FactBox blade — a card or a capped grid, every figure an existing pure function's output; never a new number |
 | None of the above | Stop. This is a Principle 10 moment ("no screen should invent a new UI pattern unnecessarily") — reopen the design before building. |
