@@ -1,7 +1,12 @@
 # Calendar-only automation trigger — design
 
 **Status:** design approved by Nishant, 10 September 2026 (shape confirmed in conversation before
-this doc was written). Not yet built.
+this doc was written). **Built and live-verified, 10 September 2026** — see
+`docs/plans/2026-09-10-calendar-only-automation-trigger-plan.md` for what shipped and the one
+real bug live verification caught before it could do lasting damage: the duplicate-fire guard
+used a config op the scheduled pass's machine actor is deliberately barred from, so it never
+advanced. Fixed with a dedicated, narrowly-permissioned op mirroring `Recurrence`'s own existing
+precedent for the identical problem.
 
 ## Why this exists
 
