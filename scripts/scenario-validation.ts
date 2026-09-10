@@ -12905,23 +12905,25 @@ scenario(
     const template = 'Thanks,\n{{name}}\n{{title}}\n{{org}}\n{{phone}}'
 
     const both = buildSignatureHtml(template, { name: 'Priya', title: 'D365 Architect', org: 'Axiocloud', phone: '+1-555-0100' })
-    const bothExpected = '<div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud<br>+1-555-0100</div>'
+    // Every block opens with a blank line (<br><br>) — the gap between a person's own typed
+    // text and "Thanks," — found missing when the live profile's output was rendered.
+    const bothExpected = '<br><br><div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud<br>+1-555-0100</div>'
     const bothCorrect = both === bothExpected
 
     const noTitle = buildSignatureHtml(template, { name: 'Priya', org: 'Axiocloud', phone: '+1-555-0100' })
-    const noTitleExpected = '<div>Thanks,<br>Priya<br>Axiocloud<br>+1-555-0100</div>'
+    const noTitleExpected = '<br><br><div>Thanks,<br>Priya<br>Axiocloud<br>+1-555-0100</div>'
     const titleDropped = noTitle === noTitleExpected && !noTitle.includes('{{title}}')
 
     const noPhone = buildSignatureHtml(template, { name: 'Priya', title: 'D365 Architect', org: 'Axiocloud' })
-    const noPhoneExpected = '<div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud</div>'
+    const noPhoneExpected = '<br><br><div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud</div>'
     const phoneDropped = noPhone === noPhoneExpected && !noPhone.includes('{{phone}}')
 
     const neither = buildSignatureHtml(template, { name: 'Priya', org: 'Axiocloud' })
-    const neitherExpected = '<div>Thanks,<br>Priya<br>Axiocloud</div>'
+    const neitherExpected = '<br><br><div>Thanks,<br>Priya<br>Axiocloud</div>'
     const neitherCorrect = neither === neitherExpected
 
     const hostile = buildSignatureHtml('{{name}}', { name: '<script>alert(1)</script> & Co', org: 'Axiocloud' })
-    const hostileExpected = '<div>&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</div>'
+    const hostileExpected = '<br><br><div>&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</div>'
     const escaped = hostile === hostileExpected && !hostile.includes('<script>')
 
     const withLogo = buildSignatureHtml('{{name}}', { name: 'Priya', org: 'Axiocloud' }, 'data:image/png;base64,AAAA')

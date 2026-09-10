@@ -46,5 +46,8 @@ export function buildSignatureHtml(template: string, values: SignatureValues, lo
     ? `<br><img src="${logoDataUri}" alt="${org}" style="max-height:40px;max-width:160px;margin-top:8px;">`
     : ''
 
-  return `<div>${lines.join('<br>')}${logo}</div>`
+  // A blank line before the block: every caller appends this straight after the person's own
+  // typed text, and without the gap the last line of the message runs directly into "Thanks,".
+  // Found by rendering the live profile's output during I19's verification, not by reasoning.
+  return `<br><br><div>${lines.join('<br>')}${logo}</div>`
 }
