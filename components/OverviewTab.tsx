@@ -604,7 +604,10 @@ export default function OverviewTab({
         )}
         <div className="ov-actions">
           {may.allowed ? (
-            <button className="btn primary" onClick={() => setEditing(true)}>
+            /* Secondary, not primary: the record's one primary action is the suggested status
+               transition in FieldStrip above (F&O's one-primary rule, applied at the record
+               level — docs/plans/2026-09-10-fno-page-grammar-design.md §2). */
+            <button className="btn" onClick={() => setEditing(true)}>
               Edit
             </button>
           ) : (

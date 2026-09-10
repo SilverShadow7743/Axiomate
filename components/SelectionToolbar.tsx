@@ -94,7 +94,12 @@ export default function SelectionToolbar({
 
       {addOptions.length > 0 && (
         <div style={{ position: 'relative' }}>
-          <button className="btn primary" onClick={() => setAddOpen((v) => !v)}>
+          {/* One primary per record (F&O's action-pane rule, docs/plans/2026-09-10-fno-page-
+              grammar-design.md §2): on an issue or activity, FieldStrip's suggested status
+              transition is the primary, so Add is secondary here; on a structural row no
+              FieldStrip renders and adding a child IS the ordinary next move — F&O's own
+              home-tab "New" — so it stays primary there. */}
+          <button className={isIssue || isActivity ? 'btn' : 'btn primary'} onClick={() => setAddOpen((v) => !v)}>
             + Add ▾
           </button>
           {addOpen && (

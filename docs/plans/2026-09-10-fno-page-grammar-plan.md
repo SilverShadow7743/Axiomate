@@ -81,7 +81,12 @@ are **single-open** (F&O allows several) because the pane mounts exactly one bod
 `onDirtyChange`, the editors and the two `tab` effects depend on that — the `FastTabs` wrapper
 changes presentation and leaves that invariant and the body chain byte-for-byte; and in the
 `compact` pane state the old tab strip was the only affordance, so compact now shows the title
-and controls only, which is what "collapsed" means.*
+and controls only, which is what "collapsed" means. 4b then turned out smaller than written: the
+record action pane already exists structurally — `SelectionToolbar` renders the whole-record
+verbs (Edit, Move, Link, Mark complete, Archive…) in the drawer's `.context-bar` beside the
+record, and `FieldStrip` already carries the suggested status transition as a `.btn primary`
+("the one ordinary next move", `lib/statusPolicy.ts`). So 4b is the one-primary rule enforced
+(Overview's own `Edit` demoted from primary to secondary) and a duplicate check, not a rebuild.*
 
 - **FastTabs.** `TABS` (`DetailPanel.tsx:375-379`) stays the single source of order — the two
   effects that depend on it (`:400-408` landing on a tab the row has; `:417-419` honouring
