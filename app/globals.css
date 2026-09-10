@@ -2080,9 +2080,8 @@ select.cell-editor {
   position: relative;
   float: right;
 }
-.board-card-move .menu {
-  min-width: 180px;
-}
+/* Its own .menu (the Move-to popover) is portaled to document.body now, not a descendant of
+   this element — see BoardView.tsx's MoveMenu. Sizing rides .row-menu's own min-width. */
 
 /* ---------- views promoted from drawers ----------
    My work and Portfolio render in the main pane as peers of Tree/Board/Calendar. The same

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { boardLanes, describeBoard, dropOutcome } from '@/lib/board'
 import { allowedNext, type StatusPolicy } from '@/lib/statusPolicy'
 import type { IssueStatus, ScheduleRow } from '@/lib/types'
@@ -43,8 +44,14 @@ export default function BoardView({
   const [asking, setAsking] = useState<{ rowId: string; to: IssueStatus; note: string | null } | null>(null)
   const [reason, setReason] = useState('')
 
-  /** Which card's Move menu is open, if any — the keyboard and touch path to a lane change. */
-  const [menuFor, setMenuFor] = useState<string | null>(null)
+  /**
+   * Which card's Move menu is open, if any, and where — the keyboard and touch path to a lane
+   * change. Viewport coordinates of the trigger, same shape `TreeGrid`'s own `openMenu` computes
+   * for `RowMenu`, and for the same reason: the menu is portaled to the body (see `MoveMenu`
+   * below), so it needs real pixel coordinates, not a CSS position relative to a card that may
+   * have scrolled.
+   */
+  const [menu, setMenu] = useState<{ rowId: string; top: number; left: number } | null>(null)
 
   /** One entry point for drag AND menu: the pre-check, then the reason collection. */
   const begin = (row: ScheduleRow, to: IssueStatus) => {
@@ -135,23 +142,36 @@ export default function BoardView({
                     <button
                       className="btn ghost"
                       aria-haspopup="menu"
-                      aria-expanded={menuFor === row.id}
+                      aria-expanded={menu?.rowId === row.id}
                       onClick={(e) => {
                         e.stopPropagation()
-                        setMenuFor((cur) => (cur === row.id ? null : row.id))
+                        if (menu?.rowId === row.id) {
+                          setMenu(null)
+                          return
+                        }
+                        // Same clamp TreeGrid's own openMenu applies, and the same reason: this
+                        // is the side that knows the trigger, and a menu opened on a card near
+                        // the edge of the board must not render off-screen.
+                        const r = e.currentTarget.getBoundingClientRect()
+                        setMenu({
+                          rowId: row.id,
+                          top: Math.max(8, Math.min(r.bottom + 2, window.innerHeight - 320)),
+                          left: Math.max(8, Math.min(r.left, window.innerWidth - 248)),
+                        })
                       }}
                       title="Move to another status"
                     >
                       Move ▾
                     </button>
-                    {menuFor === row.id && (
+                    {menu?.rowId === row.id && (
                       <MoveMenu
+                        at={{ top: menu.top, left: menu.left }}
                         options={allowedNext(policy, row.status).filter((s) => s !== row.status)}
                         onPick={(s) => {
-                          setMenuFor(null)
+                          setMenu(null)
                           begin(row, s)
                         }}
-                        onClose={() => setMenuFor(null)}
+                        onClose={() => setMenu(null)}
                       />
                     )}
                   </span>
@@ -205,14 +225,29 @@ export default function BoardView({
  * Same shape `RowMenu.tsx` already establishes for a per-record popover: `useOverlay` for
  * background inert + Tab wrap, a scrim for outside-click dismissal, Escape handled locally
  * (`useOverlay`'s own `onEscape` is deliberately unused, matching `RowMenu`'s own comment on
- * why). Before this, the menu had no way to close except picking an item — Escape, an outside
- * click, and even the row's own drag no longer masked a menu silently left open.
+ * why).
+ *
+ * **Portaled to the body, in viewport coordinates — the same reason `RowMenu` already is, and a
+ * bug found live before this was added.** `useOverlay` marks `#app-shell` `inert` while an
+ * overlay is open, which is correct for a portaled overlay (outside the inert subtree, so it
+ * stays interactive) and self-defeating for one that is not: this menu used to render inline
+ * inside the card, which is inside `#app-shell`, so opening it made its OWN scrim, its OWN
+ * trigger button and itself inert along with the background — an outside click, Escape, and
+ * even re-clicking the trigger all silently did nothing, because none of them could receive the
+ * event any more. `elementFromPoint` on a click squarely inside the scrim's own
+ * `getBoundingClientRect()` returned `<body>` with `#app-shell` marked `inert=""` — confirmed
+ * live, not inferred. Portaling out of `#app-shell` is the fix `RowMenu` already uses for the
+ * identical shape of popover.
  */
 function MoveMenu({
+  at,
   options,
   onPick,
   onClose,
 }: {
+  /** Viewport coordinates of the trigger, already clamped by the caller — same contract
+   *  `RowMenu`'s own `at` prop has, for the same reason (`TreeGrid`'s `openMenu`). */
+  at: { top: number; left: number }
   options: IssueStatus[]
   onPick: (s: IssueStatus) => void
   onClose: () => void
@@ -220,16 +255,16 @@ function MoveMenu({
   const ref = useRef<HTMLDivElement>(null)
   useOverlay(ref, true)
 
-  return (
+  const body = (
     <>
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape below */}
       <div className="row-menu-scrim" onMouseDown={onClose} />
       <div
-        className="menu"
+        className="menu row-menu"
         role="menu"
         ref={ref}
         tabIndex={-1}
-        style={{ top: 22, right: 0, left: 'auto' }}
+        style={{ top: at.top, left: at.left }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             e.preventDefault()
@@ -253,4 +288,6 @@ function MoveMenu({
       </div>
     </>
   )
+
+  return typeof document === 'undefined' ? body : createPortal(body, document.body)
 }
