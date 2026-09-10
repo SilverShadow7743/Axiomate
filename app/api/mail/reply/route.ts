@@ -3,6 +3,12 @@ import { getSession, identityEstablished } from '@/lib/principal'
 import { logAuthRefusal } from '@/lib/authLog'
 import { getPersonalGraphToken } from '@/lib/db/personalGraphTokens'
 import { describeGraphRefusal, replyToMessage } from '@/lib/personalGraph'
+import { databaseConfigured } from '@/lib/db/client'
+import { loadWorkspace } from '@/lib/db/repo'
+import { currentTenantId } from '@/lib/tenant'
+import { directoryPersonFor } from '@/lib/access'
+import { buildSignatureHtml, plainTextToHtml } from '@/lib/signature'
+import { DEFAULT_ORGANIZATION } from '@/lib/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +22,10 @@ export const dynamic = 'force-dynamic'
  * mailbox, app-only, gated on `mail.send` and recorded as a client-visible note. This one
  * sends as the SIGNED-IN PERSON, from their own mailbox, delegated-only, and — like `in-mail`'s
  * read side — records nothing: Graph's own `saveToSentItems` already puts the reply where the
- * person's own Sent Items always would. No workspace permission applies because nothing here
- * touches workspace data.
+ * person's own Sent Items always would. No workspace PERMISSION applies — but the signature
+ * (`docs/plans/2026-09-08-email-signature-design.md`) does need a workspace READ now, the same
+ * database-optional fallback `/api/mail/compose` uses: on the database being unreachable, send
+ * the plain, unsigned reply exactly as before rather than refuse to reply.
  */
 export async function POST(req: Request) {
   const session = getSession(req)
@@ -45,7 +53,23 @@ export async function POST(req: Request) {
     )
   }
 
-  const res = await replyToMessage(token, messageId, comment, Boolean(body?.replyAll))
+  let htmlContent = plainTextToHtml(comment)
+  try {
+    if (databaseConfigured()) {
+      const { state } = await loadWorkspace(currentTenantId())
+      const org = state.model.organization
+      const person = directoryPersonFor(state.model, session.actor)
+      htmlContent += buildSignatureHtml(
+        org.signatureTemplate ?? DEFAULT_ORGANIZATION.signatureTemplate ?? '',
+        { name: person?.name ?? session.actor.name, title: person?.title, org: org.name, phone: person?.phone },
+        org.logoDataUri,
+      )
+    }
+  } catch (err) {
+    console.error(`signature build skipped for ${session.actor.id}: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  const res = await replyToMessage(token, messageId, htmlContent, Boolean(body?.replyAll))
   if (!res.ok) {
     console.error(`mail reply refused for ${session.actor.id}: ${res.status} ${res.detail}`)
     return NextResponse.json(

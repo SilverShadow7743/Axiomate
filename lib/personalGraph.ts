@@ -18,7 +18,7 @@ type GraphResult<T> = { ok: true; data: T } | { ok: false; status: number; detai
 async function graphCall<T>(
   token: string,
   path: string,
-  init: { method: 'GET' | 'POST'; body?: unknown },
+  init: { method: 'GET' | 'POST' | 'PATCH'; body?: unknown },
 ): Promise<GraphResult<T>> {
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
     method: init.method,
@@ -101,17 +101,40 @@ export async function scheduleMeeting(
  * `saveToSentItems` is Graph's default (true) — the sent copy lives where it always would.
  * ================================================================== */
 
+/**
+ * Reply or reply-all, carrying the signed HTML the caller built. NOT the single-call
+ * `POST .../reply` action: Graph's own docs say `comment` and `message.body` are mutually
+ * exclusive on that endpoint, and whether `comment` renders embedded HTML tags as HTML or shows
+ * them as literal text is undocumented — not worth risking on a client-visible email. Instead,
+ * the three-call sequence Graph's own docs name as the alternative: `createReply`/
+ * `createReplyAll` returns a draft whose `body.content` already holds the correctly quoted,
+ * threaded original in HTML; the signed content is prepended to that (never replacing it, so
+ * the thread survives exactly as an ordinary reply would show it); then the edited draft is
+ * sent. See `docs/plans/2026-09-10-email-signature-plan.md`'s "Two things the design doc didn't
+ * need to settle" section.
+ */
 export async function replyToMessage(
   token: string,
   messageId: string,
-  comment: string,
+  htmlContent: string,
   replyAll: boolean,
 ): Promise<GraphResult<Record<string, never>>> {
-  return graphCall(
+  const created = await graphCall<{ id: string; body: { content: string } }>(
     token,
-    `/me/messages/${encodeURIComponent(messageId)}/${replyAll ? 'replyAll' : 'reply'}`,
-    { method: 'POST', body: { comment } },
+    `/me/messages/${encodeURIComponent(messageId)}/${replyAll ? 'createReplyAll' : 'createReply'}`,
+    { method: 'POST' },
   )
+  if (!created.ok) return created
+
+  const draftId = created.data.id
+  const patched = await graphCall<Record<string, never>>(
+    token,
+    `/me/messages/${encodeURIComponent(draftId)}`,
+    { method: 'PATCH', body: { body: { contentType: 'HTML', content: htmlContent + created.data.body.content } } },
+  )
+  if (!patched.ok) return patched
+
+  return graphCall(token, `/me/messages/${encodeURIComponent(draftId)}/send`, { method: 'POST' })
 }
 
 export interface ComposeMailInput {
@@ -123,13 +146,14 @@ export interface ComposeMailInput {
 export async function sendNewMail(
   token: string,
   input: ComposeMailInput,
+  contentType: 'Text' | 'HTML',
 ): Promise<GraphResult<Record<string, never>>> {
   return graphCall(token, '/me/sendMail', {
     method: 'POST',
     body: {
       message: {
         subject: input.subject,
-        body: { contentType: 'Text', content: input.body },
+        body: { contentType, content: input.body },
         toRecipients: input.to.map((address) => ({ emailAddress: { address } })),
       },
       saveToSentItems: true,

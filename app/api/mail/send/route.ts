@@ -11,6 +11,9 @@ import { sendAsMailbox } from '@/lib/mail'
 import type { Action } from '@/lib/workspace'
 import type { IssueNote } from '@/lib/notes'
 import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
+import { directoryPersonFor } from '@/lib/access'
+import { buildSignatureHtml, plainTextToHtml } from '@/lib/signature'
+import { DEFAULT_ORGANIZATION } from '@/lib/config'
 
 /**
  * The outward door — and the only one of the three that WRITES OUTWARD.
@@ -137,8 +140,25 @@ export async function POST(req: Request) {
       })
     }
 
+    /*
+     * The signature (`docs/plans/2026-09-08-email-signature-design.md`) is built ONLY for the
+     * actual Graph send below — `noteBody`/`alreadySent`/the `addNote` action further down all
+     * keep reading the plain `text` above, untouched. The client-visible note must show what was
+     * actually said, not a wall of HTML/signature markup, and the retry-dedupe match must keep
+     * comparing the same clean text a second identical attempt would also produce.
+     */
+    const org = state.model.organization
+    const sender = directoryPersonFor(state.model, session.actor)
+    const htmlBody =
+      plainTextToHtml(text) +
+      buildSignatureHtml(
+        org.signatureTemplate ?? DEFAULT_ORGANIZATION.signatureTemplate ?? '',
+        { name: sender?.name ?? session.actor.name, title: sender?.title, org: org.name, phone: sender?.phone },
+        org.logoDataUri,
+      )
+
     /* ---- the send itself, through the shared Graph client ---- */
-    const res = await sendAsMailbox(resolved.mailbox.address, resolved.recipient, resolved.subject, text)
+    const res = await sendAsMailbox(resolved.mailbox.address, resolved.recipient, resolved.subject, htmlBody, undefined, 'HTML')
     if (!res.ok) {
       // The full error names tenant internals; the caller gets one honest sentence.
       console.error(`mail send refused for ${issueId}: ${res.status} ${res.detail}`)

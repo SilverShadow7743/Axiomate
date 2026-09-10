@@ -54,6 +54,11 @@ export async function sendAsMailbox(
   /** Optional and TRAILING: when absent the wire body is byte-identical to every send this
    *  function has ever made. `contentBytes` is base64. Used by report delivery for its PDFs. */
   attachments?: { name: string; contentType: string; contentBytes: string }[],
+  /** Optional and TRAILING, defaulting to 'Text' — every existing caller (report/notification
+   *  delivery, `lib/db/schedule.ts`/`notifyDrain.ts`) stays byte-identical. Only
+   *  `POST /api/mail/send`, the one caller sending as a signed-in person with a signature to
+   *  attach, passes 'HTML'. See `docs/plans/2026-09-10-email-signature-plan.md`. */
+  contentType: 'Text' | 'HTML' = 'Text',
 ): Promise<{ ok: true } | { ok: false; status: number; detail: string }> {
   const token = await graphToken()
   const res = await fetch(
@@ -64,7 +69,7 @@ export async function sendAsMailbox(
       body: JSON.stringify({
         message: {
           subject,
-          body: { contentType: 'Text', content: text },
+          body: { contentType, content: text },
           toRecipients: [{ emailAddress: { address: to } }],
           ...(attachments?.length
             ? {
