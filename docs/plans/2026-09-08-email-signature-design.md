@@ -1,7 +1,8 @@
 # A signature on outgoing mail, one format for the whole firm
 
-**Status: draft, 8 September 2026.** User's direct request — *"Where is signature for email,
-format is same organization wide."* Not built.
+**Status: approved, 10 September 2026** (all three open questions resolved below, plus the
+template content itself). User's direct request — *"Where is signature for email, format is
+same organization wide."* Not yet built.
 
 ## The gap
 
@@ -25,58 +26,99 @@ a consistent firm identity across surfaces. Reusing them here means the signatur
 header can never disagree about the firm's own name or logo, because they read the same config,
 not two copies of it.
 
-**What does not exist: a job title.** `Person` (`lib/config.ts`) has `id`, `name`, `roleIds`,
-`email` — no title field. `roleIds` resolves to `OrgRole.label` (`liveRoles`), but that is a
-*permission* role — "Engagement Leader," "Project Manager" — not a client-facing job title like
-"D365 Finance Architect." Using it as a signature title would put a permission name in front of a
-client, which is not the same thing and would read strangely. This is the one real gap in the
-data model, named below as the open question it actually is.
+**What does not exist: a job title or a phone number.** `Person` (`lib/config.ts`) has `id`,
+`name`, `roleIds`, `email` — no title, no phone. `roleIds` resolves to `OrgRole.label`
+(`liveRoles`), but that is a *permission* role — "Engagement Leader," "Project Manager" — not a
+client-facing job title like "D365 Finance Architect." Using it as a signature title would put a
+permission name in front of a client, which is not the same thing and would read strangely. Both
+gaps are closed by the decisions below — `title` and `phone` are added as new `Person` fields,
+not derived from anything that already exists.
 
 ## Shape
 
 **One template, configured once, filled in per sender.** A new field on `OrganizationIdentity` —
 `signatureTemplate: string` (or similar), edited in Configuration → Roles & people, right beside
 where `name`/`logoDataUri` are already edited (`ConfigWorkspace.tsx`'s "This workspace" section) —
-holding the firm's fixed layout with placeholders: `{{name}}`, `{{title}}`, `{{org}}`. This is the
-*format*, locked to one shape for the whole firm, which is the literal ask — nobody hand-builds
-their own layout, everybody's signature looks like everybody else's.
+holding the firm's fixed layout with placeholders: `{{name}}`, `{{title}}`, `{{org}}`, `{{phone}}`.
+This is the *format*, locked to one shape for the whole firm and editable by an administrator
+through Configuration — nobody hand-builds their own layout, everybody's signature looks like
+everybody else's, and a house-style change is a config edit, not a code change.
 
-At send time (`sendNewMail`/`replyToMessage`'s call sites, `InboxPanel.tsx`'s `sendCompose`/
-`sendReply`), the template is filled with the signed-in person's own `name` and the org's `name`/
-`logoDataUri`, and appended to the body before it goes to Graph — never stored a second time,
-computed at send exactly the same way a report header is computed at generation. `contentType`
-moves from `'Text'` to `'HTML'` on the Graph call (`sendNewMail`'s body currently sends
-`contentType: 'Text'`; a signature with a logo needs HTML), which also means the compose/reply
-box either gains a live preview of the signed version or trusts the template — a UI decision, not
-a data one, left to the build pass.
+At send time, the template is filled with the sending person's own `name`/`title`/`phone` and the
+org's `name`/`logoDataUri`, and appended to the body before it goes to Graph — never stored a
+second time, computed at send exactly the same way a report header is computed at generation.
+`contentType` moves from `'Text'` to `'HTML'` on the Graph call (`sendNewMail`'s body currently
+sends `contentType: 'Text'`; a signature with a logo needs HTML), which also means the compose/
+reply box either gains a live preview of the signed version or trusts the template — a UI
+decision, not a data one, left to the build pass.
 
-**Reply, not just Compose.** The literal request is about mail generally; `sendReply`'s current
-plain-text posture would need the same HTML-wrapping treatment `sendCompose` gets, so a reply
-carries the signature too, not just a fresh message.
+**Every outbound path, not just Compose.** `sendReply`'s current plain-text posture needs the
+same HTML-wrapping treatment `sendCompose` gets, so a reply carries the signature too. So does the
+automated firm-mailbox route (`sendAsMailbox`, `lib/mail.ts`, called from
+`app/api/mail/send/route.ts`) — per the decision above, filled with the *signed-in sender's* own
+name/title/phone (`directoryPersonFor(state.model, session.actor)`), not a generic firm line, so
+all three paths produce the identically-shaped signature.
 
 ## Non-goals
 
-Per-person signature customization beyond name/title (a personal quote, a phone number nobody
-records today, social links) — the request is explicitly *one format, organization-wide*, and
-adding per-person free text would be the opposite of that. Signature rules that vary by
+Per-person signature customization beyond name/title/phone (a personal quote, social links, a
+free-text tagline) — the request is explicitly *one format, organization-wide*, and per-person
+free text would be the opposite of that: the template's shape is fixed for everyone, only the
+placeholder values (name, title, org, phone) vary by sender. Signature rules that vary by
 recipient (an internal reply gets a shorter signature than a client-facing one) — a real pattern
 some firms use, but not asked for here and easy to add later without disturbing this shape.
-Attaching a signature to the automated `POST /api/mail/send` route (`lib/mail.ts`, sends *as the
-firm* from an engagement mailbox, app-only, distinct from the personal-Graph routes this design
-touches) — that route represents the firm, not a person, so a personal name/title signature does
-not apply there; it may want its own firm-only sign-off line, which is a separate, smaller
-decision if wanted.
 
-## Open questions for Nishant
+## Decided, 10 September 2026
 
-1. **Where does the title come from?** Three options: (a) add a `title` field to `Person`,
-   filled in once per person in Configuration, separate from their permission `roleIds`; (b) reuse
-   `roleIds`'s resolved `OrgRole.label` even though it reads as a permission name, not a job
-   title; (c) drop title from the signature entirely — name and organization only. (a) is
-   recommended — it is the only option that produces a signature that actually reads like one a
-   client would recognize — but it is new data to collect for 25 people, which is real work
-   somebody has to do once.
-2. **Template content**: what exactly does the fixed layout say — name, title, org name, a phone
-   number (not recorded anywhere today), the logo, anything else? A concrete example from Nishant
-   settles this in one message rather than guessing at a firm's own house style.
-3. Confirm the scope split above (Compose + Reply, not the automated firm-mailbox route) is right.
+1. **Title source: a new `Person.title` field.** Collected once per person in Configuration,
+   separate from the permission `roleIds`. New data-entry work for the existing roster, not a new
+   concept — the same shape as adding any other `Person` field.
+2. **A new `Person.phone` field, same posture as `title`.** The signature carries a per-person
+   phone number, not a single firm-wide constant — this is new data to collect for the existing
+   roster, same as title, and both are edited in the same place (Configuration → Roles & people,
+   beside where `name`/`roleIds` are already edited).
+3. **Scope widens to every outbound-mail path, not just Compose/Reply.** The automated firm-
+   mailbox route (`POST /api/mail/send` → `sendAsMailbox`, `lib/mail.ts`) is now IN scope,
+   reversing this draft's original non-goal. That route sends from a shared engagement mailbox
+   (e.g. `OAPILCatalyst@axiocloudsolutions.com`) but the send is already attributed to a real,
+   permission-gated signed-in person via `session.actor` (`app/api/mail/send/route.ts`'s own
+   `mail.send` gate) — the same `directoryPersonFor(state.model, actor)` join `lib/inbox.ts`
+   already uses to resolve an actor to their `Person` record. The signature there uses that
+   person's own name/title/phone, exactly as Compose and Reply do — one consistent signature
+   shape everywhere mail leaves the firm, matching the request's own "one format organization-
+   wide" more literally than the original three-route split did.
+4. **The template is a stored, editable `OrganizationIdentity` field — not a hardcoded
+   constant.** This was already this draft's own proposed shape (`signatureTemplate: string`,
+   edited in Configuration next to `name`/`logoDataUri`); confirmed as a real requirement, not
+   optional. The value below is the *seeded default* for that field — an administrator can edit
+   it afterward through Configuration, the same way `slaThresholds` or `holidays` are edited
+   through a config op rather than redeployed. Nothing about the placeholder mechanism
+   (`{{name}}`/`{{title}}`/`{{org}}`/`{{phone}}`, filled at send time) depends on the seeded text
+   staying as written below.
+5. **Template content, decided line by line:**
+   ```
+   Thanks,
+   {{name}}
+   {{title}}
+   {{org}}
+   Engineering Intelligent Enterprises
+   {{phone}}
+   [org logo]
+   ```
+   - Closing line: `Thanks,` — fixed, appears before the name, same for every sender.
+   - Name, bold.
+   - Title directly beneath (the new `Person.title` field).
+   - Organization name beneath that (`OrganizationIdentity.name`).
+   - The firm's locked tagline, `Engineering Intelligent Enterprises`
+     (`knowledge/strategy/strategy.md`'s Positioning/Brand Voice Charter, 12 Aug 2026), beneath
+     the org name — fixed literal text in the seeded template, not a placeholder, since it is a
+     locked firm-wide positioning line rather than per-person or per-org data. Ties every
+     outbound email to the same positioning the report headers and public-facing content already
+     carry.
+   - Phone beneath that (the new `Person.phone` field — per-person, not a firm-wide constant).
+   - The org logo (`OrganizationIdentity.logoDataUri`) renders as a small inline image below the
+     text block, not a `{{}}` placeholder — it is not text, so it is composed separately when the
+     HTML body is assembled, the same way `FinanceReportDialog`'s xlsx export embeds the logo as
+     an image rather than a template token.
+
+Status: **approved, moving to an implementation plan.**
