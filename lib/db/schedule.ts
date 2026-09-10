@@ -5,7 +5,8 @@ import { persistSteps } from './persist'
 import { auditToRow } from './map'
 import type { TenantId } from '../tenant'
 import type { Actor } from '../actor'
-import { runRecurrences, runWatch, type WorkspaceState } from '../workspace'
+import { apply, runRecurrences, runWatch, type Action, type WorkspaceState } from '../workspace'
+import { planCalendarActions } from '../automation'
 import { EMPTY_OBSERVATION, describeRun, type Observation, type WatchDiff } from '../watch'
 import { buildTree } from '../tree'
 import { buildDailyIms } from '../reports/dailyIms'
@@ -42,6 +43,8 @@ export interface ScheduledRun {
   raised: number
   /** What the recurrence rules raised this run, by rule and occurrence. */
   recurrences: { ruleId: string; name: string; occurrence: string; issueId: string }[]
+  /** Which calendar-triggered automation rules fired this run, by rule and occurrence. */
+  calendarFired: { ruleId: string; occurrence: string }[]
   diff: WatchDiff
   misses: { ruleId: string; label: string; why: string }[]
   refusals: { action: string; error: string }[]
@@ -87,11 +90,63 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
        * steps in this one Serializable transaction.
        */
       const recur = runRecurrences(run.state, today, now, actor)
+
+      /*
+       * Calendar-triggered automation rides the same pass and the same transaction, for the
+       * identical reason runRecurrences's own comment above states: the notify actions and the
+       * lastFiredOn advance that marks them sent must commit together. A crash between them
+       * would either re-send the same weekly message on the next run, or (worse, silently)
+       * mark it sent when it never went out — the same "double-fire or silently forget" failure
+       * Recurrence's own guard exists to prevent, except here it would reach a person's inbox
+       * for real rather than just re-raising an issue.
+       */
+      const calendarPlan = planCalendarActions(recur.state, today, now)
+      const calendarSteps: { action: Action; before: WorkspaceState; after: WorkspaceState }[] = []
+      const calendarRefusals: { action: Action; error: string }[] = []
+      let calendarState = recur.state
+      for (const action of calendarPlan.actions) {
+        const before = calendarState
+        const result = apply(calendarState, action, actor)
+        if (result.error) {
+          calendarRefusals.push({ action, error: result.error })
+          continue
+        }
+        calendarSteps.push({ action, before, after: result.state })
+        calendarState = result.state
+      }
+      for (const f of calendarPlan.fired) {
+        const advance: Action = {
+          t: 'config',
+          op: {
+            k: 'setAutomationRules',
+            rules: calendarState.model.automationRules.map((r) =>
+              r.id === f.ruleId ? { ...r, lastFiredOn: f.occurrence } : r,
+            ),
+          },
+          now,
+        } as Action
+        const before = calendarState
+        const result = apply(calendarState, advance, actor)
+        if (result.error) {
+          // The notify stood but the guard did not move: recorded loudly, same reasoning
+          // runRecurrences's own advance-failure branch already states — the next pass would
+          // otherwise fire the same occurrence again, and here that means re-sending a message
+          // that already reached somebody.
+          calendarRefusals.push({ action: advance, error: result.error })
+          continue
+        }
+        calendarSteps.push({ action: advance, before, after: result.state })
+        calendarState = result.state
+      }
+
       const raised = run.steps.filter((s) => s.action.t === 'notify').length
       const summaryRecur = recur.raised.length
         ? ` Raised ${recur.raised.map((r) => `“${r.name}” for ${r.occurrence}`).join(', ')}.`
         : ''
-      const summary = describeRun(run.diff, raised) + summaryRecur
+      const summaryCalendar = calendarPlan.fired.length
+        ? ` Sent ${calendarPlan.fired.length} calendar-triggered ${calendarPlan.fired.length === 1 ? 'notice' : 'notices'}.`
+        : ''
+      const summary = describeRun(run.diff, raised) + summaryRecur + summaryCalendar
 
       for (const step of run.steps) {
         await persistSteps(tx, tenantId, step.action, step.before, step.after)
@@ -99,16 +154,19 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
       for (const step of recur.steps) {
         await persistSteps(tx, tenantId, step.action, step.before, step.after)
       }
+      for (const step of calendarSteps) {
+        await persistSteps(tx, tenantId, step.action, step.before, step.after)
+      }
 
-      const newAudit = recur.state.audit.slice(state.audit.length)
+      const newAudit = calendarState.audit.slice(state.audit.length)
       if (newAudit.length) {
         await tx.scheduleAudit.createMany({ data: newAudit.map((a) => auditToRow(tenantId, a)) })
       }
-      if (recur.state.seq !== state.seq) {
+      if (calendarState.seq !== state.seq) {
         await tx.workspaceMeta.upsert({
           where: { tenantId },
-          create: { tenantId, seq: recur.state.seq },
-          update: { seq: recur.state.seq },
+          create: { tenantId, seq: calendarState.seq },
+          update: { seq: calendarState.seq },
         })
       }
 
@@ -140,10 +198,11 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
         summary,
         raised,
         recurrences: recur.raised,
+        calendarFired: calendarPlan.fired,
         diff: run.diff,
-        misses: run.misses,
-        refusals: [...run.refusals, ...recur.refusals].map((r) => ({ action: r.action.t, error: r.error })),
-        state: recur.state,
+        misses: [...run.misses, ...calendarPlan.misses],
+        refusals: [...run.refusals, ...recur.refusals, ...calendarRefusals].map((r) => ({ action: r.action.t, error: r.error })),
+        state: calendarState,
         observation: run.observation,
         stamps,
       }
@@ -170,6 +229,7 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
     summary,
     raised: inner.raised,
     recurrences: inner.recurrences,
+    calendarFired: inner.calendarFired,
     diff: inner.diff,
     misses: inner.misses,
     refusals: inner.refusals,
