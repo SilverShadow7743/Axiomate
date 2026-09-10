@@ -1577,8 +1577,16 @@ export type ConfigOp =
   | { k: 'setCustomFieldProjects'; id: string; projectIds: string[] }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
   /** The engagement health score's weights and RAG thresholds — see `lib/portfolio.ts`'s
-   *  `healthScore` and the F&O page-grammar design. Configuration, not code, on purpose. */
-  | { k: 'setHealthScore'; patch: Partial<HealthScorePolicy> }
+   *  `healthScore` and the F&O page-grammar design. Configuration, not code, on purpose.
+   *  Partial at both levels, which is what the reducer already merges: one weight field
+   *  blurring in Configuration sends one weight, not the whole table. */
+  | {
+      k: 'setHealthScore'
+      patch: {
+        weights?: Partial<HealthScorePolicy['weights']>
+        thresholds?: Partial<HealthScorePolicy['thresholds']>
+      }
+    }
   | { k: 'setHolidays'; holidays: Holiday[] }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }

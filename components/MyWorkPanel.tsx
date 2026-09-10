@@ -13,6 +13,7 @@ import {
   type WorkReason,
 } from '@/lib/mywork'
 import type { Actor } from '@/lib/actor'
+import type { ScheduleHealth } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -36,6 +37,8 @@ export default function MyWorkPanel({
   onSelect,
   onClose,
   docked = false,
+  counts,
+  onShowInTree,
 }: {
   state: WorkspaceState
   actor: Actor
@@ -43,6 +46,15 @@ export default function MyWorkPanel({
   /** Select a record in the tree. The drawer stays open — picking one thing is not finishing. */
   onSelect: (id: string) => void
   onClose?: () => void
+  /**
+   * The workspace's own tally (the same object FilterBar's count strip reads), for the summary
+   * tiles — F&O's workspace pattern, a tile being a count with a query behind it. Nothing is
+   * counted here; a tile that disagreed with the strip would be the hidden number this panel
+   * refuses. Optional so the undocked drawer, which has no tree beneath it, shows no tiles.
+   */
+  counts?: { shown: number; overdue: number; atRisk: number; blocked: number; unscheduled: number }
+  /** The tile's query: set the schedule-health facet (or clear it) and open the Tree. */
+  onShowInTree?: (health: ScheduleHealth | null) => void
   /**
    * Rendered as a first-class view in the main pane rather than an overlay: no scrim, no
    * focus trap, no Close — the view switcher is how you leave. Same content either way,
@@ -85,6 +97,60 @@ export default function MyWorkPanel({
             Work is found by name, and “{list.matchedName}” is not in the directory. This is an
             empty list because the join failed, not because there is nothing to do.
           </p>
+        )}
+
+        {/* The workspace's summary row (F&O page grammar §5). Two labelled sets, because they
+            count different things and one row of unlabelled numbers would invite adding them:
+            the workspace tiles are the count strip's own figures and open the Tree narrowed
+            to that schedule health; the "waiting on you" tiles are this list's group sizes and
+            scroll to the group. */}
+        {counts && onShowInTree && !list.unrecognised && (
+          <div className="tiles-block">
+            <div className="tiles-eyebrow">Across the workspace</div>
+            <div className="tiles" aria-label="Workspace counts">
+              <button type="button" className="tile" onClick={() => onShowInTree(null)} title="Open the Tree">
+                <span className="tile-n">{counts.shown}</span>
+                <span className="tile-l">Showing</span>
+              </button>
+              <button type="button" className="tile band-red" onClick={() => onShowInTree('Overdue')} title="Open the Tree narrowed to Overdue">
+                <span className="tile-n">{counts.overdue}</span>
+                <span className="tile-l">Overdue</span>
+              </button>
+              <button type="button" className="tile band-blocked" onClick={() => onShowInTree('Blocked')} title="Open the Tree narrowed to Blocked">
+                <span className="tile-n">{counts.blocked}</span>
+                <span className="tile-l">Blocked</span>
+              </button>
+              <button type="button" className="tile band-amber" onClick={() => onShowInTree('At Risk')} title="Open the Tree narrowed to At Risk">
+                <span className="tile-n">{counts.atRisk}</span>
+                <span className="tile-l">At risk</span>
+              </button>
+              <button type="button" className="tile" onClick={() => onShowInTree('Unscheduled')} title="Open the Tree narrowed to Unscheduled">
+                <span className="tile-n">{counts.unscheduled}</span>
+                <span className="tile-l">Unscheduled</span>
+              </button>
+            </div>
+            {groups.length > 0 && (
+              <>
+                <div className="tiles-eyebrow">Waiting on you</div>
+                <div className="tiles" aria-label="Your work by reason">
+                  {groups.map((reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      className={`tile tile-r-${reason}`}
+                      onClick={() =>
+                        document.getElementById(`mywork-${reason}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+                      }
+                      title={REASON_WHY[reason]}
+                    >
+                      <span className="tile-n">{list.counts[reason]}</span>
+                      <span className="tile-l">{REASON_LABEL[reason]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Calendar, not a ranked reason — meetings sit above the reason-grouped list rather
@@ -135,7 +201,7 @@ export default function MyWorkPanel({
           )}
 
           {groups.map((reason: WorkReason) => (
-            <section key={reason} className="mywork-group">
+            <section key={reason} id={`mywork-${reason}`} className="mywork-group">
               <div className="mywork-head">
                 <span className={`mywork-tag r-${reason}`}>{REASON_LABEL[reason]}</span>
                 <span className="mono">{list.counts[reason]}</span>

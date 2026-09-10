@@ -37,7 +37,10 @@ import {
   type ValueKind,
   type ActivityTemplate,
   type IssueTemplate,
+  CONCERN_ORDER,
+  DEFAULT_HEALTH_SCORE,
 } from '@/lib/config'
+import { CONCERN_LABEL } from '@/lib/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type Action, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
@@ -98,6 +101,7 @@ type Tab =
   | 'skills'
   | 'customFields'
   | 'serviceLevels'
+  | 'healthScore'
   | 'transitions'
   | 'permissions'
   | 'approvals'
@@ -115,6 +119,7 @@ const TABS: { id: Tab; label: string; group: string }[] = [
   { id: 'index', label: 'All settings', group: 'Operating model' },
   { id: 'capabilities', label: 'Capabilities', group: 'Operating model' },
   { id: 'goals', label: 'Goals', group: 'Governance' },
+  { id: 'healthScore', label: 'Health score', group: 'Governance' },
   { id: 'terminology', label: 'Terminology', group: 'Operating model' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model' },
   { id: 'workTypes', label: 'Work types', group: 'Operating model' },
@@ -338,6 +343,7 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onCorrect={onCorrectSkill} onRemove={onRemoveSkill} />}
           {tab === 'customFields' && <CustomFields state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
+          {tab === 'healthScore' && <HealthScoreSection state={state} onConfig={onConfig} />}
           {tab === 'transitions' && <Transitions state={state} onConfig={onConfig} />}
           {tab === 'permissions' && <Permissions state={state} onConfig={onConfig} />}
           {tab === 'approvals' && <Approvals state={state} onConfig={onConfig} />}
@@ -1578,6 +1584,15 @@ function SettingsIndex({ state, go }: { state: WorkspaceState; go: (t: Tab) => v
       title: 'Service levels',
       what: 'Working days allowed per severity, and the org holiday calendar the date math skips.',
       now: `High ${m.sla.High} / Medium ${m.sla.Medium} / Low ${m.sla.Low} · ${(m.holidays ?? []).length} holiday(s)`,
+    },
+    {
+      id: 'healthScore',
+      title: 'Health score',
+      what: 'The weight behind each concern in an engagement score, and where amber and red begin. Printed beside every score.',
+      now: (() => {
+        const p = m.healthScore ?? DEFAULT_HEALTH_SCORE
+        return `weights ${CONCERN_ORDER.map((k) => p.weights[k]).join(' / ')} · amber from ${p.thresholds.amber}, red from ${p.thresholds.red}`
+      })(),
     },
     {
       id: 'sizing',
@@ -4207,6 +4222,123 @@ function Transitions({
         claims the client confirmed it should have something behind it. A reason is kept on the
         audit entry rather than on the record, because it explains a change rather than
         describing the work.
+      </p>
+    </section>
+  )
+}
+
+/* ================================================================== *
+ * Health score
+ * ================================================================== */
+
+/**
+ * Structural copy of Service levels: one numeric field per concern kind, two for the bands,
+ * `onBlur` → `setHealthScore`, a refusal resetting the field the way an SLA refusal does.
+ * The reducer is the validator (weights ≥ 0, red above amber); the field only stops what it
+ * can see is not a number. Sits in Governance, beside Goals, because these numbers are read
+ * by clients in a pack — they are a commercial statement, not a tuning knob.
+ */
+function HealthScoreSection({
+  state,
+  onConfig,
+}: {
+  state: WorkspaceState
+  onConfig: (op: ConfigOp) => boolean
+}) {
+  const policy = state.model.healthScore ?? DEFAULT_HEALTH_SCORE
+
+  const commit = (
+    e: React.FocusEvent<HTMLInputElement>,
+    current: number,
+    apply: (n: number) => boolean,
+  ) => {
+    const n = Number(e.target.value)
+    if (n === current) return
+    if (e.target.value.trim() === '' || !Number.isFinite(n) || n < 0) {
+      e.target.value = String(current)
+      return
+    }
+    if (!apply(n)) e.target.value = String(current)
+  }
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Health score</h3>
+      <p className="cfg-note">
+        An engagement&rsquo;s score is a sum: each concern&rsquo;s count times the weight below.
+        The number is only honest because the weights are in the open — they are printed under
+        every score, on the Portfolio and in every client pack — which is why they are here and
+        not in code. Change one and every score moves, with its printed terms.
+      </p>
+
+      <div className="cfg-card">
+        <div className="cfg-fld-row">
+          {CONCERN_ORDER.map((kind) => (
+            <label className="cfg-fld" key={kind}>
+              <span>{CONCERN_LABEL[kind]}</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={policy.weights[kind]}
+                aria-label={`Weight for ${CONCERN_LABEL[kind].toLowerCase()}`}
+                onBlur={(e) =>
+                  commit(e, policy.weights[kind], (n) =>
+                    onConfig({ k: 'setHealthScore', patch: { weights: { [kind]: n } } }),
+                  )
+                }
+              />
+            </label>
+          ))}
+        </div>
+        <p className="cfg-inherit">
+          Gone quiet counts once, however long the silence — a fortnight of nothing must not
+          outweigh three broken commitments; its days print beside the term instead.
+        </p>
+      </div>
+
+      <div className="cfg-card">
+        <div className="cfg-fld-row">
+          <label className="cfg-fld">
+            <span>Amber from</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={policy.thresholds.amber}
+              aria-label="Score at which an engagement reads amber"
+              onBlur={(e) =>
+                commit(e, policy.thresholds.amber, (n) =>
+                  onConfig({ k: 'setHealthScore', patch: { thresholds: { amber: n } } }),
+                )
+              }
+            />
+          </label>
+          <label className="cfg-fld">
+            <span>Red from</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={policy.thresholds.red}
+              aria-label="Score at which an engagement reads red"
+              onBlur={(e) =>
+                commit(e, policy.thresholds.red, (n) =>
+                  onConfig({ k: 'setHealthScore', patch: { thresholds: { red: n } } }),
+                )
+              }
+            />
+          </label>
+        </div>
+        <p className="cfg-inherit">
+          Green below amber; red must be above amber, or the change is refused.
+        </p>
+      </div>
+
+      <p className="cfg-note">
+        <b>Client packs leave one term out.</b> Over-committed is not counted in a pack, because
+        staffing is never shown to a client — the pack says so beside its score, and the same
+        engagement&rsquo;s internal score differs by exactly that term.
       </p>
     </section>
   )

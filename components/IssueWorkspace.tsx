@@ -2456,7 +2456,20 @@ export default function IssueWorkspace({
         <>
           <FirstRunCard state={state} actor={actor} />
           <AdminFirstRunCard state={state} actor={actor} />
-          <MyWorkPanel state={state} actor={actor} today={today} onSelect={revealIssue} docked />
+          <MyWorkPanel
+            state={state}
+            actor={actor}
+            today={today}
+            onSelect={revealIssue}
+            docked
+            counts={counts}
+            onShowInTree={(health) => {
+              // The tile's query is the facet the count strip already tallies by, so the Tree
+              // that opens shows exactly the tile's number — nothing is re-counted.
+              setFilters({ ...filters, health: health ?? 'All' })
+              setView('tree')
+            }}
+          />
         </>
       ) : view === 'portfolio' ? (
         <PortfolioPanel

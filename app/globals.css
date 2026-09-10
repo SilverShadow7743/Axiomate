@@ -4069,6 +4069,75 @@ select.cell-editor {
 /* ---------------------------------------------------------------- My work */
 
 .mywork { width: min(560px, 94vw); }
+
+/* ---------- workspace tiles ----------
+   F&O's workspace pattern (page grammar §5): a tile is a count with a query behind it. The
+   number leads, the label sits beneath, and where a tile carries a score its terms print as a
+   third line — the sum is part of the tile, never a tooltip alone. Band colour comes from the
+   schedule-health palette already in use, so red means what red means elsewhere. */
+.tiles-block { padding: 10px 16px 2px; border-bottom: 1px solid var(--border); }
+.tiles-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 4px 0 6px;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  text-align: left;
+  color: var(--text);
+  min-width: 0;
+}
+.tile:hover { background: var(--surface-2); }
+.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tile-n {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.tile-l {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.tile-t {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.3;
+  white-space: normal;
+}
+.tile.band-red { border-left-color: var(--h-overdue); }
+.tile.band-red .tile-n { color: var(--h-overdue); }
+.tile.band-amber { border-left-color: var(--h-atrisk); }
+.tile.band-amber .tile-n { color: var(--h-atrisk); }
+.tile.band-green { border-left-color: var(--h-ontrack); }
+.tile.band-green .tile-n { color: var(--h-ontrack); }
+.tile.band-blocked { border-left-color: var(--h-blocked); }
+.tile.band-blocked .tile-n { color: var(--h-blocked); }
+.tile.tile-r-decide { border-left-color: var(--accent); }
+.tile.tile-r-overdue { border-left-color: var(--h-overdue); }
+.tile.tile-r-blocked { border-left-color: var(--h-blocked); }
+
 .mywork-group { padding: 12px 16px 4px; border-bottom: 1px solid var(--border); }
 .mywork-head {
   display: flex;

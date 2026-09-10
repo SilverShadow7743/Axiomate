@@ -1,6 +1,19 @@
 import type { WeeklyClientPack, MonthlyGovernancePack } from '@/lib/reports/clientPack'
-import type { OrganizationIdentity } from '@/lib/config'
+import type { ConcernKind, OrganizationIdentity } from '@/lib/config'
+import { CONCERN_LABEL, scoreTerms } from '@/lib/portfolio'
 import ReportHeader from './reports/ReportHeader'
+
+/**
+ * Why a term is left out of a client's score, in the client's own words. `capacity` is the one
+ * the pack builder excludes today (`CLIENT_EXCLUDED` in lib/reports/clientPack.ts); any other
+ * kind falls back to naming itself, so a new exclusion can never print as nothing.
+ */
+const EXCLUDED_WHY: Partial<Record<ConcernKind, string>> = {
+  capacity: 'over-commitment is not counted — staffing is not shown to clients',
+}
+function excludedWords(kinds: ConcernKind[]): string {
+  return kinds.map((k) => EXCLUDED_WHY[k] ?? `${CONCERN_LABEL[k].toLowerCase()} is not counted`).join('; ')
+}
 
 /**
  * A print-ready screen for a weekly or monthly client pack — see
@@ -79,6 +92,41 @@ export default function ClientPackView({
             </span>
           </div>
         </section>
+
+        {pack.health.engagements.length > 0 && (
+          <section>
+            <h2>Health</h2>
+            <table className="pack-table">
+              <thead>
+                <tr>
+                  <th>Engagement</th>
+                  <th>Score</th>
+                  <th>Band</th>
+                  <th>How it adds up</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pack.health.engagements.map((e) => (
+                  <tr key={e.nodeId}>
+                    <td>{e.name}</td>
+                    <td>{e.score.value}</td>
+                    <td>{e.score.band}</td>
+                    <td>{scoreTerms(e.score) || 'nothing counted'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* The score's own disclosure, beside it: what the sum is and what it leaves out.
+                A number a client cannot reproduce from the column beside it is the hidden
+                sentence the design forbids. */}
+            <p className="pack-disclosure">
+              A score is each concern&rsquo;s count times its weight, added; the weights are
+              {' '}{org.name || 'the firm'}&rsquo;s own configuration and are the second number
+              in each term.
+              {pack.health.excluded.length > 0 && <> In this pack {excludedWords(pack.health.excluded)}.</>}
+            </p>
+          </section>
+        )}
 
         <section>
           <h2>Progress</h2>

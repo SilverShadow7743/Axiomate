@@ -6,7 +6,15 @@ import { useOverlay } from './useOverlay'
 import DetailDrawer from './DetailDrawer'
 import ReplanningDrawer from './ReplanningDrawer'
 import { narrationFigures } from '@/lib/assist'
-import { describePortfolio, portfolio, type Concern, type PortfolioLine } from '@/lib/portfolio'
+import { DEFAULT_HEALTH_SCORE } from '@/lib/config'
+import {
+  describePortfolio,
+  healthScore,
+  portfolio,
+  scoreTerms,
+  type Concern,
+  type PortfolioLine,
+} from '@/lib/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
 import WhyThisWorks from './WhyThisWorks'
 
@@ -49,6 +57,12 @@ export default function PortfolioPanel({
   useOverlay(rootRef, !docked, onClose)
 
   const lines = useMemo(() => portfolio(state, today), [state, today])
+  /* `?? DEFAULT` because a workspace older than the field has no stored policy (I19's lesson). */
+  const policy = state.model.healthScore ?? DEFAULT_HEALTH_SCORE
+  const scored = useMemo(
+    () => lines.map((line) => ({ line, score: healthScore(line, policy) })),
+    [lines, policy],
+  )
 
   /* Which person's capacity is open in the Replanning drawer — at most one at a time. */
   const [replanning, setReplanning] = useState<{ person: string; personId: string | null } | null>(null)
@@ -128,6 +142,29 @@ export default function PortfolioPanel({
             </p>
           )}
 
+          {/* F&O's workspace tiles (page grammar §5): one per engagement, the score as band AND
+              value, with its terms printed beneath — never the number alone, which is the
+              condition the score was admitted on (lib/portfolio.ts, 10 Sep). The tile is a
+              summary of the concern lines below it, not a replacement; clicking opens the
+              engagement in the tree, the same as its line. */}
+          {scored.length > 0 && (
+            <div className="tiles" aria-label="Engagement health scores">
+              {scored.map(({ line, score }) => (
+                <button
+                  key={line.nodeId}
+                  type="button"
+                  className={`tile band-${score.band}`}
+                  onClick={() => onSelect(line.nodeId)}
+                  title={`${scoreTerms(score) || 'Nothing counted'} — weights are set in Configuration → Health score`}
+                >
+                  <span className="tile-n">{score.value}</span>
+                  <span className="tile-l">{line.name}</span>
+                  <span className="tile-t">{scoreTerms(score) || 'nothing counted'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {lines.map((line) => (
             <Line key={line.nodeId} line={line} onSelect={onSelect} onOpenReplanning={setReplanning} />
           ))}
@@ -142,7 +179,10 @@ export default function PortfolioPanel({
               * anybody finds out it exists.
               */}
             Counts cover everything beneath each engagement, at any depth. Work filed higher than
-            an engagement is in none of these lines.
+            an engagement is in none of these lines. Each score is the sum printed under its tile
+            — a concern's count times its weight — and the weights are configuration, edited in
+            Configuration → Health score (amber from {policy.thresholds.amber}, red from{' '}
+            {policy.thresholds.red}).
           </footer>
         )}
       </aside>

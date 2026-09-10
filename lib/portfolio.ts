@@ -152,6 +152,37 @@ export function healthScore(
 }
 
 /**
+ * What each concern kind is called when it is a column, a weight field or a term in a printed
+ * sum — the `phrase` on a `Concern` is a clause for a sentence and carries its own number, so it
+ * cannot serve. Written from what each kind actually counts (see `concernsFor`).
+ */
+export const CONCERN_LABEL: Record<ConcernKind, string> = {
+  overdue: 'Past its date',
+  forecast: 'Forecast short',
+  capacity: 'Over-committed',
+  blocked: 'Blocked',
+  unowned: 'No owner',
+  stale: 'Gone quiet',
+}
+
+/**
+ * The sum, written out — "Past its date 3×3 + Blocked 2×2" — for every rendering of a score,
+ * so the Portfolio tile, the client pack and the Configuration note all print the same
+ * sentence and none of them can show the number alone. `stale` prints its days in brackets
+ * because its count is presence (see `healthScore`), and the days are what a reader would
+ * otherwise ask for. Empty string when nothing is counted.
+ */
+export function scoreTerms(score: HealthScore): string {
+  return score.terms
+    .map((t) =>
+      t.kind === 'stale'
+        ? `${CONCERN_LABEL.stale} (${t.days ?? '?'}d) ${t.count}×${t.weight}`
+        : `${CONCERN_LABEL[t.kind]} ${t.count}×${t.weight}`,
+    )
+    .join(' + ')
+}
+
+/**
  * One line per engagement, ordered by what most wants attention.
  *
  * ---------------------------------------------------------------------------
