@@ -50,6 +50,7 @@ import {
   allocationToRow,
   projectMemberFromRow,
   personalEventFromRow,
+  personalActionFromRow,
   inboundMailFromRow,
   commitmentFromRow,
   commitmentToRow,
@@ -138,6 +139,7 @@ type Reader = Pick<
   | 'allocation'
   | 'projectMember'
   | 'personalEvent'
+  | 'personalAction'
   | 'inboundMail'
   | 'commitment'
   | 'issueEstimate'
@@ -175,7 +177,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
   // Written out at every call rather than hoisted into a shared `scope` object. The nine
   // characters saved cost the thing that matters here: a reader — and the audit script that
   // checks this file — can see that each query names the tenant without following a variable.
-  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings, snapshots, applications, integrationLinks, invoices, invoiceLineItems, checklistItems] =
+  const [nodes, issues, activities, dependencies, relationships, evidence, notes, timeEntries, approvals, notifications, sows, allocations, projectMembers, personalEvents, personalActions, inboundMail, commitments, estimates, revisions, engagements, audit, meta, config, versions, timesheets, rates, changes, personSkills, documents, milestones, scopeItems, documentReviews, meetings, snapshots, applications, integrationLinks, invoices, invoiceLineItems, checklistItems] =
     await Promise.all([
       db.hierarchyNode.findMany({ where: { tenantId } }),
       db.issue.findMany({ where: { tenantId } }),
@@ -191,6 +193,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
       db.allocation.findMany({ where: { tenantId } }),
       db.projectMember.findMany({ where: { tenantId } }),
       db.personalEvent.findMany({ where: { tenantId } }),
+      db.personalAction.findMany({ where: { tenantId } }),
       db.inboundMail.findMany({ where: { tenantId } }),
       db.commitment.findMany({ where: { tenantId } }),
       db.issueEstimate.findMany({ where: { tenantId } }),
@@ -310,6 +313,7 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     engagements: Object.fromEntries(engagements.map((e) => [e.nodeId, engagementFromRow(e)])),
     projectMembers: Object.fromEntries(projectMembers.map((m) => [m.id, projectMemberFromRow(m)])),
     personalEvents: Object.fromEntries(personalEvents.map((e) => [e.id, personalEventFromRow(e)])),
+    personalActions: Object.fromEntries(personalActions.map((a) => [a.id, personalActionFromRow(a)])),
     inboundMail: Object.fromEntries(inboundMail.map((m) => [m.id, inboundMailFromRow(m)])),
     meetings: Object.fromEntries(meetings.map((m) => [m.id, meetingFromRow(m)])),
     snapshots: Object.fromEntries(snapshots.map((s) => [s.id, snapshotFromRow(s)])),

@@ -132,6 +132,7 @@ import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
+import type { PersonalAction } from './personalActions'
 import type { InboundMail } from './intake'
 import {
   allocationPolicyProblem,
@@ -305,6 +306,13 @@ export interface IssueRecord {
    * request from them would be absurd. Absent (pre-boundary rows) reads as false.
    */
   clientVisible?: boolean
+  /**
+   * Set only by intake when a brand-new (unmatched) thread auto-creates this record; cleared by
+   * any real edit through `updateIssue`, or by an explicit Confirm. A plain boolean — absent and
+   * false mean the same thing, so no absent-versus-cleared sentinel is needed (the plan's own
+   * correction to the design). See `docs/plans/2026-09-10-mail-triage-and-personal-actions-plan.md`.
+   */
+  needsTriage?: boolean
   /** A risk's judged halves, 1–5 each; null = not yet judged, never a default. Exposure is
    *  computed from these and NEVER stored — see `lib/raid.ts`. */
   riskLikelihood?: number | null
@@ -489,6 +497,11 @@ export interface WorkspaceState {
    * unconditionally; see `lib/db/boot.ts`'s `redactForReader` and `./personalEvents`.
    */
   personalEvents: Record<string, PersonalEvent>
+  /**
+   * A person's own to-dos — the same absolute privacy as `personalEvents` above; see
+   * `./personalActions` and `lib/db/boot.ts`'s `redactForReader`.
+   */
+  personalActions: Record<string, PersonalAction>
   /**
    * A kept record of every message intake has ever seen — accepted or refused. See
    * `./intake`'s `InboundMail`; `internal.view`-gated only, not narrowed further.
@@ -804,6 +817,8 @@ export function initWorkspace(
     // A fresh workspace starts with nobody's calendar typed in — there is no history to
     // backfill this from at all, for anyone.
     personalEvents: {},
+    // Nobody's to-dos either, for the same reason.
+    personalActions: {},
     // A fresh workspace has received no mail yet — the seed predates this record existing.
     inboundMail: {},
     meetings: {},

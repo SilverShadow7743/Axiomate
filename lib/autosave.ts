@@ -262,6 +262,8 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       projectMembers: parsed.projectMembers ?? {},
       // `?? {}` because a mirror written before personal events existed has no such key.
       personalEvents: parsed.personalEvents ?? {},
+      // `?? {}` because a mirror written before personal actions existed has no such key.
+      personalActions: parsed.personalActions ?? {},
       // `?? {}` because a mirror written before the mail log existed has no such key.
       inboundMail: parsed.inboundMail ?? {},
       // Merged, not taken whole. The mirror's model predates every operating-model key added

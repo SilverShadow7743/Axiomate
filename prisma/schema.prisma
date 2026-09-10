@@ -124,6 +124,7 @@ model Tenant {
   allocations   Allocation[]
   projectMembers ProjectMember[]
   personalEvents PersonalEvent[]
+  personalActions PersonalAction[]
   inboundMail   InboundMail[]
   commitments   Commitment[]
   sows          Sow[]
@@ -274,6 +275,9 @@ model Issue {
   ownerId     String?
   /// Whether a client-facing surface may show this record. Default false — marked by a person.
   clientVisible Boolean @default(false)
+  /// Set only by intake when a brand-new thread auto-creates this record; cleared by any edit or
+  /// an explicit Confirm. See docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md.
+  needsTriage   Boolean @default(false)
   /// A risk's judged halves, 1-5; null = not yet judged. Exposure is computed, never stored.
   riskLikelihood Int?
   riskImpact     Int?
@@ -716,6 +720,30 @@ model PersonalEvent {
   allDay    Boolean @default(false)
   note      String  @db.Text
   attendees String  @db.Text
+
+  createdAt DateTime
+  deletedAt DateTime?
+
+  @@id([tenantId, id])
+  @@index([tenantId, personId])
+}
+
+/// A person's own to-do — converted from mail that turned out not to be project work, or typed
+/// in. Private to its owner unconditionally, exactly as PersonalEvent: see lib/personalActions.ts
+/// and docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md. dueDate is a plain
+/// 'YYYY-MM-DD' string like every other date-only field in this schema.
+model PersonalAction {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  id       String @default(cuid())
+  personId String
+
+  text            String  @db.Text
+  dueDate         String?
+  status          String
+  sourceSubject   String?
+  sourceMessageId String?
 
   createdAt DateTime
   deletedAt DateTime?

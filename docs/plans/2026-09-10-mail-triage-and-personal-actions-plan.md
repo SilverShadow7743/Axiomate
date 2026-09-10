@@ -26,6 +26,23 @@ rather than silently changed, per this repo's own convention for correcting a pr
 
 ## Steps
 
+**0. Schema and persistence plumbing — found missing from this plan at implementation, added
+10 Sep.** `personalEvents` is not only a state slice: it has a Prisma model, a row mapper pair in
+`lib/db/map.ts` (`personalEventFromRow`/`ToRow`, `:968-997`), a loader in `lib/db/repo.ts`
+(the `findMany` list `:193`, the state assembly `:312`), a before/after diff writer in
+`lib/db/persist.ts` (`:513-526`), and a local-mirror seed in `lib/autosave.ts` (`:264`). The
+first draft of this plan mentioned none of them. `PersonalAction` needs all five, and
+`Issue.needsTriage` needs a column plus the two lines in `issueToRow`/`issueFromRow`
+(`map.ts:243`, `:292`). One migration, `20260910000001_mail_triage` — additive, no DML, and the
+new table carries its own RLS policy in its creation migration as every table since
+`20260824000004` does (the checklist migration is the template). **Stands alone as commit 0**,
+per this repo's own rule that a schema change is never bundled (`docs/adr/0005`). The entity
+type (step 1) is written here too, because the mappers need it to compile.
+
+**Verify:** `npx prisma generate`, `npx tsc --noEmit`, `npm run audit:tenancy` (the mapper count
+rises by one and the new mapper must stamp `tenantId` — the audit checks exactly that),
+`npx tsx scripts/scenario-validation.ts` (count unchanged), `npm run build`.
+
 **1. `lib/personalActions.ts` (new) — the entity, pure.**
 
 Structural copy of `lib/personalEvents.ts` in full: the interface, a validation function, and the
@@ -225,9 +242,13 @@ toggle a filter to notice their own new work needs a look.
 
 ## Commits
 
-**Commit 1 — steps 1-3.** The entity, the reducer arms, the clearing rule, all three scenarios.
-Provable end to end with no pipeline or UI change yet — the same "pure logic first" shape the
-leave-report plan used.
+**Commit 0 — step 0.** Schema, migration, mappers, loader, mirror seed, and the entity type.
+Alone, because it carries a migration.
+
+**Commit 1 — steps 1-3.** The reducer arms, the clearing rule, the `persist.ts` case for the
+three new action kinds (and for `convertToPersonalAction`, which writes to two collections —
+`issues` and `personalActions` — in one case), all three scenarios. Provable end to end with no
+pipeline or UI change yet — the same "pure logic first" shape the leave-report plan used.
 
 **Commit 2 — steps 4-6.** The filter/row plumbing and the one intake-pipeline change, bundled
 because the filter chip is meaningless until real rows can carry `needsTriage`, and the intake

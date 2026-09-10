@@ -17,6 +17,7 @@ import type {
   Allocation as AllocationRow,
   ProjectMember as ProjectMemberRow,
   PersonalEvent as PersonalEventRow,
+  PersonalAction as PersonalActionRow,
   InboundMail as InboundMailRow,
   Commitment as CommitmentRow,
   EstimateRevision as RevisionRow,
@@ -62,6 +63,7 @@ import type { Sow, SowStatus } from '../sow'
 import type { Allocation, Commitment, CommitmentKind } from '../capacity'
 import type { ProjectMember } from '../staffing'
 import type { PersonalEvent } from '../personalEvents'
+import type { PersonalAction } from '../personalActions'
 import type { InboundMail } from '../intake'
 import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../timesheet'
@@ -241,6 +243,7 @@ export function issueToRow(
     owner: i.owner,
     ownerId: i.ownerId ?? null,
     clientVisible: i.clientVisible ?? false,
+    needsTriage: i.needsTriage ?? false,
     riskLikelihood: i.riskLikelihood ?? null,
     riskImpact: i.riskImpact ?? null,
     decisionOutcome: i.decisionOutcome ?? null,
@@ -290,6 +293,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     owner: r.owner,
     ownerId: r.ownerId ?? null,
     clientVisible: r.clientVisible ?? false,
+    needsTriage: r.needsTriage ?? false,
     riskLikelihood: r.riskLikelihood ?? null,
     riskImpact: r.riskImpact ?? null,
     decisionOutcome: r.decisionOutcome ?? null,
@@ -962,6 +966,36 @@ export function projectMemberFromRow(r: ProjectMemberRow): ProjectMember {
     addedBy: r.addedBy,
     addedAt: r.addedAt.toISOString(),
     removedAt: r.removedAt ? r.removedAt.toISOString() : null,
+  }
+}
+
+export function personalActionToRow(tenantId: TenantId, a: PersonalAction): Prisma.PersonalActionUncheckedCreateInput {
+  return {
+    tenantId,
+    id: a.id,
+    personId: a.personId,
+    text: a.text,
+    dueDate: a.dueDate ?? null,
+    status: a.status,
+    sourceSubject: a.sourceSubject ?? null,
+    sourceMessageId: a.sourceMessageId ?? null,
+    createdAt: new Date(a.createdAt),
+    deletedAt: a.deletedAt ? new Date(a.deletedAt) : null,
+  }
+}
+
+export function personalActionFromRow(r: PersonalActionRow): PersonalAction {
+  return {
+    id: r.id,
+    personId: r.personId,
+    text: r.text,
+    // Absent-when-null, matching the domain type: undated is `undefined`, never `null`.
+    ...(r.dueDate ? { dueDate: r.dueDate } : {}),
+    status: r.status === 'Done' ? 'Done' : 'To do',
+    ...(r.sourceSubject ? { sourceSubject: r.sourceSubject } : {}),
+    ...(r.sourceMessageId ? { sourceMessageId: r.sourceMessageId } : {}),
+    createdAt: r.createdAt.toISOString(),
+    deletedAt: r.deletedAt ? r.deletedAt.toISOString() : null,
   }
 }
 
