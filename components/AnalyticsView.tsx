@@ -58,6 +58,7 @@ export default function AnalyticsView({
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
       {!docked && <div className="drawer-scrim" onMouseDown={onClose} />}
       <aside
         className={`evi mywork${docked ? ' docked' : ''}`}
