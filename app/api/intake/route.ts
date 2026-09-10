@@ -309,6 +309,15 @@ export async function POST(req: Request) {
         conversationId: full.conversationId,
         now,
       } as Action,
+      /*
+       * A brand-new thread lands unconfirmed. This is the ONLY place the flag is set: the
+       * matched-reply branch above never reaches here (that thread was already judged to be
+       * real work), and every other creator of an issue is a person. Everything else about the
+       * record — severity, SLA, routing — is exactly what classify() decided, untouched; a
+       * person clears the flag by editing, confirming, or converting it. See
+       * docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md.
+       */
+      { t: 'updateIssue', id: issueId, patch: { needsTriage: true }, now } as Action,
       ...draft.assignments.map(
         (a): Action => ({
           t: 'setAssignment',

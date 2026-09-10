@@ -13175,6 +13175,30 @@ scenario(
 )
 
 scenario(
+  'TRG2',
+  "The intake batch — create, then updateIssue { needsTriage: true } — dispatched as the machine actor lands a flagged issue; a person's own create lands an unflagged one",
+  "app/api/intake/route.ts's new-thread branch adds one action to a batch it already dispatches. This pins the two things that batch depends on: the machine role holds work.edit, so updateIssue passes the permission funnel for INTAKE_ACTOR (lib/access.ts's [MACHINE_ROLE_ID] grant — the plan's first draft wrongly said the arm was ungated); and the flag is set by that follow-up alone — a create with no follow-up, by a person, is not flagged. The route itself is not reducer code and cannot be driven here; its batch shape is.",
+  () => {
+    const moduleId = Object.values(BASE.nodes).find((n) => n.kind === 'module')!.id
+    const created = apply(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Mailed in, new thread' }, now: NOW } as Action, INTAKE_ACTOR)
+    if (created.error || !created.createdId) throw new Error(`intake create refused: ${created.error}`)
+    const id = created.createdId
+    const flaggedResult = apply(created.state, { t: 'updateIssue', id, patch: { needsTriage: true }, now: NOW } as Action, INTAKE_ACTOR)
+    const machineMayFlag = !flaggedResult.error
+    const flagged = machineMayFlag && flaggedResult.state.issues[id].needsTriage === true
+
+    const byPerson = act(BASE, { t: 'create', parentId: moduleId, kind: 'issue', draft: { name: 'Typed in by a person' }, now: NOW } as Action)
+    if (byPerson.error || !byPerson.createdId) throw new Error(`person create refused: ${byPerson.error}`)
+    const unflagged = byPerson.state.issues[byPerson.createdId].needsTriage !== true
+
+    const good = machineMayFlag && flagged && unflagged
+    return good
+      ? { verdict: 'PASS', actual: `INTAKE_ACTOR's updateIssue passed the funnel and set the flag on ${id}; a person's create left ${byPerson.createdId} unflagged`, stops: '', severity: 'P0', impact: 'none' }
+      : { verdict: 'FAIL', actual: `machineMayFlag=${machineMayFlag} (${flaggedResult.error}) flagged=${flagged} unflagged=${unflagged}`, stops: machineMayFlag ? 'at the flag itself' : 'at the permission funnel — the machine role cannot dispatch updateIssue, so every new-thread intake batch would be refused whole', severity: 'P0', impact: 'if the funnel refuses, intake stops filing new threads entirely — the batch fails as one' }
+  },
+)
+
+scenario(
   'PA1',
   'reapplyable strips a stale expected and the transport key, keeping the edit itself intact',
   'A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.',

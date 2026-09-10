@@ -183,7 +183,7 @@ auto-attaching exactly as today, no `needsTriage` involved), add a third action 
 
 Dispatched through the same `persistActions(tenantId, INTAKE_ACTOR, follow)` call already there —
 one more action in an existing batch, not a new round-trip. `INTAKE_ACTOR` needs no new
-permission for this: `updateIssue` itself carries no permission gate at the reducer level (matches
+permission for this: `updateIssue` is gated on `work.edit`, which `ROLE_AUTOMATION` holds (`lib/access.ts` `[MACHINE_ROLE_ID]` grant — this sentence first said the arm was ungated, which was wrong; `TRG2` pins the grant so the batch cannot be refused whole) (matches
 today's behavior — the intake actor already dispatches `create`/`addNote` through this same
 unguarded path).
 
