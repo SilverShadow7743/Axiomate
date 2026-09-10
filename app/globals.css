@@ -484,6 +484,39 @@ button.nav-burger {
   font-size: 12px;
   color: var(--text-muted);
 }
+/* The quick filter (F&O page grammar §4): the same box as the top bar's search, minus the
+   icon, so the two inputs bound to one `filters.search` read as the same control twice. */
+.fh-quick {
+  height: 25px;
+  width: 220px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border-radius: 5px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.fh-quick:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ---------- first-column link ----------
+   F&O's list-page rule: the first textual column opens the record. Ten components already
+   used this class as that link and none of them styled it — the base `button` reset left them
+   as plain text, so the affordance existed in the markup and nowhere on screen. One rule,
+   applied everywhere at once, because half of an idiom reads as inconsistency. */
+.btn-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  text-decoration: none;
+}
+.btn-link:hover,
+.btn-link:focus-visible {
+  text-decoration: underline;
+}
 
 /* ---------- filter bar ---------- */
 .filterbar {

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useOverlay } from './useOverlay'
+import { useQuickFilterFocus } from './useQuickFilterFocus'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
@@ -27,6 +28,10 @@ export default function PeopleDirectory({
   const rootRef = useRef<HTMLDivElement>(null)
   useOverlay(rootRef, !docked, onClose)
   const [filter, setFilter] = useState('')
+  // The list's quick filter (F&O page grammar §4): focused on open, so the first keystroke
+  // narrows. This panel remounts per open, so mount is the only key it needs.
+  const quick = useRef<HTMLInputElement>(null)
+  useQuickFilterFocus(quick)
 
   const model = state.model
   const people = useMemo(() => {
@@ -73,6 +78,8 @@ export default function PeopleDirectory({
         <div className="evi-list">
           <div className="cfg-inline">
             <input
+              ref={quick}
+              type="search"
               value={filter}
               placeholder={`Filter ${people.length} people…`}
               aria-label="Filter people"

@@ -2405,7 +2405,14 @@ export default function IssueWorkspace({
           filtered rows. My work, Portfolio and the record views compute their own lists —
           a filter row above them was eleven controls that did nothing. */}
       {(view === 'tree' || view === 'board' || view === 'calendar') && (
-      <FiltersHeader filters={filters} shown={counts.shown} total={counts.total}>
+      <FiltersHeader
+        filters={filters}
+        onSearch={(search) => setFilters({ ...filters, search })}
+        view={view}
+        focusSuppressed={selectedId !== null}
+        shown={counts.shown}
+        total={counts.total}
+      >
       <FilterBar
         actor={actor}
         model={state.model}

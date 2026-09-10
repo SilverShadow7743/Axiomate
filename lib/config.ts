@@ -99,6 +99,11 @@ export const LABEL_KEYS = {
      identifier in this codebase still says issue because the rendered word is configuration
      (the same reasoning that deleted the RowType union). */
   RECORD_ISSUE: 'Work',
+  /* The list-page title and the "N of M" caption name the collection, not one record, and a
+     plural is not derivable from a configured singular ("Work" is uncountable, "Issue" is
+     not) — so it is its own term, edited beside the singular (F&O page grammar, plural list
+     titles). Shipped as 'Work' to match the singular's own reasoning above. */
+  RECORD_ISSUE_PLURAL: 'Work',
   RECORD_SUB_ISSUE: 'Sub-Work',
   RECORD_MILESTONE: 'Milestone',
 
@@ -128,8 +133,8 @@ export const LABEL_GROUPS: { title: string; note: string; keys: LabelKey[] }[] =
   },
   {
     title: 'Record kinds',
-    note: 'What the things people create are called.',
-    keys: ['RECORD_ISSUE', 'RECORD_SUB_ISSUE', 'RECORD_MILESTONE'],
+    note: 'What the things people create are called. The plural names the list — its title and its "N of M" caption.',
+    keys: ['RECORD_ISSUE', 'RECORD_ISSUE_PLURAL', 'RECORD_SUB_ISSUE', 'RECORD_MILESTONE'],
   },
   {
     title: 'Responsibilities',

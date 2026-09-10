@@ -601,6 +601,7 @@ export default function TreeGrid({
                             collapsed={collapsed}
                             hasChildren={hasChildren}
                             onToggle={onToggle}
+                            onSelect={onSelect}
                             critical={criticalIds.has(r.id)}
                           />
                           {c.key === anchorKey && (
@@ -766,6 +767,7 @@ function Cell({
   collapsed,
   hasChildren,
   onToggle,
+  onSelect,
   critical,
 }: {
   col: string
@@ -773,6 +775,8 @@ function Cell({
   collapsed: Set<string>
   hasChildren: Set<string>
   onToggle: (id: string) => void
+  /** The grid's own selection path — `requestSelect` in the workspace, dirty-check included. */
+  onSelect: (id: string) => void
   critical: boolean
 }) {
   switch (col) {
@@ -833,9 +837,24 @@ function Cell({
           {(row.kind === 'activity' || row.kind === 'milestone') && (
             <span className="branch">└</span>
           )}
-          <span className={`label ${levelClass}`} title={row.name}>
+          {/* F&O's first-column link (page grammar §4): the subject opens the record. It
+              routes through the same `onSelect` the row click does — never a second path —
+              and shares the row's roving tab stop rather than adding one per row: Enter on
+              a focused row already opens it (onGridKeyDown), so this is the pointer twin.
+              The click stops at the button so the row's own handler does not select twice
+              (a dirty-check prompt asked twice is a real cost). */}
+          <button
+            type="button"
+            className={`btn-link label ${levelClass}`}
+            title={row.name}
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect(row.id)
+            }}
+          >
             {row.name}
-          </span>
+          </button>
           {critical && (
             <span className="chip" style={{ color: 'var(--accent)' }} title="On the Critical Resolution Path">
               ◆

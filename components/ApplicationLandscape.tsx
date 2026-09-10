@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import DetailDrawer from './DetailDrawer'
+import { useQuickFilterFocus } from './useQuickFilterFocus'
 import { can } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'
 import { externalPartyKinds, tiersOf } from '@/lib/config'
@@ -55,10 +56,23 @@ export default function ApplicationLandscape({
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [state.model, state.nodes])
 
-  const apps = useMemo(
+  // The list's quick filter (F&O page grammar §4) — name or platform, the two things a person
+  // knows an application by. Local, like People's: nothing here is a workspace filter.
+  const [filter, setFilter] = useState('')
+  const quick = useRef<HTMLInputElement>(null)
+  useQuickFilterFocus(quick)
+
+  const allApps = useMemo(
     () => Object.values(state.applications).filter((a) => !a.deletedAt),
     [state.applications],
   )
+  const apps = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    if (!q) return allApps
+    return allApps.filter(
+      (a) => a.name.toLowerCase().includes(q) || (a.platform ?? '').toLowerCase().includes(q),
+    )
+  }, [allApps, filter])
 
   // A lightweight, local "overdue" — the same test lib/watch.ts's own `overdue` condition
   // applies (past its planned end, not yet in a terminal status) — computed here rather than
@@ -118,12 +132,27 @@ export default function ApplicationLandscape({
         </header>
 
         <div className="evi-list">
-          {!apps.length && (
+          {allApps.length > 0 && (
+            <div className="cfg-inline">
+              <input
+                ref={quick}
+                type="search"
+                value={filter}
+                placeholder={`Filter ${allApps.length} applications…`}
+                aria-label="Filter applications"
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+          )}
+
+          {!allApps.length ? (
             <p className="evi-empty">
               Nothing recorded yet. An application belongs to a client node in the tree — add
               one to start tracking what they run.
             </p>
-          )}
+          ) : !apps.length ? (
+            <p className="evi-empty">No application matches that filter.</p>
+          ) : null}
 
           {[...byClient.entries()].map(([clientNodeId, list]) => (
             <section key={clientNodeId}>
