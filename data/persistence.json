@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-09T03:12:51.932Z",
+  "at": "2026-09-10T05:48:14.526Z",
   "target": "postgresql://***@axiomate-tms-db.postgres.database.azure.com:5432/axiomate_tms",
   "passed": 74,
   "failed": 0,
@@ -117,7 +117,7 @@
     {
       "what": "a cancellation survives reload and its mint lands with it",
       "ok": true,
-      "detail": "deletedAt=2026-09-09T09:00:00.000Z note=Cancelled: Proof sync"
+      "detail": "deletedAt=2026-09-10T09:00:00.000Z note=Cancelled: Proof sync"
     },
     {
       "what": "an allocation and a commitment keep their dates",
@@ -232,7 +232,7 @@
     {
       "what": "the withheld payload string carries the marked and none of the internal",
       "ok": true,
-      "detail": "payload 38908 chars · 1 visible issues · 11 audit rows"
+      "detail": "payload 38933 chars · 1 visible issues · 11 audit rows"
     },
     {
       "what": "the person-id half of a reference round-trips on entries and owners",
@@ -267,7 +267,7 @@
     {
       "what": "withdrawing is soft and survives the reload — the record is still there, marked",
       "ok": true,
-      "detail": "deletedAt 2026-09-09T09:00:00.000Z"
+      "detail": "deletedAt 2026-09-10T09:00:00.000Z"
     },
     {
       "what": "a milestone comes back out of Postgres with a fractional percentage intact",

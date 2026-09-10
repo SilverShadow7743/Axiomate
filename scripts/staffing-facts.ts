@@ -49,12 +49,33 @@ import type { Actor } from '../lib/actor'
 
 const APPLY = process.argv.includes('--apply')
 const TENANT = (process.env.AXIOMATE_TENANT ?? 'axiocloud') as TenantId
-const ACTOR: Actor = {
-  id: 'staffing-facts',
-  name: process.env.AXIOMATE_OPERATOR ?? 'Nishant Sekhar',
-  email: process.env.AXIOMATE_OPERATOR_EMAIL ?? 'sekharn@axiocloudsolutions.com',
-}
 const NOW = new Date().toISOString()
+
+/**
+ * `id: 'staffing-facts'` with `name`/`email` defaulted to Nishant's real identity is what
+ * produced `ver-15`..`ver-19`: rows that read as a signed-in human but are unqueryable by his
+ * real account id, because the script's own made-up id was what actually got stored as `byId`
+ * — a half-join, not an attribution. Those existing rows are left alone (correcting an audit
+ * trail is worse than annotating one; see their own `reason` field), but this script now
+ * follows the same pattern `point-intake.ts`/`repair-markup.ts`/`stop-personal-intake.ts`
+ * already use for exactly this case: look up the real directory person and use *their* id, so
+ * `byId` resolves to someone `rolesFor` and every other query can actually find. No default —
+ * an email that matches nobody is a reason to stop, not to guess.
+ */
+async function resolveOperator(state: Awaited<ReturnType<typeof loadWorkspace>>['state']): Promise<Actor> {
+  const wanted = process.env.AXIOMATE_OPERATOR_EMAIL?.toLowerCase()
+  if (!wanted) {
+    console.error('AXIOMATE_OPERATOR_EMAIL is not set. This script records a stated fact — say')
+    console.error('who stated it, the same way point-intake.ts and stop-personal-intake.ts do.')
+    process.exit(1)
+  }
+  const operator = Object.values(state.model.people ?? {}).find((p) => p.email?.toLowerCase() === wanted)
+  if (!operator) {
+    console.error(`No directory entry has ${wanted} — nothing here would be permitted.`)
+    process.exit(1)
+  }
+  return { id: operator.id, name: operator.name, email: operator.email }
+}
 
 /** The allocation start date already on record for all six allocations. Not chosen — read. */
 const FROM = '2026-08-17'
@@ -71,6 +92,7 @@ const CAREERS: { name: string; grade: string; track?: string; developingToward?:
 
 async function main() {
   const { state } = await loadWorkspace(TENANT)
+  const ACTOR = await resolveOperator(state)
   const people = Object.values(state.model.people ?? {})
   const actions: Action[] = []
   const lines: string[] = []
