@@ -148,6 +148,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'setAccess',
   'setApprovalRules',
   'setAutomationRules',
+  'advanceAutomationRuleFired',
   'setResourceProfile',
   'setWatch',
   'setReportDelivery',

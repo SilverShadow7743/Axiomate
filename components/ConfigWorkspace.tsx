@@ -2510,10 +2510,13 @@ function Automation({
       </button>
 
       <p className="cfg-inherit">
-        There is no schedule. Every rule reacts to something that happened, so &ldquo;every
-        morning, escalate what is about to breach&rdquo; cannot be expressed — that needs a clock
-        and a process to run it, and this application has neither. The SLA watch in the agent
-        registry is exactly that shape, which is why it stays declared.
+        A rule can now be bound to a calendar interval instead of an event — &ldquo;every Monday,
+        tell somebody&rdquo; needs no condition to become true, so it is offered as its own
+        trigger above. What still cannot be expressed is a <i>conditional</i> schedule —
+        &ldquo;every morning, escalate what is about to breach&rdquo; needs both a clock and a
+        judgement about what is actually close, and a calendar-triggered rule carries no
+        condition and can only tell somebody, not check anything first. The SLA watch in the
+        agent registry is exactly that compound shape, which is why it stays declared.
       </p>
     </section>
   )

@@ -115,14 +115,14 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
         calendarState = result.state
       }
       for (const f of calendarPlan.fired) {
+        // advanceAutomationRuleFired, not setAutomationRules: the pass runs as ROLE_AUTOMATION,
+        // which may file work (and, by the same narrow reclassification runRecurrences's own
+        // guard relies on, advance this bookkeeping) but may not touch configuration —
+        // setAutomationRules is config.manage-gated and would be refused here every time,
+        // which is exactly what silently broke the duplicate guard before this was caught live.
         const advance: Action = {
           t: 'config',
-          op: {
-            k: 'setAutomationRules',
-            rules: calendarState.model.automationRules.map((r) =>
-              r.id === f.ruleId ? { ...r, lastFiredOn: f.occurrence } : r,
-            ),
-          },
+          op: { k: 'advanceAutomationRuleFired', ruleId: f.ruleId, occurrence: f.occurrence },
           now,
         } as Action
         const before = calendarState

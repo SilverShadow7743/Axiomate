@@ -1550,6 +1550,16 @@ export type ConfigOp =
   | { k: 'setAccess'; patch: Partial<AccessPolicy> }
   | { k: 'setApprovalRules'; rules: ApprovalRule[] }
   | { k: 'setAutomationRules'; rules: AutomationRule[] }
+  /**
+   * The bookkeeping of a calendar-triggered rule's own fire, not a configuration edit — the
+   * single-field sibling of `upsertRecurrence`'s `lastRaisedOn` patch, and for the identical
+   * reason: `runScheduledPass` (`lib/db/schedule.ts`) advances this in the same transaction as
+   * the notify it guards, and the pass runs as `ROLE_AUTOMATION`, which may file work and may
+   * not touch configuration. A narrow op that can only ever mean "this occurrence fired" is
+   * what lets the permission check below tell the two apart without inspecting `rules` as a
+   * whole — `setAutomationRules` replaces the array and stays `config.manage`-gated.
+   */
+  | { k: 'advanceAutomationRuleFired'; ruleId: string; occurrence: string }
   | {
       k: 'setResourceProfile'
       personId: string
@@ -2044,6 +2054,16 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       (a as { op: { id?: string | null } }).op.id != null &&
       Object.keys((a as { op: { patch?: object } }).op.patch ?? {}).join(',') === 'lastRaisedOn'
     /**
+     * The same reclassification, for the same reason, on the sibling mechanism:
+     * `advanceAutomationRuleFired` is the bookkeeping of the notify it guards, not
+     * configuration — and unlike a recurrence's raise, `notify` itself requires no permission
+     * at all (`ACTION_PERMISSIONS.notify` is null), so the guard takes that, not `work.create`.
+     * The op kind existing at all already means "only ever this bookkeeping" — there is no
+     * patch to inspect the way `guardOnly` above must.
+     */
+    const notifyGuardOnly =
+      a.t === 'config' && (a as { op: { k: string } }).op.k === 'advanceAutomationRuleFired'
+    /**
      * One narrow self-exception (E2): asking for your OWN absence is not a claim on anybody
      * else's time — the arm lands it Requested, for somebody who holds the DECIDING grant to
      * answer. Requiring `capacity.record` here would make My calendar's "Request leave" a
@@ -2066,7 +2086,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           const c = state.commitments[(a as { id: string }).id]
           return Boolean(c && c.kind === 'Leave' && isSelf(c.person, c.personId))
         })())
-    const need = ownLeave ? null : guardOnly ? 'work.create' : permissionForAction(a.t, { closing })
+    const need = ownLeave
+      ? null
+      : guardOnly
+        ? 'work.create'
+        : notifyGuardOnly
+          ? null
+          : permissionForAction(a.t, { closing })
     if (need) {
       const verdict = can(state.model, actor, need)
       if (!verdict.allowed) return { state, error: verdict.reason ?? 'Not permitted.' }
@@ -8090,6 +8116,19 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           by,
         },
         'Automation updated.',
+      )
+    }
+
+    case 'advanceAutomationRuleFired': {
+      const rule = m.automationRules.find((r) => r.id === op.ruleId)
+      if (!rule) return { state, error: 'That automation rule no longer exists.' }
+      const automationRules = m.automationRules.map((r) =>
+        r.id === op.ruleId ? { ...r, lastFiredOn: op.occurrence } : r,
+      )
+      return done(
+        { ...m, automationRules },
+        { rowId: op.ruleId, field: 'automationRule.lastFiredOn', from: rule.lastFiredOn ?? null, to: op.occurrence, at: now, by },
+        `“${rule.label}” fired.`,
       )
     }
 

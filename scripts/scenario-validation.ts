@@ -3649,13 +3649,55 @@ scenario(
     } as Action)
     const illegalRefused = Boolean(illegalKind.error)
 
-    const good = firedOnce && oneNotify && delivered && noDoubleFire && orphanMissed && illegalRefused
+    /*
+     * The permission path a browser scenario never touches, because `ok`/`act` both run as
+     * actor `A` — but the scheduled pass runs as SCHEDULE_ACTOR (`machine:schedule`, resolving
+     * to ROLE_AUTOMATION), which may file work and may not touch configuration
+     * (`lib/access.ts`'s `MACHINE_ROLE_ID` grants). This is the exact gap that let the
+     * duplicate guard silently never advance in production: `notify` needs no permission
+     * (unaffected), but the FIRST version of the advance used `setAutomationRules` — config.manage
+     * — which the machine actor does not hold and which the pure-logic assertions above,
+     * calling `ok`/`act` under actor `A`, could not have caught.
+     */
+    const machineNotify = apply(withCalendarRule, firstRun.actions[0]!, SCHEDULE_ACTOR)
+    const machineMayNotify = !machineNotify.error
+    const machineAdvance = apply(machineNotify.state, {
+      t: 'config',
+      op: { k: 'advanceAutomationRuleFired', ruleId: 'AUTO_TEST_CALENDAR', occurrence: firstRun.fired[0]!.occurrence },
+      now: NOW,
+    } as Action, SCHEDULE_ACTOR)
+    const machineMayAdvance =
+      !machineAdvance.error &&
+      machineAdvance.state.model.automationRules.find((r) => r.id === 'AUTO_TEST_CALENDAR')?.lastFiredOn ===
+        firstRun.fired[0]!.occurrence
+    // Pinned negatively too: the op this was fixed FROM must still be refused for this actor,
+    // or a future edit could silently reintroduce the exact bug this scenario exists to catch.
+    const machineMayNotAdvanceViaSetAutomationRules = Boolean(
+      apply(
+        machineNotify.state,
+        {
+          t: 'config',
+          op: {
+            k: 'setAutomationRules',
+            rules: machineNotify.state.model.automationRules.map((r) =>
+              r.id === 'AUTO_TEST_CALENDAR' ? { ...r, lastFiredOn: firstRun.fired[0]!.occurrence } : r,
+            ),
+          },
+          now: NOW,
+        } as Action,
+        SCHEDULE_ACTOR,
+      ).error,
+    )
+
+    const good =
+      firedOnce && oneNotify && delivered && noDoubleFire && orphanMissed && illegalRefused &&
+      machineMayNotify && machineMayAdvance && machineMayNotAdvanceViaSetAutomationRules
     return {
       verdict: good ? 'PASS' : 'FAIL',
-      actual: `A weekly rule due for the first time fires exactly one notify (${firstRun.fired.length} fired, ${firstRun.actions.length} action) and Priya receives it (${delivered}). Re-evaluated for the same day after lastFiredOn advances to that occurrence, it fires nothing (${secondRun.actions.length} actions) — the duplicate guard, live. A calendar rule addressed to a role nobody holds is reported as a miss rather than a silent success (${orphanRun.misses.length} miss: "${orphanRun.misses[0]?.why}"). Saving a calendar rule with a setStatus step is refused at config-save time: "${illegalKind.error}".`,
+      actual: `A weekly rule due for the first time fires exactly one notify (${firstRun.fired.length} fired, ${firstRun.actions.length} action) and Priya receives it (${delivered}). Re-evaluated for the same day after lastFiredOn advances to that occurrence, it fires nothing (${secondRun.actions.length} actions) — the duplicate guard, live. A calendar rule addressed to a role nobody holds is reported as a miss rather than a silent success (${orphanRun.misses.length} miss: "${orphanRun.misses[0]?.why}"). Saving a calendar rule with a setStatus step is refused at config-save time: "${illegalKind.error}". Run as the scheduled pass's own machine actor: the notify is permitted (${machineMayNotify}), advanceAutomationRuleFired is permitted and actually advances lastFiredOn (${machineMayAdvance}), and the same advance attempted through setAutomationRules instead is refused (${machineMayNotAdvanceViaSetAutomationRules}: "${machineAdvance.error ?? ''}") — the exact permission boundary that silently broke the duplicate guard in production before this case existed.`,
       stops: '—',
       severity: '—',
-      impact: 'Closes the one gap scenario Z\'s own impact note named as still open: "a rule bound to a bare calendar interval with no watched condition at all." Restricted to notify by design — the other five RuleActionKinds are all unconditionally issue-shaped in planActions, and a calendar tick has no issue.',
+      impact: 'Closes the one gap scenario Z\'s own impact note named as still open: "a rule bound to a bare calendar interval with no watched condition at all." Restricted to notify by design — the other five RuleActionKinds are all unconditionally issue-shaped in planActions, and a calendar tick has no issue. The machine-actor cases exist because the first live run of this feature double-fired in production: the advance originally used setAutomationRules, refused for ROLE_AUTOMATION under config.manage, so lastFiredOn never moved — invisible to every case above because they all run as actor A. advanceAutomationRuleFired (mirroring upsertRecurrence\'s own lastRaisedOn-only reclassification) fixed it; these three assertions are what would have caught it before it shipped.',
     }
   },
 )
