@@ -2614,6 +2614,26 @@
       "impact": "none"
     },
     {
+      "id": "SIG1",
+      "title": "buildSignatureHtml drops a placeholder line entirely when its value is absent, HTML-escapes every substituted value, and only adds the logo image when one is given; plainTextToHtml escapes and turns newlines into <br>",
+      "expected": "A line carrying {{title}} or {{phone}} must be dropped whole when that value is absent — not left blank, not left as the literal placeholder text — the 'absent means unrecorded, never a visible gap' convention the design decided on. Every substituted value goes through HTML-escaping since a person's own name or title is untrusted-enough input to break the surrounding markup otherwise. The logo is composed as an <img>, never a {{}} token, and only appears when a logoDataUri is actually given.",
+      "verdict": "PASS",
+      "actual": "both=true titleDropped=true phoneDropped=true neither=true escaped=true logo=true/true plain=true/true",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "SIG2",
+      "title": "upsertPerson merges title/phone with the same absent-versus-cleared shape as email; setOrganization with only signatureTemplate in the patch is not swallowed by the unchanged guard",
+      "expected": "title/phone follow email's own merge rule: undefined keeps what was there, an explicit empty string clears it, a value sets it. setOrganization's `unchanged` check was extended to compare signatureTemplate alongside name/logo/etc — before that fix, a patch touching only the template would hit `if (unchanged) return { state }` and silently do nothing.",
+      "verdict": "PASS",
+      "actual": "created title=D365 Finance Architect phone=+1-555-0100; after omit title=D365 Finance Architect phone=+1-555-0100; after clear title=undefined phone=+1-555-0100; signatureTemplate changed Thanks,\n{{name}}\n{{title}}\n{{org}}\nEngineering Intelligent Enterprises\n{{phone}} -> Custom {{name}}, name untouched (Axiocloud Solutions)",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "PA1",
       "title": "reapplyable strips a stale expected and the transport key, keeping the edit itself intact",
       "expected": "A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.",

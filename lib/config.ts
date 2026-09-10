@@ -180,6 +180,15 @@ export interface OrganizationIdentity {
    * the UI is not the only writer.
    */
   logoDataUri?: string
+  /**
+   * The firm-wide outgoing-mail signature, one format for everyone — see
+   * `docs/plans/2026-09-08-email-signature-design.md`. Placeholders `{{name}}`, `{{title}}`,
+   * `{{org}}`, `{{phone}}` are filled per sender at send time by `lib/signature.ts`; the logo
+   * is composed separately from `logoDataUri`, not a placeholder. Editable in Configuration —
+   * `DEFAULT_ORGANIZATION` below seeds the decided default, not a hardcoded constant nobody can
+   * change without a deploy.
+   */
+  signatureTemplate?: string
 }
 
 /**
@@ -218,6 +227,8 @@ export const DEFAULT_ORGANIZATION: OrganizationIdentity = {
   partyCode: 'Axiocloud',
   description:
     'Delivery workspace for Axiocloud Solutions and the client engagements it runs. The top tier of the tree is a client organisation; everything beneath it is work Axiocloud is delivering.',
+  signatureTemplate:
+    'Thanks,\n{{name}}\n{{title}}\n{{org}}\nEngineering Intelligent Enterprises\n{{phone}}',
 }
 
 /* ================================================================== *
@@ -246,6 +257,15 @@ export interface Person {
    * person can change. Optional, because the imported log carries names and no addresses.
    */
   email?: string
+  /**
+   * A client-facing job title — "D365 Finance Architect," not a permission label. Deliberately
+   * separate from `roleIds` (see `docs/plans/2026-09-08-email-signature-design.md`'s own "What
+   * does not exist" section): a role grants access, a title is what a client sees signed under
+   * a name. Absent means not recorded, same convention as `email`.
+   */
+  title?: string
+  /** A work phone number for the signature block. Absent means not recorded, same convention as `email`. */
+  phone?: string
   /**
    * The CLIENT NODE this person belongs to — set for client-role seats, and what scopes
    * their withheld view to one client's subtree. Absent means unattached: for a client

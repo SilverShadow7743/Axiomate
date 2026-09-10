@@ -139,6 +139,7 @@ import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
 import { buildLeaveReport } from '../lib/reports/leave'
+import { buildSignatureHtml, plainTextToHtml } from '../lib/signature'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
@@ -12888,6 +12889,126 @@ scenario(
           stops: 'at buildLeaveReport — a month-boundary clip, a holiday, the Requested/Returned split, or the reason/note exclusion is wrong',
           severity: 'P2',
           impact: 'a leave report handed to finance/HR would show the wrong days, the wrong person, a declined request as if it were real, or — worst — a reason nobody outside the Capacity tab is meant to see',
+        }
+  },
+)
+
+/* ================================================================== *
+ * Email signature (design 2026-09-08, resolved 2026-09-10)
+ * ================================================================== */
+
+scenario(
+  'SIG1',
+  'buildSignatureHtml drops a placeholder line entirely when its value is absent, HTML-escapes every substituted value, and only adds the logo image when one is given; plainTextToHtml escapes and turns newlines into <br>',
+  "A line carrying {{title}} or {{phone}} must be dropped whole when that value is absent — not left blank, not left as the literal placeholder text — the 'absent means unrecorded, never a visible gap' convention the design decided on. Every substituted value goes through HTML-escaping since a person's own name or title is untrusted-enough input to break the surrounding markup otherwise. The logo is composed as an <img>, never a {{}} token, and only appears when a logoDataUri is actually given.",
+  () => {
+    const template = 'Thanks,\n{{name}}\n{{title}}\n{{org}}\n{{phone}}'
+
+    const both = buildSignatureHtml(template, { name: 'Priya', title: 'D365 Architect', org: 'Axiocloud', phone: '+1-555-0100' })
+    const bothExpected = '<div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud<br>+1-555-0100</div>'
+    const bothCorrect = both === bothExpected
+
+    const noTitle = buildSignatureHtml(template, { name: 'Priya', org: 'Axiocloud', phone: '+1-555-0100' })
+    const noTitleExpected = '<div>Thanks,<br>Priya<br>Axiocloud<br>+1-555-0100</div>'
+    const titleDropped = noTitle === noTitleExpected && !noTitle.includes('{{title}}')
+
+    const noPhone = buildSignatureHtml(template, { name: 'Priya', title: 'D365 Architect', org: 'Axiocloud' })
+    const noPhoneExpected = '<div>Thanks,<br>Priya<br>D365 Architect<br>Axiocloud</div>'
+    const phoneDropped = noPhone === noPhoneExpected && !noPhone.includes('{{phone}}')
+
+    const neither = buildSignatureHtml(template, { name: 'Priya', org: 'Axiocloud' })
+    const neitherExpected = '<div>Thanks,<br>Priya<br>Axiocloud</div>'
+    const neitherCorrect = neither === neitherExpected
+
+    const hostile = buildSignatureHtml('{{name}}', { name: '<script>alert(1)</script> & Co', org: 'Axiocloud' })
+    const hostileExpected = '<div>&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</div>'
+    const escaped = hostile === hostileExpected && !hostile.includes('<script>')
+
+    const withLogo = buildSignatureHtml('{{name}}', { name: 'Priya', org: 'Axiocloud' }, 'data:image/png;base64,AAAA')
+    const logoPresent = withLogo.includes('<img src="data:image/png;base64,AAAA"') && withLogo.includes('alt="Axiocloud"')
+    const withoutLogo = buildSignatureHtml('{{name}}', { name: 'Priya', org: 'Axiocloud' })
+    const logoAbsent = !withoutLogo.includes('<img')
+
+    const plainEscaped = plainTextToHtml('<b>not bold</b>') === '&lt;b&gt;not bold&lt;/b&gt;'
+    const plainBreaks = plainTextToHtml('line one\nline two') === 'line one<br>line two'
+
+    const good =
+      bothCorrect && titleDropped && phoneDropped && neitherCorrect && escaped && logoPresent && logoAbsent && plainEscaped && plainBreaks
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `both=${bothCorrect} titleDropped=${titleDropped} phoneDropped=${phoneDropped} neither=${neitherCorrect} escaped=${escaped} logo=${logoPresent}/${logoAbsent} plain=${plainEscaped}/${plainBreaks}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `both="${both}" noTitle="${noTitle}" noPhone="${noPhone}" neither="${neither}" hostile="${hostile}" withLogo="${withLogo}" withoutLogo="${withoutLogo}" plainEscaped="${plainTextToHtml('<b>not bold</b>')}" plainBreaks="${plainTextToHtml('line one\nline two')}"`,
+          stops: 'at buildSignatureHtml/plainTextToHtml — a placeholder line is not dropped correctly, a value is not escaped, or the logo appears when it should not (or vice versa)',
+          severity: 'P2',
+          impact: 'a signature sent to a real client could show a literal {{title}}, broken markup from an unescaped name, or a missing/unwanted logo',
+        }
+  },
+)
+
+scenario(
+  'SIG2',
+  'upsertPerson merges title/phone with the same absent-versus-cleared shape as email; setOrganization with only signatureTemplate in the patch is not swallowed by the unchanged guard',
+  "title/phone follow email's own merge rule: undefined keeps what was there, an explicit empty string clears it, a value sets it. setOrganization's `unchanged` check was extended to compare signatureTemplate alongside name/logo/etc — before that fix, a patch touching only the template would hit `if (unchanged) return { state }` and silently do nothing.",
+  () => {
+    let r = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: null, name: 'Sig Test Person', roleIds: [], title: 'D365 Finance Architect', phone: '+1-555-0100' },
+      now: NOW,
+    } as Action)
+    const personId = Object.values(r.model.people).find((p) => p.name === 'Sig Test Person')!.id
+    const created = r.model.people[personId]
+    const createdCorrect = created.title === 'D365 Finance Architect' && created.phone === '+1-555-0100'
+
+    // Omit title/phone entirely on a follow-up edit — absent means keep, not clear.
+    r = ok(r, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: personId, name: 'Sig Test Person', roleIds: [] },
+      now: NOW,
+    } as Action)
+    const afterOmit = r.model.people[personId]
+    const preserved = afterOmit.title === 'D365 Finance Architect' && afterOmit.phone === '+1-555-0100'
+
+    // Clear title only — explicit empty string clears; phone stays untouched.
+    r = ok(r, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: personId, name: 'Sig Test Person', roleIds: [], title: '' },
+      now: NOW,
+    } as Action)
+    const afterClear = r.model.people[personId]
+    const titleCleared = afterClear.title === undefined && afterClear.phone === '+1-555-0100'
+
+    const before = BASE.model.organization.signatureTemplate
+    const s2 = ok(BASE, {
+      t: 'config',
+      op: { k: 'setOrganization', patch: { signatureTemplate: 'Custom {{name}}' } },
+      now: NOW,
+    } as Action)
+    const templateChanged =
+      s2.model.organization.signatureTemplate === 'Custom {{name}}' && s2.model.organization.signatureTemplate !== before
+    const nameUntouched = s2.model.organization.name === BASE.model.organization.name
+
+    const good = createdCorrect && preserved && titleCleared && templateChanged && nameUntouched
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `created title=${created.title} phone=${created.phone}; after omit title=${afterOmit.title} phone=${afterOmit.phone}; after clear title=${afterClear.title} phone=${afterClear.phone}; signatureTemplate changed ${before} -> ${s2.model.organization.signatureTemplate}, name untouched (${s2.model.organization.name})`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `createdCorrect=${createdCorrect} preserved=${preserved} (title=${afterOmit.title} phone=${afterOmit.phone}) titleCleared=${titleCleared} (title=${afterClear.title} phone=${afterClear.phone}) templateChanged=${templateChanged} (${s2.model.organization.signatureTemplate}) nameUntouched=${nameUntouched}`,
+          stops: 'at upsertPerson\'s title/phone merge, or at setOrganization\'s unchanged guard',
+          severity: 'P2',
+          impact: 'a title/phone edit could silently fail to save, or — the sharper risk — an admin editing only the signature template could see no error and no saved change at all',
         }
   },
 )

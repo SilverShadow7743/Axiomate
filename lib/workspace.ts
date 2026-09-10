@@ -1583,6 +1583,10 @@ export type ConfigOp =
       name: string
       roleIds: string[]
       email?: string
+      /** A client-facing job title, for the email signature. See `Person.title`. */
+      title?: string
+      /** A work phone number, for the email signature. See `Person.phone`. */
+      phone?: string
       /** The client node a client-role seat belongs to; null clears it. See Person. */
       clientScopeId?: string | null
       /** Who this person reports to; null clears it. See `Person.managerId`. */
@@ -8532,7 +8536,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
        * TypeError out of a pure reducer, which surfaces as a 500 rather than as a refusal
        * naming the field.
        */
-      for (const f of ['grade', 'track', 'developingToward', 'joinedOn', 'departedOn'] as const) {
+      for (const f of ['grade', 'track', 'developingToward', 'joinedOn', 'departedOn', 'title', 'phone'] as const) {
         const v = op[f]
         if (v !== undefined && typeof v !== 'string') {
           return { state, error: `${f} must be text.` }
@@ -8546,6 +8550,8 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       const clash = Object.values(m.people).find((p) => p.id !== id && p.name === name)
       if (clash) return { state, error: `“${name}” is already in the directory.` }
       const email = op.email?.trim().toLowerCase()
+      const title = op.title?.trim()
+      const phone = op.phone?.trim()
       // Two people cannot share an address, and the check is worth having precisely because
       // this is the field a signed-in person is matched on.
       const sameEmail = email
@@ -8584,6 +8590,9 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         // Undefined when cleared rather than an empty string, so "no address recorded" is one
         // state rather than two that compare unequal.
         ...(email ? { email } : existing?.email && op.email === undefined ? { email: existing.email } : {}),
+        // Same absent-versus-cleared shape as the address — a title/phone the signature reads.
+        ...(title ? { title } : existing?.title && op.title === undefined ? { title: existing.title } : {}),
+        ...(phone ? { phone } : existing?.phone && op.phone === undefined ? { phone: existing.phone } : {}),
         // Absent-versus-cleared, like the address: undefined keeps what was there, null clears.
         ...(op.clientScopeId !== undefined
           ? op.clientScopeId
@@ -8909,7 +8918,8 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         org.shortName === m.organization.shortName &&
         org.description === m.organization.description &&
         org.partyCode === m.organization.partyCode &&
-        (org.logoDataUri ?? '') === (m.organization.logoDataUri ?? '')
+        (org.logoDataUri ?? '') === (m.organization.logoDataUri ?? '') &&
+        (org.signatureTemplate ?? '') === (m.organization.signatureTemplate ?? '')
       if (unchanged) return { state }
 
       return done(
