@@ -64,6 +64,7 @@ import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyI
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './ClientPackView'
 import FinanceReportDialog from './FinanceReportDialog'
+import LeaveReportDialog from './LeaveReportDialog'
 import FirstRunCard from './FirstRunCard'
 import AdminFirstRunCard from './AdminFirstRunCard'
 import SearchResults from './SearchResults'
@@ -243,6 +244,7 @@ export default function IssueWorkspace({
   /** Which client pack is open for print, if any. */
   const [clientPack, setClientPack] = useState<{ kind: 'weekly' | 'monthly'; pack: WeeklyClientPack | MonthlyGovernancePack } | null>(null)
   const [financeReportOpen, setFinanceReportOpen] = useState(false)
+  const [leaveReportOpen, setLeaveReportOpen] = useState(false)
   /** The directory person whose profile panel is open, if any. */
   const [openProfileId, setOpenProfileId] = useState<string | null>(null)
   const exportWrap = useRef<HTMLDivElement>(null)
@@ -2291,6 +2293,16 @@ export default function IssueWorkspace({
                 className="menu-item"
                 onClick={() => {
                   setExportMenu(false)
+                  setLeaveReportOpen(true)
+                }}
+              >
+                Leave report…
+                <span className="menu-sub">Working days taken, trailing 6 months — no reasons, no balances</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setExportMenu(false)
                   exportCsv()
                 }}
               >
@@ -3040,6 +3052,9 @@ export default function IssueWorkspace({
       )}
       {financeReportOpen && (
         <FinanceReportDialog state={state} today={today} onClose={() => setFinanceReportOpen(false)} />
+      )}
+      {leaveReportOpen && (
+        <LeaveReportDialog state={state} today={today} onClose={() => setLeaveReportOpen(false)} />
       )}
 
       {snapshotTarget && (
