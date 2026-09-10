@@ -3435,7 +3435,7 @@ scenario(
       actual: `The working step ran and the impossible one did not, whether the rule fired on a person's click (${raised} notification raised, ${refused} step refused: "${run.automation.refusals[0]?.error}") or on the scheduled pass's own onset event (${scheduleRaised} notification raised, ${scheduleRefused} step refused: "${scheduled.refusals[0]?.error}") — the original change stands either way. A rule addressed to a role nobody holds reports it — "${missed.automation.misses[0]?.why}" — rather than looking like it worked. Rules act by dispatching ordinary actions, so a rule cannot do anything a person could not, and everything it does is in the trail with the rule that caused it.`,
       stops: '—',
       severity: '—',
-      impact: 'A rule fails exactly as safely whether a person triggered it or the scheduled pass did. Time-driven automation already exists — AUTO_OVERDUE below is a shipped, enabled rule bound to the pass\'s own "issue.overdue" event — the one remaining gap is a rule bound to a bare calendar interval with no watched condition at all, which is a different and much narrower thing.',
+      impact: 'A rule fails exactly as safely whether a person triggered it or the scheduled pass did. Time-driven automation already exists — AUTO_OVERDUE below is a shipped, enabled rule bound to the pass\'s own "issue.overdue" event. The gap this once named — a rule bound to a bare calendar interval with no watched condition at all — is closed by AUTO3, further down.',
     }
   },
 )

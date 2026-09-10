@@ -2266,23 +2266,46 @@ function Automation({
 
           <div className="cfg-fld-row">
             <label className="cfg-fld">
-              <span>When</span>
-              {/* `rule.on` widened to admit a calendar trigger (`RuleTrigger`,
-                  lib/automation.ts) — the picker for that mode is its own step, not yet built;
-                  this keeps an event-shaped rule's existing picker compiling and working
-                  unchanged until it lands. */}
+              <span>Trigger</span>
               <select
-                value={typeof rule.on === 'string' ? rule.on : ''}
-                onChange={(e) => put(rule.id, { on: e.target.value as EventType })}
+                value={typeof rule.on === 'string' ? 'event' : 'calendar'}
+                onChange={(e) =>
+                  put(
+                    rule.id,
+                    e.target.value === 'calendar'
+                      ? {
+                          on: { kind: 'calendar', cadence: { kind: 'weekly', weekday: 1 } },
+                          // A calendar tick has no issue for the other five action kinds to
+                          // act on, and setAutomationRules refuses saving one that keeps them —
+                          // reset here so switching the toggle never itself trips that refusal.
+                          then: [{ kind: 'notify', audience: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'in-app', text: '' }],
+                        }
+                      : { on: EVENT_TYPES[0]!.key },
+                  )
+                }
               >
-                {EVENT_TYPES.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.label}
-                  </option>
-                ))}
+                <option value="event">An event happens</option>
+                <option value="calendar">A calendar interval, with no condition</option>
               </select>
             </label>
-            {rule.when.map((cond, i) => (
+            {typeof rule.on === 'string' ? (
+              <label className="cfg-fld">
+                <span>When</span>
+                <select value={rule.on} onChange={(e) => put(rule.id, { on: e.target.value as EventType })}>
+                  {EVENT_TYPES.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <CadenceFields
+                cadence={rule.on.cadence}
+                onChange={(cadence) => put(rule.id, { on: { kind: 'calendar', cadence } })}
+              />
+            )}
+            {typeof rule.on === 'string' && rule.when.map((cond, i) => (
               <Fragment key={i}>
                 <label className="cfg-fld">
                   <span>And</span>
@@ -2352,11 +2375,18 @@ function Automation({
                   }
                 >
                   <option value="notify">Tell somebody</option>
-                  <option value="setNextAction">Set the next action</option>
-                  <option value="addNote">Add a note</option>
-                  <option value="requestApproval">Ask for an approval</option>
-                  <option value="setStatus">Set the status</option>
-                  <option value="setOwner">Set the owner</option>
+                  {/* A calendar tick has no issue — the other five all patch or annotate one
+                      (planActions, lib/automation.ts), so they are not offered here rather than
+                      offered and refused at save time. */}
+                  {typeof rule.on === 'string' && (
+                    <>
+                      <option value="setNextAction">Set the next action</option>
+                      <option value="addNote">Add a note</option>
+                      <option value="requestApproval">Ask for an approval</option>
+                      <option value="setStatus">Set the status</option>
+                      <option value="setOwner">Set the owner</option>
+                    </>
+                  )}
                 </select>
               </label>
               {step.kind === 'notify' && (
@@ -2364,15 +2394,22 @@ function Automation({
                   <label className="cfg-fld">
                     <span>Who</span>
                     <select
-                      value={step.audience ?? 'owner'}
+                      value={step.audience ?? (typeof rule.on === 'string' ? 'owner' : '')}
                       onChange={(e) =>
                         put(rule.id, {
                           then: rule.then.map((a, j) => (j === i ? { ...a, audience: e.target.value } : a)),
                         })
                       }
                     >
-                      <option value="owner">The owner</option>
-                      <option value="raisedBy">Whoever raised it</option>
+                      {/* Neither resolves to anyone without a triggering issue
+                          (resolveAudience, lib/automation.ts) — offering them on a calendar
+                          rule would be a choice that can only ever miss. */}
+                      {typeof rule.on === 'string' && (
+                        <>
+                          <option value="owner">The owner</option>
+                          <option value="raisedBy">Whoever raised it</option>
+                        </>
+                      )}
                       {roles.map((r) => (
                         <option key={r.id} value={`role:${r.id}`}>
                           Everyone who is {r.label}
@@ -2969,6 +3006,60 @@ function Goals({
   )
 }
 
+/** Shared by `Recurring`'s own cadence form and `CadenceFields` below, so there is exactly one
+ *  place that spells a weekday wrong if it ever is. */
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/**
+ * The weekly/monthly cadence picker `Recurring`'s own "Add a rule" form already renders inline
+ * — same two fields, same day-31-means-month-end convention (`lib/recurrence.ts`) — extracted
+ * so `Automation`'s calendar-triggered rules use the identical control rather than a second,
+ * possibly-drifting copy of it. Controlled, unlike `Recurring`'s local kind/weekday/day state,
+ * because a rule's cadence here is a field on already-live state (`rule.on.cadence`), edited
+ * through the same `put`-on-change pattern every other field on this card already uses.
+ */
+function CadenceFields({ cadence, onChange }: { cadence: Cadence; onChange: (c: Cadence) => void }) {
+  return (
+    <>
+      <label className="cfg-fld">
+        <span>Cadence</span>
+        <select
+          value={cadence.kind}
+          onChange={(e) =>
+            onChange(e.target.value === 'weekly' ? { kind: 'weekly', weekday: 1 } : { kind: 'monthly', day: 31 })
+          }
+        >
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </label>
+      {cadence.kind === 'weekly' ? (
+        <label className="cfg-fld">
+          <span>On</span>
+          <select value={cadence.weekday} onChange={(e) => onChange({ kind: 'weekly', weekday: Number(e.target.value) })}>
+            {WEEKDAY_LABELS.map((d, i) => (
+              <option key={d} value={i}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <label className="cfg-fld">
+          <span>On day (31 = month-end)</span>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={cadence.day}
+            onChange={(e) => onChange({ kind: 'monthly', day: Number(e.target.value) })}
+          />
+        </label>
+      )}
+    </>
+  )
+}
+
 function Recurring({
   state,
   onConfig,
@@ -3098,7 +3189,7 @@ function Recurring({
             <label className="cfg-fld">
               <span>On</span>
               <select value={weekday} onChange={(e) => setWeekday(e.target.value)}>
-                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
+                {WEEKDAY_LABELS.map((d, i) => (
                   <option key={d} value={i}>
                     {d}
                   </option>
