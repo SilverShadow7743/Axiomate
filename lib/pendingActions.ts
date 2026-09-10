@@ -113,11 +113,23 @@ export function savePendingAction(tenantId: string, action: SubmittedAction): vo
   writeAll(tenantId, [...all, action])
 }
 
-/** Remove one action once it is confirmed (saved, or explicitly discarded). */
+/**
+ * Remove one action once it is confirmed (saved, or explicitly discarded).
+ *
+ * Clears the halted marker itself once this empties the log completely — deliberately not
+ * done by whatever emptied a live queue (`useAutosave.ts`'s in-memory ref, reset fresh on every
+ * mount), which is a session-local signal and says nothing about the persisted log a PRIOR
+ * session's halt may have left behind. This function is the single place every removal path
+ * (a confirmed batch, a refused batch's committed prefix, Reapply, Discard) already funnels
+ * through, so it is the one place that actually knows when the log — the thing `wasHalted`
+ * exists to describe — is truly clear.
+ */
 export function clearPendingAction(tenantId: string, key: string): void {
   const all = readAll(tenantId)
   const next = all.filter((a) => a.key !== key)
-  if (next.length !== all.length) writeAll(tenantId, next)
+  if (next.length === all.length) return
+  writeAll(tenantId, next)
+  if (!next.length) clearHalted(tenantId)
 }
 
 /** Everything currently held — what a recovery view has to show. */

@@ -117,7 +117,7 @@ import {
   loadWorkspaceLocally,
   saveWorkspaceLocally,
 } from '@/lib/autosave'
-import { clearHalted, clearPendingAction, loadPendingActions, wasHalted } from '@/lib/pendingActions'
+import { clearPendingAction, loadPendingActions, wasHalted } from '@/lib/pendingActions'
 import { reapplyable } from '@/lib/reapplyPendingAction'
 import type { SubmittedAction } from '@/lib/idempotency'
 import type { ConfigOp } from '@/lib/workspace'
@@ -3160,19 +3160,11 @@ export default function IssueWorkspace({
             // normally like any other edit. Clearing the OLD key here is what removes the stuck
             // entry itself; it is not the same key a subsequent server confirmation would clear.
             if (action.key) clearPendingAction(tenantId, action.key)
-            setStuckActions((prev) => {
-              const next = prev?.filter((a) => a.key !== action.key) ?? null
-              if (next && !next.length) clearHalted(tenantId)
-              return next
-            })
+            setStuckActions((prev) => prev?.filter((a) => a.key !== action.key) ?? null)
           }}
           onDiscard={(key) => {
             clearPendingAction(tenantId, key)
-            setStuckActions((prev) => {
-              const next = prev?.filter((a) => a.key !== key) ?? null
-              if (next && !next.length) clearHalted(tenantId)
-              return next
-            })
+            setStuckActions((prev) => prev?.filter((a) => a.key !== key) ?? null)
           }}
           onClose={() => setStuckActions(null)}
         />

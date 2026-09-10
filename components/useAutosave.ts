@@ -5,7 +5,7 @@ import type { Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 import type { SaveState } from '@/lib/autosave'
 import { shouldResume, verdictFor, type Halt, type ResumeTrigger, type Verdict } from '@/lib/queue'
-import { clearHalted, clearPendingAction, markHalted, savePendingAction } from '@/lib/pendingActions'
+import { clearPendingAction, markHalted, savePendingAction } from '@/lib/pendingActions'
 
 /**
  * The autosave queue.
@@ -218,10 +218,6 @@ export function useAutosave(enabled: boolean, tenantId: string): Autosave {
               // A batch that got through means whatever was wrong is over. The ladder resets
               // so the next outage waits thirty seconds rather than four minutes.
               pauses.current = 0
-              // Nothing left owed to the server — whatever halt this tenant's log was marked
-              // with (if any) is resolved. Left set, it would misclassify the next ordinary
-              // in-flight gap as a stuck change on a future boot.
-              if (!queue.current.length) clearHalted(tenantId)
               if (alive.current) {
                 setState({
                   status: queue.current.length ? 'saving' : 'saved',
