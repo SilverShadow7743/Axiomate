@@ -131,6 +131,8 @@ export function clientView(
     // `redactForReader`'s own filter, applied here too since clientView can be called
     // independently of boot()'s internal.view branch.
     personalEvents: {},
+    // Nobody's private to-dos either — the same absolute rule, the same reason.
+    personalActions: {},
     // Internal machinery, the same class as rates/allocations/project membership above — a
     // client must never see the firm's own mail log, accepted or refused.
     inboundMail: {},

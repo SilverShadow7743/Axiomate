@@ -384,6 +384,19 @@ export default function FilterBar({
         {filters.raidOnly ? 'All records' : 'RAID only'}
       </button>
 
+      <button
+        className={`btn ghost${filters.triageOnly ? ' on' : ''}`}
+        onClick={() => setFilters({ ...filters, triageOnly: !filters.triageOnly })}
+        aria-pressed={filters.triageOnly}
+        title={
+          filters.triageOnly
+            ? 'Show every record again'
+            : 'Show only records intake filed from a new thread that nobody has confirmed yet'
+        }
+      >
+        {filters.triageOnly ? 'All records' : 'Needs triage'}
+      </button>
+
       {active && (
         <button
           className="btn ghost"

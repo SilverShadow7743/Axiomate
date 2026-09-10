@@ -130,6 +130,8 @@ interface Props {
   onClearLifecycle: (id: string) => void
   /** Opens the Move dialog for the selected record — see OverviewTab's own use of it. */
   onMove?: () => void
+  /** Mail triage — passed straight through to OverviewTab; see its own doc comment. */
+  onConvertToPersonalAction?: (issueId: string) => void
   onAcceptProposal: (id: string) => void
   onUnlink: (relationshipId: string) => void
   onRemoveDependency: (dependencyId: string) => void
@@ -260,6 +262,7 @@ export default function DetailPanel({
   onBuildLifecycle,
   onClearLifecycle,
   onMove,
+  onConvertToPersonalAction,
   onAcceptProposal,
   onUnlink,
   onRemoveDependency,
@@ -721,6 +724,7 @@ export default function DetailPanel({
             onUploadImage={(file) => onUploadImage(issue.id, file)}
             onManageEvidence={onManageEvidence}
             onMove={onMove}
+            onConvertToPersonalAction={onConvertToPersonalAction}
           />
         ) : tab === 'Checklist' ? (
           <ChecklistTab

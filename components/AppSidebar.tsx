@@ -16,7 +16,7 @@ import type { SavedView } from '@/lib/savedViews'
  */
 
 const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
-  { title: 'My work', items: ['mywork', 'mycalendar', 'inbox'] },
+  { title: 'My work', items: ['mywork', 'mycalendar', 'mytodos', 'inbox'] },
   { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio', 'applications', 'analytics'] },
   { title: 'Records', items: ['timesheet', 'mail', 'people'] },
 ]
@@ -45,6 +45,7 @@ const VIEW_LABEL: Record<WorkspaceView, string> = {
   timesheet: 'Timesheets',
   inbox: 'Inbox',
   mycalendar: 'My calendar',
+  mytodos: 'My to-dos',
   mail: 'Mail',
   people: 'People',
 }
@@ -59,6 +60,7 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   timesheet: 'Your week, gathered — and the approval queue, if you hold it',
   inbox: 'What needs a decision, what you’re waiting on, and what the rules have told you',
   mycalendar: 'Your own month — events, leave, allocation and your due dates, private to you',
+  mytodos: 'Your own to-dos — mail that wasn’t project work, and anything you note for yourself, private to you',
   mail: 'Your inbox, and what arrived at the project mailbox',
   people: 'Every colleague in the directory — open a profile for identity, career and skills',
 }

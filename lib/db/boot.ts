@@ -3,6 +3,7 @@ import { clientView } from '../clientBoundary'
 import { redactLeaveReasons } from '../availability'
 import { memberProjectIdsFor, projectView } from '../projectBoundary'
 import { personalEventsFor } from '../personalEvents'
+import { personalActionsFor } from '../personalActions'
 import { redactPersonSkill } from '../skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
@@ -353,6 +354,10 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
    * different conditions. A personal-event leak has no such story.
    */
   const personalEvents = personalEventsFor(state.personalEvents, mine)
+  // The same absolute rule, the same placement, for a person's own to-dos — see
+  // lib/personalActions.ts. Every row that is not the reader's own is withheld here, before
+  // any branch below could be reached for out of habit.
+  const personalActions = personalActionsFor(state.personalActions, mine)
 
   /*
    * Leave reasons — the rates posture, applied to the other thing people are sensitive about.
@@ -382,7 +387,7 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
         Object.entries(state.snapshots).map(([id, s]) => [id, { ...s, cost: null }]),
       )
 
-  const base = { ...state, rates, personSkills, documents, personalEvents, commitments, snapshots }
+  const base = { ...state, rates, personSkills, documents, personalEvents, personalActions, commitments, snapshots }
 
   /*
    * The client boundary — the same posture as the rate redaction above, applied to content.

@@ -249,6 +249,9 @@ export interface ScheduleRow {
   /** Resolved once here via `raidKindOf`, not re-derived per filter check — `matchesFilters`
    *  has no model reference to call it with. */
   raidKind: 'risk' | 'decision' | null
+  /** Copied from the issue at row construction; false for every non-issue row. The mail-triage
+   *  filter chip reads this, the way `raidOnly` reads `raidKind`. */
+  needsTriage: boolean
 
   scheduleMode: ScheduleMode
 
@@ -381,6 +384,9 @@ export interface FilterState {
   health: string
   /** Show only Risk and Decision rows (`lib/raid.ts`'s RaidKind), together — the RAID log. */
   raidOnly: boolean
+  /** Show only records intake auto-created from a brand-new thread that nobody has yet confirmed,
+   *  reclassified or converted — the triage queue, as a chip rather than a screen. */
+  triageOnly: boolean
 }
 
 /**
@@ -413,4 +419,5 @@ export const EMPTY_FILTERS: FilterState = {
   accountable: 'All',
   health: 'All',
   raidOnly: false,
+  triageOnly: false,
 }

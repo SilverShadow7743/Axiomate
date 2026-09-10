@@ -9007,7 +9007,7 @@ function tvRow(
     depth: 0, displayId: over.id, name: over.id, type: 'Defect', discipline: null,
     status: issue?.status ?? null, severity: issue?.severity ?? null, owner: issue?.owner ?? null,
     accountable: issue?.accountable ?? null,
-    riskLikelihood: null, riskImpact: null, decisionOutcome: null, raidKind: null,
+    riskLikelihood: null, riskImpact: null, decisionOutcome: null, raidKind: null, needsTriage: false,
     scheduleMode: 'AUTO', plannedStartDate: null,
     plannedEndDate: null, actualStartDate: null, actualEndDate: null, plannedOrigin: null,
     actualOrigin: null, duration: null, workingDuration: null, percentComplete: 0,

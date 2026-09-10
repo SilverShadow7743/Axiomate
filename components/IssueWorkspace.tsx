@@ -9,6 +9,7 @@ import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
+import MyTodosPanel from './MyTodosPanel'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ApplicationLandscape from './ApplicationLandscape'
@@ -2562,6 +2563,16 @@ export default function IssueWorkspace({
             if (tab) setRequestTab(tab as DetailTab)
           }}
         />
+      ) : view === 'mytodos' ? (
+        <MyTodosPanel
+          state={state}
+          today={today}
+          onAdd={(input) => dispatch({ t: 'addPersonalAction', ...input, now: new Date().toISOString() })}
+          onUpdate={(id, patch) =>
+            dispatch({ t: 'updatePersonalAction', id, patch, now: new Date().toISOString() })
+          }
+          onRemove={(id) => dispatch({ t: 'removePersonalAction', id, now: new Date().toISOString() })}
+        />
       ) : view === 'mycalendar' ? (
         <MyCalendarPanel
           state={state}
@@ -2925,6 +2936,9 @@ export default function IssueWorkspace({
           mailEnabled={persistence.enabled}
           onSetAssignment={(issueId, responsibilityId, values) =>
             dispatch({ t: 'setAssignment', issueId, responsibilityId, values, now: new Date().toISOString() })
+          }
+          onConvertToPersonalAction={(issueId: string) =>
+            dispatch({ t: 'convertToPersonalAction', issueId, now: new Date().toISOString() })
           }
         />
       </LabelProvider>

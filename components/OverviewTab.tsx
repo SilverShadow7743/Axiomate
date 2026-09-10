@@ -109,6 +109,7 @@ export default function OverviewTab({
   onUploadImage,
   onManageEvidence,
   onMove,
+  onConvertToPersonalAction,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
@@ -134,6 +135,10 @@ export default function OverviewTab({
   onUploadImage: (file: File) => Promise<{ documentId: string; alt: string } | null>
   /** Opens the evidence manager; kept out of this form so it stays a form. */
   onManageEvidence: (issueId: string) => void
+  /** Mail triage: move an unconfirmed record to the person's own private to-dos and off the
+   *  tree. Optional so older callers keep compiling; the control only renders when the record
+   *  carries `needsTriage`. See docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md. */
+  onConvertToPersonalAction?: (issueId: string) => void
   /** Opens the Move dialog for this record. Optional so callers that have not been updated
    *  still compile — the hint text next to Process Area is the only thing that needs it. */
   onMove?: () => void
@@ -577,6 +582,26 @@ export default function OverviewTab({
   if (!editing) {
     return (
       <>
+        {row.needsTriage && (
+          <div className="ov-actions" role="status" aria-label="Needs triage">
+            {/* Filed by intake from a brand-new thread; nobody has looked yet. Editing anything
+                below clears this too (the reducer's own rule) — these are the two explicit ways. */}
+            <span className="prov">
+              Filed by intake from a new thread — not yet confirmed by a person.
+            </span>
+            <span className="grow" />
+            {may.allowed && (
+              <button className="btn" onClick={() => onSave({ needsTriage: false }, null)}>
+                Confirm
+              </button>
+            )}
+            {onConvertToPersonalAction && (
+              <button className="btn" onClick={() => onConvertToPersonalAction(issue.id)}>
+                Move to my to-dos
+              </button>
+            )}
+          </div>
+        )}
         <div className="ov-actions">
           {may.allowed ? (
             <button className="btn primary" onClick={() => setEditing(true)}>

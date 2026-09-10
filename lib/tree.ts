@@ -145,6 +145,7 @@ export function buildTree(state: WorkspaceState, today: string): ScheduleRow[] {
     row.riskImpact = issue.riskImpact ?? null
     row.decisionOutcome = issue.decisionOutcome ?? null
     row.raidKind = raidKindOf(state.model, issue.type)
+    row.needsTriage = issue.needsTriage === true
     row.nextAction = issue.nextAction
     row.actualStartDate = issue.raised
     row.actualEndDate = issue.actualEnd
@@ -317,6 +318,7 @@ function blank(
     riskImpact: null,
     decisionOutcome: null,
     raidKind: null,
+    needsTriage: false,
     // Null, not rolled up. A tier is resolved by whoever its children need; taking the
     // commonest discipline among them would present an average as a fact about the tier.
     discipline: null,
@@ -440,6 +442,7 @@ export function matchesFilters(row: ScheduleRow, f: FilterState, scope?: ClientF
   if (f.accountable !== 'All' && i.accountable !== f.accountable) return false
   if (f.health !== 'All' && row.scheduleHealth !== f.health) return false
   if (f.raidOnly && row.raidKind === null) return false
+  if (f.triageOnly && !row.needsTriage) return false
   if (f.search.trim()) {
     const q = f.search.toLowerCase()
     const hay =

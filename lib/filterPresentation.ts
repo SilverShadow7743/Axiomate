@@ -23,8 +23,8 @@ import { NO_CLIENT_CHOSEN } from './types'
 /**
  * Whether one facet deviates from its resting value.
  *
- * Each key needs its own test: search rests at empty, `showCompleted`/`raidOnly` rest at
- * false, and every other facet rests at 'All' — except the Client facet, which rests at
+ * Each key needs its own test: search rests at empty, `showCompleted`/`raidOnly`/`triageOnly`
+ * rest at false, and every other facet rests at 'All' — except the Client facet, which rests at
  * `NO_CLIENT_CHOSEN`, a sentinel that is not a choice (BR7), so it must not arm Clear or count
  * towards More. Comparing a boolean against 'All' would have made Clear look permanently
  * armed; comparing the sentinel against 'All' would do the same. The Discipline facet's 'None'
@@ -33,7 +33,7 @@ import { NO_CLIENT_CHOSEN } from './types'
  */
 export function isActiveFilter(key: keyof FilterState, value: string | boolean): boolean {
   if (key === 'search') return value !== ''
-  if (key === 'showCompleted' || key === 'raidOnly') return value === true
+  if (key === 'showCompleted' || key === 'raidOnly' || key === 'triageOnly') return value === true
   return value !== 'All' && value !== NO_CLIENT_CHOSEN
 }
 
