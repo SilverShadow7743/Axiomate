@@ -1,6 +1,8 @@
 # Stuck-changes recovery — design
 
-**Status:** design approved by Nishant, 9 September 2026. Not yet built.
+**Status:** design approved by Nishant, 9 September 2026. Built and live-verified against
+production (SLG-001) on 9–10 September 2026 — see the "Data flow" and "Open question" updates
+below, added after implementation surfaced one real gap the original design missed.
 
 ## Why this exists
 
@@ -69,6 +71,28 @@ On load, the app checks this log for the signed-in tenant. Entries left over fro
 that ended without clearing them (reload during a halt, a crashed tab, a tab discarded by the
 browser) mean unconfirmed work exists — the recovery view opens on its own.
 
+**Revised after implementation, before this shipped further** (advisor review, then confirmed
+live): "an entry exists in the log" is not by itself "this is stuck." `savePendingAction` writes
+at enqueue and `clearPendingAction` at server confirmation — a real network round trip apart —
+so an entry exists for the entire ordinary gap of every save, not just a genuine halt. Ending a
+session inside that ordinary gap (closing a tab right after an edit) is routine, not a loss;
+opening the recovery view over it would be a false alarm on a change that in fact saved fine,
+training exactly the ignore-reflex the toast fix exists to avoid.
+
+The log is now gated by a second, narrower marker: `markHalted`/`wasHalted`/`clearHalted`
+(`lib/pendingActions.ts`), stamped only by `useAutosave.ts`'s `settle()` on a genuine
+`Halt: 'stopped'` — never on an entry merely existing. The boot-time check opens the recovery
+view only when this marker is set; a leftover entry with no recorded halt is treated as a stray
+(most likely already committed via the `sendBeacon` unload flush) and cleared silently instead
+of shown. The marker itself clears — via `clearPendingAction`, the one place every removal path
+already funnels through — the moment the persisted log actually empties, so it cannot
+misclassify a later, unrelated in-flight gap. It deliberately does *not* clear on a live tab's
+in-memory queue emptying (`useAutosave.ts`'s ref, reset fresh on every mount) — that was the
+first version of this fix, and live verification caught it being wrong: reapplying one of two
+stuck entries drained the *current* session's queue to empty and cleared the marker, silently
+discarding the second, still-unresolved entry on the next reload. See the plan's step 6 notes
+for the reproduction.
+
 ## Components
 
 - **`lib/pendingActions.ts`** (new). Same shape and conventions as the local-mirror functions
@@ -133,11 +157,28 @@ browser) mean unconfirmed work exists — the recovery view opens on its own.
   the right plain-language description, confirm reapply genuinely re-saves and clears the entry,
   confirm discard removes it without dispatching anything.
 
-## Open question for the implementation pass
+## Resolved during implementation
 
-`useAutosave.ts:465-475` already has a `beforeunload` handler that warns the browser's native
-"leave this site?" dialog when the queue is non-empty or halted. It should have fired for
-Nishant and Tarun's incident. Worth asking them, before or during implementation, exactly how
-their tabs went away (dismissed that dialog without reading it, browser crash, tab discarded in
-the background) — it does not change this design, but it would confirm whether there is a
-second, separate gap in that existing warning worth a follow-up look.
+`useAutosave.ts:465-475`'s `beforeunload` handler (warns the browser's native "leave this site?"
+dialog when the queue is non-empty or halted) was live-verified directly rather than left as an
+open question: it fires correctly the moment a genuine halt leaves the in-memory queue non-empty,
+confirmed against production by triggering a real 409 and reloading. It does not change this
+design — it is a warning at the moment of leaving, not a recovery mechanism, and this feature is
+what covers the case where someone leaves anyway (or the tab goes away without a chance to warn:
+crash, background discard). Whether that is what happened to Nishant and Tarun's original
+tabs is still unconfirmed and not answerable from the code — worth asking them directly if it
+comes up again, but it no longer blocks or informs this design.
+
+**Known limitation, not fixed in this pass**: `beforeunload` reads `state.status` from
+`useAutosave`'s own state, not from the pending-actions log. Discarding every entry in the
+recovery panel clears the log and (once it is empty) the halted marker, but does not reset the
+*live* session's `saveStatus.status`, which stays `'error'` until the page reloads — because the
+underlying halt (`lib/queue.ts`'s `Halt: 'stopped'`) is itself only ever cleared by a reload, by
+policy, not by anything this feature does. A person who opens the panel and discards everything
+in it still sees the top-of-screen indicator reporting a broken save afterward, in the same
+session, with the reassuring panel now gone. Not data loss, and consistent with the existing
+halt policy — but it is the shape of failure this plan's own "what would send this back to the
+design" section warned about (the panel itself becoming ignored like the corner badge was), so
+it is recorded here rather than left to be rediscovered as a surprise. A future pass could have
+Discard (once the log empties) also force the live queue's halt back to a clean, non-error
+resting state; out of scope for this one.

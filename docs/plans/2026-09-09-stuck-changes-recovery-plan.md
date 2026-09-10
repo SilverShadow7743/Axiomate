@@ -169,6 +169,41 @@ diagnose — matching this plan's ordering principle exactly. Sequence:
    the browser's network panel, the same method used to confirm the original bug) and no
    change appears anywhere.
 
+**Run against production, 9–10 September 2026 — what actually happened.** Two tabs open on
+SLG-001; tab B set Severity to Medium and it confirmed; tab A, still holding the stale "High"
+read, changed Severity twice more (to Medium, then to Low), producing a real 409 on the first of
+the two and halting the queue with both stuck. Every step above passed as written, with one
+addition the plan did not anticipate:
+
+- Steps 1–3 passed exactly as described — panel opened live with both items in plain language
+  ("SLG-001 — severity: High → Medium", "SLG-001 — severity: Medium → Low"), survived a real
+  reload (forced through the `beforeunload` warning, which fired correctly and is itself a
+  passing check — see the design doc's "Resolved during implementation" section) with the same
+  two items.
+- Step 4 (Reapply) surfaced a real bug before advisor review flagged the two issues fixed before
+  first deploy (see below) even ran a second time: `clearHalted` was being called wherever a
+  queue happened to empty, including `useAutosave.ts`'s in-memory ref — which starts fresh on
+  every mount. Reapplying one of the two stuck items queued and drained successfully in the
+  *new*, post-reload session, whose ref queue naturally started and ended empty; that cleared
+  the tenant's halted marker even though the second item was still sitting unresolved in the
+  persisted log. The next reload's boot check then read `wasHalted()` as false and silently
+  discarded that still-open entry as a stray — exactly the "what would send this back to the
+  design" false-positive risk below, arrived at from the opposite direction (a false *negative*
+  that suppressed a real stuck item, not a false positive that showed a fake one). Fixed by
+  moving the clear into `clearPendingAction` itself — the one place every removal path already
+  funnels through, and the only one that actually knows when the persisted log is empty. Full
+  sequence re-run afterward end to end, including a second live confirmation that Reapply saves
+  for real and survives a reload.
+- Step 5 (Discard) passed as written on the re-run: zero network requests fired
+  (`read_network_requests` showed none), the entry disappeared, and the persisted log plus the
+  halted marker both cleared the instant the log actually emptied.
+- Additional check beyond the plan's five steps, added live once the halt-marker gate existed:
+  simulated the ordinary enqueue-to-confirm gap directly (wrote a `pendingActions` entry with no
+  halted marker set) and confirmed the panel does *not* open and the stray entry is cleared
+  silently on boot — the false-positive case the "what would send this back to the design"
+  section below worried about, now closed by the gate rather than by a server-state check.
+- All test data (SLG-001's Severity) restored to its original value, "High", after each round.
+
 ## Commits
 
 **Commit 1 — steps 1, 2, 3 and their scenario.** The storage layer and the reapply logic,
@@ -188,15 +223,22 @@ since that is where the untested surface actually lives). Step 6 is verification
   it, or if `withExpectation`'s `updateIssue`-only scope means some other action type this
   design assumed was safe to blindly redispatch actually needs its own staleness check. Surfaces
   at step 3's scenario, cheaply, before any UI exists.
-- **If the boot-time "found leftovers" check produces false positives** — a session that ends
-  genuinely mid-flight (the `sendBeacon` fired and the server is about to confirm it, but the
-  tab closes before the response would have cleared the local entry) would show as "stuck" on
-  next boot even though it may already be safely committed. The design did not consider this
-  race explicitly. Surfaces at step 6, live — worth checking directly: trigger a beacon-flush
-  scenario (switch tabs/close mid-save) and confirm whether the reopened panel's items were
-  actually applied server-side already. If this happens often, the design needs a step that
-  checks server state before showing an item as stuck, not just local storage — a real design
-  change, not a bug fix.
+- ~~**If the boot-time "found leftovers" check produces false positives**~~ — **resolved before
+  ship, not by a server-state check.** The race is real (confirmed by reasoning about
+  `savePendingAction`/`clearPendingAction`'s enqueue-to-confirm gap, not by reproducing an actual
+  beacon race live — that would need a genuinely flaky network, which was not manufactured here)
+  but did not need querying the server to close: the boot check is now gated on a second marker
+  (`markHalted`/`wasHalted`, `lib/pendingActions.ts`) stamped only on a genuine
+  `Halt: 'stopped'`, never on an entry merely existing. An entry with no recorded halt is treated
+  as a stray and cleared silently rather than shown. Live-verified directly (see step 6's log):
+  a manufactured leftover entry with no halted marker did not open the panel and was cleared on
+  boot. See the design doc's "Data flow" section for the full mechanism, including a related bug
+  this same area produced and fixed live (`clearHalted` originally cleared on the wrong signal).
 - **If the panel itself becomes a second thing users learn to ignore** (the same failure mode
   the toast fix already exists to correct once) — not verifiable in this pass, but worth
-  Nishant's judgment after it has been live for real conflicts, not manufactured ones.
+  Nishant's judgment after it has been live for real conflicts, not manufactured ones. One
+  concrete version of this already surfaced during live verification, not the full pattern but
+  worth flagging early: discarding every stuck entry clears the log but leaves the live session's
+  save-status indicator reporting `'error'` until reload (the underlying halt only ever clears on
+  reload, by policy). See the design doc's "Resolved during implementation" section for the full
+  note — recorded as a known limitation, not fixed in this pass.
