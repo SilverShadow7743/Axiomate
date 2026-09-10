@@ -69,12 +69,15 @@ Steps 1–3 are committed and live. Step 4 is the risky one.
 
 ## D. Requested today, not yet built
 
+*Reconciled 10 Sep — both rows had gone stale. Found while sweeping C/F/G/I; this section wasn't
+part of that sweep's scope but was one grep away from the same discovery.*
+
 | # | Request | The question inside it |
 |---|---|---|
-| D1 | **Client filter defaults to None; All shows only project stakeholders; each person picks their project** | "Stakeholder" needs a definition the code can compute. The candidates already in the data are: has a live `Allocation` on the project, is named on the `Engagement` (leader / PM / sponsor), or holds a role scoped to it. These give different answers — a client sponsor has no allocation |
-| D2 | **The 14-row issue-type taxonomy** | See below. This is a modelling decision, not a config edit |
+| ~~D1~~ | ~~Client filter defaults to None; All shows only project stakeholders; each person picks their project~~ | **Built.** A full seventeen-step plan (`ART-024`, commits from `4cabc59` through `37c6cf6`) — the stakeholder question this row asked was answered as **a live `ProjectMember` row** (`0bd630b`, pinned by scenarios CD2/CD3), not any of the three candidates this row listed as live options. `NO_CLIENT_CHOSEN` is the resting state, saved views carry a scope, and `memberProjectIdsFor` is the actual computation |
+| ~~D2~~ | ~~The 14-row issue-type taxonomy~~ | **Built exactly as recommended below** (`8f5670d`). `Issue.discipline` is a third, independent classification axis alongside `type` and `module`, defaults to "Not yet classified" (never inferred), and each discipline can name a suggested owner role for `model.routingRules` to route against. Confirmed live during the C/F/G/I sweep: the "Discipline: All" filter in production carries exactly these fourteen categories |
 
-### D2, stated properly
+### D2, stated properly (the original recommendation — built as written)
 
 The 14 categories — Business, Functional, Technical, Integration, Data, Configuration, Testing,
 Environment, Security & Access, Performance, Project/Delivery, Decision/Governance,
