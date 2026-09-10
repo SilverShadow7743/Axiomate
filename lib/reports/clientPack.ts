@@ -1,6 +1,7 @@
 import type { WorkspaceState } from '../workspace'
 import { clientView } from '../clientBoundary'
-import { externalPartyKinds, tiersOf } from '../config'
+import { DEFAULT_HEALTH_SCORE, externalPartyKinds, tiersOf, type ConcernKind } from '../config'
+import { healthScore, portfolio, type HealthScore } from '../portfolio'
 import { isTerminal } from '../schedule'
 import { buildTree } from '../tree'
 
@@ -109,10 +110,26 @@ export interface PackProgress {
   }
 }
 
+/**
+ * The client-facing health score, per engagement — see `lib/portfolio.ts`'s 10 Sep header and
+ * the F&O page-grammar design §5. Computed over the SAME `clientView()` subset every other
+ * number in the pack is computed over, with `capacity` excluded by name: the boundary withholds
+ * allocations and project membership, so that concern cannot be computed for a client, and the
+ * pack says so rather than printing a score that silently lacks a term. Terms print beside every
+ * number; nothing here is stored.
+ */
+export interface PackHealth {
+  /** Concern kinds left out of every score below, and why the printed number may differ from
+   *  the internal one for the same engagement by exactly these terms. */
+  excluded: ConcernKind[]
+  engagements: { nodeId: string; name: string; score: HealthScore }[]
+}
+
 export interface WeeklyClientPack {
   client: string
   asOf: string
   disclosure: ClientPackDisclosure
+  health: PackHealth
   /** Across the whole client-visible subset, not windowed — same split `dailyIms` makes between
    *  its position figure and its movement/sections. */
   position: Position
@@ -126,6 +143,7 @@ export interface MonthlyGovernancePack {
   client: string
   asOf: string
   disclosure: ClientPackDisclosure
+  health: PackHealth
   position: Position
   window: { from: string; to: string }
   movement: {
@@ -268,6 +286,27 @@ function progressOf(visible: WorkspaceState, from: string, asOf: string): PackPr
   }
 }
 
+/** What `clientView()` withholds the data for, and therefore what no client-facing score counts. */
+const CLIENT_EXCLUDED: readonly ConcernKind[] = ['capacity']
+
+/**
+ * One score per engagement the client can see. `portfolio(visible, …)` only yields
+ * engagements with at least one client-visible record, because `clientView()` keeps only the
+ * ancestor chain of surviving issues — so this is scoped to the client without a second filter
+ * that could disagree with the boundary.
+ */
+function packHealthOf(visible: WorkspaceState, asOf: string): PackHealth {
+  const policy = visible.model.healthScore ?? DEFAULT_HEALTH_SCORE
+  return {
+    excluded: [...CLIENT_EXCLUDED],
+    engagements: portfolio(visible, asOf).map((line) => ({
+      nodeId: line.nodeId,
+      name: line.name,
+      score: healthScore(line, policy, CLIENT_EXCLUDED),
+    })),
+  }
+}
+
 export function buildWeeklyClientPack(
   state: WorkspaceState,
   clientScopeId: string,
@@ -292,6 +331,7 @@ export function buildWeeklyClientPack(
     window: { from, to: asOf },
     lines,
     progress: progressOf(visible, from, asOf),
+    health: packHealthOf(visible, asOf),
   }
 }
 
@@ -334,6 +374,7 @@ export function buildMonthlyGovernancePack(
       resolved,
     },
     progress: progressOf(visible, from, asOf),
+    health: packHealthOf(visible, asOf),
     milestones: milestonesOf(state, clientScopeId),
   }
 }

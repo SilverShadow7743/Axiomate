@@ -1094,6 +1094,26 @@
       "impact": "none"
     },
     {
+      "id": "PF3",
+      "title": "healthScore sums count × configured weight per concern, bands at the thresholds (amber inclusive), prints every non-zero term, treats stale as presence not days, honours an exclusion list, and setHealthScore validates and merges",
+      "expected": "lib/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
+      "verdict": "PASS",
+      "actual": "3 overdue×3 + 1 blocked×2 + stale(14d)×1 = 12 red; empty = 0 green; 2 blocked = 4 amber (inclusive); 2 unowned = 2 green; capacity excluded leaves 3 with excluded=[capacity]; setHealthScore merges a partial patch, refuses a negative weight and red ≤ amber, and reports a no-op",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PK4",
+      "title": "The client pack's health score is computed over the clientView() subset, excludes capacity by name, matches the internal score on the same subset exactly, and is not moved by a client-invisible record",
+      "expected": "The design's own send-back clause, pinned: the pack score and the internal score for one engagement may differ by the capacity term and nothing else. Built on PK1's setup (OAPIL-1 and OAPIL-2 visible, OAPIL-3 internal). Capacity data is withheld by clientView(), so on the pack's subset the internal and pack scores are identical — the exclusion is declared, not silently absent. An overdue internal-only record must not move the client's number.",
+      "verdict": "PASS",
+      "actual": "pack excludes [capacity]; OAPIL Engagement scores 3 (green) with terms [\"overdue×1×3\"]; the internal score on the same subset is 3; an internal-only overdue record left it at 3",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
       "id": "PK1",
       "title": "clientScopeIdFor resolves a client by name, and buildWeeklyClientPack windows its lines to 7 days while its position and disclosure cover the whole client-visible subset",
       "expected": "OAPIL-1 is marked visible with recent activity, OAPIL-2 visible but stale, OAPIL-3 left internal — the shape a real client-visible backlog will actually have.",

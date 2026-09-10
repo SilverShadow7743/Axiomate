@@ -140,6 +140,7 @@ const CONFIG_OPS = allOf<ConfigOp['k']>()([
   'deleteCustomField',
   'setCustomFieldProjects',
   'setSla',
+  'setHealthScore',
   'setHolidays',
   'setSizeBands',
   'setStatusPolicy',

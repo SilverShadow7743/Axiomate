@@ -223,6 +223,9 @@ import { type IntakeForm,
   externalPartyKinds,
   tierIndex,
   type OrganizationIdentity,
+  type HealthScorePolicy,
+  DEFAULT_HEALTH_SCORE,
+  CONCERN_ORDER,
   type DocumentFiling,
   type OrgRole,
   type Person,
@@ -1573,6 +1576,9 @@ export type ConfigOp =
   /** Which projects a defined field is actually live on. Replaces the list wholesale. */
   | { k: 'setCustomFieldProjects'; id: string; projectIds: string[] }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
+  /** The engagement health score's weights and RAG thresholds — see `lib/portfolio.ts`'s
+   *  `healthScore` and the F&O page-grammar design. Configuration, not code, on purpose. */
+  | { k: 'setHealthScore'; patch: Partial<HealthScorePolicy> }
   | { k: 'setHolidays'; holidays: Holiday[] }
   | { k: 'setSizeBands'; bands: SizeBand[] }
   | { k: 'setStatusPolicy'; patch: Partial<StatusPolicy> }
@@ -8383,6 +8389,45 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         { ...m, sla: next },
         { rowId: 'SLA', field: 'sla', from: before, to: after, at: now, by },
         `Service levels updated — ${after}.`,
+      )
+    }
+
+    case 'setHealthScore': {
+      /*
+       * Read as `?? DEFAULT` because an existing workspace predates the field — the lesson
+       * I19's live-verify taught with `signatureTemplate`, and I27's standing note.
+       */
+      const current = m.healthScore ?? DEFAULT_HEALTH_SCORE
+      const next: HealthScorePolicy = {
+        weights: { ...current.weights, ...(op.patch.weights ?? {}) },
+        thresholds: { ...current.thresholds, ...(op.patch.thresholds ?? {}) },
+      }
+      /*
+       * Validated rather than trusted, for the same reason the SLA thresholds are: these
+       * numbers become a figure a client reads in a pack. A negative weight would make a
+       * concern improve a score; a red threshold at or below amber would make the bands
+       * unreachable in one direction.
+       */
+      for (const kind of CONCERN_ORDER) {
+        const w = next.weights[kind]
+        if (typeof w !== 'number' || !Number.isFinite(w) || w < 0) {
+          return { state, error: `The ${kind} weight must be a number of zero or more.` }
+        }
+      }
+      const { amber, red } = next.thresholds
+      if (![amber, red].every((t) => typeof t === 'number' && Number.isFinite(t) && t >= 0)) {
+        return { state, error: 'The amber and red thresholds must be numbers of zero or more.' }
+      }
+      if (red <= amber) return { state, error: 'The red threshold must be above the amber threshold.' }
+      const describe = (p: HealthScorePolicy) =>
+        `${CONCERN_ORDER.map((k) => `${k} ${p.weights[k]}`).join(' / ')} · amber ${p.thresholds.amber}, red ${p.thresholds.red}`
+      const before = describe(current)
+      const after = describe(next)
+      if (before === after) return { state, message: 'Nothing changed.' }
+      return done(
+        { ...m, healthScore: next },
+        { rowId: 'HEALTH', field: 'healthScore', from: before, to: after, at: now, by },
+        'Health score weights updated — every score now prints these beside its number.',
       )
     }
 

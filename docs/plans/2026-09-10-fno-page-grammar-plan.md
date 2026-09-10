@@ -33,7 +33,11 @@ refreshed truthfully once the shell has changed.
   ConcernKind[]): HealthScore` where `HealthScore = { value: number; band: 'green' | 'amber' |
   'red'; terms: { kind: ConcernKind; count: number; weight: number }[]; excluded: ConcernKind[] }`
   — `terms` is what every rendering prints ("Overdue 3 × 2 + …"), `excluded` is what the
-  client-pack disclosure names. Pure; reads only the line's existing `concerns`.
+  client-pack disclosure names. Pure; reads only the line's existing `concerns`. **One fidelity point found while writing it:**
+  `stale`'s `count` is a number of *days*, not of records, so weight × count would let a
+  fortnight of quiet outweigh three broken commitments — the reverse of `CONCERN_ORDER`'s own
+  argument that quiet is the weakest evidence. `stale` therefore contributes as presence
+  (1 × weight) with its days carried on the term for the label; `PF3` pins this.
 - **Rewrite the header comment** (`lib/portfolio.ts:13-46`): keep the refusal and its reason
   verbatim, then record the 10 Sep reversal, why (client packs), and the four conditions the
   design sets. `PortfolioPanel.tsx:20-24` and `MyWorkPanel.tsx:25-29` restate the refusal —
@@ -59,7 +63,7 @@ says what it is not counting. Money is not a concern kind, so nothing new is wit
   concern with its weight, a zero-concern line scores 0/green with empty terms; `setHealthScore`
   refuses a negative weight and `red ≤ amber`, applies a partial patch, and returns unchanged
   for a no-op — the `setSla` scenario's own shape.
-- **`CP3`** (after `CP2`, `:6165`): the weekly pack's `health.excluded` is exactly
+- **`PK4`** (after `CP2`, `:6165`): the weekly pack's `health.excluded` is exactly
   `['capacity']`; an engagement whose only concern is capacity scores 0 in the pack and non-zero
   internally — **the design's own send-back clause, pinned as a number so it is seen rather than
   inferred**; a client-invisible overdue issue does not move the pack score (the boundary holds
@@ -214,7 +218,7 @@ sentence the design forbids.
 - **If a FactBox needs a number no `lib/` function provides** — surfaces at step 5. Build the
   function under its module's doctrine first; the blade never computes.
 - **If the pack score and the internal score for one engagement differ by more than the
-  capacity term** — `CP3` is written to pin exactly this; if it fails for any other reason, the
+  capacity term** — `PK4` is written to pin exactly this; if it fails for any other reason, the
   boundary is leaking into the score and that is a disclosure question for the design.
 - **If a second `.btn.primary` is needed on the record action pane for some row kind** —
   surfaces at step 4; means the status-transition model has two "most likely next" moves, which

@@ -2,7 +2,7 @@ import { forecastFor } from './forecast'
 import { availabilityFor } from './availability'
 import { profileAt } from './capacity'
 import { addDays } from './dates'
-import { holidaySetOf } from './config'
+import { CONCERN_ORDER, holidaySetOf, type ConcernKind, type HealthScorePolicy } from './config'
 import { directoryIdByName } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
 import { issuesUnder } from './engagement'
@@ -14,7 +14,7 @@ import type { Severity } from './types'
  * Every engagement at once, so "which of these is in trouble" is one screen rather than three.
  *
  * ---------------------------------------------------------------------------
- * There is no health score, and there will not be one
+ * There was no health score, and this header said there would not be one
  *
  * The obvious shape for a portfolio is a number per engagement — a percentage, a RAG light, a
  * weighted index. Every one of those is a derived value presented as a fact, which is the rule
@@ -28,7 +28,20 @@ import type { Severity } from './types'
  * It is: name the concerns, count them, and let the reader do the weighing.
  *
  * So an engagement carries a list of CONCERNS. Each one is a plain claim with a number attached,
- * checkable against the tree in one click. An engagement with none says so.
+ * checkable against the tree in one click. An engagement with none says so. That is unchanged.
+ *
+ * ---------------------------------------------------------------------------
+ * Reopened 10 September 2026 — a score, on the objection's own terms
+ *
+ * Nishant reopened this because clients expect a health indicator in the packs
+ * (`docs/plans/2026-09-10-fno-page-grammar-design.md`, decision 3). The objection above is not
+ * overruled; it is the design constraint. `healthScore` below is admissible on exactly these
+ * terms: its components are the six concerns already named here, nothing new is measured; the
+ * weights are configuration (`OperatingModel.healthScore`, edited in Configuration), not code,
+ * so the argument is the firm's to have in the open; every rendering prints its terms beside
+ * the number, so the sentence about weights is one everybody can read; the client-pack score
+ * leaves out what `clientView()` withholds and says so; and nothing is stored. The `mywork`
+ * lesson is why the terms are printed.
  *
  * ---------------------------------------------------------------------------
  * What is deliberately not here
@@ -57,8 +70,10 @@ const STALE_DAYS = 14
  * itself. `stale` is last of the four because quiet is weaker evidence than any of the others —
  * a fortnight of silence on a small engagement may be correct.
  */
-export const CONCERN_ORDER = ['overdue', 'forecast', 'capacity', 'blocked', 'unowned', 'stale'] as const
-export type ConcernKind = (typeof CONCERN_ORDER)[number]
+// The constant itself lives in `./config` since 10 Sep — the health score's weights are keyed
+// by it and configuration must not import from a report module — and is re-exported here so
+// the argument above stays beside the order it argues for. Same order, same six kinds.
+export { CONCERN_ORDER, type ConcernKind }
 
 export interface Concern {
   kind: ConcernKind
@@ -91,6 +106,49 @@ export interface PortfolioLine {
   high: number
   concerns: Concern[]
   lastActivity: string | null
+}
+
+/**
+ * An engagement's health score — see the header's 10 Sep reversal for the terms on which one
+ * was admitted. `terms` is the working every rendering prints beside the number; `excluded`
+ * names the concern kinds a caller left out (the client pack omits `capacity`, which
+ * `clientView()` withholds the data for) so the printed score says what it is not counting.
+ *
+ * `stale` contributes as presence, not as its day count: its `count` is a duration, and
+ * multiplying a duration by a weight would let a fortnight of quiet outweigh three broken
+ * commitments — the reverse of `CONCERN_ORDER`'s own argument that quiet is the weakest
+ * evidence. Its days ride along in `days` for the term's label.
+ */
+export interface HealthScoreTerm {
+  kind: ConcernKind
+  count: number
+  weight: number
+  /** Only on `stale` — the days of silence its presence stands for. */
+  days?: number
+}
+
+export interface HealthScore {
+  value: number
+  band: 'green' | 'amber' | 'red'
+  terms: HealthScoreTerm[]
+  excluded: ConcernKind[]
+}
+
+export function healthScore(
+  line: PortfolioLine,
+  policy: HealthScorePolicy,
+  exclude: readonly ConcernKind[] = [],
+): HealthScore {
+  const terms: HealthScoreTerm[] = line.concerns
+    .filter((c) => !exclude.includes(c.kind) && c.count > 0)
+    .map((c) =>
+      c.kind === 'stale'
+        ? { kind: c.kind, count: 1, weight: policy.weights[c.kind], days: c.count }
+        : { kind: c.kind, count: c.count, weight: policy.weights[c.kind] },
+    )
+  const value = terms.reduce((n, t) => n + t.count * t.weight, 0)
+  const band = value >= policy.thresholds.red ? 'red' : value >= policy.thresholds.amber ? 'amber' : 'green'
+  return { value, band, terms, excluded: [...exclude] }
 }
 
 /**

@@ -232,6 +232,40 @@ export const DEFAULT_ORGANIZATION: OrganizationIdentity = {
 }
 
 /* ================================================================== *
+ * Engagement health — the concern kinds, and the score's configured weights
+ * ================================================================== */
+
+/**
+ * The six concern kinds `lib/portfolio.ts` names on an engagement, worst first — the order is
+ * the argument, and that argument lives beside `portfolio.ts`'s own re-export. Defined here
+ * because the health score's weights are keyed by it and configuration must not import from a
+ * report module.
+ */
+export const CONCERN_ORDER = ['overdue', 'forecast', 'capacity', 'blocked', 'unowned', 'stale'] as const
+export type ConcernKind = (typeof CONCERN_ORDER)[number]
+
+/**
+ * The engagement health score's weights and RAG thresholds — configuration, not code, on
+ * purpose: a score is a sentence about weights, and these are the weights, in the open, edited
+ * in Configuration and printed beside every score. See `lib/portfolio.ts`'s header (the 10 Sep
+ * reversal) and `docs/plans/2026-09-10-fno-page-grammar-design.md` §5.
+ */
+export interface HealthScorePolicy {
+  weights: Record<ConcernKind, number>
+  /** `value >= amber` is amber, `value >= red` is red; below amber is green. */
+  thresholds: { amber: number; red: number }
+}
+
+/**
+ * Defaults to be argued with, which is the point. They follow `CONCERN_ORDER`'s own ranking —
+ * overdue heaviest, stale lightest (and stale counts as presence, not days: see `healthScore`).
+ */
+export const DEFAULT_HEALTH_SCORE: HealthScorePolicy = {
+  weights: { overdue: 3, forecast: 2, capacity: 2, blocked: 2, unowned: 1, stale: 1 },
+  thresholds: { amber: 4, red: 10 },
+}
+
+/* ================================================================== *
  * Roles, people, responsibilities
  * ================================================================== */
 
@@ -941,6 +975,12 @@ export interface OperatingModel {
    */
   sla: SlaPolicy
   /**
+   * The engagement health score's weights and thresholds. Optional for the same reason
+   * `holidays` is: a stored model that predates the field reads as absent, and every consumer
+   * falls back to `DEFAULT_HEALTH_SCORE` rather than assuming the seed reached it.
+   */
+  healthScore?: HealthScorePolicy
+  /**
    * What each T-shirt size costs this firm, in story points and hours.
    *
    * Configuration for the same reason the service levels are: two firms using an identical
@@ -1420,6 +1460,10 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     skills,
     customFieldDefs,
     sla: { ...DEFAULT_SLA },
+    healthScore: {
+      weights: { ...DEFAULT_HEALTH_SCORE.weights },
+      thresholds: { ...DEFAULT_HEALTH_SCORE.thresholds },
+    },
     sizeBands: DEFAULT_SIZE_BANDS.map((b) => ({ ...b })),
     statusPolicy: defaultStatusPolicy(),
     access: defaultAccessPolicy(),

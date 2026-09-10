@@ -17,11 +17,11 @@ import WhyThisWorks from './WhyThisWorks'
  * screen showed one engagement at a time, so answering it meant opening each in turn and holding
  * the comparison in your head.
  *
- * **No traffic lights, and no score.** Each line states what is wrong as counted claims —
- * "13 blocked, 14 with no owner" — and every one of them is checkable by opening the engagement.
- * The reasoning lives in `lib/portfolio.ts`, including why a single blended number was refused:
- * a score is an argument about weights nobody can see, and the weights are the part worth
- * arguing with.
+ * **Counted claims first, and a score only on the objection's own terms.** Each line states
+ * what is wrong as counted claims — "13 blocked, 14 with no owner" — and every one of them is
+ * checkable by opening the engagement. The reasoning lives in `lib/portfolio.ts`, including why
+ * a single blended number was refused and the terms on which one was admitted on 10 Sep: its
+ * weights are configuration, and every rendering prints them beside the number.
  */
 export default function PortfolioPanel({
   state,

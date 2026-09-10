@@ -46,7 +46,7 @@ import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
-  initModel, mergeModel, customFieldsFor,
+  initModel, mergeModel, customFieldsFor, DEFAULT_HEALTH_SCORE,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
@@ -197,7 +197,7 @@ import { meetingSuggestions } from '../lib/timesheetSuggestions'
 import { replanningFor } from '../lib/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
-import { CONCERN_ORDER, describePortfolio, portfolio } from '../lib/portfolio'
+import { CONCERN_ORDER, describePortfolio, healthScore, portfolio, type PortfolioLine } from '../lib/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '../lib/capabilities'
 import { describeGoals, goalProgress } from '../lib/goals'
 import {
@@ -6878,6 +6878,87 @@ scenario(
   },
 )
 
+/* ================================================================== *
+ * Engagement health score (F&O page-grammar design 2026-09-10, §5)
+ * ================================================================== */
+
+scenario(
+  'PF3',
+  'healthScore sums count × configured weight per concern, bands at the thresholds (amber inclusive), prints every non-zero term, treats stale as presence not days, honours an exclusion list, and setHealthScore validates and merges',
+  "lib/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
+  () => {
+    const line = (concerns: PortfolioLine['concerns']): PortfolioLine =>
+      ({ nodeId: 'E', name: 'E', client: 'C', status: '', issues: 0, open: 0, projects: 0, high: 0, concerns, lastActivity: null })
+    const c = (kind: PortfolioLine['concerns'][number]['kind'], count: number) => ({ kind, count, phrase: '' })
+    const policy = DEFAULT_HEALTH_SCORE
+
+    const red = healthScore(line([c('overdue', 3), c('blocked', 1), c('stale', 14)]), policy)
+    const redRight =
+      red.value === 3 * 3 + 1 * 2 + 1 * 1 && red.band === 'red' && red.terms.length === 3 &&
+      red.terms.find((t) => t.kind === 'stale')?.count === 1 && red.terms.find((t) => t.kind === 'stale')?.days === 14 &&
+      red.excluded.length === 0
+
+    const zero = healthScore(line([]), policy)
+    const zeroRight = zero.value === 0 && zero.band === 'green' && zero.terms.length === 0
+
+    const amber = healthScore(line([c('blocked', 2)]), policy) // 4 — the amber threshold, inclusive
+    const green = healthScore(line([c('unowned', 2)]), policy) // 2
+    const bandsRight = amber.value === 4 && amber.band === 'amber' && green.value === 2 && green.band === 'green'
+
+    const excl = healthScore(line([c('capacity', 2), c('overdue', 1)]), policy, ['capacity'])
+    const exclRight = excl.value === 3 && excl.terms.length === 1 && excl.terms[0].kind === 'overdue' && excl.excluded.join() === 'capacity'
+
+    const set = ok(BASE, { t: 'config', op: { k: 'setHealthScore', patch: { weights: { overdue: 5 } } }, now: NOW } as Action)
+    const merged = set.model.healthScore?.weights.overdue === 5 && set.model.healthScore?.weights.blocked === 2 && set.model.healthScore?.thresholds.red === 10
+    const negative = act(BASE, { t: 'config', op: { k: 'setHealthScore', patch: { weights: { stale: -1 } } }, now: NOW } as Action)
+    const inverted = act(BASE, { t: 'config', op: { k: 'setHealthScore', patch: { thresholds: { red: 3 } } }, now: NOW } as Action)
+    const noop = act(BASE, { t: 'config', op: { k: 'setHealthScore', patch: {} }, now: NOW } as Action)
+    const opRight = merged && Boolean(negative.error) && Boolean(inverted.error) && !noop.error && noop.message === 'Nothing changed.'
+
+    const good = redRight && zeroRight && bandsRight && exclRight && opRight
+    return good
+      ? { verdict: 'PASS', actual: `3 overdue×3 + 1 blocked×2 + stale(14d)×1 = ${red.value} red; empty = 0 green; 2 blocked = 4 amber (inclusive); 2 unowned = 2 green; capacity excluded leaves ${excl.value} with excluded=[capacity]; setHealthScore merges a partial patch, refuses a negative weight and red ≤ amber, and reports a no-op`, stops: '', severity: 'P1', impact: 'none' }
+      : { verdict: 'FAIL', actual: `redRight=${redRight} (${JSON.stringify(red)}) zeroRight=${zeroRight} bandsRight=${bandsRight} (amber=${amber.value}/${amber.band} green=${green.value}/${green.band}) exclRight=${exclRight} (${JSON.stringify(excl)}) opRight=${opRight} (merged=${merged} neg=${negative.error} inv=${inverted.error} noop=${noop.error ?? noop.message})`, stops: 'at healthScore or setHealthScore — a weight, a band, the stale rule, the exclusion, or the config op is wrong', severity: 'P1', impact: 'a client would read a number whose printed working does not add up, or whose weights the firm cannot set' }
+  },
+)
+
+scenario(
+  'PK4',
+  "The client pack's health score is computed over the clientView() subset, excludes capacity by name, matches the internal score on the same subset exactly, and is not moved by a client-invisible record",
+  "The design's own send-back clause, pinned: the pack score and the internal score for one engagement may differ by the capacity term and nothing else. Built on PK1's setup (OAPIL-1 and OAPIL-2 visible, OAPIL-3 internal). Capacity data is withheld by clientView(), so on the pack's subset the internal and pack scores are identical — the exclusion is declared, not silently absent. An overdue internal-only record must not move the client's number.",
+  () => {
+    const oapilId = clientScopeIdFor(BASE, 'OAPIL')!
+    let s = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { clientVisible: true }, now: NOW } as Action)
+    s = ok(s, { t: 'updateIssue', id: 'OAPIL-2', patch: { clientVisible: true }, now: NOW } as Action)
+    // OAPIL-1 overdue as of TODAY (2026-08-15): planned end already passed.
+    s = ok(s, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-01', end: '2026-08-05', now: NOW } as Action)
+
+    const pack = buildWeeklyClientPack(s, oapilId, TODAY)
+    const excludedNamed = pack.health.excluded.join() === 'capacity'
+    const eng = pack.health.engagements.find((e) => /OAPIL/.test(e.name)) ?? pack.health.engagements[0]
+    const hasEngagement = Boolean(eng)
+    const overdueCounted = Boolean(eng?.score.terms.some((t) => t.kind === 'overdue' && t.count >= 1))
+    const noCapacityTerm = Boolean(eng && !eng.score.terms.some((t) => t.kind === 'capacity'))
+
+    // The same engagement, scored internally on the same client-visible subset with nothing excluded.
+    const visible = clientView(s, oapilId)
+    const internalLine = portfolio(visible, TODAY).find((l) => l.nodeId === eng?.nodeId)
+    const internal = internalLine ? healthScore(internalLine, visible.model.healthScore ?? DEFAULT_HEALTH_SCORE) : null
+    const identicalOnSubset = Boolean(internal && eng && internal.value === eng.score.value && internal.band === eng.score.band)
+
+    // An internal-only record going overdue must not move the client's number.
+    const s2 = ok(s, { t: 'setDates', id: 'OAPIL-3', start: '2026-08-01', end: '2026-08-05', now: NOW } as Action)
+    const pack2 = buildWeeklyClientPack(s2, oapilId, TODAY)
+    const eng2 = pack2.health.engagements.find((e) => e.nodeId === eng?.nodeId)
+    const unmovedByInternal = Boolean(eng && eng2 && eng2.score.value === eng.score.value)
+
+    const good = excludedNamed && hasEngagement && overdueCounted && noCapacityTerm && identicalOnSubset && unmovedByInternal
+    return good
+      ? { verdict: 'PASS', actual: `pack excludes [capacity]; ${eng?.name} scores ${eng?.score.value} (${eng?.score.band}) with terms ${JSON.stringify(eng?.score.terms.map((t) => `${t.kind}×${t.count}×${t.weight}`))}; the internal score on the same subset is ${internal?.value}; an internal-only overdue record left it at ${eng2?.score.value}`, stops: '', severity: 'P1', impact: 'none' }
+      : { verdict: 'FAIL', actual: `excludedNamed=${excludedNamed} hasEngagement=${hasEngagement} overdueCounted=${overdueCounted} noCapacityTerm=${noCapacityTerm} identicalOnSubset=${identicalOnSubset} (internal=${internal?.value} pack=${eng?.score.value}) unmovedByInternal=${unmovedByInternal} (${eng?.score.value} -> ${eng2?.score.value}) engagements=${JSON.stringify(pack.health.engagements.map((e) => e.name))}`, stops: 'at packHealthOf — the boundary is leaking into the client score, the exclusion is not declared, or the pack and internal scores disagree on the same subset', severity: 'P1', impact: 'a client would read a health number that counts work they were never shown, or one the firm cannot reconcile with its own' }
+  },
+)
+
 scenario(
   'PK1',
   'clientScopeIdFor resolves a client by name, and buildWeeklyClientPack windows its lines to 7 days while its position and disclosure cover the whole client-visible subset',
@@ -11739,6 +11820,7 @@ scenario(
   const PDF_WEEKLY: WeeklyClientPack = {
     client: 'OAPIL', asOf: '2026-08-15',
     disclosure: { shown: 2, total: 3 },
+    health: { excluded: ['capacity'], engagements: [] },
     position: { total: 2, open: 1, closed: 1, high: 1, medium: 0, low: 0 },
     window: { from: '2026-08-08', to: '2026-08-15' },
     lines: [PDF_LINE],
@@ -11747,6 +11829,7 @@ scenario(
   const PDF_MONTHLY: MonthlyGovernancePack = {
     client: 'OAPIL', asOf: '2026-08-15',
     disclosure: { shown: 2, total: 3 },
+    health: { excluded: ['capacity'], engagements: [] },
     position: { total: 2, open: 1, closed: 1, high: 1, medium: 0, low: 0 },
     window: { from: '2026-07-16', to: '2026-08-15' },
     movement: { trailAvailable: false, raised: 0, resolved: 0 },
