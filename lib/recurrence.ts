@@ -92,8 +92,16 @@ export function occurrenceOnOrBefore(cadence: Cadence, date: string): string | n
  * The one occurrence a pass should raise for today, or null.
  *
  * Strictly after `lastRaisedOn` — on-or-after would re-raise the same occurrence forever.
+ *
+ * Takes only the three fields this actually reads, not a full `Recurrence` — so a caller with a
+ * genuinely different shape sharing the same cadence arithmetic (a calendar-triggered
+ * `AutomationRule`, `lib/automation.ts`'s `planCalendarActions`) can reuse this unchanged rather
+ * than fabricating an `id`/`name`/`scopeId` nothing needs just to satisfy the type.
  */
-export function dueOccurrence(rule: Recurrence, today: string): string | null {
+export function dueOccurrence(
+  rule: Pick<Recurrence, 'enabled' | 'cadence' | 'lastRaisedOn'>,
+  today: string,
+): string | null {
   if (!rule.enabled) return null
   const occ = occurrenceOnOrBefore(rule.cadence, today)
   if (!occ) return null

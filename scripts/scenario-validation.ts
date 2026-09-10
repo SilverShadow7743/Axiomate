@@ -57,6 +57,7 @@ import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/p
 import type { ProjectMember } from '../lib/staffing'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
+import { planCalendarActions } from '../lib/automation'
 import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
@@ -3560,6 +3561,101 @@ scenario(
       stops: '—',
       severity: '—',
       impact: 'The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done.',
+    }
+  },
+)
+
+scenario(
+  'AUTO3',
+  'A rule bound to nothing but a calendar fires notify on its due occurrence, once, and only that action kind',
+  'planCalendarActions covers the one gap AUTO1/AUTO2 left named in scenario Z\'s own impact note: a rule with no watched condition at all, due on a weekly/monthly cadence rather than an event.',
+  () => {
+    const lead = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const staffed = ok(BASE, {
+      t: 'config', op: { k: 'upsertPerson', id: lead.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] }, now: NOW,
+    } as Action)
+
+    /* TODAY (2026-08-15) is a Saturday — Date.UTC weekday 6. A weekly rule on that weekday is
+     * due the first time it is ever evaluated (no lastFiredOn yet). */
+    const withCalendarRule = ok(staffed, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_CALENDAR', label: 'Weekly status note', on: { kind: 'calendar', cadence: { kind: 'weekly', weekday: 6 } },
+            when: [], enabled: true,
+            then: [{ kind: 'notify', audience: 'role:ROLE_ENGAGEMENT_LEAD', channel: 'in-app', text: 'Weekly status — nothing bound to it going wrong' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+
+    const firstRun = planCalendarActions(withCalendarRule, TODAY, NOW)
+    const firedOnce = firstRun.fired.length === 1 && firstRun.fired[0]!.ruleId === 'AUTO_TEST_CALENDAR'
+    const oneNotify = firstRun.actions.length === 1 && firstRun.actions[0]!.t === 'notify'
+    const appliedRun = firstRun.actions.reduce((s, a) => ok(s, a), withCalendarRule)
+    const delivered = Object.values(appliedRun.notifications).some(
+      (n) => n.ruleId === 'AUTO_TEST_CALENDAR' && n.to === 'Priya',
+    )
+
+    /* The same rule, but already fired for this week's occurrence — the duplicate guard. */
+    const alreadyFired = ok(withCalendarRule, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [{ ...withCalendarRule.model.automationRules[0]!, lastFiredOn: firstRun.fired[0]!.occurrence }],
+      },
+      now: NOW,
+    } as Action)
+    const secondRun = planCalendarActions(alreadyFired, TODAY, NOW)
+    const noDoubleFire = secondRun.actions.length === 0 && secondRun.fired.length === 0
+
+    /* Addressed to a role nobody holds — a miss, not a silent no-op, same shape AUTO_ORPHAN
+     * proves for an event-triggered rule in scenario Z. */
+    const orphanRule = ok(BASE, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_ORPHAN_CAL', label: 'Weekly, nobody to tell', on: { kind: 'calendar', cadence: { kind: 'weekly', weekday: 6 } },
+            when: [], enabled: true,
+            then: [{ kind: 'notify', audience: 'role:ROLE_CLIENT_SPONSOR', channel: 'in-app', text: 'x' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const orphanRun = planCalendarActions(orphanRule, TODAY, NOW)
+    const orphanMissed = orphanRun.actions.length === 0 && orphanRun.fired.length === 0 && orphanRun.misses.length === 1
+
+    /* setAutomationRules refuses a calendar rule carrying anything but notify — the config-save
+     * boundary, not just a run-time skip. */
+    const illegalKind = act(BASE, {
+      t: 'config',
+      op: {
+        k: 'setAutomationRules',
+        rules: [
+          {
+            id: 'AUTO_TEST_CAL_ILLEGAL', label: 'Weekly, tries to close things', on: { kind: 'calendar', cadence: { kind: 'weekly', weekday: 6 } },
+            when: [], enabled: true,
+            then: [{ kind: 'setStatus', text: 'Closed - confirmed' }],
+          },
+        ],
+      },
+      now: NOW,
+    } as Action)
+    const illegalRefused = Boolean(illegalKind.error)
+
+    const good = firedOnce && oneNotify && delivered && noDoubleFire && orphanMissed && illegalRefused
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `A weekly rule due for the first time fires exactly one notify (${firstRun.fired.length} fired, ${firstRun.actions.length} action) and Priya receives it (${delivered}). Re-evaluated for the same day after lastFiredOn advances to that occurrence, it fires nothing (${secondRun.actions.length} actions) — the duplicate guard, live. A calendar rule addressed to a role nobody holds is reported as a miss rather than a silent success (${orphanRun.misses.length} miss: "${orphanRun.misses[0]?.why}"). Saving a calendar rule with a setStatus step is refused at config-save time: "${illegalKind.error}".`,
+      stops: '—',
+      severity: '—',
+      impact: 'Closes the one gap scenario Z\'s own impact note named as still open: "a rule bound to a bare calendar interval with no watched condition at all." Restricted to notify by design — the other five RuleActionKinds are all unconditionally issue-shaped in planActions, and a calendar tick has no issue.',
     }
   },
 )

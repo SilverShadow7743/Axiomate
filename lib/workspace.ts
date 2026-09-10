@@ -8068,6 +8068,16 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       for (const r of op.rules) {
         if (!r.label.trim()) return { state, error: 'A rule needs a name.' }
         if (!r.then.length) return { state, error: `“${r.label}” does nothing.` }
+        // A calendar tick has no issue to act on — every RuleActionKind but notify is
+        // unconditionally issue-shaped in planActions (lib/automation.ts). Refused here, at
+        // the config-save boundary, rather than left to be discovered as a silent no-op the
+        // first time the scheduled pass actually evaluates the rule.
+        if (typeof r.on !== 'string' && r.on.kind === 'calendar' && r.then.some((s) => s.kind !== 'notify')) {
+          return {
+            state,
+            error: 'A calendar-triggered rule can only notify — the other actions need an issue a calendar tick does not have.',
+          }
+        }
       }
       return done(
         { ...m, automationRules: op.rules },

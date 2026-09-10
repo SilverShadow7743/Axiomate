@@ -3,6 +3,7 @@ import type { Channel } from './notifications'
 import type { Action, IssueRecord, WorkspaceState } from './workspace'
 import type { IssueStatus } from './types'
 import { wrapPlainText } from './richText'
+import { dueOccurrence, type Cadence } from './recurrence'
 
 /**
  * Event → condition → action, and the one design decision that makes it safe.
@@ -98,13 +99,29 @@ export interface RuleAction {
   ruleId?: string
 }
 
+/**
+ * What a rule reacts to — something happening, or nothing but a calendar interval.
+ *
+ * A calendar-shaped trigger is an object, never a bare string, so `rule.on !== event.type` in
+ * `matches` below keeps working unchanged: an object can never `===` a string, so a
+ * calendar-triggered rule is correctly invisible to every event-driven check without adding one.
+ */
+export type RuleTrigger = EventType | { kind: 'calendar'; cadence: Cadence }
+
 export interface AutomationRule {
   id: string
   label: string
-  on: EventType
+  on: RuleTrigger
   when: Condition[]
   then: RuleAction[]
   enabled: boolean
+  /**
+   * Set only for a calendar-triggered rule — the occurrence last fired for. Mirrors
+   * `Recurrence.lastRaisedOn` (`lib/recurrence.ts`) exactly, and for the same reason: a pass
+   * re-running the same morning must not notify twice, and a pass down for three days fires the
+   * missed occurrence once, not once per missed day.
+   */
+  lastFiredOn?: string | null
 }
 
 /**
@@ -389,4 +406,76 @@ export function planActions(
   }
 
   return { actions, misses }
+}
+
+/**
+ * What the calendar-triggered rules want done today — the sibling `planActions` has no answer
+ * for, because that function's whole contract is "given events, decide what to do about them,"
+ * and a calendar tick is not an event. Restricted to `notify` by construction: every other
+ * `RuleActionKind` needs an issue to act on (`planActions`'s own switch is unconditionally
+ * `event.subjectId`-shaped), and a calendar tick has none. `setAutomationRules`
+ * (`lib/workspace.ts`) refuses a calendar rule carrying anything else at save time, so this loop
+ * skipping non-`notify` steps is a second, redundant safety net, not the only one.
+ *
+ * Pure, like `planActions`: state, today's date and the clock in, actions and bookkeeping out.
+ * Applying them and advancing `lastFiredOn` is the caller's job (`lib/db/schedule.ts`), so this
+ * runs identically whether driven live or from a scenario.
+ */
+export function planCalendarActions(
+  state: WorkspaceState,
+  today: string,
+  now: string,
+): { actions: Action[]; fired: { ruleId: string; occurrence: string }[]; misses: RuleMiss[] } {
+  const actions: Action[] = []
+  const fired: { ruleId: string; occurrence: string }[] = []
+  const misses: RuleMiss[] = []
+
+  for (const rule of state.model.automationRules) {
+    if (!rule.enabled || typeof rule.on === 'string' || rule.on.kind !== 'calendar') continue
+
+    // `dueOccurrence` only reads `.enabled`, `.cadence` and `.lastRaisedOn` — a minimal object
+    // satisfying those three is the honest amount to construct, not a fabricated full Recurrence
+    // with an invented id/name/scopeId nothing here needs.
+    const occurrence = dueOccurrence(
+      { enabled: rule.enabled, cadence: rule.on.cadence, lastRaisedOn: rule.lastFiredOn ?? null },
+      today,
+    )
+    if (!occurrence) continue
+
+    // A synthetic event `fill()` can read from — it only touches `.subjectId`/`.from`/`.to`/
+    // `.by`, never `.type`/`.at`, so this satisfies the type without those two fields meaning
+    // anything. `subjectId: rule.id` because there is no issue; `{id}` in a calendar rule's text
+    // renders as the rule's own id rather than throwing or rendering blank.
+    const event: DomainEvent = { type: 'issue.created', subjectId: rule.id, from: '', to: '', at: now, by: 'the scheduled pass' }
+
+    let ruleFired = false
+    for (const step of rule.then) {
+      if (step.kind !== 'notify') continue
+      const people = resolveAudience(step.audience ?? '', state, undefined)
+      if (!people.length) {
+        misses.push({
+          ruleId: rule.id,
+          label: rule.label,
+          why: `Reached nobody — "${step.audience}" resolves to no one in the directory.`,
+        })
+        continue
+      }
+      for (const person of people) {
+        actions.push({
+          t: 'notify',
+          to: person,
+          channel: step.channel ?? 'in-app',
+          subject: fill(step.text ?? '', event, undefined).slice(0, 120),
+          body: fill(step.text ?? '', event, undefined),
+          aboutId: rule.id,
+          ruleId: rule.id,
+          now,
+        })
+      }
+      ruleFired = true
+    }
+    if (ruleFired) fired.push({ ruleId: rule.id, occurrence })
+  }
+
+  return { actions, fired, misses }
 }

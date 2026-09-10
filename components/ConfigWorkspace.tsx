@@ -2267,7 +2267,14 @@ function Automation({
           <div className="cfg-fld-row">
             <label className="cfg-fld">
               <span>When</span>
-              <select value={rule.on} onChange={(e) => put(rule.id, { on: e.target.value as EventType })}>
+              {/* `rule.on` widened to admit a calendar trigger (`RuleTrigger`,
+                  lib/automation.ts) — the picker for that mode is its own step, not yet built;
+                  this keeps an event-shaped rule's existing picker compiling and working
+                  unchanged until it lands. */}
+              <select
+                value={typeof rule.on === 'string' ? rule.on : ''}
+                onChange={(e) => put(rule.id, { on: e.target.value as EventType })}
+              >
                 {EVENT_TYPES.map((t) => (
                   <option key={t.key} value={t.key}>
                     {t.label}

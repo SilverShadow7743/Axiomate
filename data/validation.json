@@ -624,6 +624,16 @@
       "impact": "The percent-complete rollup already existed and was live; nobody was told when it actually finished. This closes that without ever making the automation the one who decides a record is done."
     },
     {
+      "id": "AUTO3",
+      "title": "A rule bound to nothing but a calendar fires notify on its due occurrence, once, and only that action kind",
+      "expected": "planCalendarActions covers the one gap AUTO1/AUTO2 left named in scenario Z's own impact note: a rule with no watched condition at all, due on a weekly/monthly cadence rather than an event.",
+      "verdict": "PASS",
+      "actual": "A weekly rule due for the first time fires exactly one notify (1 fired, 1 action) and Priya receives it (true). Re-evaluated for the same day after lastFiredOn advances to that occurrence, it fires nothing (0 actions) — the duplicate guard, live. A calendar rule addressed to a role nobody holds is reported as a miss rather than a silent success (1 miss: \"Reached nobody — \"role:ROLE_CLIENT_SPONSOR\" resolves to no one in the directory.\"). Saving a calendar rule with a setStatus step is refused at config-save time: \"A calendar-triggered rule can only notify — the other actions need an issue a calendar tick does not have.\".",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Closes the one gap scenario Z's own impact note named as still open: \"a rule bound to a bare calendar interval with no watched condition at all.\" Restricted to notify by design — the other five RuleActionKinds are all unconditionally issue-shaped in planActions, and a calendar tick has no issue."
+    },
+    {
       "id": "CUSTFLD1",
       "title": "A custom field is defined once, opted into one project, and appears only where it was opted in",
       "expected": "Defining a field is not the same act as putting it on a project — a field with no projects yet is invisible everywhere, assigning it to one project makes it visible only there, and archiving it is refused while any live issue still carries a value.",
