@@ -776,6 +776,17 @@ const SHAPES = {
   },
   updatePersonalEvent: { id: req(id), patch: req(plainObject), now },
   removePersonalEvent: { id: req(id), now },
+  /* ---- PERSONAL ACTIONS — see lib/personalActions.ts; the arms validate text and ownership ---- */
+  addPersonalAction: {
+    text: req(text),
+    dueDate: opt(text),
+    sourceSubject: opt(text),
+    sourceMessageId: opt(text),
+    now,
+  },
+  updatePersonalAction: { id: req(id), patch: req(plainObject), now },
+  removePersonalAction: { id: req(id), now },
+  convertToPersonalAction: { issueId: req(id), dueDate: opt(text), now },
   /* ---- MAIL LOG ---- */
   recordInboundMail: {
     mailbox: req(text),

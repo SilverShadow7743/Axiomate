@@ -132,7 +132,7 @@ import { checkEntry, type TimeActivity, type TimeEntry } from './time'
 import { overlapProblem, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
-import type { PersonalAction } from './personalActions'
+import { actionProblem, type PersonalAction } from './personalActions'
 import type { InboundMail } from './intake'
 import {
   allocationPolicyProblem,
@@ -1489,6 +1489,22 @@ export type Action =
       now: string
     }
   | { t: 'removePersonalEvent'; id: string; now: string }
+  /* ---- PERSONAL ACTIONS — the same absolute privacy as the events above; see ./personalActions ---- */
+  | { t: 'addPersonalAction'; text: string; dueDate?: string; sourceSubject?: string; sourceMessageId?: string; now: string }
+  | {
+      t: 'updatePersonalAction'
+      id: string
+      patch: Partial<Pick<PersonalAction, 'text' | 'dueDate' | 'status'>>
+      now: string
+    }
+  | { t: 'removePersonalAction'; id: string; now: string }
+  /**
+   * Two effects in one arm on purpose: the issue is soft-deleted AND the personal action
+   * created in the same state transition, so there is no window where the record is gone but
+   * nothing replaced it, or vice versa. See the mail-triage design's "Convert to a personal
+   * to-do" — the one triage action that removes something from the org-visible tree.
+   */
+  | { t: 'convertToPersonalAction'; issueId: string; dueDate?: string; now: string }
   /**
    * ---- MAIL LOG ----
    * Machine-written only. Deliberately absent from `app/api/workspace/route.ts`'s `KINDS` —
@@ -2819,6 +2835,22 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         )
       }
       const next = { ...i, ...a.patch, lastActivity: a.now.slice(0, 10) }
+      /*
+       * An unconfirmed record is confirmed by being edited. `changed` above is the list of
+       * fields that genuinely differ (a no-op resend returned early before this point), so any
+       * real edit — module, severity, owner, parent, status — clears `needsTriage` as a side
+       * effect; a caller that names the flag explicitly (Confirm sends `{ needsTriage: false }`
+       * alone; intake sends `{ needsTriage: true }` alone) is respected as written.
+       * See the mail-triage plan's step 2, and TRG1.
+       */
+      if (i.needsTriage === true && a.patch.needsTriage === undefined) {
+        next.needsTriage = false
+        audit = log(
+          actor,
+          { ...state, audit },
+          { rowId: a.id, field: 'needsTriage', from: 'true', to: 'false', at: a.now, by },
+        )
+      }
       // The join half of the reference, re-resolved ONLY when the owner actually moves —
       // re-resolving on every save would let a later directory change rewrite old joins.
       if (a.patch.owner != null && a.patch.owner !== i.owner) {
@@ -7750,6 +7782,120 @@ Question: ${review.question}`),
           personalEvents: { ...state.personalEvents, [a.id]: { ...event, deletedAt: a.now } },
         },
         message: `${event.title} removed.`,
+      }
+    }
+
+    case 'addPersonalAction': {
+      const problem = actionProblem(a)
+      if (problem) return { state, error: problem.message }
+      const personId = directoryPersonFor(state.model, actor)?.id
+      if (!personId) {
+        return { state, error: 'This sign-in matches no directory entry, so there is nowhere to add it.' }
+      }
+      const seq = state.seq + 1
+      const id = `paction-${seq}`
+      const action: PersonalAction = {
+        id,
+        personId,
+        text: a.text.trim(),
+        ...(a.dueDate ? { dueDate: a.dueDate } : {}),
+        status: 'To do',
+        ...(a.sourceSubject ? { sourceSubject: a.sourceSubject } : {}),
+        ...(a.sourceMessageId ? { sourceMessageId: a.sourceMessageId } : {}),
+        createdAt: a.now,
+        deletedAt: null,
+      }
+      return {
+        state: { ...state, personalActions: { ...state.personalActions, [id]: action }, seq },
+        createdId: id,
+        message: 'Added to your to-dos.',
+      }
+    }
+
+    case 'updatePersonalAction': {
+      const existing = state.personalActions[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That to-do no longer exists.' }
+      /* No admin fallback, exactly as updatePersonalEvent — nobody but the owner has a reason. */
+      if (directoryPersonFor(state.model, actor)?.id !== existing.personId) {
+        return { state, error: 'This is not your to-do.' }
+      }
+      const next: PersonalAction = { ...existing, ...a.patch }
+      if (a.patch.dueDate === '') delete next.dueDate
+      const problem = actionProblem(next)
+      if (problem) return { state, error: problem.message }
+      return {
+        state: { ...state, personalActions: { ...state.personalActions, [a.id]: next } },
+        message: next.status === 'Done' && existing.status !== 'Done' ? 'Done.' : 'Updated.',
+      }
+    }
+
+    case 'removePersonalAction': {
+      const existing = state.personalActions[a.id]
+      if (!existing) return { state, error: 'That to-do no longer exists.' }
+      if (existing.deletedAt) return { state }
+      if (directoryPersonFor(state.model, actor)?.id !== existing.personId) {
+        return { state, error: 'This is not your to-do.' }
+      }
+      return {
+        state: {
+          ...state,
+          personalActions: { ...state.personalActions, [a.id]: { ...existing, deletedAt: a.now } },
+        },
+        message: 'Removed.',
+      }
+    }
+
+    case 'convertToPersonalAction': {
+      const issue = state.issues[a.issueId]
+      if (!issue || issue.deletedAt) return { state, error: 'That record no longer exists.' }
+      /*
+       * The same gate POST /api/mail/file already uses for filing mail: evidence.add, plus
+       * internal.view where the record has no project above it (a client seat holding
+       * evidence.add must not reach a structural record outside any client's own scope).
+       */
+      const may = can(state.model, actor, 'evidence.add')
+      if (!may.allowed) return { state, error: may.reason ?? 'Not permitted.' }
+      if (!projectOf(state, issue.parentId)) {
+        const internal = can(state.model, actor, 'internal.view')
+        if (!internal.allowed) {
+          return { state, error: 'This record has no project, so only an internal seat may convert it.' }
+        }
+      }
+      const personId = directoryPersonFor(state.model, actor)?.id
+      if (!personId) {
+        return { state, error: 'This sign-in matches no directory entry, so there is nowhere to put a to-do.' }
+      }
+      const mail = Object.values(state.inboundMail).find((m) => m.issueId === a.issueId)
+      const seq = state.seq + 1
+      const id = `paction-${seq}`
+      const action: PersonalAction = {
+        id,
+        personId,
+        text: issue.subject,
+        ...(a.dueDate ? { dueDate: a.dueDate } : {}),
+        status: 'To do',
+        sourceSubject: issue.subject,
+        ...(mail?.messageId ? { sourceMessageId: mail.messageId } : {}),
+        createdAt: a.now,
+        deletedAt: null,
+      }
+      return {
+        state: {
+          ...state,
+          seq,
+          issues: { ...state.issues, [a.issueId]: { ...issue, deletedAt: a.now, needsTriage: false } },
+          personalActions: { ...state.personalActions, [id]: action },
+          audit: log(actor, state, {
+            rowId: a.issueId,
+            field: 'convertedToPersonalAction',
+            from: issue.subject,
+            to: '(private to-do)',
+            at: a.now,
+            by,
+          }),
+        },
+        createdId: id,
+        message: `“${issue.subject}” moved to your to-dos and removed from the tree.`,
       }
     }
 

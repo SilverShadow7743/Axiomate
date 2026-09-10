@@ -2634,6 +2634,36 @@
       "impact": "none"
     },
     {
+      "id": "PA2",
+      "title": "A personal action is private to its creator: another person cannot update or remove it, and personalActionsFor returns only the owner's own rows — with no exemption for anyone",
+      "expected": "The PersonalEvent pattern applied to a to-do. addPersonalAction resolves personId from the actor, never from the wire; update/remove refuse anyone but the owner in plain words; personalActionsFor (the redaction lib/db/boot.ts's redactForReader applies) returns only the caller's rows from a set holding several people's, and an empty map for a sign-in with no directory entry.",
+      "verdict": "PASS",
+      "actual": "personId resolved from actor; Sam refused on update and remove; owner's Done applied; empty text refused; Priya sees 1, Sam sees 1 (his own), nobody sees 0",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "PA3",
+      "title": "convertToPersonalAction soft-deletes the issue and creates the private to-do in one state transition, carrying the inbound message id; refused for a client seat without evidence.add, refused for one with it but no internal.view, and refused twice",
+      "expected": "The one triage action that removes something from the org-visible tree. Two effects, one arm: no window where the issue is gone but nothing replaced it. The originating InboundMail row's messageId rides along as provenance. Gated exactly as POST /api/mail/file gates filing: evidence.add at the funnel, plus internal.view inside the arm where no project sits above (the fixture's issues sit under a process area with no project tier, so that branch is live). A roleless directory person is NOT a negative case — the fallback role ships as Administrator (lib/access.ts) — so the negatives are the two client seats the gate was written for: Client User (no evidence.add) and Client Process Lead (evidence.add, no internal.view). Afterwards the to-do is visible only to its creator, by the same redaction PA2 proves.",
+      "verdict": "PASS",
+      "actual": "Client User refused at the funnel (no evidence.add); Client Process Lead refused by the no-project branch (no internal.view); Priya's convert soft-deleted OAPIL-2 and created paction-3 with sourceMessageId from the inbound row, in one state; row gone from the tree; second convert refused; to-do visible to Priya only",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
+      "id": "TRG1",
+      "title": "needsTriage is set by an explicit patch, survives a no-op resend, is cleared by any real edit, is cleared by an explicit Confirm, and changes nothing else on the record",
+      "expected": "The clearing rule rides on updateIssue's existing `changed` computation: a resend of the same values returns early before the rule (flag kept); a genuine change to any field clears the flag as a side effect and audits it; an explicit `{ needsTriage: false }` alone (Confirm's own shape) clears it as an ordinary field write. The design's central safety claim, pinned: flagging an issue leaves every other field byte-identical.",
+      "verdict": "PASS",
+      "actual": "flag set with every other field byte-identical; no-op resend kept it; owner change cleared it (audited); Confirm alone cleared it with the owner untouched",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
       "id": "PA1",
       "title": "reapplyable strips a stale expected and the transport key, keeping the edit itself intact",
       "expected": "A stuck action, redispatched via reapplyable, carries no expected (so withExpectation, components/IssueWorkspace.tsx:374-386, re-stamps a fresh one from current state rather than skipping because one is already present) and no key (so dispatch mints a new one, tracking the reapply as its own pending entry rather than reusing the stale one). Everything else about the action — what it actually changes — is untouched.",

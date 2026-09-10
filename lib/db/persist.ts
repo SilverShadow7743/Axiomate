@@ -25,6 +25,7 @@ import {
   allocationToRow,
   projectMemberToRow,
   personalEventToRow,
+  personalActionToRow,
   inboundMailToRow,
   commitmentToRow,
   meetingToRow,
@@ -517,6 +518,36 @@ export async function persistSteps(
         if (before.personalEvents[id] === e) continue
         const row = personalEventToRow(tenantId, e)
         await tx.personalEvent.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'addPersonalAction':
+    case 'updatePersonalAction':
+    case 'removePersonalAction': {
+      for (const [id, p] of Object.entries(after.personalActions)) {
+        if (before.personalActions[id] === p) continue
+        const row = personalActionToRow(tenantId, p)
+        await tx.personalAction.upsert({
+          where: { tenantId_id: { tenantId, id } },
+          create: row,
+          update: row,
+        })
+      }
+      return
+    }
+
+    case 'convertToPersonalAction': {
+      // Two collections, one transaction — the arm's own reason for being one action.
+      await upsertIssue(tx, tenantId, after, action.issueId)
+      for (const [id, p] of Object.entries(after.personalActions)) {
+        if (before.personalActions[id] === p) continue
+        const row = personalActionToRow(tenantId, p)
+        await tx.personalAction.upsert({
           where: { tenantId_id: { tenantId, id } },
           create: row,
           update: row,

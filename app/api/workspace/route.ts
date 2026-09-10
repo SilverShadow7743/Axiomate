@@ -116,6 +116,10 @@ const KINDS = new Set([
   'addPersonalEvent',
   'updatePersonalEvent',
   'removePersonalEvent',
+  'addPersonalAction',
+  'updatePersonalAction',
+  'removePersonalAction',
+  'convertToPersonalAction',
   'dismissProposal',
 ])
 

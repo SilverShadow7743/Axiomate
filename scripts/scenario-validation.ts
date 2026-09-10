@@ -140,6 +140,7 @@ import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } f
 import { buildFinanceReport } from '../lib/reports/finance'
 import { buildLeaveReport } from '../lib/reports/leave'
 import { buildSignatureHtml, plainTextToHtml } from '../lib/signature'
+import { personalActionsFor } from '../lib/personalActions'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
@@ -13012,6 +13013,164 @@ scenario(
           severity: 'P2',
           impact: 'a title/phone edit could silently fail to save, or — the sharper risk — an admin editing only the signature template could see no error and no saved change at all',
         }
+  },
+)
+
+/* ================================================================== *
+ * Mail triage: unconfirmed issues and a private personal action list (design 2026-09-10)
+ * ================================================================== */
+
+scenario(
+  'PA2',
+  'A personal action is private to its creator: another person cannot update or remove it, and personalActionsFor returns only the owner\'s own rows — with no exemption for anyone',
+  "The PersonalEvent pattern applied to a to-do. addPersonalAction resolves personId from the actor, never from the wire; update/remove refuse anyone but the owner in plain words; personalActionsFor (the redaction lib/db/boot.ts's redactForReader applies) returns only the caller's rows from a set holding several people's, and an empty map for a sign-in with no directory entry.",
+  () => {
+    const PRIYA: Actor = { id: 'pa2-priya', name: 'Priya' }
+    const SAM: Actor = { id: 'pa2-sam', name: 'Sam' }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+
+    let r = apply(BASE, { t: 'addPersonalAction', text: 'Chase the vendor quote', dueDate: '2026-08-20', now: NOW } as Action, PRIYA)
+    if (r.error) throw new Error(`Priya add refused: ${r.error}`)
+    const priyaActionId = r.createdId!
+    let s = r.state
+    const owned = s.personalActions[priyaActionId].personId === priyaId
+
+    r = apply(s, { t: 'addPersonalAction', text: 'Book the workshop room', now: NOW } as Action, SAM)
+    if (r.error) throw new Error(`Sam add refused: ${r.error}`)
+    s = r.state
+
+    const samUpdate = apply(s, { t: 'updatePersonalAction', id: priyaActionId, patch: { status: 'Done' }, now: NOW } as Action, SAM)
+    const updateRefused = Boolean(samUpdate.error) && /not your to-do/.test(samUpdate.error ?? '')
+    const samRemove = apply(s, { t: 'removePersonalAction', id: priyaActionId, now: NOW } as Action, SAM)
+    const removeRefused = Boolean(samRemove.error) && /not your to-do/.test(samRemove.error ?? '')
+
+    r = apply(s, { t: 'updatePersonalAction', id: priyaActionId, patch: { status: 'Done' }, now: NOW } as Action, PRIYA)
+    if (r.error) throw new Error(`owner update refused: ${r.error}`)
+    s = r.state
+    const ownerCanUpdate = s.personalActions[priyaActionId].status === 'Done'
+
+    const empty = apply(s, { t: 'addPersonalAction', text: '', now: NOW } as Action, PRIYA)
+    const emptyRefused = Boolean(empty.error)
+
+    const priyaView = personalActionsFor(s.personalActions, priyaId)
+    const samView = personalActionsFor(s.personalActions, samId)
+    const nobodyView = personalActionsFor(s.personalActions, null)
+    const redacted =
+      Object.keys(priyaView).length === 1 &&
+      priyaView[priyaActionId] !== undefined &&
+      Object.keys(samView).length === 1 &&
+      samView[priyaActionId] === undefined &&
+      Object.keys(nobodyView).length === 0
+
+    const good = owned && updateRefused && removeRefused && ownerCanUpdate && emptyRefused && redacted
+    return good
+      ? { verdict: 'PASS', actual: `personId resolved from actor; Sam refused on update and remove; owner's Done applied; empty text refused; Priya sees 1, Sam sees 1 (his own), nobody sees 0`, stops: '', severity: 'P1', impact: 'none' }
+      : { verdict: 'FAIL', actual: `owned=${owned} updateRefused=${updateRefused} removeRefused=${removeRefused} ownerCanUpdate=${ownerCanUpdate} emptyRefused=${emptyRefused} redacted=${redacted} (priya=${Object.keys(priyaView).length} sam=${Object.keys(samView).length} nobody=${Object.keys(nobodyView).length})`, stops: 'at the personal-action arms or personalActionsFor — a to-do is reachable by somebody who is not its owner', severity: 'P1', impact: 'the one property this entity exists for — nobody else can see it — does not hold' }
+  },
+)
+
+scenario(
+  'PA3',
+  'convertToPersonalAction soft-deletes the issue and creates the private to-do in one state transition, carrying the inbound message id; refused for a client seat without evidence.add, refused for one with it but no internal.view, and refused twice',
+  "The one triage action that removes something from the org-visible tree. Two effects, one arm: no window where the issue is gone but nothing replaced it. The originating InboundMail row's messageId rides along as provenance. Gated exactly as POST /api/mail/file gates filing: evidence.add at the funnel, plus internal.view inside the arm where no project sits above (the fixture's issues sit under a process area with no project tier, so that branch is live). A roleless directory person is NOT a negative case — the fallback role ships as Administrator (lib/access.ts) — so the negatives are the two client seats the gate was written for: Client User (no evidence.add) and Client Process Lead (evidence.add, no internal.view). Afterwards the to-do is visible only to its creator, by the same redaction PA2 proves.",
+  () => {
+    const priyaPerson = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
+    const samPerson = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!
+    // Priya: a seat that holds evidence.add and internal.view — Engagement Leader holds every permission.
+    let s = ok(BASE, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: priyaPerson.id, name: 'Priya', roleIds: ['ROLE_ENGAGEMENT_LEAD'] },
+      now: NOW,
+    } as Action)
+    const PRIYA: Actor = { id: 'pa3-priya', name: 'Priya' }
+    const SAM: Actor = { id: 'pa3-sam', name: 'Sam' }
+
+    s = ok(s, {
+      t: 'recordInboundMail', mailbox: 'intake@example.test', from: 'client@example.test',
+      subject: 'Subject OAPIL-2', body: 'hello', messageId: '<pa3-msg-1@example.test>',
+      receivedAt: NOW, issueId: 'OAPIL-2', refusalReason: null, conversationId: 'pa3-conv', now: NOW,
+    } as Action)
+
+    // Sam as a Client User: work.create and note.add only — no evidence.add, so the funnel refuses.
+    const asClientUser = ok(s, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: samPerson.id, name: 'Sam', roleIds: ['ROLE_CLIENT_USER'] },
+      now: NOW,
+    } as Action)
+    const noGrant = apply(asClientUser, { t: 'convertToPersonalAction', issueId: 'OAPIL-2', now: NOW } as Action, SAM)
+    const refusedWithoutGrant = Boolean(noGrant.error) && !/no project/.test(noGrant.error ?? '')
+
+    // Sam as a Client Process Lead: holds evidence.add but not internal.view — the arm's own
+    // no-project branch refuses, in its own words. The same F1 case /api/mail/file closed.
+    const asClientLead = ok(s, {
+      t: 'config',
+      op: { k: 'upsertPerson', id: samPerson.id, name: 'Sam', roleIds: ['ROLE_CLIENT_LEAD'] },
+      now: NOW,
+    } as Action)
+    const noInternal = apply(asClientLead, { t: 'convertToPersonalAction', issueId: 'OAPIL-2', now: NOW } as Action, SAM)
+    const refusedWithoutInternalView = Boolean(noInternal.error) && /no project/.test(noInternal.error ?? '')
+
+    const r = apply(s, { t: 'convertToPersonalAction', issueId: 'OAPIL-2', dueDate: '2026-08-22', now: NOW } as Action, PRIYA)
+    if (r.error) throw new Error(`convert refused: ${r.error}`)
+    const after = r.state
+    const actionId = r.createdId!
+    const action = after.personalActions[actionId]
+
+    const issueGone = Boolean(after.issues['OAPIL-2'].deletedAt) && after.issues['OAPIL-2'].needsTriage === false
+    const actionMade =
+      !!action && action.personId === priyaPerson.id && action.text === 'Subject OAPIL-2' &&
+      action.sourceMessageId === '<pa3-msg-1@example.test>' && action.dueDate === '2026-08-22' && action.status === 'To do'
+    const sameTransition = issueGone && actionMade // both read from ONE returned state
+    const notInTree = !rowsOf(after).some((row) => row.id === 'OAPIL-2')
+
+    const again = apply(after, { t: 'convertToPersonalAction', issueId: 'OAPIL-2', now: NOW } as Action, PRIYA)
+    const refusedTwice = Boolean(again.error)
+
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+    const onlyOwner =
+      personalActionsFor(after.personalActions, priyaPerson.id)[actionId] !== undefined &&
+      personalActionsFor(after.personalActions, samId)[actionId] === undefined
+
+    const good = refusedWithoutGrant && refusedWithoutInternalView && sameTransition && notInTree && refusedTwice && onlyOwner
+    return good
+      ? { verdict: 'PASS', actual: `Client User refused at the funnel (no evidence.add); Client Process Lead refused by the no-project branch (no internal.view); Priya's convert soft-deleted OAPIL-2 and created ${actionId} with sourceMessageId from the inbound row, in one state; row gone from the tree; second convert refused; to-do visible to Priya only`, stops: '', severity: 'P1', impact: 'none' }
+      : { verdict: 'FAIL', actual: `refusedWithoutGrant=${refusedWithoutGrant} (${noGrant.error}) refusedWithoutInternalView=${refusedWithoutInternalView} (${noInternal.error}) issueGone=${issueGone} actionMade=${actionMade} (${JSON.stringify(action)}) notInTree=${notInTree} refusedTwice=${refusedTwice} onlyOwner=${onlyOwner}`, stops: 'at convertToPersonalAction — the gate, the two-effect transition, the provenance, or the redaction is wrong', severity: 'P1', impact: 'a record could vanish from the tree with nothing replacing it, or a to-do could be created for the wrong person' }
+  },
+)
+
+scenario(
+  'TRG1',
+  'needsTriage is set by an explicit patch, survives a no-op resend, is cleared by any real edit, is cleared by an explicit Confirm, and changes nothing else on the record',
+  "The clearing rule rides on updateIssue's existing `changed` computation: a resend of the same values returns early before the rule (flag kept); a genuine change to any field clears the flag as a side effect and audits it; an explicit `{ needsTriage: false }` alone (Confirm's own shape) clears it as an ordinary field write. The design's central safety claim, pinned: flagging an issue leaves every other field byte-identical.",
+  () => {
+    const before = BASE.issues['OAPIL-1']
+    let s = ok(BASE, { t: 'updateIssue', id: 'OAPIL-1', patch: { needsTriage: true }, now: NOW } as Action)
+    const flagged = s.issues['OAPIL-1'].needsTriage === true
+
+    const strip = (i: Record<string, unknown>) => {
+      const { needsTriage: _n, lastActivity: _l, ...rest } = i
+      return JSON.stringify(rest)
+    }
+    const nothingElseMoved = strip(s.issues['OAPIL-1'] as unknown as Record<string, unknown>) === strip(before as unknown as Record<string, unknown>)
+
+    // A no-op resend: the same owner value the record already carries.
+    const noop = act(s, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: s.issues['OAPIL-1'].owner }, now: NOW } as Action)
+    const noopKept = !noop.error && noop.state.issues['OAPIL-1'].needsTriage === true
+
+    // A real edit — a different owner — clears it, and the clearing is audited.
+    const edited = ok(s, { t: 'updateIssue', id: 'OAPIL-1', patch: { owner: 'Sam' }, now: NOW } as Action)
+    const clearedByEdit = edited.issues['OAPIL-1'].needsTriage === false
+    const audited = edited.audit.some((e) => e.rowId === 'OAPIL-1' && e.field === 'needsTriage' && e.to === 'false')
+
+    // Confirm's own shape: the flag alone, nothing else in the patch.
+    const confirmed = ok(s, { t: 'updateIssue', id: 'OAPIL-1', patch: { needsTriage: false }, now: NOW } as Action)
+    const clearedByConfirm = confirmed.issues['OAPIL-1'].needsTriage === false && confirmed.issues['OAPIL-1'].owner === before.owner
+
+    const good = flagged && nothingElseMoved && noopKept && clearedByEdit && audited && clearedByConfirm
+    return good
+      ? { verdict: 'PASS', actual: `flag set with every other field byte-identical; no-op resend kept it; owner change cleared it (audited); Confirm alone cleared it with the owner untouched`, stops: '', severity: 'P1', impact: 'none' }
+      : { verdict: 'FAIL', actual: `flagged=${flagged} nothingElseMoved=${nothingElseMoved} noopKept=${noopKept} clearedByEdit=${clearedByEdit} audited=${audited} clearedByConfirm=${clearedByConfirm}`, stops: 'at updateIssue — the clearing rule fires on a no-op, fails to fire on a real edit, or flagging disturbs another field', severity: 'P1', impact: 'either every new issue loses its flag the instant anything unrelated changes, or a reclassified record stays in the triage queue forever' }
   },
 )
 

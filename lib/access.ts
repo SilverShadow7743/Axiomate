@@ -612,6 +612,14 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   addPersonalEvent: null,
   updatePersonalEvent: null,
   removePersonalEvent: null,
+  /* Personal actions: the same owner-only gate inside the arms, no permission key — except
+   * convert, which removes a record from the org-visible tree and so carries the same grant
+   * POST /api/mail/file requires to put one there (plus internal.view inside the arm where no
+   * project sits above). See the mail-triage design. */
+  addPersonalAction: null,
+  updatePersonalAction: null,
+  removePersonalAction: null,
+  convertToPersonalAction: 'evidence.add',
   /* Machine-written only — see the mail-log design. Never reachable via app/api/workspace's
    * KINDS set, the same reasoning `notify` is absent from it. */
   recordInboundMail: null,
