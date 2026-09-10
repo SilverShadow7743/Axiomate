@@ -1391,10 +1391,39 @@ select.cell-editor {
   background: var(--surface);
   border-left: 1px solid var(--border-strong);
   box-shadow: -14px 0 34px rgba(0, 0, 0, 0.2);
+  /* A row since the FactBox blade: the page (`.drawer-main`, the old column) plus the blade
+     beside it. The page keeps its 720px; an open blade widens the drawer instead. */
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   outline: none;
 }
+.drawer-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.drawer.blade-open { width: min(1020px, 92vw); }
+
+/* F&O's FactBox pane (FactBoxBlade): collapsed to a labelled edge tab, open to a column. */
+.factbox-tab {
+  flex: 0 0 auto; width: 28px; border: 0; border-left: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-muted); cursor: pointer; font: inherit;
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  writing-mode: vertical-rl; transform: rotate(180deg); padding: 10px 0;
+}
+.factbox-tab:hover { color: var(--accent); }
+.factbox-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.factbox-blade {
+  flex: 0 0 300px; min-width: 0; border-left: 1px solid var(--border); background: var(--surface-2);
+  overflow: auto; display: flex; flex-direction: column;
+}
+.factbox-blade-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint);
+  border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.factbox { padding: 10px; border-bottom: 1px solid var(--border); }
+.factbox-h { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text); }
+.factbox-kv { grid-template-columns: 92px 1fr; }
+.factbox-grid { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.factbox-grid li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.factbox-empty { padding: 12px; }
 .drawer.wide {
   width: 92vw;
 }

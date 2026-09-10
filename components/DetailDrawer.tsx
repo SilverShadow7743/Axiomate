@@ -27,9 +27,17 @@ interface Props {
   /** Must route through the workspace's dirty-checking deselect, never a bare unmount. */
   onClose: () => void
   children: ReactNode
+  /**
+   * F&O's FactBox pane, laid out beside the page rather than over it — see `FactBoxBlade`.
+   * This container stays data-free: the workspace builds the blade and hands it in, the same
+   * way it hands in the panel. `bladeOpen` widens the drawer so the page keeps its own width
+   * and the "first FastTab fits without scrolling" rule keeps holding.
+   */
+  blade?: ReactNode
+  bladeOpen?: boolean
 }
 
-export default function DetailDrawer({ wide, onClose, children }: Props) {
+export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Focus lands in the drawer on open and returns to the element that opened it on close,
@@ -53,14 +61,15 @@ export default function DetailDrawer({ wide, onClose, children }: Props) {
       }}
     >
       <div
-        className={`drawer${wide ? ' wide' : ''}`}
+        className={`drawer${wide ? ' wide' : ''}${bladeOpen ? ' blade-open' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label="Record detail"
         tabIndex={-1}
         ref={panelRef}
       >
-        {children}
+        <div className="drawer-main">{children}</div>
+        {blade}
       </div>
     </div>
   )

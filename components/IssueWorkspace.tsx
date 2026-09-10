@@ -10,6 +10,7 @@ import { wrapPlainText } from '@/lib/richText'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import MyTodosPanel from './MyTodosPanel'
+import FactBoxBlade from './FactBoxBlade'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ApplicationLandscape from './ApplicationLandscape'
@@ -1891,6 +1892,8 @@ export default function IssueWorkspace({
   /** Whether the current view pairs with the detail drawer at all. */
   const drawerOffered = !DETAIL_INCOMPATIBLE_VIEWS.has(view)
   const [drawerWide, setDrawerWide] = useState(false)
+  /* F&O's FactBox pane beside the record — collapsed to its edge tab by default. */
+  const [bladeOpen, setBladeOpen] = useState(false)
 
   /**
    * DetailPanel's dock-era size verbs, mapped onto the drawer. Collapse means close — routed
@@ -2691,7 +2694,22 @@ export default function IssueWorkspace({
           the same dirty-checking gate as every row switch. The selected row's verbs ride
           along at the top — beside the record they act on. */}
       {selectedId !== null && drawerOffered && (
-      <DetailDrawer wide={drawerWide} onClose={() => requestSelect(null)}>
+      <DetailDrawer
+        wide={drawerWide}
+        onClose={() => requestSelect(null)}
+        bladeOpen={bladeOpen}
+        blade={
+          <FactBoxBlade
+            row={selected}
+            state={state}
+            allRows={sortedRows}
+            today={today}
+            open={bladeOpen}
+            onToggle={() => setBladeOpen((v) => !v)}
+            onOpenTab={(t) => setRequestTab(t as DetailTab)}
+          />
+        }
+      >
       <div className="context-bar">
         <SelectionToolbar
           row={selected}
