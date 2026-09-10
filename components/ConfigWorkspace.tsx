@@ -667,6 +667,26 @@ function RolesAndPeople({
               </p>
             )}
           </div>
+          <div className="cfg-fld-row">
+            <label className="cfg-fld" style={{ flex: 1 }}>
+              <span>Email signature template</span>
+              <textarea
+                rows={6}
+                defaultValue={org.signatureTemplate ?? ''}
+                onBlur={(e) =>
+                  e.target.value !== (org.signatureTemplate ?? '') &&
+                  onConfig({ k: 'setOrganization', patch: { signatureTemplate: e.target.value } })
+                }
+              />
+            </label>
+          </div>
+          <p className="cfg-inherit">
+            Appended to every Compose, Reply and client-facing send, filled in per sender.
+            Placeholders: <code>{'{{name}}'}</code>, <code>{'{{title}}'}</code>,{' '}
+            <code>{'{{org}}'}</code>, <code>{'{{phone}}'}</code> — a line naming a placeholder
+            whose value isn&apos;t recorded for that person is dropped, not left blank. The logo
+            above is added automatically and needs no placeholder of its own.
+          </p>
         </div>
       </section>
 
@@ -892,6 +912,8 @@ function RolesAndPeople({
             <tr>
               <th>Name</th>
               <th>Work address</th>
+              <th>Title</th>
+              <th>Phone</th>
               <th>Joined</th>
               <th>Status</th>
               <th>Client</th>
@@ -924,6 +946,39 @@ function RolesAndPeople({
                       if (next.toLowerCase() === (p.email ?? '').toLowerCase()) return
                       if (!onConfig({ k: 'upsertPerson', id: p.id, name: p.name, roleIds: p.roleIds, email: next })) {
                         e.target.value = p.email ?? ''
+                      }
+                    }}
+                  />
+                </td>
+                <td>
+                  {/* A client-facing job title for the email signature — deliberately separate
+                      from roleIds, a permission grant, not a title. */}
+                  <input
+                    className="resp-input"
+                    defaultValue={p.title ?? ''}
+                    placeholder="none recorded"
+                    aria-label={`Title for ${p.name}`}
+                    onBlur={(e) => {
+                      const next = e.target.value.trim()
+                      if (next === (p.title ?? '')) return
+                      if (!onConfig({ k: 'upsertPerson', id: p.id, name: p.name, roleIds: p.roleIds, title: next })) {
+                        e.target.value = p.title ?? ''
+                      }
+                    }}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="resp-input"
+                    type="tel"
+                    defaultValue={p.phone ?? ''}
+                    placeholder="none recorded"
+                    aria-label={`Phone for ${p.name}`}
+                    onBlur={(e) => {
+                      const next = e.target.value.trim()
+                      if (next === (p.phone ?? '')) return
+                      if (!onConfig({ k: 'upsertPerson', id: p.id, name: p.name, roleIds: p.roleIds, phone: next })) {
+                        e.target.value = p.phone ?? ''
                       }
                     }}
                   />
