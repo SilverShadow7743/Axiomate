@@ -1,7 +1,7 @@
 # A leave report, month on month
 
-**Status: draft, 8 September 2026.** User's direct request — *"I would be needing leave report
-month on month."* Not built.
+**Status: approved, 10 September 2026** (all three open questions resolved below). User's direct
+request — *"I would be needing leave report month on month."* Not yet built.
 
 ## What exists today, and the gap
 
@@ -64,12 +64,12 @@ This report shows days taken, not days remaining. Scheduled/emailed delivery —
 finance report already carries, revisit together later. Leave-type breakdown (sick vs. vacation
 vs. other) — `CommitmentKind` has no such subdivision today; every leave is just `'Leave'`.
 
-## Open questions for Nishant
+## Decided, 10 September 2026
 
-1. **Which months?** Trailing N months from today (how many — 6? 12?), the current calendar
-   year, or an explicit from/to like the finance report's custom mode?
-2. **Reason text, never shown** — confirm, or should this follow `mayReadReasons` the way the
-   Capacity tab does, with the export itself warning the downloader it may carry private text?
-3. Does this need a **per-project** cut (whose leave affected which engagement), or is
-   **firm-wide, per-person** the whole ask? The request as stated is firm-wide; project
-   attribution would need `Commitment` to carry a project reference, which it does not today.
+1. **Which months?** Trailing 6 months from today, rolling — no date picker, always current.
+2. **Reason text** — never shown, full stop, as this draft recommended.
+3. **Firm-wide, per-person** — no per-project cut. Matches the request as stated; `Commitment`
+   does not carry a project reference today, and adding one would be new modeling this pass
+   does not need.
+
+Status: **approved, moving to an implementation plan.**
