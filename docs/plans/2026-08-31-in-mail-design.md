@@ -1,5 +1,10 @@
 # In-mail — your inbox in the workspace, tokens never at rest
 
+> **Posture revised 11 September 2026.** "Tokens never at rest" no longer holds: at Nishant's
+> direction the delegated refresh token is now sealed at rest (AES-256-GCM under a key derived
+> from the session secret) so a restart does not cost a reconnect. Access tokens stay RAM-only.
+> See `2026-09-11-durable-personal-graph-tokens-design.md`; the rest of this document stands.
+
 **Status: approved 2026-08-31** (two AskUserQuestion decisions: inbox-in-app + file-to-issue,
 over filing-only and over reply-from-issue; the RAM-only token posture below). The Hive Mail
 row from the comparison, done the Axiomate way: the mail that today bypasses intake — a

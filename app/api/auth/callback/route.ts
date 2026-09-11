@@ -69,13 +69,15 @@ export async function GET(req: Request) {
   try {
     const { identity, tokens } = await completeSignIn(config, code, verifier, nonce)
     /*
-     * The personal-Graph-token cache is a bonus on top of identity, never a dependency of it: a
-     * failure to store must not fail the sign-in. RAM-only by design — see
-     * docs/plans/2026-08-31-in-mail-design.md and 2026-09-07-personal-connect-write-design.md.
+     * The personal-Graph-token store is a bonus on top of identity, never a dependency of it: a
+     * failure to store must not fail the sign-in. Since 11 Sep the refresh token is also sealed
+     * at rest (docs/plans/2026-09-11-durable-personal-graph-tokens-design.md), so a restart no
+     * longer costs a reconnect; the store itself swallows database trouble, and this try is the
+     * belt to that brace.
      */
     if (tokens) {
       try {
-        storePersonalGraphTokens(identity.oid, tokens)
+        await storePersonalGraphTokens(identity.oid, tokens)
       } catch {
         /* the Mail panel — and Calendar/Teams actions — will simply say "reconnect" */
       }

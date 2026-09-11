@@ -1,26 +1,37 @@
 import 'server-only'
 import { AXIOMATE_DELEGATED_SCOPES, entraConfig } from '../auth/entra'
+import { MIN_SECRET_LENGTH } from '../auth/seal'
+import { secretValue } from '../secrets'
+import { currentTenantId } from '../tenant'
+import { decryptSecret, deriveTokenKey, encryptSecret } from '../tokenCrypto'
+import { databaseConfigured, withTenant } from './client'
 
 /**
- * The RAM-only personal-Graph-token cache — see `docs/plans/2026-08-31-in-mail-design.md` and
- * `2026-09-07-personal-connect-write-design.md`.
+ * The personal-Graph-token cache — one person's own delegated Graph access, read by the
+ * inbox/file routes and by schedule/reply/compose/chat. One sign-in carries every scope in
+ * `AXIOMATE_DELEGATED_SCOPES` in the SAME token, so this is one entry per person, keyed by
+ * their Entra oid — the claim every session cookie already carries.
  *
- * Formerly `mailTokens.ts`, holding one scope (`Mail.Read`). One person's sign-in now carries
- * five delegated scopes in the SAME token (`AXIOMATE_DELEGATED_SCOPES`) — Graph does not issue
- * a separate token per scope — so this is renamed to what it actually is: the cache of one
- * person's own delegated Graph access, read by the inbox/file routes and now also by
- * schedule/reply/compose/chat. Nothing below changes shape; only what it is honestly called.
+ * **Posture, revised 11 September 2026** (`docs/plans/2026-09-11-durable-personal-graph-tokens-
+ * design.md`, at Nishant's direction: "there should be a way to connect to your inbox without
+ * reconnecting"). From 31 Aug to 11 Sep this map was the ONLY place tokens lived, and the
+ * stated cost was that every app restart — which App Service does routinely — emptied it and
+ * every personal feature said "reconnect". That cost was paid on every deploy. Now:
  *
- * Access and refresh tokens live in this process's memory and NOWHERE else: never in a
- * cookie, never in Postgres, nothing at rest to leak from a backup or rotate. The stated
- * cost: an app restart empties the map and every personal-Graph feature says "reconnect",
- * refilled by one sign-in hop. Keyed by the person's Entra oid — the claim every existing
- * session cookie already carries, so no claims-shape change and no cookie migration; two
- * devices of one person share the latest token, which is harmless for reads and, for writes,
- * means only that the second device is the one whose token actually goes out — never a mix.
+ *   - Access tokens are still RAM-only. They live an hour and are never written anywhere.
+ *   - The REFRESH token is also written to `PersonalGraphToken`, sealed with AES-256-GCM under
+ *     a key derived from the session secret (`lib/tokenCrypto.ts`) — so a restart, or a second
+ *     instance, re-acquires access on the first cache miss with no one signing in again.
+ *   - Nothing here is a dependency of anything: with no database, or no session secret, the
+ *     behaviour is exactly the RAM-only one it replaced; a database error on store or load is
+ *     logged and the caller sees "reconnect", never an error page.
+ *   - A refresh Entra refuses (revoked, expired, consent withdrawn) deletes the row: a token
+ *     that no longer works is not kept at rest waiting to be found.
  *
- * Single-instance by assumption (the B1). Scaling out invalidates this cache and forces the
- * stored-token-table decision the design records as a send-back — not a quiet workaround.
+ * What a database backup now contains: ciphertexts that open only with the session secret,
+ * which is not in the database. Rotating that secret turns every stored token into one
+ * reconnect per person, by design. The single-instance assumption this file used to carry is
+ * gone with the map's monopoly.
  */
 
 interface CachedTokens {
@@ -31,23 +42,90 @@ interface CachedTokens {
 
 const cache = new Map<string, CachedTokens>()
 
-export function storePersonalGraphTokens(oid: string, tokens: CachedTokens): void {
-  cache.set(oid, tokens)
+function tokenKey(): Buffer | null {
+  const secret = secretValue('AXIOMATE_SESSION_SECRET', MIN_SECRET_LENGTH)
+  return secret ? deriveTokenKey(secret) : null
 }
 
-export function dropPersonalGraphTokens(oid: string): void {
+function durable(): boolean {
+  return databaseConfigured() && tokenKey() !== null
+}
+
+function report(what: string, oid: string, err: unknown): void {
+  console.error(`personal graph token ${what} skipped for ${oid}: ${err instanceof Error ? err.message : String(err)}`)
+}
+
+async function persistRefresh(oid: string, refresh: string): Promise<void> {
+  if (!durable()) return
+  const key = tokenKey()!
+  const tenantId = currentTenantId()
+  const refreshCiphertext = encryptSecret(refresh, key)
+  const updatedAt = new Date()
+  await withTenant(tenantId, (tx) =>
+    tx.personalGraphToken.upsert({
+      where: { tenantId_oid: { tenantId, oid } },
+      create: { tenantId, oid, refreshCiphertext, updatedAt },
+      update: { refreshCiphertext, updatedAt },
+    }),
+  )
+}
+
+async function loadRefresh(oid: string): Promise<string | null> {
+  if (!durable()) return null
+  const key = tokenKey()!
+  const tenantId = currentTenantId()
+  const row = await withTenant(tenantId, (tx) =>
+    tx.personalGraphToken.findUnique({ where: { tenantId_oid: { tenantId, oid } } }),
+  )
+  return row ? decryptSecret(row.refreshCiphertext, key) : null
+}
+
+async function forgetRefresh(oid: string): Promise<void> {
+  if (!databaseConfigured()) return
+  const tenantId = currentTenantId()
+  await withTenant(tenantId, (tx) => tx.personalGraphToken.deleteMany({ where: { tenantId, oid } }))
+}
+
+/** Cache the sign-in's tokens and seal the refresh token at rest. Never throws: storage is a bonus on top of identity. */
+export async function storePersonalGraphTokens(oid: string, tokens: CachedTokens): Promise<void> {
+  cache.set(oid, tokens)
+  try {
+    await persistRefresh(oid, tokens.refresh)
+  } catch (err) {
+    report('store', oid, err)
+  }
+}
+
+export async function dropPersonalGraphTokens(oid: string): Promise<void> {
   cache.delete(oid)
+  try {
+    await forgetRefresh(oid)
+  } catch (err) {
+    report('drop', oid, err)
+  }
 }
 
 /**
- * A live access token for this person, refreshed when within five minutes of expiry, or
- * null — absent entry and failed refresh both mean "reconnect", never an error page. The
- * one token this returns carries every scope in `AXIOMATE_DELEGATED_SCOPES`; a caller that
- * only reads mail and one that sends a Teams chat draw from the same cache entry.
+ * A live access token for this person, or null — which every caller renders as "reconnect",
+ * never as an error page. Refreshed when within five minutes of expiry. On a cache miss the
+ * sealed refresh token is loaded and exchanged first, which is the whole of the 11 Sep change
+ * from a caller's point of view: the miss that used to mean "reconnect" now means one round
+ * trip to Entra.
  */
 export async function getPersonalGraphToken(oid: string): Promise<string | null> {
-  const entry = cache.get(oid)
-  if (!entry) return null
+  let entry = cache.get(oid)
+  if (!entry) {
+    let refresh: string | null = null
+    try {
+      refresh = await loadRefresh(oid)
+    } catch (err) {
+      report('load', oid, err)
+    }
+    if (!refresh) return null
+    // An entry with no access token and an expiry in the past: the refresh below is forced.
+    entry = { access: '', refresh, expiresAt: 0 }
+    cache.set(oid, entry)
+  }
   if (entry.expiresAt - Date.now() > 5 * 60_000) return entry.access
 
   const config = entraConfig()
@@ -66,6 +144,16 @@ export async function getPersonalGraphToken(oid: string): Promise<string | null>
     )
     if (!res.ok) {
       cache.delete(oid)
+      // 400 is Entra's `invalid_grant`: the refresh token itself is dead (revoked, expired,
+      // consent withdrawn). A dead token is not kept at rest. Anything else — a 5xx, a
+      // throttle — keeps the row for the next attempt.
+      if (res.status === 400) {
+        try {
+          await forgetRefresh(oid)
+        } catch (err) {
+          report('forget', oid, err)
+        }
+      }
       return null
     }
     const token = (await res.json()) as {
@@ -84,6 +172,13 @@ export async function getPersonalGraphToken(oid: string): Promise<string | null>
       expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
     }
     cache.set(oid, next)
+    if (next.refresh !== entry.refresh) {
+      try {
+        await persistRefresh(oid, next.refresh)
+      } catch (err) {
+        report('rotate', oid, err)
+      }
+    }
     return next.access
   } catch {
     // Network trouble is "try again", not "sign out" — the entry stays for the next attempt.

@@ -125,6 +125,7 @@ model Tenant {
   projectMembers ProjectMember[]
   personalEvents PersonalEvent[]
   personalActions PersonalAction[]
+  personalGraphTokens PersonalGraphToken[]
   inboundMail   InboundMail[]
   commitments   Commitment[]
   sows          Sow[]
@@ -750,6 +751,22 @@ model PersonalAction {
 
   @@id([tenantId, id])
   @@index([tenantId, personId])
+}
+
+/// One person's delegated Graph REFRESH token, sealed — see lib/db/personalGraphTokens.ts and
+/// docs/plans/2026-09-11-durable-personal-graph-tokens-design.md (the RAM-only posture reversed
+/// on 11 Sep 2026 at Nishant's direction). Never an access token. AES-256-GCM under a key
+/// derived from the session secret, which is not in this database. Keyed by Entra oid, one
+/// row per person per tenant; deleted when Entra refuses the refresh.
+model PersonalGraphToken {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  oid               String
+  refreshCiphertext String   @db.Text
+  updatedAt         DateTime
+
+  @@id([tenantId, oid])
 }
 
 /// Every message intake has ever seen, accepted or refused — the reader classify()'s own

@@ -3,6 +3,9 @@
 *7 September 2026. A design, not an increment — extends `2026-08-18-connected-workspace-design.md`
 ("Personal" tier) from read-only to read-and-act. Not yet built; not yet gated.*
 
+> **Token posture revised 11 September 2026** — the RAM-only cache this design leans on now
+> also seals the refresh token at rest; see `2026-09-11-durable-personal-graph-tokens-design.md`.
+
 **Requested:** every user connects their own Microsoft 365 account and can, from inside Axiomate,
 compose a new email, reply or reply-all, schedule a meeting, and send a Teams chat message.
 

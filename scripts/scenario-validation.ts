@@ -141,6 +141,7 @@ import { buildFinanceReport } from '../lib/reports/finance'
 import { buildLeaveReport } from '../lib/reports/leave'
 import { buildSignatureHtml, plainTextToHtml } from '../lib/signature'
 import { personalActionsFor } from '../lib/personalActions'
+import { decryptSecret, deriveTokenKey, encryptSecret } from '../lib/tokenCrypto'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
@@ -13035,6 +13036,36 @@ scenario(
           severity: 'P2',
           impact: 'a signature sent to a real client could show a literal {{title}}, broken markup from an unescaped name, or a missing/unwanted logo',
         }
+  },
+)
+
+scenario(
+  'TOK1',
+  'A delegated refresh token is sealed at rest and opens only with the right key, unaltered',
+  "lib/tokenCrypto.ts (docs/plans/2026-09-11-durable-personal-graph-tokens-design.md): encryptSecret/decryptSecret round-trip under a key derived from a master secret; two seals of one token differ (fresh IV each time); a tampered ciphertext, a wrong key and an unknown version prefix all open as null — never as text that is almost right.",
+  () => {
+    const key = deriveTokenKey('a-master-secret-of-at-least-thirty-two-characters')
+    const other = deriveTokenKey('a-different-secret-of-at-least-thirty-two-chars')
+    const token = '0.AXkA…refresh-token-value…'
+    const sealed = encryptSecret(token, key)
+    const sealedAgain = encryptSecret(token, key)
+    const roundTrip = decryptSecret(sealed, key) === token
+    const freshIv = sealed !== sealedAgain && decryptSecret(sealedAgain, key) === token
+    const parts = sealed.split('.')
+    const flipped = parts[3].slice(0, -2) + (parts[3].endsWith('AA') ? 'BB' : 'AA')
+    const tampered = decryptSecret([parts[0], parts[1], parts[2], flipped].join('.'), key) === null
+    const wrongKey = decryptSecret(sealed, other) === null
+    const wrongVersion = decryptSecret(['v9', parts[1], parts[2], parts[3]].join('.'), key) === null
+    const keyDerivesSame = deriveTokenKey('a-master-secret-of-at-least-thirty-two-characters').equals(key)
+    const good = roundTrip && freshIv && tampered && wrongKey && wrongVersion && keyDerivesSame
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `round trip ${roundTrip ? 'opens' : 'FAILS'}; two seals ${freshIv ? 'differ and both open' : 'do not differ or do not open'}; tampered → ${tampered ? 'null' : 'TEXT'}; wrong key → ${wrongKey ? 'null' : 'TEXT'}; unknown version → ${wrongVersion ? 'null' : 'TEXT'}; key derivation ${keyDerivesSame ? 'is' : 'is NOT'} deterministic.`,
+      stops: good ? '—' : 'at lib/tokenCrypto.ts — the seal is not authenticated, not versioned, or not keyed as designed',
+      severity: good ? '—' : 'P0',
+      impact:
+        'This is what a database backup now holds for every signed-in person. If a tampered or mis-keyed ciphertext ever opened as text, a Graph refresh would be attempted with garbage — or worse, a row edited by hand would work — and the whole point of sealing rather than storing would be gone.',
+    }
   },
 )
 

@@ -2644,6 +2644,16 @@
       "impact": "none"
     },
     {
+      "id": "TOK1",
+      "title": "A delegated refresh token is sealed at rest and opens only with the right key, unaltered",
+      "expected": "lib/tokenCrypto.ts (docs/plans/2026-09-11-durable-personal-graph-tokens-design.md): encryptSecret/decryptSecret round-trip under a key derived from a master secret; two seals of one token differ (fresh IV each time); a tampered ciphertext, a wrong key and an unknown version prefix all open as null — never as text that is almost right.",
+      "verdict": "PASS",
+      "actual": "round trip opens; two seals differ and both open; tampered → null; wrong key → null; unknown version → null; key derivation is deterministic.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "This is what a database backup now holds for every signed-in person. If a tampered or mis-keyed ciphertext ever opened as text, a Graph refresh would be attempted with garbage — or worse, a row edited by hand would work — and the whole point of sealing rather than storing would be gone."
+    },
+    {
       "id": "SIG2",
       "title": "upsertPerson merges title/phone with the same absent-versus-cleared shape as email; setOrganization with only signatureTemplate in the patch is not swallowed by the unchanged guard",
       "expected": "title/phone follow email's own merge rule: undefined keeps what was there, an explicit empty string clears it, a value sets it. setOrganization's `unchanged` check was extended to compare signatureTemplate alongside name/logo/etc — before that fix, a patch touching only the template would hit `if (unchanged) return { state }` and silently do nothing.",
