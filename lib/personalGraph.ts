@@ -119,6 +119,29 @@ export async function replyToMessage(
   htmlContent: string,
   replyAll: boolean,
 ): Promise<GraphResult<Record<string, never>>> {
+  const draft = await draftReply(token, messageId, htmlContent, replyAll)
+  if (!draft.ok) return draft
+  return graphCall(token, `/me/messages/${encodeURIComponent(draft.data.id)}/send`, { method: 'POST' })
+}
+
+/**
+ * The first two of those three calls, on their own: the reply written into a draft in the
+ * person's own Drafts folder and left there. This is "reply and schedule" as decided on 11 Sep
+ * (`docs/plans/2026-09-08-scheduled-reply-design.md`, Option C): Axiomate hands Outlook the
+ * finished reply and Outlook's own *Schedule send* owns the timing — so nothing here needs a
+ * token to still be alive later, and nothing is stored on this side. `webLink` is the draft's
+ * own Outlook-on-the-web address from the PATCH response, for the badge that opens it.
+ *
+ * The signed content is PREPENDED to `created.data.body.content`, never put in its place: the
+ * quoted, threaded original is what `createReply` produced and what a reader of the draft
+ * expects to find beneath the reply.
+ */
+export async function draftReply(
+  token: string,
+  messageId: string,
+  htmlContent: string,
+  replyAll: boolean,
+): Promise<GraphResult<{ id: string; webLink: string | null }>> {
   const created = await graphCall<{ id: string; body: { content: string } }>(
     token,
     `/me/messages/${encodeURIComponent(messageId)}/${replyAll ? 'createReplyAll' : 'createReply'}`,
@@ -127,14 +150,14 @@ export async function replyToMessage(
   if (!created.ok) return created
 
   const draftId = created.data.id
-  const patched = await graphCall<Record<string, never>>(
+  const patched = await graphCall<{ id?: string; webLink?: string }>(
     token,
     `/me/messages/${encodeURIComponent(draftId)}`,
     { method: 'PATCH', body: { body: { contentType: 'HTML', content: htmlContent + created.data.body.content } } },
   )
   if (!patched.ok) return patched
 
-  return graphCall(token, `/me/messages/${encodeURIComponent(draftId)}/send`, { method: 'POST' })
+  return { ok: true, data: { id: draftId, webLink: patched.data?.webLink ?? null } }
 }
 
 export interface ComposeMailInput {

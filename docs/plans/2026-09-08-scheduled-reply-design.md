@@ -1,8 +1,11 @@
 # Reply and schedule — why this is a bigger decision than it looks
 
-**Status: draft, 8 September 2026.** User's direct request — *"reply and schedule."* Not built.
-**This design has one central fork that needs Nishant's decision before any code is written** —
-it is not a small extension of the existing reply feature the way folders/priority/search were.
+**Status: decided 11 September 2026 — Option C.** Nishant chose "draft into Outlook": the reply
+is composed in Axiomate and saved as a draft in the person's own Outlook Drafts, and Outlook's
+own *Schedule send* owns the timing. No new storage, the RAM-only token posture untouched.
+Plan: `2026-09-11-reply-to-outlook-drafts-plan.md`. Originally: draft, 8 September 2026, the
+user's direct request — *"reply and schedule."* The fork below is kept as written because it is
+the record of why C was the shape chosen.
 
 ## What exists today
 

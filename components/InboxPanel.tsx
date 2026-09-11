@@ -93,11 +93,20 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
   const [replyBusy, setReplyBusy] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
   const [replied, setReplied] = useState<Record<string, true>>({})
+  /** Message id → the draft's Outlook link ('' when Graph gave none). "Reply and schedule",
+      Option C: the reply is left in the person's own Drafts and Outlook owns it from there. */
+  const [drafted, setDrafted] = useState<Record<string, string>>({})
 
-  const sendReply = async () => {
+  /**
+   * One request shape, two outcomes: `'send'` sends as before; `'draft'` leaves the signed
+   * reply in the person's own Outlook Drafts (`docs/plans/2026-09-08-scheduled-reply-design.md`,
+   * decided 11 Sep) — nothing is stored on this side and no token has to outlive this click.
+   */
+  const submitReply = async (mode: 'send' | 'draft') => {
     if (!replying || !replyText.trim()) return
     setReplyBusy(true)
     setReplyError(null)
+    const verb = mode === 'draft' ? 'saved' : 'sent'
     try {
       const res = await fetch('/api/mail/reply', {
         method: 'POST',
@@ -106,30 +115,34 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
           messageId: replying.message.id,
           comment: replyText,
           replyAll: replying.all,
+          mode,
         }),
       })
       const data = (await res.json().catch(() => null)) as {
         ok?: boolean
         error?: string
         reconnect?: boolean
+        draft?: { id: string; webLink: string | null }
       } | null
       if (!res.ok || !data?.ok) {
         setReplyError(
           data?.reconnect
             ? 'Your inbox connection is not active — sign in once to connect it.'
-            : (data?.error ?? 'The reply could not be sent.'),
+            : (data?.error ?? `The reply could not be ${verb}.`),
         )
         return
       }
-      setReplied((p) => ({ ...p, [replying.message.id]: true }))
+      if (mode === 'draft') setDrafted((p) => ({ ...p, [replying.message.id]: data.draft?.webLink ?? '' }))
+      else setReplied((p) => ({ ...p, [replying.message.id]: true }))
       setReplying(null)
       setReplyText('')
     } catch {
-      setReplyError('The reply could not be sent. Check the connection and try again.')
+      setReplyError(`The reply could not be ${verb}. Check the connection and try again.`)
     } finally {
       setReplyBusy(false)
     }
   }
+  const sendReply = () => submitReply('send')
 
   /* ---------------- compose new — personal ---------------- */
   const [composingNew, setComposingNew] = useState(false)
@@ -284,6 +297,14 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
       <div className="ibx-row-side">
         <span className="ibx-date">{m.receivedAt ? formatIso(m.receivedAt.slice(0, 10)) : ''}</span>
         {replied[m.id] && <span className="ibx-filed">replied</span>}
+        {drafted[m.id] !== undefined &&
+          (drafted[m.id] ? (
+            <a className="ibx-filed" href={drafted[m.id]} target="_blank" rel="noreferrer" title="Open the draft in Outlook">
+              drafted · open in Outlook
+            </a>
+          ) : (
+            <span className="ibx-filed">drafted</span>
+          ))}
         <button className="btn" onClick={() => void openMessage(m)}>
           Open…
         </button>
@@ -485,7 +506,8 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
           <div className="modal" style={{ maxWidth: 520 }}>
             <h3>{replying.all ? 'Reply all to' : 'Reply to'} “{replying.message.subject}”</h3>
             <p className="ibx-note">
-              Sent from your own mailbox, as you — not recorded on any record.
+              Sent from your own mailbox, as you — not recorded on any record. Or save it to your
+              Outlook Drafts to finish later or schedule with Outlook&rsquo;s own Schedule send.
             </p>
             <textarea
               rows={6}
@@ -500,8 +522,18 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
               <button className="btn" disabled={replyBusy} onClick={() => setReplying(null)}>
                 Close
               </button>
+              {/* Secondary on purpose: Send stays the dialog's one primary (F&O's one-primary
+                  rule); a draft is the alternative outcome, not the ordinary next move. */}
+              <button
+                className="btn"
+                disabled={replyBusy || !replyText.trim()}
+                onClick={() => void submitReply('draft')}
+                title="Leave the reply in your Outlook Drafts — finish it there, or use Outlook's Schedule send"
+              >
+                Save to Outlook Drafts
+              </button>
               <button className="btn primary" disabled={replyBusy || !replyText.trim()} onClick={sendReply}>
-                {replyBusy ? 'Sending…' : replying.all ? 'Send to all' : 'Send'}
+                {replyBusy ? 'Working…' : replying.all ? 'Send to all' : 'Send'}
               </button>
             </div>
           </div>
