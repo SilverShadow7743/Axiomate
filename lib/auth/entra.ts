@@ -68,9 +68,19 @@ export function configured(): boolean {
  * non-goal, and this addition does not reopen it. Two different things share the word
  * "meeting": one is a tracked capacity-consuming record the firm keeps; this is a person
  * putting something on their own calendar and telling Axiomate nothing more than that they did.
+ *
+ * `Mail.ReadWrite` (11 Sep 2026) is what `createReply`/`createReplyAll` need — Microsoft's
+ * reference lists it as the least-privileged permission for both, with no alternative — and
+ * `Mail.Send` covers only the single-call `reply` action and `send`. The signed-reply sequence
+ * of 10 Sep (create the draft, PATCH the signature in, send) was therefore refused by Graph
+ * from the day it shipped, found when the 11 Sep "save to Outlook Drafts" was tried live.
+ * Delegated `Mail.ReadWrite` needs no admin consent; each person sees one consent screen on
+ * their next sign-in, and a refresh token minted under the old scope string is refused
+ * (`invalid_grant`), which the token store treats as "sign in once" — exactly the hop that
+ * grants the consent.
  */
 export const AXIOMATE_DELEGATED_SCOPES =
-  'openid profile email offline_access Mail.Read Mail.Send Calendars.ReadWrite Chat.Create Chat.ReadWrite'
+  'openid profile email offline_access Mail.ReadWrite Mail.Send Calendars.ReadWrite Chat.Create Chat.ReadWrite'
 
 const authority = (tenantId: string) => `https://login.microsoftonline.com/${tenantId}/v2.0`
 

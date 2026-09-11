@@ -61,7 +61,7 @@ Nishant's call, not a default to assume.
 
 **Option C — not scheduling as timing, but scheduling as drafting.** A near-reading of "reply and
 schedule" that never needs a live token at rest: save the composed reply as a **draft**
-(`POST /me/messages/{id}/createReply` then `PATCH` the draft body, both already inside `Mail.Send`)
+(`POST /me/messages/{id}/createReply` then `PATCH` the draft body — **not** "inside `Mail.Send`" as this draft first said: Microsoft's reference lists `Mail.ReadWrite` as the least-privileged permission for `createReply`, corrected 11 Sep when the live draft was refused)
 sitting in the person's own Outlook Drafts folder, for them to send at will — Outlook's own
 "schedule send" feature, if the mailbox has it enabled, then does the actual timing entirely
 inside Microsoft's infrastructure, never touching Axiomate's token cache at all. This narrows the
