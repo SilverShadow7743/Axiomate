@@ -6812,6 +6812,16 @@ select.cell-editor {
   gap: 8px;
 }
 
+/* The bulk status-change reason box (12 Sep multi-select) reuses .board-ask verbatim inside
+   the toolbar's own wrapping flex row rather than a scrollable board lane -- sticky positioning
+   has nothing to stick to there, so it drops onto its own full-width line instead. */
+.seltoolbar .board-ask {
+  position: relative;
+  bottom: auto;
+  flex: 1 1 100%;
+  margin: 6px 0 0;
+}
+
 /* ================================================================== *
  * Calendar view (design 2026-08-19)
  * ================================================================== */

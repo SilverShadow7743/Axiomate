@@ -2,12 +2,13 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import type { FilterState, IssueRelationship, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
+import type { FilterState, IssueRelationship, IssueStatus, ScheduleRow, SlaPolicy, ZoomLevel } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
-import { ownerChoicesFor, ownerOptionValues, UNASSIGNED } from '@/lib/ownerChoices'
+import { ownerChoicesFor, ownerOptionValues, clientNodeOf, UNASSIGNED } from '@/lib/ownerChoices'
+import { bulkStatusChoices } from '@/lib/board'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import MyTodosPanel from './MyTodosPanel'
@@ -1016,6 +1017,71 @@ export default function IssueWorkspace({
   )
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds])
+
+  const bulkHasEvidence = useCallback(
+    (id: string) => Object.values(state.evidence).some((e) => e.issueId === id && !e.deletedAt),
+    [state.evidence],
+  )
+
+  const bulkStatusOptions = useMemo(
+    () => bulkStatusChoices(state.model.statusPolicy, selectedRows, bulkHasEvidence),
+    [state.model.statusPolicy, selectedRows, bulkHasEvidence],
+  )
+
+  const onBulkStatusChange = useCallback(
+    (to: IssueStatus, reason: string): boolean => {
+      const now = new Date().toISOString()
+      // Rows already at the target are no-ops per bulkDropOutcome/dropOutcome -- skipped here
+      // rather than sent as a no-op updateIssue.
+      const actions: Action[] = selectedRows
+        .filter((r) => r.status !== to)
+        .map((r) => ({ t: 'updateIssue', id: r.id, patch: { status: to }, now, reason }))
+      if (!actions.length) return true
+      return dispatchMany(actions).ok
+    },
+    [selectedRows, dispatchMany],
+  )
+
+  /**
+   * Which client seats are safe to offer for a bulk reassign: the directory's own team always,
+   * and a client's seats only when every selected row's own client node (`clientNodeOf`, the
+   * same resolution `ownerOptionsFor` uses per row) agrees on which client that is. A selection
+   * spanning two clients falls back to team-only rather than guessing which client's seats
+   * belong on the other client's records.
+   */
+  const bulkOwnerOptions = useMemo(() => {
+    const clientNodes = new Set(selectedRows.map((r) => clientNodeOf(state, r.id)))
+    const sharedAnchor = clientNodes.size === 1 ? (selectedRows[0]?.id ?? null) : null
+    return ownerOptionValues(ownerChoicesFor(state, sharedAnchor, null))
+  }, [state, selectedRows])
+
+  const onBulkReassign = useCallback(
+    (owner: string): boolean => {
+      const now = new Date().toISOString()
+      // 'Unassigned' is stored literally, same as commitCell's single-record owner case --
+      // never null, never empty string.
+      const unavailable = selectedRows.filter((r) => {
+        const issue = state.issues[r.id]
+        const verdict = issue ? availabilityForAssignment(state, issue, owner, now) : null
+        return verdict && refusesAssignment(verdict)
+      })
+      if (unavailable.length) {
+        notify(
+          `${owner} is unavailable for the whole window on ${unavailable.length} of ${selectedRows.length} selected. Nothing was changed -- reassign those individually to override.`,
+          true,
+        )
+        return false
+      }
+      const actions: Action[] = selectedRows
+        .filter((r) => r.owner !== owner)
+        .map((r) => ({ t: 'updateIssue', id: r.id, patch: { owner }, now }))
+      if (!actions.length) return true
+      return dispatchMany(actions).ok
+    },
+    [selectedRows, state, dispatchMany, notify],
+  )
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
   const facets = useMemo(() => facetsOf(state, scope), [state, scope])
@@ -2832,6 +2898,13 @@ export default function IssueWorkspace({
           onDelete={() => selected && rowActions.archive(selected)}
           onBuildLifecycle={() => selected && toggleLifecycle(selected.id)}
           onNewIssue={newIssue}
+          selectedIds={selectedIds}
+          selectedRows={selectedRows}
+          bulkStatusOptions={bulkStatusOptions}
+          onBulkStatusChange={onBulkStatusChange}
+          bulkOwnerOptions={bulkOwnerOptions}
+          onBulkReassign={onBulkReassign}
+          onClearSelection={clearSelection}
         />
       </div>
 

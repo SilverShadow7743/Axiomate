@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { ScheduleRow } from '@/lib/types'
+import type { IssueStatus, ScheduleRow } from '@/lib/types'
 import { isGroupRow } from '@/lib/types'
 import { createMenuFor, type CreatableKind } from '@/lib/workspace'
 import { kindLabel } from '@/lib/config'
@@ -26,6 +26,27 @@ interface Props {
   onNewIssue: () => void
   onBuildLifecycle: () => void
   hasLifecycle: boolean
+  /**
+   * The bulk-action selection (12 Sep multi-select design/plan) — rendered instead of the
+   * single-record menu above whenever two or more rows are checked. Resolved by the caller
+   * (`selectedRows`), not looked up here, the same way `row` above is already resolved rather
+   * than an id the toolbar would have to look up itself.
+   */
+  selectedIds: Set<string>
+  selectedRows: ScheduleRow[]
+  /** Every status `bulkStatusChoices` refuses for no selected row — `lib/board.ts`. */
+  bulkStatusOptions: IssueStatus[]
+  /** commitCell's status arm, run once per selected row inside one dispatchMany. Returns false
+   *  when the funnel refuses (mirrors onCommitStatus's own single-record contract). */
+  onBulkStatusChange: (to: IssueStatus, reason: string) => boolean
+  /** "Unassigned" first, then the directory — `ownerOptionValues` shape, resolved by the caller
+   *  since which client seats are safe to offer depends on whether the selection shares one
+   *  client node (see IssueWorkspace.tsx). */
+  bulkOwnerOptions: string[]
+  /** False means at least one selected row's assignment was refused for unavailability — the
+   *  caller has already surfaced why; nothing committed for any row. */
+  onBulkReassign: (owner: string) => boolean
+  onClearSelection: () => void
 }
 
 export default function SelectionToolbar({
@@ -40,11 +61,21 @@ export default function SelectionToolbar({
   onNewIssue,
   onBuildLifecycle,
   hasLifecycle,
+  selectedIds,
+  selectedRows,
+  bulkStatusOptions,
+  onBulkStatusChange,
+  bulkOwnerOptions,
+  onBulkReassign,
+  onClearSelection,
 }: Props) {
   const labels = useLabels()
   const [addOpen, setAddOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
+  /** The status picked, awaiting its unconditionally-required reason — `null` closes the ask. */
+  const [bulkAsking, setBulkAsking] = useState<IssueStatus | null>(null)
+  const [bulkReason, setBulkReason] = useState('')
 
   useEffect(() => {
     const away = (e: MouseEvent) => {
@@ -56,6 +87,106 @@ export default function SelectionToolbar({
     window.addEventListener('mousedown', away)
     return () => window.removeEventListener('mousedown', away)
   }, [])
+
+  // Two or more rows checked for a bulk action — this branch replaces the single-record menu
+  // entirely, the same way `!row` below replaces it with the "nothing selected" state. A row
+  // that is ALSO the open `selectedId` never reaches here: a plain click that opens a record
+  // clears `selectedIds` to empty, so the two states cannot disagree about which renders.
+  if (selectedIds.size >= 2) {
+    const submitBulkStatus = () => {
+      if (!bulkAsking || !bulkReason.trim()) return
+      if (onBulkStatusChange(bulkAsking, bulkReason.trim())) {
+        setBulkAsking(null)
+        setBulkReason('')
+      }
+    }
+    return (
+      <div className="seltoolbar" ref={wrap}>
+        <span className="sel-ctx">
+          <b>{selectedIds.size} selected</b>
+        </span>
+
+        <div style={{ position: 'relative' }}>
+          <select
+            value=""
+            aria-label="Change status"
+            disabled={bulkStatusOptions.length === 0}
+            title={
+              bulkStatusOptions.length === 0
+                ? 'No status is valid for all selected records.'
+                : 'Change status for every selected record'
+            }
+            onChange={(e) => {
+              if (!e.target.value) return
+              setBulkReason('')
+              setBulkAsking(e.target.value as IssueStatus)
+            }}
+          >
+            <option value="">Change status…</option>
+            {bulkStatusOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <select
+            value=""
+            aria-label="Reassign owner"
+            onChange={(e) => {
+              if (!e.target.value) return
+              onBulkReassign(e.target.value)
+              e.target.value = ''
+            }}
+          >
+            <option value="">Reassign owner…</option>
+            {bulkOwnerOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <span className="grow" />
+        <button className="btn" onClick={onClearSelection}>
+          Clear ({selectedIds.size})
+        </button>
+
+        {bulkAsking && (
+          <div className="board-ask" role="dialog" aria-label="Reason for the change">
+            <p className="board-ask-title">
+              Moving {selectedRows.length} records to “{bulkAsking}”. A status change needs a
+              short reason — it is what these records are read for later.
+            </p>
+            <textarea
+              autoFocus
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              rows={2}
+              placeholder="Why these are moving"
+            />
+            <div className="board-ask-actions">
+              <button className="btn" disabled={!bulkReason.trim()} onClick={submitBulkStatus}>
+                Apply to {selectedRows.length}
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setBulkAsking(null)
+                  setBulkReason('')
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // Nothing selected — only the global actions make sense.
   if (!row) {
