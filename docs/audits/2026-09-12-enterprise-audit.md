@@ -295,3 +295,8 @@ H11 the boot payload; H12 a second registration with a certificate; M4, M5, M6.
   checklist items to the issue's project, so the funnel's staffing gate covers them. Pinned by
   `AUD1`: an unstaffed consultant is refused and succeeds once staffed; a client seat holding
   `document.upload` is refused with the internal wording.
+- **12 Sep, M2 (model choice):** the assistant and chat routes no longer bill the firm for
+  whatever model id the request body names. `lib/modelChoice.ts` honours a requested id only if
+  some agent in Configuration → Agent registry is configured to use it, or it is the code
+  default; anything else lands on the default. The routes load the operating model alone
+  (`loadModelOnly`) for the registry. Pinned by `MC1`. Rate limiting itself remains owed.

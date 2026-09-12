@@ -19,6 +19,10 @@
 import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
 import Anthropic from '@anthropic-ai/sdk'
+import { databaseConfigured } from '@/lib/db/client'
+import { loadModelOnly } from '@/lib/db/repo'
+import { currentTenantId } from '@/lib/tenant'
+import { resolveModelId } from '@/lib/modelChoice'
 import {
   DEFAULT_CHAT_CONFIG,
   MAX_HISTORY_TURNS,
@@ -172,12 +176,18 @@ export async function POST(req: Request) {
 
   const parsed = parseBody(body)
   if (typeof parsed === 'string') return NextResponse.json({ error: parsed }, { status: 400 })
-  const { messages, index, today, config } = parsed
+  const { messages, index, today, config: asked } = parsed
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
-    return NextResponse.json(offlineReply(messages, index, today, config) satisfies ChatReply)
+    return NextResponse.json(offlineReply(messages, index, today, asked) satisfies ChatReply)
   }
+
+  // The body may ask for a model; the agent registry decides (lib/modelChoice.ts, 12 Sep audit
+  // M2). Without a database there is no registry to check against and only the default is
+  // honoured. Resolved here, once, so `modelFor` downstream sees only a permitted id.
+  const agents = databaseConfigured() ? (await loadModelOnly(currentTenantId())).agents : undefined
+  const config: ChatConfig = { ...asked, modelId: resolveModelId(asked.modelId, agents, DEFAULT_MODEL) }
 
   try {
     return NextResponse.json(await runClaude(apiKey, messages, index, today, config))

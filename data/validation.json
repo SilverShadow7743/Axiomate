@@ -784,6 +784,16 @@
       "impact": "Without these, any consultant could attach to or tick off any issue in the tenant, and a client seat holding document.upload could publish internal files to itself. The download route now applies the same boundary, so this is the write side of one rule."
     },
     {
+      "id": "MC1",
+      "title": "An AI route bills the firm only for a model an administrator configured",
+      "expected": "lib/modelChoice.ts (12 Sep audit, M2): a requested model id is honoured only if some agent in the registry is configured to use it, or it is the code default; anything else — a typo, a stale mirror, a person choosing the priciest model — lands on the default, never on a refusal.",
+      "verdict": "PASS",
+      "actual": "configured id honoured; unconfigured id falls to default; junk falls to default; no registry falls to default; default always accepted.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The model is the firm’s bill. The registry is where an administrator decides it; a request body must not be a second, unaudited place to decide it."
+    },
+    {
       "id": "DOC5",
       "title": "Attaching a file counts as activity on the issue",
       "expected": "recordDocument stamps the issue's lastActivity with the upload date, the same stamp every other write to an issue makes, and writes its History row. Found 12 Sep when the first real upload left the record reading as untouched since 9 Sep.",

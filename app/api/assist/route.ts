@@ -20,6 +20,10 @@ import { getSession, identityEstablished } from '@/lib/principal'
 import Anthropic from '@anthropic-ai/sdk'
 import { validateCreate, type ChatConfig, type CreateProposal, type IssueIndexEntry } from '@/lib/chat'
 import type { NarrationFigures, SuggestRequest } from '@/lib/assist'
+import { databaseConfigured } from '@/lib/db/client'
+import { loadModelOnly } from '@/lib/db/repo'
+import { currentTenantId } from '@/lib/tenant'
+import { resolveModelId } from '@/lib/modelChoice'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -79,7 +83,10 @@ export async function POST(req: Request) {
     })
   }
   const client = new Anthropic({ apiKey })
-  const model = typeof b.modelId === 'string' && b.modelId.trim() ? b.modelId.trim() : DEFAULT_MODEL
+  // The body may ask; the agent registry decides (lib/modelChoice.ts). Without a database
+  // there is no registry to check against, and only the default is honoured.
+  const agents = databaseConfigured() ? (await loadModelOnly(currentTenantId())).agents : undefined
+  const model = resolveModelId(b.modelId, agents, DEFAULT_MODEL)
 
   if (b.kind === 'narrate') {
     const figures = b.figures as NarrationFigures | undefined

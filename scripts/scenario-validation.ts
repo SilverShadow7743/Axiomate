@@ -142,6 +142,7 @@ import { buildLeaveReport } from '../lib/reports/leave'
 import { buildSignatureHtml, plainTextToHtml } from '../lib/signature'
 import { personalActionsFor } from '../lib/personalActions'
 import { decryptSecret, deriveTokenKey, encryptSecret } from '../lib/tokenCrypto'
+import { resolveModelId } from '../lib/modelChoice'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
@@ -4979,6 +4980,34 @@ scenario(
       severity: good ? '—' : 'P1',
       impact:
         'Without these, any consultant could attach to or tick off any issue in the tenant, and a client seat holding document.upload could publish internal files to itself. The download route now applies the same boundary, so this is the write side of one rule.',
+    }
+  },
+)
+
+scenario(
+  'MC1',
+  'An AI route bills the firm only for a model an administrator configured',
+  "lib/modelChoice.ts (12 Sep audit, M2): a requested model id is honoured only if some agent in the registry is configured to use it, or it is the code default; anything else — a typo, a stale mirror, a person choosing the priciest model — lands on the default, never on a refusal.",
+  () => {
+    const agents = {
+      AGENT_A: { modelId: 'claude-sonnet-5' },
+      AGENT_B: { modelId: 'claude-haiku-4-5-20251001' },
+      AGENT_C: {},
+    }
+    const fallback = 'claude-sonnet-5'
+    const configuredWins = resolveModelId('claude-haiku-4-5-20251001', agents, fallback) === 'claude-haiku-4-5-20251001'
+    const unknownFalls = resolveModelId('claude-opus-5', agents, fallback) === fallback
+    const junkFalls = resolveModelId({ not: 'a string' }, agents, fallback) === fallback && resolveModelId('   ', agents, fallback) === fallback
+    const noRegistryFalls = resolveModelId('claude-haiku-4-5-20251001', undefined, fallback) === fallback
+    const defaultAlways = resolveModelId(fallback, {}, fallback) === fallback
+    const good = configuredWins && unknownFalls && junkFalls && noRegistryFalls && defaultAlways
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `configured id ${configuredWins ? 'honoured' : 'REFUSED'}; unconfigured id ${unknownFalls ? 'falls to default' : 'HONOURED'}; junk ${junkFalls ? 'falls to default' : 'HONOURED'}; no registry ${noRegistryFalls ? 'falls to default' : 'HONOURED'}; default ${defaultAlways ? 'always accepted' : 'REFUSED'}.`,
+      stops: good ? '—' : 'at resolveModelId — the registry is not the boundary it is meant to be',
+      severity: good ? '—' : 'P2',
+      impact:
+        'The model is the firm’s bill. The registry is where an administrator decides it; a request body must not be a second, unaudited place to decide it.',
     }
   },
 )
