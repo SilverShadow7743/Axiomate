@@ -24,7 +24,7 @@ filter above the grid, first textual column opens the record, plural title from 
 | Analytics | `analytics` | Cross-tabs over the register | `AnalyticsView` | No | No |
 | Timesheets | `timesheet` | Phone-adjacent form + approval queue; record column is the link | `TimesheetPanel` | No | No — opens the record's Time tab via `revealIssue` |
 | Mail | `mail` | Two-part: live inbox panel + static log table | `InboxPanel`, `MailLog` | No | No |
-| People | `people` | List page (local quick filter, name as link) — internal actors only | `PeopleDirectory` | No | No — opens `ProfilePanel` |
+| People | `people` | List page (quick filter over name/address/title/role, sortable columns, name as link, status chip, one primary: New person for `config.manage`) — internal actors only | `PeopleDirectory` | No | Yes — a person's page in `DetailDrawer` (`ProfilePanel`) |
 
 ## Standalone routes (outside the shell)
 
@@ -61,7 +61,7 @@ Under 900px the rail collapses to a horizontal tab strip.
 | Archive | Sidebar foot | Drawer-style panel | `ArchivePanel` |
 | SLA planner | Filters chip's "Set due dates from this policy…" | Modal | `SlaPlanPanel` |
 | Finance report | Export ▾ menu | Modal | `FinanceReportDialog` |
-| Profile panel | People view, account menu / sidebar avatar | Modal/panel | `ProfilePanel` |
+| A person's page | People list, reports-to / direct-report links, the People configuration card | Details page in a right drawer (lifted above the Configuration overlay): name as title, Active/Departed chip upper-right, Mark departed / Reactivate for `config.manage`, FastTabs Overview · Career · Skills · Work · History; identity fields inline-editable for `config.manage` | `ProfilePanel` in `DetailDrawer` |
 | Assistant | Top bar toggle | Dock (`--z-dock`, distinct from the drawer) | `ChatPanel` |
 
 ## Export / print artifacts (not navigable screens)

@@ -35,9 +35,16 @@ interface Props {
    */
   blade?: ReactNode
   bladeOpen?: boolean
+  /**
+   * Extra class on the scrim. The one use today is `above-overlay`: a person's page is opened
+   * from the Configuration overlay as well as from the People list, and Configuration sits at
+   * `--z-overlay`, above `--z-drawer` — so that drawer has to be lifted or it renders beneath
+   * the screen that opened it.
+   */
+  className?: string
 }
 
-export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen }: Props) {
+export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen, className }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Focus lands in the drawer on open and returns to the element that opened it on close,
@@ -55,7 +62,7 @@ export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen
     // scrim itself, so nothing that starts inside the drawer can bubble into a close.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- the scrim is a pointer affordance; Escape (via DetailPanel) is the keyboard path to the same close
     <div
-      className="record-drawer-scrim"
+      className={`record-drawer-scrim${className ? ` ${className}` : ''}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

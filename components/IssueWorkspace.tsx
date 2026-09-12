@@ -2515,7 +2515,7 @@ export default function IssueWorkspace({
       ) : view === 'analytics' ? (
         <AnalyticsView state={state} today={today} docked />
       ) : view === 'people' && isInternal ? (
-        <PeopleDirectory state={state} onOpenProfile={setOpenProfileId} docked />
+        <PeopleDirectory state={state} actor={actor} onOpenProfile={setOpenProfileId} onConfig={applyConfigOp} docked />
       ) : view === 'calendar' ? (
         <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
       ) : view === 'board' ? (
@@ -3205,6 +3205,11 @@ export default function IssueWorkspace({
           onUpdateCareer={(id, patch) =>
             dispatch({ t: 'updateCareerProfile', id, patch, now: new Date().toISOString() })
           }
+          onConfig={applyConfigOp}
+          onOpenIssue={(issueId) => {
+            setOpenProfileId(null)
+            revealIssue(issueId)
+          }}
           onClose={() => setOpenProfileId(null)}
         />
       )}
