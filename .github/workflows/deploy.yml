@@ -79,9 +79,9 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -273,7 +273,7 @@ jobs:
           cd .next/standalone
           zip -qry "$RUNNER_TEMP/app.zip" .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: app
           path: ${{ runner.temp }}/app.zip
@@ -314,9 +314,9 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -357,7 +357,7 @@ jobs:
         # has to be done by hand. The federated credential grants a short-lived token, only to a
         # run of this workflow in this repository in this environment, and there is nothing to
         # leak, rotate or revoke. What has to exist in Entra for it is in docs/deployment.md.
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -401,7 +401,7 @@ jobs:
             --name "${{ steps.firewall.outputs.rule }}" \
             --yes --output none || true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: app
           path: ${{ runner.temp }}/package
