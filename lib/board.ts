@@ -67,6 +67,47 @@ export function dropOutcome(
 }
 
 /**
+ * What a bulk drop is allowed to do, decided before anything moves — `dropOutcome` run across
+ * every selected row rather than one (12 Sep review, multi-select design). `ask` never appears
+ * here: a bulk status change collects one reason unconditionally (`commitCell`'s `'status'`
+ * case requires one for every change, not only the ones `checkTransition` itself flags), so
+ * there is nothing for the caller to branch on beyond ok-or-refused. A row already at `to` is
+ * `dropOutcome`'s own no-op `ok` (`:59` above) and is never refused — the caller skips dispatching
+ * for it rather than sending a no-op update, which `bulkStatusChoices` below relies on.
+ */
+export type BulkDropOutcome =
+  | { kind: 'ok' }
+  | { kind: 'refused'; refused: { rowId: string; message: string }[] }
+
+export function bulkDropOutcome(
+  policy: StatusPolicy,
+  rows: ScheduleRow[],
+  to: IssueStatus,
+  hasEvidence: (rowId: string) => boolean,
+): BulkDropOutcome {
+  const refused: { rowId: string; message: string }[] = []
+  for (const row of rows) {
+    const outcome = dropOutcome(policy, row, to, hasEvidence(row.id))
+    if (outcome.kind === 'refused') refused.push({ rowId: row.id, message: outcome.message })
+  }
+  return refused.length ? { kind: 'refused', refused } : { kind: 'ok' }
+}
+
+/**
+ * Every status a bulk change may offer — the ones `bulkDropOutcome` refuses for no selected
+ * row. Not `allowedNext` intersected across the rows: `dropOutcome` already carries the no-op
+ * and evidence handling `allowedNext` alone does not, and reusing it here is what keeps the
+ * picker and the eventual commit checking the exact same rule.
+ */
+export function bulkStatusChoices(
+  policy: StatusPolicy,
+  rows: ScheduleRow[],
+  hasEvidence: (rowId: string) => boolean,
+): IssueStatus[] {
+  return ISSUE_STATUSES.filter((to) => bulkDropOutcome(policy, rows, to, hasEvidence).kind === 'ok')
+}
+
+/**
  * One sentence over the board, same discipline as every other panel: counts, no score.
  */
 export function describeBoard(lanes: BoardLane[]): string {

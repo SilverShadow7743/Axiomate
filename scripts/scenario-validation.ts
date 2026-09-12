@@ -113,7 +113,8 @@ function readProof(): ProofRun | null {
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
 import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/tree'
-import { boardLanes, dropOutcome } from '../lib/board'
+import { boardLanes, dropOutcome, bulkDropOutcome, bulkStatusChoices } from '../lib/board'
+import type { StatusPolicy } from '../lib/statusPolicy'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
@@ -6625,6 +6626,119 @@ scenario(
     return okAll
       ? { verdict: 'PASS', actual: `${m.dated.length} dated + ${m.undated.length} undated = ${rows.length}; sentence carries the undated count; ${m.inMonth} in month; placements stay inside the month; every week has seven days`, stops: '', severity: 'P2', impact: 'none' } as const
       : { verdict: 'FAIL', actual: `reconciled=${reconciled} stated=${stated} noLeak=${noLeak} gridShape=${gridShape}`, stops: 'the calendar hides or double-counts part of the register', severity: 'P1', impact: 'the screen would silently show less than the register holds' } as const
+  },
+)
+
+scenario(
+  'BLK1',
+  'A bulk status candidate is offered only when no selected row refuses it',
+  'a target legal for every selected row survives; a target illegal for even one does not; a policy with no shared target for two rows offers nothing',
+  () => {
+    const policy = BASE.model.statusPolicy
+    const base = rowsOf(BASE).find((r) => r.kind === 'issue')!
+    const openRow = { ...base, id: 'BLK-open', status: 'Open' as const }
+    const clarifyRow = { ...base, id: 'BLK-clarify', status: 'Needs clarification' as const }
+    const awaitingRow = { ...base, id: 'BLK-awaiting', status: 'Awaiting client confirmation' as const }
+    // Awaiting alone carries evidence: the "Closed - confirmed" check below must fail Open and
+    // Needs clarification on the ROUTE (neither can reach it at all), not on evidence too --
+    // otherwise all three would be refused and the route-vs-reachable distinction is untested.
+    const hasEvidence = (rowId: string) => rowId === 'BLK-awaiting'
+
+    const choices = bulkStatusChoices(policy, [openRow, clarifyRow, awaitingRow], hasEvidence)
+    // Open->In Progress, Needs clarification->In Progress, Awaiting...->In Progress all legal.
+    const sharedOffered = choices.includes('In Progress')
+    // Awaiting client confirmation can reach Closed - confirmed; Open and Needs clarification cannot.
+    const illegalExcluded = !choices.includes('Closed - confirmed')
+    const outcome = bulkDropOutcome(policy, [openRow, clarifyRow, awaitingRow], 'Closed - confirmed', hasEvidence)
+    const namesTheRefusedRows =
+      outcome.kind === 'refused' &&
+      outcome.refused.some((r) => r.rowId === 'BLK-open') &&
+      outcome.refused.some((r) => r.rowId === 'BLK-clarify') &&
+      !outcome.refused.some((r) => r.rowId === 'BLK-awaiting')
+
+    // A policy with two rows sharing no reachable status at all: nothing is offered.
+    const restrictive: StatusPolicy = {
+      enforced: true,
+      transitions: {
+        Open: ['Needs clarification'],
+        'In Progress': ['Superseded'],
+        'Needs clarification': [],
+        'Awaiting client confirmation': [],
+        'Closed - confirmed': [],
+        'Closed - no defect': [],
+        Superseded: [],
+      },
+      requireEvidence: [],
+      requireReason: [],
+    }
+    const disjointA = { ...base, id: 'BLK-disjoint-a', status: 'Open' as const }
+    const disjointB = { ...base, id: 'BLK-disjoint-b', status: 'In Progress' as const }
+    const emptyIntersection = bulkStatusChoices(restrictive, [disjointA, disjointB], hasEvidence).length === 0
+
+    const okAll = sharedOffered && illegalExcluded && namesTheRefusedRows && emptyIntersection
+    return okAll
+      ? {
+          verdict: 'PASS',
+          actual: `In Progress offered=${sharedOffered}; Closed - confirmed excluded=${illegalExcluded}; refusal names Open and Needs clarification, not Awaiting=${namesTheRefusedRows}; a policy with no shared reachable status offers nothing=${emptyIntersection}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `sharedOffered=${sharedOffered} illegalExcluded=${illegalExcluded} namesTheRefusedRows=${namesTheRefusedRows} emptyIntersection=${emptyIntersection}`,
+          stops: 'bulkStatusChoices/bulkDropOutcome disagree with dropOutcome run per row',
+          severity: 'P1',
+          impact: 'a bulk status change could offer a target illegal for one of the selected rows, or silently drop a legal one',
+        } as const
+  },
+)
+
+scenario(
+  'BLK2',
+  'Missing evidence refuses one row in a bulk closure, naming it, without touching an already-there row',
+  'a row missing required evidence for Closed - confirmed is refused by name; a row that already has evidence is not; a row already sitting at the target is a no-op, not a refusal',
+  () => {
+    const policy = BASE.model.statusPolicy
+    const base = rowsOf(BASE).find((r) => r.kind === 'issue')!
+    const awaitingNoEvidence = { ...base, id: 'BLK2-no-evidence', status: 'Awaiting client confirmation' as const }
+    const awaitingWithEvidence = { ...base, id: 'BLK2-has-evidence', status: 'Awaiting client confirmation' as const }
+    const alreadyClosed = { ...base, id: 'BLK2-already-closed', status: 'Closed - confirmed' as const }
+    const hasEvidence = (rowId: string) => rowId === 'BLK2-has-evidence'
+
+    const outcome = bulkDropOutcome(
+      policy,
+      [awaitingNoEvidence, awaitingWithEvidence, alreadyClosed],
+      'Closed - confirmed',
+      hasEvidence,
+    )
+    const refusesTheOneMissingEvidence =
+      outcome.kind === 'refused' &&
+      outcome.refused.length === 1 &&
+      outcome.refused[0].rowId === 'BLK2-no-evidence'
+
+    // Isolated: the same row, alone, with evidence, is not refused -- and the already-closed
+    // row, alone, is the no-op 'ok' dropOutcome itself defines, never a refusal.
+    const withEvidenceAlone = bulkDropOutcome(policy, [awaitingWithEvidence], 'Closed - confirmed', hasEvidence)
+    const alreadyClosedAlone = bulkDropOutcome(policy, [alreadyClosed], 'Closed - confirmed', hasEvidence)
+
+    const okAll =
+      refusesTheOneMissingEvidence && withEvidenceAlone.kind === 'ok' && alreadyClosedAlone.kind === 'ok'
+    return okAll
+      ? {
+          verdict: 'PASS',
+          actual: `refused names exactly BLK2-no-evidence=${refusesTheOneMissingEvidence}; a row with evidence alone is ok=${withEvidenceAlone.kind === 'ok'}; a row already at the target alone is ok, not refused=${alreadyClosedAlone.kind === 'ok'}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `outcome=${outcome.kind} withEvidenceAlone=${withEvidenceAlone.kind} alreadyClosedAlone=${alreadyClosedAlone.kind}`,
+          stops: 'bulkDropOutcome disagrees with dropOutcome on evidence or the no-op case',
+          severity: 'P1',
+          impact: 'a bulk closure could refuse a row that should succeed, or silently succeed on one missing required evidence',
+        } as const
   },
 )
 
