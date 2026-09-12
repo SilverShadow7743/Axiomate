@@ -116,7 +116,17 @@ App settings, on the production slot, all of them **not** marked as slot setting
   explains why. The slot has a different hostname, so a single shared value means sign-in on the
   slot bounces to production. If that is left undone, the slot simply cannot be signed into, which
   the pipeline's anonymous checks do not notice and a person testing the slot by hand will.
+- `AXIOMATE_DOCS_DRIVE_ID` — the document library's drive id (`lib/storage/graph.ts`). Set on
+  **both slots**, marked as a slot setting on each. Learned the hard way on 12 Sep 2026: set on
+  the production slot alone, it travelled to `staging` on the next swap, and the first real
+  upload was refused with "No document library has been chosen".
 - `AXIOMATE_INTAKE_TOKEN`, `AXIOMATE_SCHEDULE_TOKEN`, `ANTHROPIC_API_KEY` — as required.
+
+**The rule behind "not slot settings unless noted":** the two slots must carry the same values,
+because a swap moves the *instance* and every non-sticky setting with it. A value that exists on
+one slot only is therefore on the wrong slot after every second deploy. Whenever a setting is
+added, add it to both slots (`az webapp config appsettings set … --slot staging` as well), or
+mark it sticky on both.
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false`. The package is built in CI, gated in CI, and shipped
   whole. Letting Oryx rebuild on the host would produce a different artefact from the one the
   gates passed, which makes the gates advisory.
