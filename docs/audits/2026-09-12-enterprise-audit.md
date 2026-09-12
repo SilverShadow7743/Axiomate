@@ -229,7 +229,8 @@ Prisma CLI chain, dev-only); a literal dev password in `scripts/db-setup.sql:33`
 scripts bypass `withTenant` and would silently no-op under FORCE RLS; the 401-paused queue
 offers no "open sign-in in a new tab" link; `tokenCrypto` binds no additional authenticated
 data (a ciphertext copied between rows opens under another oid). Docs drift: G5's scenario
-count, `docs/design/ux-checklist.md` referenced by the lint config but absent, `entra.md` on
+count, a `ux-checklist.md` referenced by two design docs but absent (the keyboard walk lives in
+`docs/verification-checklist.md`), `entra.md` on
 application permissions, `postgres.bicep:24-47` claiming a pool fix still outstanding.
 
 ## What is done well

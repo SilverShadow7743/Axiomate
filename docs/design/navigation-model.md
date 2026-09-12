@@ -22,7 +22,7 @@ uppercase, `--text-faint`) header; items are flat `.side-item` buttons,
 - Hover — `background: var(--surface-2)`.
 - Active/current — `background: var(--surface-2)` + `color: var(--accent)` +
   `font-weight: 600`, plus `aria-current="page"` (screen-reader-safe even though the visual cue
-  is color+weight only, not shape — see `ux-checklist.md`).
+  is color+weight only, not shape — see `docs/verification-checklist.md`'s keyboard walk).
 - Badge — a filled `.side-badge` pill (accent background) for live counts (My work, unread
   Notifications), or `.side-badge.muted` for a neutral count (Archive).
 

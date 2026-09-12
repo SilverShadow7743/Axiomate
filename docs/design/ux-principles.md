@@ -64,7 +64,7 @@ color-not-only rule.
 glyph pairing the way schedule health has. The sidebar's active-nav state also relies on color
 + font-weight without a shape indicator, mitigated only by `aria-current="page"` for screen
 readers — sighted users with color-vision deficiency have font-weight as their only visual cue.
-Both are flagged in `component-standards.md` and `ux-checklist.md` as concrete fix candidates.
+Both are flagged in `component-standards.md` and `docs/verification-checklist.md` as concrete fix candidates.
 
 ## 5. Important actions should require minimal clicks
 

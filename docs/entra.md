@@ -131,8 +131,12 @@ person who tries.
 internal tool. Run the script with `--admin-consent`, or use
 `az ad app permission admin-consent --id <clientId>`, or use **Grant admin consent for
 axiocloudsolutions.com** on the API permissions page. This needs Cloud Application Administrator,
-Application Administrator or Global Administrator — Privileged Role Administrator is only needed
-for application permissions, and this registration has none. After it, nobody is prompted at all.
+Application Administrator or Global Administrator. Privileged Role Administrator is needed for
+*application* permissions — and this registration does hold two, contrary to what this line
+said until 12 Sep 2026: `Mail.Send` for the firm mailbox (`lib/mail.ts`) and
+`Sites.ReadWrite.All` for the document library (`lib/storage/graph.ts`), both app-only under the
+same client secret as sign-in. The 12 Sep audit (H12) recommends moving those to a second
+registration with a certificate. After consent, nobody is prompted at all.
 
 One thing not to promise anyone: the wording of the consent screen will not map one-to-one onto the
 three scope names. Microsoft groups and rewords them — "Sign you in and read your profile", "View

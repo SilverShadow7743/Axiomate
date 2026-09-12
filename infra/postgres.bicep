@@ -25,13 +25,13 @@
 //    A B1ms has 1 vCore and 2 GiB of memory, which gives `max_connections` a default of 50, of
 //    which 15 are reserved for replication and monitoring. The application gets 35.
 //
-//    `@prisma/adapter-pg` hands `PrismaPg` a connection string and nothing else (see
-//    `lib/db/client.ts`), so the pool underneath is a node-postgres pool at its default size —
-//    `max: 10`, read from `node_modules/pg/lib/defaults.js` at pg 8.23.0, not from memory. That
-//    is ten connections per App Service instance. Three instances is thirty of the thirty-five
-//    before anybody runs `npm run db:migrate` or opens psql to look at something. Four
-//    instances exhausts the server, and the symptom is `FATAL: sorry, too many clients already`
-//    on whichever request happens to arrive next.
+//    RESOLVED IN THE APPLICATION, and this note said otherwise until 12 Sep 2026 (the
+//    enterprise audit found three infra comments contradicting app code; this was one).
+//    `lib/db/client.ts` passes `max: POOL_MAX` to `PrismaPg` — eight by default,
+//    `AXIOMATE_DB_POOL_MAX` to change it — and its own comment counts it twice, because Next
+//    instantiates the module once for route handlers and once for the page: sixteen per
+//    instance, so two instances fit inside thirty-five with room for a migration and a psql
+//    session, and three do not. The paragraph below about the URL parameter still holds.
 //
 //    Prisma's `connection_limit` URL parameter does NOT apply here. That parameter configures
 //    the Rust query engine's pool, and a driver adapter replaces that pool entirely; adding it
