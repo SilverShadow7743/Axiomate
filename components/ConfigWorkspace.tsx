@@ -5578,6 +5578,9 @@ function Scopes({
  * between them, and a screen that made you click twice to compare would be a screen where
  * nobody compared.
  */
+/** Same window `commitCell`'s owner-unavailability override uses (`IssueWorkspace.tsx`). */
+const RATE_CONFIRM_WINDOW_MS = 20_000
+
 function Rates({
   state,
   actor,
@@ -5620,10 +5623,30 @@ function Rates({
   const [newAmount, setNewAmount] = useState('')
   const [correctWhy, setCorrectWhy] = useState('')
 
+  /*
+   * A second-actor confirmation, in spirit — a single-operator deployment cannot require a
+   * literal second person the way `change.approve`'s asker≠decider rule does, so the same
+   * repeat-within-a-window gesture `commitCell`'s owner-unavailability override already uses
+   * stands in: click once to arm, click the same write again within the window to commit. Every
+   * rate write goes through this, unconditionally, not above some invented dollar threshold —
+   * a rate silently redefines every future margin figure the firm reports, at any size (12 Sep
+   * review). Keyed on the write's own values so editing any field after arming starts over
+   * rather than confirming a stale figure.
+   */
+  const [pendingWrite, setPendingWrite] = useState<{ key: string; armedAt: number } | null>(null)
+  const isArmed = (key: string) =>
+    !!pendingWrite && pendingWrite.key === key && performance.now() - pendingWrite.armedAt <= RATE_CONFIRM_WINDOW_MS
+  const confirmOrArm = (key: string): boolean => {
+    if (isArmed(key)) return true
+    setPendingWrite({ key, armedAt: performance.now() })
+    return false
+  }
+
   /* Only people with something recorded, plus whoever is being edited. A directory of 26 with
      four rates in it is a page of empty rows otherwise. */
   const withRates = people.filter((p) => rates.some((r) => r.personId === p.id))
   const ready = who && from && Number(amount) > 0 && why.trim() !== ''
+  const recordArmed = ready && isArmed(`${who}|${kind}|${from}|${amount}|${currency}`)
 
   return (
     <section className="cfg-section">
@@ -5695,27 +5718,35 @@ function Rates({
                   correcting === r.id ? (
                     <tr key={`${r.id}-fix`}>
                       <td colSpan={7}>
-                        <div className="time-row">
-                          <label className="fld time-fld-hours">
-                            <span className="fld-label">Per hour</span>
-                            <input type="number" min={0} step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+                        <div className="cfg-fld-row">
+                          <label className="cfg-fld required">
+                            <span>Per hour</span>
+                            <input type="number" min={0} step="0.01" required value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
                           </label>
-                          <label className="fld time-fld-note">
-                            <span className="fld-label">Why it was wrong</span>
-                            <input value={correctWhy} onChange={(e) => setCorrectWhy(e.target.value)} />
+                          <label className="cfg-fld required">
+                            <span>Why it was wrong</span>
+                            <input required value={correctWhy} onChange={(e) => setCorrectWhy(e.target.value)} />
                           </label>
                           <button
                             className="btn"
                             disabled={!correctWhy.trim() || !(Number(newAmount) > 0)}
-                            title={correctWhy.trim() ? 'Correct it' : 'A correction needs a reason'}
+                            title={
+                              !correctWhy.trim() || !(Number(newAmount) > 0)
+                                ? 'A correction needs a reason'
+                                : isArmed(`correct:${r.id}|${newAmount}`)
+                                  ? 'Click again to confirm this correction'
+                                  : 'Correct it'
+                            }
                             onClick={() => {
+                              if (!confirmOrArm(`correct:${r.id}|${newAmount}`)) return
                               if (onCorrect(r.id, { amount: Number(newAmount) }, correctWhy)) {
                                 setCorrecting(null)
                                 setCorrectWhy('')
+                                setPendingWrite(null)
                               }
                             }}
                           >
-                            Correct
+                            {isArmed(`correct:${r.id}|${newAmount}`) ? 'Confirm — click again' : 'Correct'}
                           </button>
                         </div>
                       </td>
@@ -5729,11 +5760,11 @@ function Rates({
       )}
 
       {mayEdit.allowed ? (
-        <div className="time-form">
-          <div className="time-row">
-            <label className="fld time-fld-person">
-              <span className="fld-label">Who</span>
-              <select value={who} onChange={(e) => setWho(e.target.value)}>
+        <div className="cfg-card">
+          <div className="cfg-fld-row">
+            <label className="cfg-fld required">
+              <span>Who</span>
+              <select required value={who} onChange={(e) => { setWho(e.target.value); setPendingWrite(null) }}>
                 <option value="">Choose a person…</option>
                 {people.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -5742,28 +5773,28 @@ function Rates({
                 ))}
               </select>
             </label>
-            <label className="fld">
-              <span className="fld-label">What</span>
-              <select value={kind} onChange={(e) => setKind(e.target.value as RateKind)}>
+            <label className="cfg-fld">
+              <span>What</span>
+              <select value={kind} onChange={(e) => { setKind(e.target.value as RateKind); setPendingWrite(null) }}>
                 <option value="cost">Cost to the firm</option>
                 <option value="bill">Charged to the client</option>
               </select>
             </label>
-            <label className="fld">
-              <span className="fld-label">From</span>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <label className="cfg-fld required">
+              <span>From</span>
+              <input type="date" required value={from} onChange={(e) => { setFrom(e.target.value); setPendingWrite(null) }} />
             </label>
-            <label className="fld time-fld-hours">
-              <span className="fld-label">Per hour</span>
-              <input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <label className="cfg-fld required">
+              <span>Per hour</span>
+              <input type="number" min={0} step="0.01" required value={amount} onChange={(e) => { setAmount(e.target.value); setPendingWrite(null) }} />
             </label>
-            <label className="fld">
-              <span className="fld-label">Currency</span>
-              <input value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} />
+            <label className="cfg-fld">
+              <span>Currency</span>
+              <input value={currency} onChange={(e) => { setCurrency(e.target.value); setPendingWrite(null) }} maxLength={3} />
             </label>
-            <label className="fld time-fld-note">
-              <span className="fld-label">Why</span>
-              <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="New starter, annual review, renegotiated card" />
+            <label className="cfg-fld required">
+              <span>Why</span>
+              <input required value={why} onChange={(e) => setWhy(e.target.value)} placeholder="New starter, annual review, renegotiated card" />
             </label>
             {/*
               * No end date. A rate runs until the next one is recorded, and the reducer refuses
@@ -5772,8 +5803,15 @@ function Rates({
             <button
               className="btn"
               disabled={!ready}
-              title={ready ? 'Record it' : 'Needs a person, a date, an amount and a reason'}
+              title={
+                !ready
+                  ? 'Needs a person, a date, an amount and a reason'
+                  : recordArmed
+                    ? 'Click again to confirm this rate'
+                    : 'Record it'
+              }
               onClick={() => {
+                if (!confirmOrArm(`${who}|${kind}|${from}|${amount}|${currency}`)) return
                 if (
                   onRecord({
                     personId: who,
@@ -5787,10 +5825,11 @@ function Rates({
                 ) {
                   setAmount('')
                   setWhy('')
+                  setPendingWrite(null)
                 }
               }}
             >
-              Record
+              {recordArmed ? 'Confirm — click again' : 'Record'}
             </button>
           </div>
         </div>
