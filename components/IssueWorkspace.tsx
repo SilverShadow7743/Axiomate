@@ -2252,6 +2252,21 @@ export default function IssueWorkspace({
             Assistant
           </button>
         )}
+        {/* The notification bell (12 Sep 2026): notifications are an action centre, not a place
+            on the rail — "inbox is just notification". The bell opens the same Inbox view
+            (Needs action, Waiting, and what the rules said), badged with the unread count. */}
+        {isInternal && (
+          <button
+            className={`btn ghost topbar-bell${view === 'inbox' ? ' on' : ''}`}
+            onClick={() => setView('inbox')}
+            aria-pressed={view === 'inbox'}
+            aria-label={`Notifications${notificationsUnread ? `, ${notificationsUnread} unread` : ''}`}
+            title="Notifications — what needs a decision, what you are waiting on, and what the rules have told you"
+          >
+            <span aria-hidden="true">🔔</span>
+            {notificationsUnread > 0 && <span className="side-badge">{notificationsUnread}</span>}
+          </button>
+        )}
         {/* My week and the saved views both moved into the sidebar — navigation lives on the
             rail; this row keeps only actions. */}
         <div ref={exportWrap} style={{ position: 'relative' }}>
@@ -2346,7 +2361,6 @@ export default function IssueWorkspace({
           signInRequired={Boolean(signInRequired)}
           myProfileId={directoryPersonFor(state.model, actor)?.id ?? null}
           onOpenProfile={setOpenProfileId}
-          onOpenNotifications={() => setView('inbox')}
           mayInternal={isInternal}
           onOpenConfig={() => setConfigOpen(true)}
           archivedCount={archivedCount}
@@ -2374,7 +2388,6 @@ export default function IssueWorkspace({
             ? Object.values(state.timesheets).filter((t) => t.status === 'Submitted').length
             : null
         }
-        notificationsUnread={notificationsUnread}
         savedViews={state.model.savedViews}
         onApplySavedView={(v) => {
           // A view stored at rest (BR14) carries no client of its own; applying it leaves the
@@ -2401,9 +2414,6 @@ export default function IssueWorkspace({
             now: new Date().toISOString(),
           })
         }}
-        onOpenConfig={() => setConfigOpen(true)}
-        archivedCount={archivedCount}
-        onOpenArchive={() => setArchiveOpen(true)}
         open={sidebarOpen}
         onNavigate={() => setSidebarOpen(false)}
       />

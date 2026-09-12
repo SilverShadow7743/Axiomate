@@ -8,14 +8,14 @@ filter above the grid, first textual column opens the record, plural title from 
 *details page* (`ID : Subject`, status upper-right, one primary action, FastTabs), *workspace*
 (summary tiles above a tabbed list), *FactBox* (related information beside the record).
 
-## Workspace views (inside `IssueWorkspace.tsx`, reached via the primary rail)
+## Workspace views (inside `IssueWorkspace.tsx`, reached via the primary rail — except Notifications, reached via the top bar's bell)
 
 | Screen | View key | Pattern | Primary component | Pairs with Filters chip? | Pairs with drawer? |
 |---|---|---|---|---|---|
 | My work | `mywork` | Workspace: two labelled tile rows (workspace counts → Tree; your reasons → the group) above the ranked list | `MyWorkPanel` (+ `FirstRunCard`, `AdminFirstRunCard`) | No | No — hops to Tree on open |
 | My calendar | `mycalendar` | Month grid, personal | `MyCalendarPanel` | No | No |
 | My to-dos | `mytodos` | Private list (per-owner redaction, never org-visible) | `MyTodosPanel` | No | No |
-| Inbox | `inbox` | Grouped list | `Inbox` (docked) | No | No |
+| Notifications | `inbox` | Action centre: grouped list, opened from the top-bar bell (badged with the unread count), not from the rail | `Inbox` (docked) | No | No |
 | Tree | `tree` | List page (quick filter, subject as link) + Gantt, split pane | `TreeGrid`, `GanttChart` | Yes | Yes |
 | Board | `board` | List page (quick filter) as Kanban lanes — the card is the link | `BoardView` | Yes | Yes |
 | Calendar | `calendar` | List page (quick filter) as month grid + undated rail | `CalendarView` | Yes | Yes |
@@ -33,7 +33,7 @@ filter above the grid, first textual column opens the record, plural title from 
 | My week | `/my-week` | Phone-first form, 44px touch targets | `MyWeek.tsx` |
 | Sign in | `/signin` | Entra redirect | (auth route, no custom UI) |
 
-## Configuration (full-screen overlay, reached from the sidebar's foot)
+## Configuration (full-screen overlay, reached from the account menu)
 
 Thirty sections behind the Configuration rail (`.cfg-rail` — see `navigation-model.md`
 pattern 3). Grouped exactly as declared in `ConfigWorkspace.tsx`'s `TABS`:
@@ -58,7 +58,7 @@ Under 900px the rail collapses to a horizontal tab strip.
 | Related information | The drawer's right-edge tab | FactBox blade beside the page (Owner, Schedule cards; Related records, Recent activity grids capped at five) | `FactBoxBlade` (in `DetailDrawer`'s `blade` slot) |
 | Add/edit dialogs (issue, node, dependency, etc.) | "+ New Issue", row actions | Modal | `Dialogs` |
 | Evidence manager | A record's Links/Evidence tab | Modal | `EvidencePanel` |
-| Archive | Sidebar foot | Drawer-style panel | `ArchivePanel` |
+| Archive | Account menu (Workspace group; shown only when something is archived) | Drawer-style panel | `ArchivePanel` |
 | SLA planner | Filters chip's "Set due dates from this policy…" | Modal | `SlaPlanPanel` |
 | Finance report | Export ▾ menu | Modal | `FinanceReportDialog` |
 | A person's page | People list, reports-to / direct-report links, the People configuration card | Details page in a right drawer (lifted above the Configuration overlay): name as title, Active/Departed chip upper-right, Mark departed / Reactivate for `config.manage`, FastTabs Overview · Career · Skills · Work · History; identity fields inline-editable for `config.manage` | `ProfilePanel` in `DetailDrawer` |

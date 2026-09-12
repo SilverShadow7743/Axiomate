@@ -291,6 +291,21 @@ button {
   background: var(--surface-3, var(--surface-2));
   color: var(--text-muted);
 }
+/* The notification bell in the top bar (12 Sep 2026) — an action centre, not a rail entry.
+   The unread count reuses .side-badge so one pill style carries every live count in the
+   shell; the bell itself is a ghost button like its Assistant neighbour, lit when its view
+   is the one open. */
+.topbar-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 32px;
+  padding-inline: 8px;
+}
+.topbar-bell .side-badge {
+  margin-left: 2px;
+}
 .side-saved {
   display: flex;
   align-items: center;

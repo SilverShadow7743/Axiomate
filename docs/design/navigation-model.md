@@ -23,8 +23,10 @@ uppercase, `--text-faint`) header; items are flat `.side-item` buttons,
 - Active/current — `background: var(--surface-2)` + `color: var(--accent)` +
   `font-weight: 600`, plus `aria-current="page"` (screen-reader-safe even though the visual cue
   is color+weight only, not shape — see `docs/verification-checklist.md`'s keyboard walk).
-- Badge — a filled `.side-badge` pill (accent background) for live counts (My work, unread
-  Notifications), or `.side-badge.muted` for a neutral count (Archive).
+- Badge — a filled `.side-badge` pill (accent background) for live counts (My work, the
+  timesheet approval queue). The same pill carries the unread count on the top bar's bell, so
+  one style serves every live count in the shell. (`.side-badge.muted` is the neutral variant
+  that Archive used at the rail's foot until 12 Sep 2026; it has no rail use now.)
 
 **Responsive:** under 900px, collapses to an off-canvas overlay (`transform: translateX`)
 behind a hamburger (`.nav-burger`), guarded by `prefers-reduced-motion`. The underlying page
@@ -42,7 +44,16 @@ tried once, for My work and Portfolio, and removed for exactly this reason).
 **Anatomy:** single fixed row, `padding: 7px 14px`, `min-height: 48px`. Fixed order,
 left-to-right: brand → global search (with a results dropdown, `z-index: 60`) → flexible
 spacer → **one primary CTA** (`.btn.primary`, "+ New Issue") → secondary actions (Assistant
-toggle, Export ▾) → save-status chip (`.persist-tag`) → account (`UserMenu`).
+toggle, the notification bell, Export ▾) → save-status chip (`.persist-tag`) → account
+(`UserMenu`, which also holds Configuration and Archive).
+
+**The bell** (`.topbar-bell`, 12 Sep 2026) is the one deliberate exception to the rule below:
+it opens the `inbox` view. That view is an action centre — what needs a decision, what you are
+waiting on, what the rules have told you — and Nishant's call was that it belongs with the
+actions, the way F&O's action centre hangs off the top bar, not on the rail as a place
+("inbox is just notification"). It is a `.btn.ghost` with `aria-pressed` while its view is
+open and a `.side-badge` unread count; internal actors only, since a client's notifications
+are always empty.
 
 **The one-primary-action rule:** exactly one `.btn.primary` lives in the top bar at any time.
 Every other action is `.btn` or `.btn.ghost`. This is deliberate — a bar with two competing
@@ -50,7 +61,8 @@ primary actions asks the user to decide which one matters, which is a decision t
 should have already made.
 
 **Use for:** global actions that apply regardless of the current view. **Never** for navigating
-between views — that's the rail's job. (An earlier design merged navigation and action into one
+between views — that's the rail's job; the bell above is the sole, named exception, and a
+second one needs the same explicit decision. (An earlier design merged navigation and action into one
 row; the clean shell deliberately split them apart, and that split is now load-bearing — don't
 reintroduce a view-switcher here.)
 

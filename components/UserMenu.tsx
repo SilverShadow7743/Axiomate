@@ -42,7 +42,6 @@ export default function UserMenu({
   signInRequired,
   myProfileId,
   onOpenProfile,
-  onOpenNotifications,
   mayInternal,
   onOpenConfig,
   archivedCount,
@@ -54,8 +53,7 @@ export default function UserMenu({
   /** This session's own directory id, when the signed-in actor resolves to one. */
   myProfileId: string | null
   onOpenProfile: (personId: string) => void
-  onOpenNotifications: () => void
-  /** Same gate `AppSidebar` uses for its own Configuration/Archive footer items. */
+  /** Whether this viewer holds `internal.view` — Configuration and Archive are offered only then. */
   mayInternal: boolean
   onOpenConfig: () => void
   archivedCount: number
@@ -181,17 +179,8 @@ export default function UserMenu({
             </button>
           )}
 
-          <button
-            className="menu-item"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onOpenNotifications()
-              setOpen(false)
-            }}
-          >
-            Notifications
-          </button>
+          {/* Notifications left this menu on 12 Sep 2026: they are the bell in the top bar now,
+              beside the other global actions, the way an action centre sits in F&O. */}
 
           {/* A live toggle rather than a navigate-away item, so switching and seeing the result
               don't cost two separate menu openings. 'System' clears data-theme rather than

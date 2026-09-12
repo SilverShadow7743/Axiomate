@@ -5,10 +5,15 @@ import type { WorkspaceView } from '@/lib/viewChoice'
 import type { SavedView } from '@/lib/savedViews'
 
 /**
- * The shell's one navigation surface (docs/plans/2026-08-31-clean-shell-design.md). Every
- * view is reached from here and only from here; the top bar keeps actions, this keeps
- * places. Grouped by whose question each place answers — yours, the workspace's, the
- * records' — rather than by how the code renders them.
+ * The shell's navigation surface (docs/plans/2026-08-31-clean-shell-design.md). Every
+ * workspace view is reached from here — with one exception since 12 Sep 2026: notifications
+ * are an F&O action centre, reached from the bell in the top bar, not a place on the rail
+ * (Nishant: "inbox is just notification"). The top bar keeps actions, this keeps places.
+ * Grouped by whose question each place answers — yours, the workspace's, the records' —
+ * rather than by how the code renders them.
+ *
+ * Configuration and Archive left the rail's foot the same day; both live in the account menu
+ * (`UserMenu`), which had carried them alongside all along.
  *
  * Deliberately dumb, the way FilterBar is: counts arrive computed, clicks hand back verbs.
  * The active item derives from `view` and never from local state, because notification
@@ -16,7 +21,7 @@ import type { SavedView } from '@/lib/savedViews'
  */
 
 const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
-  { title: 'My work', items: ['mywork', 'mycalendar', 'mytodos', 'inbox'] },
+  { title: 'My work', items: ['mywork', 'mycalendar', 'mytodos'] },
   { title: 'Workspace', items: ['tree', 'board', 'calendar', 'portfolio', 'applications', 'analytics'] },
   { title: 'Records', items: ['timesheet', 'mail', 'people'] },
 ]
@@ -74,15 +79,10 @@ interface Props {
   myWorkCount: number
   /** null for a viewer without time.approve — the badge must not leak the queue's size. */
   timesheetQueue: number | null
-  notificationsUnread: number
   savedViews: SavedView[]
   onApplySavedView: (v: SavedView) => void
   onDeleteSavedView: (id: string) => void
   onSaveCurrentView: (name: string) => void
-  onOpenConfig: () => void
-  /** How many records are archived. The entry hides itself when there are none. */
-  archivedCount: number
-  onOpenArchive: () => void
   /** Narrow-screen overlay state; ignored by CSS at desktop widths. */
   open: boolean
   /** Called after any pick, so the phone overlay closes behind a navigation. */
@@ -95,14 +95,10 @@ export default function AppSidebar({
   mayInternal,
   myWorkCount,
   timesheetQueue,
-  notificationsUnread,
   savedViews,
   onApplySavedView,
   onDeleteSavedView,
   onSaveCurrentView,
-  onOpenConfig,
-  archivedCount,
-  onOpenArchive,
   open,
   onNavigate,
 }: Props) {
@@ -110,13 +106,7 @@ export default function AppSidebar({
   const navRef = useRef<HTMLElement>(null)
 
   const badgeFor = (v: WorkspaceView): number | null =>
-    v === 'mywork'
-      ? myWorkCount || null
-      : v === 'timesheet'
-        ? timesheetQueue || null
-        : v === 'inbox'
-          ? notificationsUnread || null
-          : null
+    v === 'mywork' ? myWorkCount || null : v === 'timesheet' ? timesheetQueue || null : null
 
   const pick = (v: WorkspaceView) => {
     setView(v)
@@ -220,36 +210,6 @@ export default function AppSidebar({
       </div>
 
       <span className="grow" />
-
-      <div className="side-group side-foot">
-        {mayInternal && (
-          <button
-            className="side-item"
-            onClick={() => {
-              onOpenConfig()
-              onNavigate()
-            }}
-            onKeyDown={rove}
-            title="Terminology, roles, responsibilities, agents — most settings are read-only unless you hold config.manage"
-          >
-            <span className="side-label">Configuration</span>
-          </button>
-        )}
-        {archivedCount > 0 && (
-          <button
-            className="side-item"
-            onClick={() => {
-              onOpenArchive()
-              onNavigate()
-            }}
-            onKeyDown={rove}
-            title="Archived records, and the way to restore them"
-          >
-            <span className="side-label">Archive</span>
-            <span className="side-badge muted">{archivedCount}</span>
-          </button>
-        )}
-      </div>
     </nav>
   )
 }

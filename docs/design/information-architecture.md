@@ -7,19 +7,25 @@ See `navigation-model.md` for the interaction specs of the patterns named below,
 
 ## The shape of the app
 
-One shell (`IssueWorkspace.tsx`) hosts thirteen navigable **views**, reached exclusively through
-the left sidebar. Two things sit outside that shell entirely: `/my-week` (a standalone
-phone-first route) and Configuration (a full-screen overlay reached from the sidebar's foot,
-with its own internal navigation). A detail drawer overlays any list-shaped view to show one
-record without leaving it, and a FactBox blade can open beside that record.
+One shell (`IssueWorkspace.tsx`) hosts thirteen navigable **views**. Twelve are reached
+through the left sidebar; the thirteenth, notifications (`inbox`), is an action centre reached
+from the bell in the top bar — the one place the "rail navigates, top bar acts" split is
+crossed on purpose (12 Sep 2026: "inbox is just notification"). Two things sit outside that
+shell entirely: `/my-week` (a standalone phone-first route) and Configuration (a full-screen
+overlay reached from the account menu, with its own internal navigation). A detail drawer
+overlays any list-shaped view to show one record without leaving it, and a FactBox blade can
+open beside that record.
 
 ```
-AppSidebar (all navigation)
+Top bar (actions)
+├── 🔔 Notifications     → view: inbox (badged with unread count)
+└── account menu         → My profile · Appearance · Configuration · Archive · Sign out
+
+AppSidebar (places)
 ├── My work
 │   ├── My work        → view: mywork      (workspace: tiles above the ranked list)
 │   ├── My calendar     → view: mycalendar
-│   ├── My to-dos       → view: mytodos     (private; per-owner redaction)
-│   └── Inbox           → view: inbox
+│   └── My to-dos       → view: mytodos     (private; per-owner redaction)
 ├── Workspace
 │   ├── Tree             → view: tree      (+ DetailDrawer on selection)
 │   ├── Board            → view: board     (+ DetailDrawer on selection)
@@ -31,10 +37,13 @@ AppSidebar (all navigation)
 │   ├── Timesheets       → view: timesheet
 │   ├── Mail             → view: mail
 │   └── People           → view: people (internal actors only)
-├── Saved views           (team-shared, apply sets filters + view together)
-└── (foot) Configuration → full-screen overlay, its own rail (30 sections / 3 groups)
-    (foot) Archive       → archive drawer
+└── Saved views           (team-shared, apply sets filters + view together)
 ```
+
+Configuration (a full-screen overlay with its own rail, 30 sections / 3 groups) and Archive
+(a drawer) are reached from the account menu, not the rail. They sat at the rail's foot until
+12 Sep 2026; the account menu had carried both all along, so the foot was a second entry point
+to the same two places — the very duplication the rail's own rule forbids.
 
 `/my-week` is reached from the sidebar too, as a route rather than a view. A client actor
 sees a reduced sidebar: Tree, Board and Calendar only (`CLIENT_GROUPS` in `AppSidebar.tsx`).
@@ -45,7 +54,8 @@ Grouped by **whose question each place answers**, not by how the code renders th
 (`AppSidebar.tsx`'s own top comment states this explicitly):
 
 - **My work** — "what's waiting on me, personally." My work (badged with a live count), My
-  calendar, My to-dos, Inbox (badged with unread count).
+  calendar, My to-dos. Notifications used to sit here as "Inbox"; they are the top bar's bell
+  now, because a notification is a prompt to act, not a place to be.
 - **Workspace** — "what does the delivery look like." Tree, Board, Calendar, Portfolio — four
   ways of viewing the same underlying issue/schedule data — plus Applications (what each client
   runs) and Analytics (cross-tabs over the register).
@@ -66,7 +76,7 @@ state.
 | `mywork` | My work | Everything waiting on you, across every engagement, grouped by reason (decide/overdue/blocked/attest/due/open); summary tiles above — the workspace's own counts open the Tree narrowed, your reason counts scroll to the group | No — opens via `revealIssue`, navigates to Tree |
 | `mycalendar` | My calendar | Your own month — events, leave, allocation, your own due dates | No |
 | `mytodos` | My to-dos | Your own to-dos — mail that wasn't project work, and anything you note for yourself; never visible at org level | No |
-| `inbox` | Inbox | What needs a decision, what you're waiting on, and what the rules have told you | No |
+| `inbox` | (top-bar bell, "Notifications") | What needs a decision, what you're waiting on, and what the rules have told you | No |
 | `tree` | Tree | The full structure with the timeline (Gantt) beside it; quick filter above, subject is the link | Yes |
 | `board` | Board | Status lanes — drag a card to move it; quick filter above | Yes |
 | `calendar` | Calendar | Due dates on a month grid, undated on a rail; quick filter above | Yes |
@@ -87,7 +97,7 @@ outside them.
 
 ## Configuration — 30 sections, 3 groups
 
-Configuration is reached from the sidebar's foot but is architecturally separate: a full-screen
+Configuration is reached from the account menu but is architecturally separate: a full-screen
 overlay (`.cfg`, `position: fixed`) with its own left rail, not a fourteenth workspace view.
 Its sections, grouped exactly as defined in `ConfigWorkspace.tsx`:
 
@@ -120,7 +130,7 @@ record's related information — Owner and Schedule cards, Related records and R
 grids — every figure an existing pure function's output; the drawer widens to hold it rather
 than narrowing the page.
 
-The drawer does not pair with My work, Portfolio, Timesheets, Inbox, My calendar, My to-dos,
+The drawer does not pair with My work, Portfolio, Timesheets, Notifications, My calendar, My to-dos,
 Analytics, Mail or People — those either navigate away on selection (`revealIssue` hops to
 Tree) or have no per-record detail concept at all. Applications is the one other view that
 uses `DetailDrawer`, for its own `ApplicationDetail`.
