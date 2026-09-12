@@ -1,4 +1,4 @@
-import type { ScheduleRow } from './types'
+import { isGroupRow, type ScheduleRow } from './types'
 
 /**
  * The calendar: one month of planned work, with the unscheduled majority carried beside it.
@@ -41,7 +41,12 @@ export function calendarMonth(rows: ScheduleRow[], monthIso: string): CalendarMo
   const dated: ScheduleRow[] = []
   const undated: ScheduleRow[] = []
   for (const row of rows) {
-    if (row.status === null) continue // structural tiers are not calendar entries, as they are not cards
+    // Structural tiers (Client/Engagement/Project/…) are not calendar entries, as they are not
+    // cards — but `status === null` was the wrong test for that: an activity or milestone row
+    // (12 Sep review) is a leaf, not a tier, and carries a real `plannedEndDate`/`milestoneDate`
+    // even though `IssueActivity` has no `IssueStatus`-shaped status field. `isGroupRow` is the
+    // codebase's own leaf/tier distinction and excludes only what this comment always meant to.
+    if (isGroupRow(row.kind)) continue
     ;(row.plannedEndDate ? dated : undated).push(row)
   }
 

@@ -89,7 +89,8 @@ export default function CalendarView({
                 >
                   <span className="cal-day-num mono">{Number(day.date.slice(8))}</span>
                   {day.rows.slice(0, 3).map((r) => (
-                    <span key={r.id} className="cal-chip" title={r.name}>
+                    <span key={r.id} className={`cal-chip${r.isMilestone ? ' milestone' : ''}`} title={r.name}>
+                      {r.isMilestone ? '◆ ' : ''}
                       {r.displayId || r.name}
                     </span>
                   ))}
