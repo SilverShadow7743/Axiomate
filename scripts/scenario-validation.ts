@@ -55,6 +55,7 @@ import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
 import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, isStaffedOn, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
 import type { ProjectMember } from '../lib/staffing'
+import { ownerChoicesFor, ownerOptionValues } from '../lib/ownerChoices'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { planCalendarActions } from '../lib/automation'
@@ -2414,6 +2415,53 @@ scenario(
       severity: good ? '—' : 'P1',
       impact:
         'Report delivery is the one thing the pass does that reaches people outside the firm. Before the claim, a Logic App retry after a timeout that had in fact succeeded emailed every client pack twice.',
+    }
+  },
+)
+
+scenario(
+  'OWN1',
+  "The owner picker offers the firm's active people and only THIS client's seats, and keeps a stored name that matches nobody until it is replaced",
+  "ownerChoicesFor (12 Sep 2026, Nishant: 'where is the owner dropdown which should come from people' → a strict pick from the directory). Team = every active non-client person; client = active seats attached to the record's own client node, never another client's or an unattached seat; a departed person is not offered; a stored dual owner is carried as `unlisted` so the control can still show it, and drops out once the value is one of the offered names.",
+  () => {
+    let s = BASE
+    const clientKinds = externalPartyKinds(tiersOf(s.model))
+    const clientNode = Object.values(s.nodes).find((n) => clientKinds.has(n.kind))!
+    const clientId = clientNode.id
+    /* A second, real client — the reducer refuses a scope that is not a client node in the tree. */
+    s = ok(s, { t: 'create', parentId: clientNode.parentId ?? COMPANY_NODE_ID, kind: clientNode.kind, draft: { name: 'Other Co' }, now: NOW } as Action)
+    const otherId = Object.values(s.nodes).find((n) => clientKinds.has(n.kind) && n.name === 'Other Co')!.id
+    const person = (name: string, roleIds: string[], extra: Record<string, unknown> = {}) => {
+      s = ok(s, { t: 'config', op: { k: 'upsertPerson', id: null, name, roleIds, ...extra }, now: NOW } as Action)
+    }
+    person('Tessa Team', ['ROLE_FUNCTIONAL'])
+    person('Cleo Client', ['ROLE_CLIENT_USER'], { clientScopeId: clientId })
+    person('Otto Other', ['ROLE_CLIENT_LEAD'], { clientScopeId: otherId })
+    person('Una Unattached', ['ROLE_CLIENT_SPONSOR'])
+    person('Dev Departed', ['ROLE_FUNCTIONAL'])
+    const departedId = Object.values(s.model.people).find((p) => p.name === 'Dev Departed')!.id
+    s = ok(s, { t: 'config', op: { k: 'upsertPerson', id: departedId, name: 'Dev Departed', roleIds: ['ROLE_FUNCTIONAL'], status: 'Departed', departedOn: TODAY }, now: NOW } as Action)
+
+    const issueId = Object.keys(s.issues)[0]
+    const dual = ownerChoicesFor(s, issueId, 'Michael Thomas (POS) / Amolak (D365)')
+    const team = dual.team.map((p) => p.name)
+    const client = dual.client.map((p) => p.name)
+    const teamRight = team.includes('Tessa Team') && !team.includes('Dev Departed') && !team.includes('Cleo Client')
+    const clientRight = client.join(',') === 'Cleo Client'
+    const carried = dual.unlisted === 'Michael Thomas (POS) / Amolak (D365)'
+    const settled = ownerChoicesFor(s, issueId, 'Tessa Team').unlisted === null
+    const unassigned = ownerChoicesFor(s, issueId, 'Unassigned').unlisted === null
+    const flat = ownerOptionValues(dual)
+    const flatRight = flat[0] === 'Unassigned' && flat[flat.length - 1] === dual.unlisted && flat.includes('Cleo Client')
+    const offClient = ownerChoicesFor(s, null, '').client.length === 0
+    const good = teamRight && clientRight && carried && settled && unassigned && flatRight && offClient
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `team=[${team.join(', ')}]; client=[${client.join(', ')}]; dual owner ${carried ? 'carried as unlisted' : 'LOST'}; a listed name is ${settled ? 'not' : 'WRONGLY'} unlisted; flat list starts ${flat[0]} and ends ${flat[flat.length - 1]}; off a client the client group has ${ownerChoicesFor(s, null, '').client.length}.`,
+      stops: good ? '—' : 'at ownerChoicesFor — the directory is not the source, or the client boundary leaks into the picker',
+      severity: good ? '—' : 'P1',
+      impact:
+        "The owner is the join to My work, availability checks and notifications. A picker that offers another client's guest, or drops a stored dual owner on first open, either names the wrong person on a client's work or silently unassigns nine live issues.",
     }
   },
 )

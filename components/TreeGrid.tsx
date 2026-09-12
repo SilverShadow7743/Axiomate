@@ -50,8 +50,10 @@ interface Props {
    * onto the audit entry and a blank reason there reads as a question that was answered.
    */
   onCellCommit: (rowId: string, colKey: string, value: string, reason?: string) => boolean
-  /** Known owner names, offered as suggestions when editing an owner cell. */
-  ownerOptions: string[]
+  /** The owner choices for a row — the directory's active people, scoped to the row's client
+   *  (`lib/ownerChoices.ts`). A function of the row, since the client seats on offer differ
+   *  by which client the row sits under. */
+  ownerOptions: (row: ScheduleRow) => readonly string[]
   statusPolicy: StatusPolicy
   /**
    * The row verbs, shared with `SelectionToolbar`.
@@ -566,7 +568,7 @@ export default function TreeGrid({
                         <QuickEditPopover
                           row={r}
                           statusOptions={editorFor(r, 'status', ownerOptions, statusPolicy)?.options ?? []}
-                          ownerOptions={ownerOptions}
+                          ownerOptions={ownerOptions(r)}
                           onCommit={(colKey, value, reason) => onCellCommit(r.id, colKey, value, reason)}
                           onClose={() => {
                             setQuickEditId(null)

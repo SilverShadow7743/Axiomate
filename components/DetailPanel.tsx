@@ -49,7 +49,7 @@ import { profileAt } from '@/lib/capacity'
 import { directoryIdByName } from '@/lib/access'
 import { severityGlyph } from '@/lib/severity'
 import { projectOf, readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
-import { ownerCandidatesFor } from '@/lib/staffing'
+import { ownerChoicesFor, UNASSIGNED } from '@/lib/ownerChoices'
 import {
   KIND_ICON,
   KIND_LABEL,
@@ -1465,19 +1465,14 @@ function FieldStrip({
     [state.timeEntries, state.estimates, issue.id, state.model.sizeBands],
   )
   /**
-   * Project team and client-side candidates for the owner picker — `projectOf` walks the same
-   * tree `parentOf`/`scopeChainOf` already use, so an activity resolves through its issue the
-   * same way every other project-scoped lookup in this panel does. `ownerCandidatesFor`
-   * (`lib/staffing.ts`) does the role split, one definition shared with anywhere else that
-   * needs "who's staffed here, client side vs. team side".
+   * Who may be named as owner — the People directory, the firm's side and this record's
+   * client's seats, plus the stored value when it names nobody offered
+   * (`ownerChoicesFor`, `lib/ownerChoices.ts`). The record's client resolves through the same
+   * scope chain every other scoped lookup in this panel walks.
    */
-  const projectId = useMemo(
-    () => projectOf(state, row.id),
-    [state.nodes, state.issues, state.activities, row.id],
-  )
-  const ownerCandidates = useMemo(
-    () => ownerCandidatesFor(state.projectMembers, projectId),
-    [state.projectMembers, projectId],
+  const ownerChoices = useMemo(
+    () => ownerChoicesFor(state, row.id, issue.owner),
+    [state, row.id, issue.owner],
   )
   const [pendingStatus, setPendingStatus] = useState<IssueStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
@@ -1586,42 +1581,49 @@ function FieldStrip({
       {refusal && <span className="fs-refusal">{refusal}</span>}
       <label className="fs-fld">
         <span>{labels.ISSUE_OWNER}</span>
-        {/* Project team / client suggestions (I25 Tier 3) via `list`, not a `<select>` —
-            checked against live data before committing to a hard picker: SLG-001 itself (this
-            session's own test issue) carries "Michael Thomas (POS) / Amolak (D365)", and the
-            live register has eight more open issues shaped the same way — a real, established
-            pattern, not a hypothetical one, for splitting ownership across systems within one
-            project. A `<select>` would make that shape permanently unrepresentable going
-            forward (display-only, via a fallback option); an `<input list>` keeps the free-text
-            path fully open while still surfacing `ownerCandidatesFor`'s (`lib/staffing.ts`)
-            project-team and client-role names as real, clickable suggestions — the same
-            `<input list>` + `<datalist>` pattern `ProjectMembersPanel`'s own member picker
-            already uses for this exact "suggest from a list, don't force it" shape. */}
-        <input
-          list={`fs-owner-list-${issue.id}`}
-          value={ownerDraft}
-          onChange={(e) => setOwnerDraft(e.target.value)}
-          onBlur={() => {
-            if (ownerDraft.trim() !== issue.owner) onCommitCell(row.id, 'owner', ownerDraft)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        {/* A strict pick from the directory (12 Sep 2026), reversing I25 Tier 3's free-text
+            decision at Nishant's direction: an owner is a person the firm knows. The nine
+            dual-owner values ("Michael Thomas (POS) / Amolak (D365)") that decision protected
+            are not rewritten — `ownerChoices.unlisted` keeps the stored value selectable until
+            somebody picks a person — but they can no longer be typed afresh. A refused commit
+            (an owner away for the whole window, first press) leaves the draft on the refused
+            name so the second press within the window can confirm it, the same repeat-to-
+            confirm path the grid's cell editor uses. */}
+        <select
+          value={ownerDraft || UNASSIGNED}
+          onChange={(e) => {
+            const next = e.target.value
+            setOwnerDraft(next)
+            if (next !== issue.owner) onCommitCell(row.id, 'owner', next)
           }}
           aria-label={labels.ISSUE_OWNER}
-          // A native <input> never applies text-overflow: ellipsis to its own value text — it
-          // just hard-clips, silently, with no indication anything is hidden. A dual owner like
-          // "Michael Thomas (POS) / Amolak (D365)" is exactly the shape this strip is too narrow
-          // for; title gives the one thing a clipped input can offer for free, a hover tooltip.
           title={ownerDraft}
-        />
-        <datalist id={`fs-owner-list-${issue.id}`}>
-          {ownerCandidates.team.map((m) => (
-            <option key={m.id} value={m.person} />
-          ))}
-          {ownerCandidates.client.map((m) => (
-            <option key={m.id} value={m.person} />
-          ))}
-        </datalist>
+        >
+          <option value={UNASSIGNED}>{UNASSIGNED}</option>
+          {ownerChoices.team.length > 0 && (
+            <optgroup label="Team">
+              {ownerChoices.team.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {ownerChoices.client.length > 0 && (
+            <optgroup label="Client">
+              {ownerChoices.client.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {ownerChoices.unlisted && (
+            <optgroup label="Not in People">
+              <option value={ownerChoices.unlisted}>{ownerChoices.unlisted}</option>
+            </optgroup>
+          )}
+        </select>
       </label>
       <label className="fs-fld">
         <span>{labels.FIELD_DUE_DATE}</span>

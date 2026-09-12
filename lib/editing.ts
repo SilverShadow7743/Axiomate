@@ -31,10 +31,20 @@ export const ACCOUNTABLES = ['Unassigned', 'Axiocloud', 'OAPIL', 'SLG', 'Shared'
 /** Columns that never accept a typed value — they are identifiers or computed. */
 const READ_ONLY = new Set(['id', 'type', 'health', 'mode', 'dependency'])
 
+/**
+ * The owner choices for a row — a list, or a function of the row since 12 Sep 2026, when the
+ * owner became a strict pick from the People directory (`lib/ownerChoices.ts`) and the
+ * client's seats on offer depend on which client the row sits under.
+ */
+export type OwnerOptions = readonly string[] | ((row: ScheduleRow) => readonly string[])
+
+const ownersFor = (owners: OwnerOptions, row: ScheduleRow): readonly string[] =>
+  typeof owners === 'function' ? owners(row) : owners
+
 export function editorFor(
   row: ScheduleRow,
   colKey: string,
-  owners: readonly string[] = [],
+  owners: OwnerOptions = [],
   /**
    * The transition graph, when the caller has one.
    *
@@ -72,13 +82,17 @@ export function editorFor(
        */
       return isIssue ? null : { kind: 'text', value: row.name, placeholder: 'Name' }
 
-    case 'owner':
+    case 'owner': {
+      // A strict pick, not a typed name (12 Sep 2026): the options are the directory's active
+      // people with "Unassigned" first, and the caller appends the stored value when it names
+      // nobody offered, so a dual owner or a departed name stays visible until it is replaced.
+      const options = ownersFor(owners, row)
       return {
-        kind: 'text',
-        value: row.owner ?? '',
-        placeholder: 'Unassigned',
-        suggestions: owners,
+        kind: 'select',
+        value: row.owner && options.includes(row.owner) ? row.owner : 'Unassigned',
+        options,
       }
+    }
 
     case 'status':
       // Status belongs to an issue. Activities carry progress, not a lifecycle status.
@@ -154,7 +168,7 @@ export function editorFor(
 export function editableColumns(
   row: ScheduleRow,
   colKeys: string[],
-  owners: readonly string[] = [],
+  owners: OwnerOptions = [],
 ): string[] {
   return colKeys.filter((k) => editorFor(row, k, owners) !== null)
 }

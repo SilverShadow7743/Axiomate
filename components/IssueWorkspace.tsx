@@ -7,6 +7,7 @@ import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
+import { ownerChoicesFor, ownerOptionValues, UNASSIGNED } from '@/lib/ownerChoices'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
 import MyTodosPanel from './MyTodosPanel'
@@ -967,6 +968,12 @@ export default function IssueWorkspace({
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
   const facets = useMemo(() => facetsOf(state, scope), [state, scope])
+  /** The grid's owner cell and Quick edit: the directory's people for this row's client,
+   *  "Unassigned" first, the stored value appended when it names nobody (`lib/ownerChoices.ts`). */
+  const ownerOptionsFor = useCallback(
+    (row: ScheduleRow) => ownerOptionValues(ownerChoicesFor(state, row.id, row.owner)),
+    [state],
+  )
 
   const counts = useMemo(() => {
     const issueRows = sortedRows.filter((r) => r.kind === 'issue')
@@ -1405,7 +1412,9 @@ export default function IssueWorkspace({
         }
 
         case 'owner': {
-          if (isNode) return dispatch({ t: 'updateNode', id: rowId, patch: { owner: value || null }, now })
+          // A node's owner is nullable, and the select's "Unassigned" is the null it means.
+          if (isNode)
+            return dispatch({ t: 'updateNode', id: rowId, patch: { owner: value && value !== UNASSIGNED ? value : null }, now })
           if (isIssue) {
             /**
              * Ask before the reducer refuses, so the refusal has a way through.
@@ -1753,7 +1762,7 @@ export default function IssueWorkspace({
       } else if (dialog.t === 'edit') {
         const id = dialog.id
         if (state.nodes[id]) {
-          ok = dispatch({ t: 'updateNode', id, patch: { name: p.name, owner: p.owner || null }, now })
+          ok = dispatch({ t: 'updateNode', id, patch: { name: p.name, owner: p.owner && p.owner !== UNASSIGNED ? p.owner : null }, now })
         } else if (state.issues[id]) {
           ok = dispatch({
             t: 'updateIssue',
@@ -2683,7 +2692,7 @@ export default function IssueWorkspace({
             onScroll={() => syncFrom('tree')}
             criticalIds={criticalIds}
             onCellCommit={commitCell}
-            ownerOptions={facets.owners}
+            ownerOptions={ownerOptionsFor}
           statusPolicy={state.model.statusPolicy}
           actions={rowActions}
           />

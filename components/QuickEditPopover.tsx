@@ -35,7 +35,8 @@ export default function QuickEditPopover({
   row: ScheduleRow
   /** The transition graph's own answer for where this row's status may go. */
   statusOptions: readonly string[]
-  ownerOptions: string[]
+  /** This row's owner choices, "Unassigned" first — see `ownerOptionValues` in `lib/ownerChoices.ts`. */
+  ownerOptions: readonly string[]
   /** Same shape as `TreeGrid`'s own `onCellCommit` — returns false when the reducer refused. */
   onCommit: (colKey: string, value: string, reason?: string) => boolean
   onClose: () => void
@@ -68,8 +69,8 @@ export default function QuickEditPopover({
     if (value && value !== row.name) onCommit('name', value)
     else setSubject(row.name)
   }
-  const commitOwner = () => {
-    if (owner !== (row.owner ?? '')) onCommit('owner', owner)
+  const commitOwner = (value: string) => {
+    if (value !== (row.owner ?? '')) onCommit('owner', value)
   }
   const commitSeverity = (value: string) => {
     setSeverity(value)
@@ -195,24 +196,22 @@ export default function QuickEditPopover({
 
         <label className="status-editor-field">
           <span className="menu-title">Owner</span>
-          <input
-            value={owner}
-            list="quick-edit-owners"
-            placeholder="Unassigned"
-            onChange={(e) => setOwner(e.target.value)}
-            onBlur={commitOwner}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                commitOwner()
-              }
+          {/* A pick from the directory, not a typed name (12 Sep 2026) — the options arrive
+              from `ownerChoicesFor`, with the stored value appended when it names nobody
+              offered, so the current owner is always the selected one. */}
+          <select
+            value={ownerOptions.includes(owner) ? owner : 'Unassigned'}
+            onChange={(e) => {
+              setOwner(e.target.value)
+              commitOwner(e.target.value)
             }}
-          />
-          <datalist id="quick-edit-owners">
+          >
             {ownerOptions.map((o) => (
-              <option key={o} value={o} />
+              <option key={o} value={o}>
+                {o}
+              </option>
             ))}
-          </datalist>
+          </select>
         </label>
 
         <label className="status-editor-field">

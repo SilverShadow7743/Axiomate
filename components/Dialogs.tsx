@@ -18,6 +18,63 @@ import { formatIso } from '@/lib/dates'
 import { classificationsOf } from '@/lib/tree'
 import { isExternalPartyKind, isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
+import { ownerChoicesFor, UNASSIGNED } from '@/lib/ownerChoices'
+
+/**
+ * The owner as a pick from the People directory (12 Sep 2026), the same choices the record
+ * page's field strip and the grid's cell offer: the firm's people, then the seats of the
+ * client this record sits under, then the stored value when it names nobody offered. The
+ * form's own value stays '' for "nobody", which is what every submit path already read as
+ * unassigned, so nothing downstream changes shape.
+ */
+function OwnerSelect({
+  state,
+  anchorId,
+  value,
+  onChange,
+  autoFocus,
+}: {
+  state: WorkspaceState
+  /** The record being edited, or the parent a new one is created under — for the client. */
+  anchorId: string
+  value: string
+  onChange: (v: string) => void
+  autoFocus?: boolean
+}) {
+  const choices = useMemo(() => ownerChoicesFor(state, anchorId, value), [state, anchorId, value])
+  return (
+    <select
+      autoFocus={autoFocus}
+      value={value || UNASSIGNED}
+      onChange={(e) => onChange(e.target.value === UNASSIGNED ? '' : e.target.value)}
+    >
+      <option value={UNASSIGNED}>{UNASSIGNED}</option>
+      {choices.team.length > 0 && (
+        <optgroup label="Team">
+          {choices.team.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {choices.client.length > 0 && (
+        <optgroup label="Client">
+          {choices.client.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {choices.unlisted && (
+        <optgroup label="Not in People">
+          <option value={choices.unlisted}>{choices.unlisted}</option>
+        </optgroup>
+      )}
+    </select>
+  )
+}
 
 export type DialogState =
   | { t: 'add'; parentId: string; kind: CreatableKind }
@@ -251,7 +308,7 @@ function AddForm({
 
       {isStructural && (
         <Field label={labels.ISSUE_OWNER} hint="Optional">
-          <input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} />
+          <OwnerSelect state={state} anchorId={dialog.parentId} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
         </Field>
       )}
 
@@ -327,7 +384,7 @@ function AddForm({
             </Field>
           </div>
           <Field label={labels.ISSUE_OWNER} hint="Optional">
-            <input value={f.owner ?? ''} onChange={(e) => set('owner', e.target.value)} />
+            <OwnerSelect state={state} anchorId={dialog.parentId} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
           </Field>
           <Field label="Next action" hint="Optional">
             <input value={f.nextAction ?? ''} onChange={(e) => set('nextAction', e.target.value)} />
@@ -420,7 +477,7 @@ function EditForm({
             <input autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
           <Field label={labels.ISSUE_OWNER}>
-            <input value={f.owner} onChange={(e) => set('owner', e.target.value)} />
+            <OwnerSelect state={state} anchorId={id} value={f.owner} onChange={(v) => set('owner', v)} />
           </Field>
         </>
       )}
@@ -431,7 +488,7 @@ function EditForm({
             <input autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
           <Field label={labels.ISSUE_OWNER}>
-            <input value={f.owner} onChange={(e) => set('owner', e.target.value)} />
+            <OwnerSelect state={state} anchorId={id} value={f.owner} onChange={(v) => set('owner', v)} />
           </Field>
           <div className="fld-row">
             <Field label="Start">

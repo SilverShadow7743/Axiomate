@@ -433,6 +433,16 @@
       "impact": "Report delivery is the one thing the pass does that reaches people outside the firm. Before the claim, a Logic App retry after a timeout that had in fact succeeded emailed every client pack twice."
     },
     {
+      "id": "OWN1",
+      "title": "The owner picker offers the firm's active people and only THIS client's seats, and keeps a stored name that matches nobody until it is replaced",
+      "expected": "ownerChoicesFor (12 Sep 2026, Nishant: 'where is the owner dropdown which should come from people' → a strict pick from the directory). Team = every active non-client person; client = active seats attached to the record's own client node, never another client's or an unattached seat; a departed person is not offered; a stored dual owner is carried as `unlisted` so the control can still show it, and drops out once the value is one of the offered names.",
+      "verdict": "PASS",
+      "actual": "team=[Client, Priya, Sam, Tessa Team]; client=[Cleo Client]; dual owner carried as unlisted; a listed name is not unlisted; flat list starts Unassigned and ends Michael Thomas (POS) / Amolak (D365); off a client the client group has 0.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "The owner is the join to My work, availability checks and notifications. A picker that offers another client's guest, or drops a stored dual owner on first open, either names the wrong person on a client's work or silently unassigns nine live issues."
+    },
+    {
       "id": "DL2",
       "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
       "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",
