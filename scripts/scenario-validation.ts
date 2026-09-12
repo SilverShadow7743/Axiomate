@@ -10388,9 +10388,13 @@ scenario(
       /approved/.test(told[0].body) &&
       notifsOf(r4.state, "leave-requested").length === 0
 
-    // 5. A non-Leave commitment is a recorded fact, not a question: nothing mints.
+    // 5. A non-Leave commitment is a recorded fact, not a question: nothing mints -- checked as
+    //    no NEW notification against `setup`'s own count, not an absolute zero. `setup` already
+    //    carries one: Sam's role change at step 1 correctly mints him a profile-change
+    //    notification (12 Sep review), and that is a fact about `setup`, not about this step.
+    const notifsBeforeR5 = Object.values(setup.notifications).length
     const r5 = ok(setup, { t: "upsertCommitment", id: null, person: "Priya", kind: "Internal", startDate: "2026-09-21", endDate: "2026-09-21", hoursPerDay: 2, note: "practice", now: NOW } as Action)
-    const nonLeaveSilent = Object.values(r5.notifications).length === 0
+    const nonLeaveSilent = Object.values(r5.notifications).length === notifsBeforeR5
 
     // 6. A consultant whose role lacks capacity.record can still ask for their OWN absence —
     //    and only that: another person's leave, or any non-Leave kind, keeps the grant; a

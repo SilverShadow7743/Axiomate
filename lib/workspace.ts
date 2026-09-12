@@ -8071,8 +8071,19 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
   const by = actor.name
   const m = state.model
   const scopeName = (id: string) => (id === ROOT_SCOPE ? 'the organisation' : nameOf(state, id))
-  const done = (model: OperatingModel, entry: Omit<AuditEntry, 'id'>, message: string): OpResult => ({
-    state: { ...state, model, audit: log(actor, state, entry) },
+  const done = (
+    model: OperatingModel,
+    entry: Omit<AuditEntry, 'id'>,
+    message: string,
+    /** Carries a mintApproval() result forward — omitted, this stays a no-op exactly as before. */
+    minted?: { notifications: Record<string, Notification>; seq: number },
+  ): OpResult => ({
+    state: {
+      ...state,
+      model,
+      audit: log(actor, state, entry),
+      ...(minted ? { notifications: minted.notifications, seq: minted.seq } : {}),
+    },
     message,
   })
 
@@ -8916,6 +8927,38 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
             : {}),
       }
       const roleNames = person.roleIds.map((r) => m.roles[r].label).join(', ') || 'no role'
+
+      /*
+       * A person's own manager, roles, status or client scope changing is a business event to
+       * THEM the same way a leave or timesheet decision already is (12 Sep review, People
+       * domain) — until this, nothing told the subject their record had changed. Career fields
+       * (grade/track/development) are self-declared and excluded on purpose: notifying someone
+       * about their own edit is noise, not news. A brand-new person (`existing` absent) and a
+       * self-edit (the actor IS the person changing) mint nothing, for the same reason.
+       */
+      let minted: { notifications: Record<string, Notification>; seq: number } | undefined
+      if (existing && by !== person.name) {
+        const rolesChanged =
+          existing.roleIds.length !== person.roleIds.length ||
+          existing.roleIds.some((r) => !person.roleIds.includes(r))
+        const changed: string[] = []
+        if (existing.managerId !== person.managerId) {
+          changed.push(`manager: ${m.people[existing.managerId ?? '']?.name ?? 'none'} → ${m.people[person.managerId ?? '']?.name ?? 'none'}`)
+        }
+        if (rolesChanged) changed.push(`roles: ${roleNames}`)
+        if (existing.status !== person.status) changed.push(`status: ${person.status ?? 'Active'}`)
+        if (existing.clientScopeId !== person.clientScopeId) changed.push('client scope changed')
+        if (changed.length) {
+          const result = mintApproval(
+            state, state.notifications, state.seq, [{ id, name: person.name }],
+            'Your record changed',
+            `${by} updated your directory record — ${changed.join('; ')}.`,
+            id, 'profile-change', now, 'profile-change',
+          )
+          minted = { notifications: result.notifications, seq: result.seq }
+        }
+      }
+
       return done(
         { ...m, people: { ...m.people, [id]: person }, seq: m.seq + (op.id ? 0 : 1) },
         {
@@ -8927,6 +8970,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
           by,
         },
         existing ? `${name} updated.` : `${name} added to the directory.`,
+        minted,
       )
     }
 

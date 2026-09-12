@@ -126,7 +126,7 @@
       "title": "The pass runs every morning for a fortnight and nothing changes",
       "expected": "The same condition is reported once, not fourteen times.",
       "verdict": "PASS",
-      "actual": "1 message on the first run and 0 across the next thirteen: the condition is counted, not repeated — and the memory still records it as true, so the quiet is suppression rather than the condition having stopped being detected. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.",
+      "actual": "2 message on the first run and 0 across the next thirteen: the condition is counted, not repeated — and the memory still records it as true, so the quiet is suppression rather than the condition having stopped being detected. Moving the date cleared it, and missing the new one raised it again — a date somebody moved and then missed is a different fact from the first miss.",
       "stops": "—",
       "severity": "—",
       "impact": "This is the failure that makes scheduled alerting useless in its second month. The pass is built around avoiding it rather than patched to."
@@ -908,7 +908,7 @@
       "title": "decisionItems, extracted from myWork's decide block, changes nothing",
       "expected": "The unified inbox needs the same 'needs a decision' logic myWork already computes, without a second copy of it. decisionItems is that block pulled out standalone — this scenario proves the extraction is a no-op by comparing its output, item for item, against myWork's own decide group on the identical state.",
       "verdict": "PASS",
-      "actual": "decisionItems produced 1 item(s) — cr:cr-4 — identical in key, order, why and when to myWork's own decide group on the same state. The extraction changed nothing.",
+      "actual": "decisionItems produced 1 item(s) — cr:cr-5 — identical in key, order, why and when to myWork's own decide group on the same state. The extraction changed nothing.",
       "stops": "",
       "severity": "—",
       "impact": "none"
@@ -2158,7 +2158,7 @@
       "title": "The private leave reason never travels in a notification, to anyone, on any channel",
       "expected": "E2's firmest line: notification bodies are composed from dates, hours and decision notes only — the private reason stays on the row, where redaction governs who reads it. Email lands in mailboxes outside the app's redaction, so this is enforced at the mint, not at the reader.",
       "verdict": "PASS",
-      "actual": "6 notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.",
+      "actual": "7 notifications minted across request, return, re-open and one-step approval — in-app and email — and not one carries the reason; the row itself still holds it for the readers redaction allows.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
@@ -2748,7 +2748,7 @@
       "title": "convertToPersonalAction soft-deletes the issue and creates the private to-do in one state transition, carrying the inbound message id; refused for a client seat without evidence.add, refused for one with it but no internal.view, and refused twice",
       "expected": "The one triage action that removes something from the org-visible tree. Two effects, one arm: no window where the issue is gone but nothing replaced it. The originating InboundMail row's messageId rides along as provenance. Gated exactly as POST /api/mail/file gates filing: evidence.add at the funnel, plus internal.view inside the arm where no project sits above (the fixture's issues sit under a process area with no project tier, so that branch is live). A roleless directory person is NOT a negative case — the fallback role ships as Administrator (lib/access.ts) — so the negatives are the two client seats the gate was written for: Client User (no evidence.add) and Client Process Lead (evidence.add, no internal.view). Afterwards the to-do is visible only to its creator, by the same redaction PA2 proves.",
       "verdict": "PASS",
-      "actual": "Client User refused at the funnel (no evidence.add); Client Process Lead refused by the no-project branch (no internal.view); Priya's convert soft-deleted OAPIL-2 and created paction-3 with sourceMessageId from the inbound row, in one state; row gone from the tree; second convert refused; to-do visible to Priya only",
+      "actual": "Client User refused at the funnel (no evidence.add); Client Process Lead refused by the no-project branch (no internal.view); Priya's convert soft-deleted OAPIL-2 and created paction-4 with sourceMessageId from the inbound row, in one state; row gone from the tree; second convert refused; to-do visible to Priya only",
       "stops": "",
       "severity": "P1",
       "impact": "none"
