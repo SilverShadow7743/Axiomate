@@ -18,6 +18,7 @@ import { summarise } from '@/lib/estimation'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
 import { addDays } from '@/lib/dates'
+import { CLIENT_ORG_ROLES } from '@/lib/ownerChoices'
 
 /**
  * Who is committed to this project, and whether the plan can be delivered by them.
@@ -331,7 +332,21 @@ export default function CapacityPanel({
           </table>
         )}
         {mayRecord.allowed ? (
-          <CommitmentForm people={[...new Set(allocations.map((a) => a.person))]} defaultFrom={from} onCommit={onCommit} />
+          <CommitmentForm
+            /*
+             * Person-first, not project-first (12 Sep review): leave, internal time and
+             * training are facts about a person, not about the project whose Capacity tab
+             * happens to be open. Restricting this list to the project's own allocations
+             * made a bench or not-yet-allocated person's leave unrecordable from anywhere.
+             * The firm's own people, active only -- a client seat is never on internal time.
+             */
+            people={Object.values(state.model.people)
+              .filter((p) => p.status !== 'Departed' && !p.roleIds.some((r) => CLIENT_ORG_ROLES.includes(r)))
+              .map((p) => p.name)
+              .sort((a, b) => a.localeCompare(b))}
+            defaultFrom={from}
+            onCommit={onCommit}
+          />
         ) : (
           <div className="panel-note">{mayRecord.reason ?? 'Read only.'}</div>
         )}

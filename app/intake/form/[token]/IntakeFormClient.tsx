@@ -27,9 +27,14 @@ export default function IntakeFormClient({ token }: { token: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ token, name, email, subject, description, urgency }),
       })
-      const body = (await res.json()) as { ok: boolean; reference?: string; error?: string }
+      const body = (await res.json()) as { ok: boolean; reference?: string; confirmationSent?: boolean; error?: string }
       if (body.ok && body.reference) {
-        setOutcome({ ok: true, text: `Received — reference ${body.reference}. Quote it in any follow-up.` })
+        setOutcome({
+          ok: true,
+          text: body.confirmationSent
+            ? `Received — reference ${body.reference}. A confirmation has been emailed to you; reply to it to add anything further.`
+            : `Received — reference ${body.reference}. Quote it in any follow-up.`,
+        })
         setSubject('')
         setDescription('')
         setUrgency('normal')

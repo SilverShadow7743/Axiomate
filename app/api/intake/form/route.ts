@@ -8,6 +8,8 @@ import { classifyForm, provenanceNote, type InboundMessage } from '@/lib/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { wrapPlainText } from '@/lib/richText'
+import { sendingMailboxFor, isOutboundRefusal } from '@/lib/outbound'
+import { sendAsMailbox } from '@/lib/mail'
 
 /**
  * The form's half of intake — the second door that creates records from the internet.
@@ -155,11 +157,41 @@ export async function POST(req: Request) {
     ]
     const second = await persistActions(tenantId, INTAKE_ACTOR, follow)
 
+    /*
+     * A confirmation email (12 Sep review, client-transparency domain). Until this, the
+     * anonymous form's submitter left with nothing but the on-screen reference string — no
+     * proof the request survived a closed tab, no way to reply back into the same thread. Best
+     * effort: refetched (persisting above changed the record `state` was loaded before), and a
+     * mailbox that cannot be resolved or a send that fails is logged, never surfaced to the
+     * submitter — the issue itself is already filed either way, and the reference on screen
+     * still stands as the fallback proof of receipt.
+     */
+    let confirmationSent = false
+    try {
+      const { state: freshState } = await loadWorkspace(tenantId)
+      const resolved = sendingMailboxFor(freshState, issueId)
+      if (!isOutboundRefusal(resolved)) {
+        const sent = await sendAsMailbox(
+          resolved.mailbox.address,
+          resolved.recipient,
+          `We've received your request [${issueId}]`,
+          `Thanks, ${name} — this has been logged and reference ${issueId} identifies it. Reply to this email to add anything further; quoting the reference keeps it attached to the same request.\n\nSubject: ${subject}`,
+        )
+        confirmationSent = sent.ok
+        if (!sent.ok) console.error(`intake form ${form.id} confirmation email refused: ${sent.status} ${sent.detail}`)
+      } else {
+        console.error(`intake form ${form.id} confirmation email skipped: ${resolved.reason}`)
+      }
+    } catch (err) {
+      console.error(describeDbError(err))
+    }
+
     return NextResponse.json({
       ok: true,
       // The one workspace fact this page discloses: the reference the submitter quotes later.
       reference: issueId,
       noteRecorded: second.ok,
+      confirmationSent,
     })
   } catch (err) {
     console.error(describeDbError(err))
