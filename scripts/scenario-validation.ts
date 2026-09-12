@@ -4911,6 +4911,33 @@ scenario(
 )
 
 scenario(
+  'DOC5',
+  'Attaching a file counts as activity on the issue',
+  "recordDocument stamps the issue's lastActivity with the upload date, the same stamp every other write to an issue makes, and writes its History row. Found 12 Sep when the first real upload left the record reading as untouched since 9 Sep.",
+  () => {
+    const before = BASE.issues['OAPIL-1'].lastActivity
+    const r = apply(BASE, {
+      t: 'recordDocument', subjectKind: 'issue', subjectId: 'OAPIL-1',
+      name: 'site-photo.jpeg', mimeType: 'image/jpeg', sizeBytes: 120_000,
+      checksum: 'b'.repeat(64), locator: 'graph-item-9', store: 'graph', note: '', now: NOW,
+    } as Action, A)
+    const after = r.state.issues['OAPIL-1'].lastActivity
+    const stamped = !r.error && after === NOW.slice(0, 10) && after !== before
+    const last = r.state.audit[r.state.audit.length - 1]
+    const logged = last?.rowId === 'OAPIL-1' && last.field === 'document' && /site-photo\.jpeg/.test(last.to ?? '')
+    const good = stamped && logged
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `lastActivity ${before} → ${after}${r.error ? ` (refused: ${r.error})` : ''}; last audit row ${last ? `${last.field} "${last.to}"` : 'absent'}.`,
+      stops: good ? '—' : 'at recordDocument — the issue is not stamped, or the History row is missing',
+      severity: good ? '—' : 'P2',
+      impact:
+        'Without the stamp a record somebody has just put evidence on reads as idle to the Tree, the stale check and every "last touched" figure — the opposite of what attaching a file means.',
+    }
+  },
+)
+
+scenario(
   'DOC1',
   'A file is attached to an issue, and a record only ever exists when the bytes do',
   'Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.',

@@ -501,6 +501,28 @@ button.nav-burger {
   border-color: var(--accent);
 }
 
+/* ---------- attachments on the record ----------
+   The Links FastTab's Attachments section: a thumbnail for an image, a file glyph otherwise,
+   the name as the link that opens it. The lightbox is the ordinary modal with the image
+   allowed to take the width. */
+.att-list { display: flex; flex-direction: column; gap: 8px; }
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.att-thumb-btn { padding: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; line-height: 0; }
+.att-thumb { width: 56px; height: 56px; object-fit: cover; display: block; }
+.att-icon { width: 56px; height: 56px; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; border: 1px solid var(--border); border-radius: 4px; }
+.att-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.att-body .btn-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.att-preview { max-width: min(960px, 94vw); }
+.att-preview img { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; border-radius: 4px; }
+
 /* ---------- first-column link ----------
    F&O's list-page rule: the first textual column opens the record. Ten components already
    used this class as that link and none of them styled it — the base `button` reset left them

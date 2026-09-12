@@ -509,6 +509,14 @@ export default function IssueWorkspace({
       setState((s) => ({
         ...s,
         documents: { ...s.documents, [doc.id]: doc },
+        // The reducer stamped the issue's lastActivity on the server (12 Sep); mirror that
+        // here so the row and the FastTab summaries move at once. The History row itself is
+        // the server's and arrives with the next load — an invented copy here would be a
+        // second audit entry, which is worse than a late one.
+        issues:
+          doc.subjectKind === 'issue' && s.issues[doc.subjectId]
+            ? { ...s.issues, [doc.subjectId]: { ...s.issues[doc.subjectId], lastActivity: doc.uploadedAt.slice(0, 10) } }
+            : s.issues,
         evidence:
           body.evidenceId && s.evidence[body.evidenceId]
             ? {

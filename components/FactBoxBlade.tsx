@@ -93,6 +93,13 @@ export default function FactBoxBlade({
     ? Object.values(state.notes).filter((n) => n.issueId === issueId && !n.deletedAt).length
     : 0
 
+  const attachments = useMemo(() => {
+    if (!issueId) return []
+    return Object.values(state.documents)
+      .filter((d) => d.subjectKind === 'issue' && d.subjectId === issueId && !d.deletedAt)
+      .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+  }, [issueId, state.documents])
+
   if (!row) return null
 
   if (!open) {
@@ -167,6 +174,29 @@ export default function FactBoxBlade({
             {related.length > GRID_CAP && onOpenTab && (
               <button type="button" className="btn ghost" onClick={() => onOpenTab('Links')}>
                 More ({related.length})
+              </button>
+            )}
+          </section>
+
+          <section className="factbox">
+            <h4 className="factbox-h">Attachments</h4>
+            {attachments.length === 0 ? (
+              <p className="prov">No files attached.</p>
+            ) : (
+              <ul className="factbox-grid">
+                {attachments.slice(0, GRID_CAP).map((d) => (
+                  <li key={d.id}>
+                    <a className="btn-link" href={`/api/documents/${d.id}?inline=1`} target="_blank" rel="noreferrer">
+                      {d.name}
+                    </a>{' '}
+                    <span className="mono prov">{formatIso(d.uploadedAt.slice(0, 10))}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {attachments.length > GRID_CAP && onOpenTab && (
+              <button type="button" className="btn ghost" onClick={() => onOpenTab('Links')}>
+                More ({attachments.length})
               </button>
             )}
           </section>

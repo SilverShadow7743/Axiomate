@@ -774,6 +774,16 @@
       "impact": "SK1 could answer \"who could do this\" but nothing produced a \"this\" to ask about — the requirement had to be constructed by the scenario, not read off a work item. That was the stated stop; this closes it."
     },
     {
+      "id": "DOC5",
+      "title": "Attaching a file counts as activity on the issue",
+      "expected": "recordDocument stamps the issue's lastActivity with the upload date, the same stamp every other write to an issue makes, and writes its History row. Found 12 Sep when the first real upload left the record reading as untouched since 9 Sep.",
+      "verdict": "PASS",
+      "actual": "lastActivity 2026-08-03 → 2026-08-15; last audit row document \"site-photo.jpeg (117 KB)\".",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Without the stamp a record somebody has just put evidence on reads as idle to the Tree, the stale check and every \"last touched\" figure — the opposite of what attaching a file means."
+    },
+    {
       "id": "DOC1",
       "title": "A file is attached to an issue, and a record only ever exists when the bytes do",
       "expected": "Uploads are refused on size, on an executable, and on a path in the name; the same file cannot be attached twice to one record; and a store nobody has configured refuses loudly rather than accepting and dropping.",

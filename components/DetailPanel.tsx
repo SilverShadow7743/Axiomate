@@ -16,6 +16,7 @@ import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
 import { proposeTargetDate, statusColorClass } from '@/lib/schedule'
 import { formatIso } from '@/lib/dates'
+import type { DocumentRecord } from '@/lib/documents'
 import { useLabels } from './labels'
 import OverviewTab from './OverviewTab'
 import NotesTab from './NotesTab'
@@ -410,7 +411,11 @@ export default function DetailPanel({
       const links =
         relationships.filter((r) => r.sourceIssueId === issue.id || r.targetIssueId === issue.id).length +
         dependencies.filter((d) => d.predecessorId.split('#')[0] === issue.id || d.successorId.split('#')[0] === issue.id).length
-      if (links) s.Links = `${links} linked`
+      const attached = Object.values(state.documents).filter(
+        (d) => d.subjectKind === 'issue' && d.subjectId === issue.id && !d.deletedAt,
+      ).length
+      const linkBits = [links ? `${links} linked` : '', attached ? `${attached} attached` : ''].filter(Boolean)
+      if (linkBits.length) s.Links = linkBits.join(' · ')
       const est = state.estimates[issue.id]
       if (est?.baselinedAt) s.Estimation = 'Baselined'
       const at = lastAt(issue.id)
@@ -1025,6 +1030,15 @@ export default function DetailPanel({
             <Evidence
               issue={issue}
               items={evidence.filter((e) => e.issueId === issue.id && !e.deletedAt)}
+              onManage={() => onManageEvidence(issue.id)}
+            />
+          </section>
+          <section className="tab-sect">
+            <h4 className="est-h">Attachments</h4>
+            <Attachments
+              documents={Object.values(state.documents).filter(
+                (d) => d.subjectKind === 'issue' && d.subjectId === issue.id && !d.deletedAt,
+              )}
               onManage={() => onManageEvidence(issue.id)}
             />
           </section>
@@ -1737,6 +1751,82 @@ function DataSource({ meta }: { meta: Props['meta'] }) {
  * Deliberately distinct from History (what happened to the issue) and Data Source (where the
  * record was imported from). All three answer different questions and are easy to conflate.
  */
+/**
+ * The files on this record, on the record (12 Sep). Until now a stored document was reachable
+ * only as a download arrow inside the Evidence & Documents dialog — the person who had just
+ * attached a photo could not see it anywhere on the issue and concluded nothing had updated.
+ * Images show as thumbnails and open in a lightbox; everything opens in a tab through
+ * `?inline=1` (the route decides what is safe to render) and downloads through the plain link.
+ */
+function Attachments({
+  documents,
+  onManage,
+}: {
+  documents: DocumentRecord[]
+  onManage: () => void
+}) {
+  const [preview, setPreview] = useState<DocumentRecord | null>(null)
+  const live = [...documents].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+  const isImage = (d: DocumentRecord) => d.mimeType.startsWith('image/')
+
+  return (
+    <div className="att-list">
+      {live.length === 0 ? (
+        <p className="prov">No files attached. Attach one from Manage…</p>
+      ) : (
+        live.map((d) => (
+          <div key={d.id} className="att-row">
+            {isImage(d) ? (
+              <button type="button" className="att-thumb-btn" onClick={() => setPreview(d)} title="Preview">
+                <img className="att-thumb" src={`/api/documents/${d.id}?inline=1`} alt={d.name} />
+              </button>
+            ) : (
+              <span className="att-icon" aria-hidden="true">
+                📄
+              </span>
+            )}
+            <div className="att-body">
+              <a className="btn-link" href={`/api/documents/${d.id}?inline=1`} target="_blank" rel="noreferrer" title="Open in a new tab">
+                {d.name}
+              </a>
+              <div className="evi-item-meta">
+                <span>{formatBytes(d.sizeBytes)}</span>
+                <span>{d.uploadedBy}</span>
+                <span className="mono">{formatIso(d.uploadedAt.slice(0, 10))}</span>
+                {d.clientVisible && <span className="chip">client-visible</span>}
+              </div>
+            </div>
+            <a className="btn ghost" href={`/api/documents/${d.id}`} title="Download">
+              ⬇
+            </a>
+          </div>
+        ))
+      )}
+      <div className="est-actions">
+        <button className="btn" onClick={onManage}>
+          Manage…
+        </button>
+      </div>
+      {preview && (
+        <div className="modal-scrim" role="dialog" aria-label={preview.name}>
+          <div className="modal att-preview">
+            <img src={`/api/documents/${preview.id}?inline=1`} alt={preview.name} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+              <span className="prov" style={{ marginRight: 'auto' }}>{preview.name}</span>
+              <a className="btn" href={`/api/documents/${preview.id}`}>
+                Download
+              </a>
+              <button className="btn primary" onClick={() => setPreview(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Evidence({
   issue,
   items,

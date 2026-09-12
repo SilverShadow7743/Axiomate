@@ -5058,10 +5058,22 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           ? { ...state.evidence, [a.evidenceId]: { ...state.evidence[a.evidenceId], documentId: id } }
           : state.evidence
 
+      /*
+       * Attaching a file IS activity on the record (12 Sep): until now the audit row was
+       * written but the issue's own `lastActivity` stood still, so the Tree, the stale check
+       * and every "last touched" reading said nothing had happened on a record somebody had
+       * just put evidence on. Same stamp every other write to an issue makes.
+       */
+      const issues =
+        a.subjectKind === 'issue' && state.issues[a.subjectId]
+          ? { ...state.issues, [a.subjectId]: { ...state.issues[a.subjectId], lastActivity: a.now.slice(0, 10) } }
+          : state.issues
+
       return {
         state: {
           ...state,
           seq,
+          issues,
           documents: { ...state.documents, [id]: next },
           evidence,
           audit: log(actor, state, {

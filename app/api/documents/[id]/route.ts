@@ -115,17 +115,26 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       )
     }
 
-    const type = INLINE_SAFE.has(doc.mimeType) ? doc.mimeType : 'application/octet-stream'
+    const inlineSafe = INLINE_SAFE.has(doc.mimeType)
+    const type = inlineSafe ? doc.mimeType : 'application/octet-stream'
+    /*
+     * `?inline=1` (12 Sep) lets the Attachments section OPEN a file in a tab rather than only
+     * download it — and only for the types the allow-list above already treats as safe to
+     * render. Anything else stays an attachment whatever the query says: an HTML upload must
+     * never be rendered from this origin.
+     */
+    const inline = inlineSafe && new URL(_req.url).searchParams.get('inline') === '1'
     return new Response(body, {
       headers: {
         'content-type': type,
         'content-length': String(doc.sizeBytes),
         /*
-         * `attachment`, and the filename encoded rather than interpolated. A name containing a
-         * quote or a newline would otherwise let the uploader write their own response headers.
-         * `uploadProblem` already refuses control characters; this is the second of the two.
+         * `attachment` by default, and the filename encoded rather than interpolated. A name
+         * containing a quote or a newline would otherwise let the uploader write their own
+         * response headers. `uploadProblem` already refuses control characters; this is the
+         * second of the two.
          */
-        'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
+        'content-disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
         'x-content-type-options': 'nosniff',
         // A document is somebody's evidence, not a public asset. No shared cache holds it.
         'cache-control': 'private, no-store',
