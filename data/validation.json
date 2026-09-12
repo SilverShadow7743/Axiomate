@@ -1044,6 +1044,26 @@
       "impact": "none"
     },
     {
+      "id": "BLK1",
+      "title": "A bulk status candidate is offered only when no selected row refuses it",
+      "expected": "a target legal for every selected row survives; a target illegal for even one does not; a policy with no shared target for two rows offers nothing",
+      "verdict": "PASS",
+      "actual": "In Progress offered=true; Closed - confirmed excluded=true; refusal names Open and Needs clarification, not Awaiting=true; a policy with no shared reachable status offers nothing=true",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
+      "id": "BLK2",
+      "title": "Missing evidence refuses one row in a bulk closure, naming it, without touching an already-there row",
+      "expected": "a row missing required evidence for Closed - confirmed is refused by name; a row that already has evidence is not; a row already sitting at the target is a no-op, not a refusal",
+      "verdict": "PASS",
+      "actual": "refused names exactly BLK2-no-evidence=true; a row with evidence alone is ok=true; a row already at the target alone is ok, not refused=true",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "RW1",
       "title": "The cadence arithmetic: clamping, catch-up, and the strictly-after guard",
       "expected": "Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing",
