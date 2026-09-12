@@ -966,6 +966,28 @@ export function projectScopeOf(state: WorkspaceState, a: Action): string[] | nul
       // resolve a project when there is an issue to resolve it from. No issue means no project
       // to gate on, same as every other case above that returns null when nothing resolves.
       return a.issueId ? one(a.issueId) : null
+    /*
+     * Documents and checklist items (12 Sep audit, H7): both mutate an issue's record and both
+     * were outside this gate, so a consultant staffed on nothing could attach a file to, or
+     * tick a checklist on, any issue in the tenant. A document on a SOW, node or change stays
+     * ungated here — those are coarser than a project, the boundary this function draws.
+     */
+    case 'recordDocument':
+      return a.subjectKind === 'issue' ? one(a.subjectId) : null
+    case 'removeDocument':
+    case 'setDocumentVisibility': {
+      const d = state.documents[a.id]
+      return d && d.subjectKind === 'issue' ? one(d.subjectId) : null
+    }
+    case 'requestDocumentReview': {
+      const d = state.documents[a.documentId]
+      return d && d.subjectKind === 'issue' ? one(d.subjectId) : null
+    }
+    case 'upsertChecklistItem':
+      return a.issueId ? one(a.issueId) : a.id && state.checklistItems[a.id] ? one(state.checklistItems[a.id].issueId) : null
+    case 'toggleChecklistItem':
+    case 'removeChecklistItem':
+      return state.checklistItems[a.id] ? one(state.checklistItems[a.id].issueId) : null
     default:
       return null
   }
@@ -5978,6 +6000,11 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
     case 'setDocumentVisibility': {
       const doc = state.documents[a.id]
       if (!doc || doc.deletedAt) return { state, error: 'That document does not exist or was removed.' }
+      // Publishing to the client is an internal act (12 Sep audit, H7): `document.upload`, which
+      // the funnel asks for, is held by every internal role AND is what a client seat needs to
+      // attach its own files — so on its own it let a client seat mark anything client-visible.
+      const may = can(state.model, actor, 'internal.view')
+      if (!may.allowed) return { state, error: may.reason ?? 'Only an internal reader can change what a client sees.' }
       if ((doc.clientVisible ?? false) === a.clientVisible) return { state }
       return {
         state: {

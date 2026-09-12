@@ -774,6 +774,16 @@
       "impact": "SK1 could answer \"who could do this\" but nothing produced a \"this\" to ask about — the requirement had to be constructed by the scenario, not read off a work item. That was the stated stop; this closes it."
     },
     {
+      "id": "AUD1",
+      "title": "A client seat cannot publish a document to the client, and an internal person attaches files only on projects they are staffed on",
+      "expected": "12 Sep audit, H7: setDocumentVisibility requires internal.view in the arm (document.upload alone is held by client seats too), and projectScopeOf now resolves recordDocument / removeDocument / setDocumentVisibility / requestDocumentReview / the checklist arms to the issue's project, so the funnel's staffing gate applies. A client seat holding document.upload is refused with the internal wording; an unstaffed functional consultant is refused with the staffing wording and succeeds once staffed.",
+      "verdict": "PASS",
+      "actual": "unstaffed attach → Nell Newjoiner is not staffed on this project.; staffed attach → allowed; client seat visibility → See internal records is not something Client User can do here.; admin visibility → allowed.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Without these, any consultant could attach to or tick off any issue in the tenant, and a client seat holding document.upload could publish internal files to itself. The download route now applies the same boundary, so this is the write side of one rule."
+    },
+    {
       "id": "DOC5",
       "title": "Attaching a file counts as activity on the issue",
       "expected": "recordDocument stamps the issue's lastActivity with the upload date, the same stamp every other write to an issue makes, and writes its History row. Found 12 Sep when the first real upload left the record reading as untouched since 9 Sep.",

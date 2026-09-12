@@ -170,10 +170,23 @@ jobs:
         # in migrations and never exercised. Same env, same reasons as the persistence gate.
         # `audit:integrity` is deliberately NOT here: it reads the real tenant's stored state and
         # an empty CI database has nothing to say about it.
+        #
+        # As a LEAST-PRIVILEGE role, not the service container's user. That user is a Postgres
+        # superuser, and row-level security never applies to a superuser — the first run of this
+        # gate proved it by seeing the other tenant's row. The role below is what the audit's C4
+        # asks production to run as too: login, no superuser, no BYPASSRLS, ordinary table grants.
         env:
-          DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
-          NODE_OPTIONS: --conditions=react-server
-        run: npm run audit:rls
+          PGPASSWORD: axiomate
+        run: |
+          psql -h localhost -U axiomate -d axiomate_ci -v ON_ERROR_STOP=1 -c "
+            CREATE ROLE axiomate_app LOGIN PASSWORD 'axiomate_app' NOSUPERUSER NOBYPASSRLS;
+            GRANT USAGE ON SCHEMA public TO axiomate_app;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO axiomate_app;
+            GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO axiomate_app;
+          "
+          DATABASE_URL=postgresql://axiomate_app:axiomate_app@localhost:5432/axiomate_ci \
+          NODE_OPTIONS=--conditions=react-server \
+          npm run audit:rls
 
       - name: Keep the committed validation baseline
         # `validate:scenarios` overwrites data/validation.json in place, so the committed copy is

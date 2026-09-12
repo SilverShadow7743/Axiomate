@@ -262,3 +262,36 @@ stamp-then-send order; H3 — an alert email address.
 
 **Planned, with a maintenance window:** C4 database roles; H4 the DR runbook and a rehearsal;
 H11 the boot payload; H12 a second registration with a certificate; M4, M5, M6.
+
+## Progress
+
+*Kept here as the fixes land, so the report stays the record of both the finding and the fix.*
+
+- **12 Sep, C1 + H8** (`6371d56`): the route allow-list is derived from `SHAPES` minus a named
+  server-only set; `ACTION_PERMISSIONS` is `as const satisfies`, the six entries are in, and
+  removing one fails tsc naming it (proven). `npm run audit:kinds` checks the three registries
+  and every client dispatch, in CI and pre-commit. **Verified live:** a saved view survives a
+  reload and its deletion persists, with the persist tag reading "Saved".
+- **12 Sep, C3 + H1 + H5 + M1 + M2 + M7** (`5569b55`): `infra/app.bicep` says `node server.js`
+  and why; `app.bicepparam` names the live P0v3; security headers in `next.config.ts` (no
+  `script-src` yet — needs a nonce middleware, owed); `httpsOnly`, Always On and the health-check
+  path set on both slots (HTTP now 301s); sign-out drops the person's Graph token; sign-in
+  cookies derive `Secure` from the public origin, live twenty minutes, and the callback checks
+  presence before state; the schedule trigger compares its bearer timing-safely.
+- **12 Sep, H9** (`b84dfe3`): `audit:a11y` and `audit:rls` run in CI; `app/error.tsx` and
+  `app/global-error.tsx` catch a render crash and say how many changes were still unsaved.
+  Route-handler tests remain owed. **The first CI run with the RLS gate failed** — the
+  proof's bypass query saw the other tenant's row, because the service container's user is a
+  Postgres superuser and row-level security never applies to one. The gate now runs as a
+  least-privilege `axiomate_app` role created in the workflow (login, no superuser, no
+  `BYPASSRLS`, ordinary grants) — C4's posture in miniature, and the reason C4 matters.
+- **12 Sep, H6 + H7:** `identityEstablished()` is true when a provider is configured *or half
+  configured*, so losing one Entra setting closes every route instead of opening them (the
+  sign-in route's 503 names what is missing); only a deployment with no provider at all is the
+  trusting single-operator one. Document download applies the boundary the payload applies: a
+  client seat gets a file only if it is client-visible and under its own client node, a
+  non-exempt internal reader only from a project they are staffed on. `setDocumentVisibility`
+  requires `internal.view` in the arm. `projectScopeOf` resolves documents, review requests and
+  checklist items to the issue's project, so the funnel's staffing gate covers them. Pinned by
+  `AUD1`: an unstaffed consultant is refused and succeeds once staffed; a client seat holding
+  `document.upload` is refused with the internal wording.

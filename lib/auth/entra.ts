@@ -54,6 +54,22 @@ export function configured(): boolean {
 }
 
 /**
+ * Some of the four settings but not all — a deployment that MEANT to have a provider and has
+ * lost part of it (12 Sep audit, H6). Distinguished from "no provider at all" because the two
+ * must fail in opposite directions: no provider is the single-operator deployment that trusts
+ * whoever reaches it; a half-configured one must trust nobody until it is whole again.
+ */
+export function partiallyConfigured(): boolean {
+  const values = [
+    process.env.AXIOMATE_ENTRA_TENANT_ID,
+    process.env.AXIOMATE_ENTRA_CLIENT_ID,
+    process.env.AXIOMATE_ENTRA_CLIENT_SECRET,
+    process.env.AXIOMATE_ENTRA_REDIRECT_URI,
+  ].map((v) => Boolean(v?.trim()))
+  return values.some(Boolean) && !values.every(Boolean)
+}
+
+/**
  * The one delegated scope string, declared once — see `lib/db/personalGraphTokens.ts`'s own
  * comment on why a drifted copy here is worse than an import.
  *

@@ -2,7 +2,7 @@ import 'server-only'
 import type { Actor } from './actor'
 import { currentActor } from './identity'
 import { SESSION_COOKIE, verify } from './auth/cookie'
-import { configured as entraConfigured } from './auth/entra'
+import { configured as entraConfigured, partiallyConfigured as entraPartiallyConfigured } from './auth/entra'
 import { cookies } from 'next/headers'
 
 /**
@@ -85,9 +85,20 @@ function sessionFrom(cookie: string | undefined): Session {
   }
 }
 
-/** Whether this deployment can tell two people apart at all. */
+/**
+ * Whether this deployment requires people to be told apart.
+ *
+ * True when a provider is configured — and, since 12 Sep 2026 (audit H6), also when one is
+ * HALF configured. Before that, losing any one of the four Entra settings on a slot made this
+ * false, and every route then accepted anonymous requests as the named operator with the
+ * Administrator fallback: the application was one app setting away from open mode. Now a
+ * half-configured provider means "identity is required and cannot currently be proven", so
+ * every route refuses until the configuration is whole; the sign-in route's 503 names the
+ * missing settings. Only a deployment with NO provider at all is the trusting single-operator
+ * one, and that is a deliberate state, not a slip.
+ */
 export function identityEstablished(): boolean {
-  return entraConfigured()
+  return entraConfigured() || entraPartiallyConfigured()
 }
 
 /** For a route handler, which has the request. */

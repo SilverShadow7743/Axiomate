@@ -31,6 +31,8 @@
 import { NextResponse } from 'next/server'
 import { databaseConfigured } from '@/lib/db/client'
 import { loadWorkspace } from '@/lib/db/repo'
+import { can, directoryPersonFor, isStaffedOn } from '@/lib/access'
+import { projectOf, scopeChainOf } from '@/lib/workspace'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { logAuthRefusal } from '@/lib/authLog'
@@ -92,6 +94,34 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
      */
     if (!doc || doc.deletedAt) {
       return NextResponse.json({ ok: false, error: 'That file is not attached here.' }, { status: 404 })
+    }
+
+    /*
+     * The same boundary the page payload applies, on the only path to the bytes (12 Sep audit,
+     * H7). Until this, a verified session of any kind could fetch any document by id — a client
+     * seat could pull internal deliverables the payload had withheld from it. A client reader
+     * gets a file only if it is marked client-visible AND sits under their own client node; an
+     * internal reader who is not exempt gets it only from a project they are staffed on, which
+     * is what `boot()`'s `projectView` already shows them. Both refusals are the same 404 as a
+     * missing document, for the reason given above that one.
+     */
+    const members = Object.values(state.projectMembers)
+    const internal = can(state.model, session.actor, 'internal.view').allowed
+    if (!internal) {
+      const mine = directoryPersonFor(state.model, session.actor)?.id ?? null
+      const clientScope = mine ? (state.model.people[mine]?.clientScopeId ?? null) : null
+      const inScope =
+        doc.subjectKind === 'issue' && clientScope !== null && scopeChainOf(state, doc.subjectId).includes(clientScope)
+      if (!doc.clientVisible || !inScope) {
+        logAuthRefusal('GET /api/documents/[id]', 'outside the client boundary', session.actor)
+        return NextResponse.json({ ok: false, error: 'That file is not attached here.' }, { status: 404 })
+      }
+    } else {
+      const projectId = doc.subjectKind === 'issue' ? projectOf(state, doc.subjectId) : null
+      if (projectId && !isStaffedOn(state.model, session.actor, projectId, members)) {
+        logAuthRefusal('GET /api/documents/[id]', 'not staffed on the project', session.actor)
+        return NextResponse.json({ ok: false, error: 'That file is not attached here.' }, { status: 404 })
+      }
     }
     if (!doc.locator) {
       // Only reachable if a redacted copy were ever persisted, which `documentToRow` refuses.

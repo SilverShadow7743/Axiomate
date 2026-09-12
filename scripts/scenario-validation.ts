@@ -4911,6 +4911,79 @@ scenario(
 )
 
 scenario(
+  'AUD1',
+  'A client seat cannot publish a document to the client, and an internal person attaches files only on projects they are staffed on',
+  "12 Sep audit, H7: setDocumentVisibility requires internal.view in the arm (document.upload alone is held by client seats too), and projectScopeOf now resolves recordDocument / removeDocument / setDocumentVisibility / requestDocumentReview / the checklist arms to the issue's project, so the funnel's staffing gate applies. A client seat holding document.upload is refused with the internal wording; an unstaffed functional consultant is refused with the staffing wording and succeeds once staffed.",
+  () => {
+    let s = BASE
+    const person = (name: string, roleIds: string[]) => {
+      s = ok(s, { t: 'config', op: { k: 'upsertPerson', id: null, name, roleIds }, now: NOW } as Action)
+    }
+    person('Dana Seat', ['ROLE_CLIENT_USER'])
+    person('Nell Newjoiner', ['ROLE_FUNCTIONAL'])
+    const dana: Actor = { id: 'dana-seat', name: 'Dana Seat' }
+    const nell: Actor = { id: 'nell-newjoiner', name: 'Nell Newjoiner' }
+
+    /* BASE's issues sit under a process area with no project tier, which is the ungated default
+       by design — so the staffing half needs a project and an issue beneath it. */
+    const engagementId = Object.values(s.nodes).find((n) => n.kind === 'engagement')!.id
+    s = ok(s, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Quay' }, now: NOW } as Action)
+    const projectId = Object.values(s.nodes).find((n) => n.kind === 'project' && n.name === 'Quay')!.id
+    s = ok(s, { t: 'create', parentId: projectId, kind: 'issue', draft: { name: 'Quay cutover spec', type: 'Task' }, now: NOW } as Action)
+    const issueId = Object.values(s.issues).find((i) => i.subject === 'Quay cutover spec')!.id
+
+    const attach = (who: Actor, st: WorkspaceState, locator: string) =>
+      apply(st, {
+        t: 'recordDocument', subjectKind: 'issue', subjectId: issueId,
+        name: 'spec.pdf', mimeType: 'application/pdf', sizeBytes: 1_000,
+        checksum: locator.repeat(64).slice(0, 64), locator, store: 'graph', note: '', now: NOW,
+      } as Action, who)
+
+    /* Staffing. Nell is in the directory with a delivery role and on no project. */
+    const unstaffed = attach(nell, s, 'n')
+    const resolved = projectOf(s, issueId)
+    const roleId = Object.keys(s.model.projectRoles)[0]
+    const staffedState = resolved && roleId
+      ? ok(s, { t: 'addProjectMember', projectId: resolved, person: 'Nell Newjoiner', projectRoleId: roleId, now: NOW } as Action)
+      : null
+    const staffed = staffedState ? attach(nell, staffedState, 'm') : null
+    const staffingHolds = resolved === projectId && /staffed/.test(unstaffed.error ?? '') && !!staffed && !staffed.error
+
+    /* Visibility. Give the client seat document.upload so the funnel lets it through and the
+       arm's own internal.view check is what refuses. */
+    const attached = attach(A, s, 'a')
+    const docId = attached.createdId!
+    const lenient: WorkspaceState = {
+      ...attached.state,
+      model: {
+        ...attached.state.model,
+        access: {
+          ...attached.state.model.access,
+          grants: { ...attached.state.model.access.grants, ROLE_CLIENT_USER: ['work.create', 'note.add', 'document.upload'] },
+        },
+      },
+    }
+    /* Staff the seat on the project too, so the funnel's staffing gate is satisfied and the
+       arm's own internal.view check is the one that answers. */
+    const seatStaffed = apply(lenient, { t: 'addProjectMember', projectId, person: 'Dana Seat', projectRoleId: roleId, now: NOW } as Action, A)
+    const seatBase = seatStaffed.error ? lenient : seatStaffed.state
+    const seatRefused = apply(seatBase, { t: 'setDocumentVisibility', id: docId, clientVisible: true, now: NOW } as Action, dana)
+    const adminAllowed = apply(lenient, { t: 'setDocumentVisibility', id: docId, clientVisible: true, now: NOW } as Action, A)
+    const visibilityHolds = /internal/i.test(seatRefused.error ?? '') && !adminAllowed.error && adminAllowed.state.documents[docId]?.clientVisible === true
+
+    const good = staffingHolds && visibilityHolds
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `unstaffed attach → ${unstaffed.error ?? 'ALLOWED'}; staffed attach → ${staffed ? (staffed.error ?? 'allowed') : 'not attempted (no project or project role)'}; client seat visibility → ${seatRefused.error ?? 'ALLOWED'}; admin visibility → ${adminAllowed.error ?? 'allowed'}.`,
+      stops: good ? '—' : 'at projectScopeOf / setDocumentVisibility — a gate the audit added is not holding',
+      severity: good ? '—' : 'P1',
+      impact:
+        'Without these, any consultant could attach to or tick off any issue in the tenant, and a client seat holding document.upload could publish internal files to itself. The download route now applies the same boundary, so this is the write side of one rule.',
+    }
+  },
+)
+
+scenario(
   'DOC5',
   'Attaching a file counts as activity on the issue',
   "recordDocument stamps the issue's lastActivity with the upload date, the same stamp every other write to an issue makes, and writes its History row. Found 12 Sep when the first real upload left the record reading as untouched since 9 Sep.",
