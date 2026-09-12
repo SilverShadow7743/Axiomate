@@ -488,7 +488,14 @@ export function canOnProject(
  * An action that genuinely needs no permission says so with `null` and a reason. Omission is
  * not a way of saying anything.
  */
-export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
+/*
+ * A literal type, not `Record<string, …>` (12 Sep 2026). Annotated as a string-keyed record,
+ * this table was assignable to `Record<Action['t'], …>` whatever it omitted — a string index
+ * covers every key — so the `satisfies` in workspace.ts could never fail and six kinds shipped
+ * without an entry. `as const satisfies` at the bottom keeps the literal keys, which is what
+ * lets the assertion bite; `permissionForAction` widens for its string lookup.
+ */
+export const ACTION_PERMISSIONS = {
   create: 'work.create',
   // Duplicating mints an issue *and* a relationship, and this table has room for one key. The
   // second grant — `work.link` — is asked for in the arm itself, because the relationship is not
@@ -620,6 +627,21 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   updatePersonalAction: null,
   removePersonalAction: null,
   convertToPersonalAction: 'evidence.add',
+  /*
+   * The six the 12 Sep audit found missing. Each arm already decides for itself and the funnel
+   * cannot express the rule, so `null` with the reason — omission is not a way of saying that.
+   */
+  // Attestation: the arm resolves who may attest a given week via `attesterFor`.
+  submitTimesheet: null,
+  decideTimesheet: null,
+  // The arm requires `leave.approve` and additionally refuses deciding one's own request.
+  decideLeave: 'leave.approve',
+  // The arm requires `internal.view`; a client sign-in never books a meeting.
+  upsertMeeting: 'internal.view',
+  // Organizer-or-`config.manage`, decided in the arm — only it knows who organised it.
+  cancelMeeting: null,
+  // Records that the reader dismissed an assistant proposal shown to them; audit-only.
+  dismissProposal: null,
   /* Machine-written only — see the mail-log design. Never reachable via app/api/workspace's
    * KINDS set, the same reasoning `notify` is absent from it. */
   recordInboundMail: null,
@@ -649,7 +671,7 @@ export const ACTION_PERMISSIONS: Record<string, PermissionKey | null> = {
   /* The drain stamping what happened to a queued message after it happened — a record of an
    * outcome, not a grant. Never accepted over the wire; see the workspace endpoint's KINDS. */
   markNotificationDelivery: null,
-}
+} as const satisfies Record<string, PermissionKey | null>
 
 /**
  * The permission an action needs, given what it is trying to do.
@@ -663,7 +685,7 @@ export function permissionForAction(
   opts: { closing?: boolean } = {},
 ): PermissionKey | null {
   if (kind === 'updateIssue' && opts.closing) return 'work.close'
-  return ACTION_PERMISSIONS[kind] ?? null
+  return (ACTION_PERMISSIONS as Record<string, PermissionKey | null>)[kind] ?? null
 }
 
 /* ================================================================== *

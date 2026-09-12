@@ -17,6 +17,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:check": "node scripts/db-check.mjs",
     "audit:tenancy": "node scripts/tenant-audit.mjs",
+    "audit:kinds": "node scripts/action-kinds-audit.mjs",
     "audit:attribution": "npx tsx scripts/attribution-proof.ts",
     "audit:restore": "npx tsx scripts/restore-proof.ts",
     "audit:estimation": "npx tsx scripts/estimation-proof.ts",

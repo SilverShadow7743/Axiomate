@@ -8,3 +8,4 @@
 
 npx tsc --noEmit
 npm run audit:tenancy
+npm run audit:kinds

@@ -107,6 +107,13 @@ jobs:
         # such calls when it was written. It reads source text and needs nothing else.
         run: npm run audit:tenancy
 
+      - name: Audit — action kinds
+        # The three action registries (SHAPES, ACTION_PERMISSIONS, the route's server-only set)
+        # and every kind a component dispatches, checked against each other. Twice a kind the
+        # UI dispatched was missing from the route's allow-list, and each time persistence
+        # silently stopped for the session. Reads source text and needs nothing else.
+        run: npm run audit:kinds
+
       - name: Audit — attribution
         # Runs the real reducer with two actors and asserts the audit trail differs. Pure.
         run: npm run audit:attribution

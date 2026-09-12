@@ -17,7 +17,7 @@ import { getSession, identityEstablished } from '@/lib/principal'
 import { logAuthRefusal } from '@/lib/authLog'
 import type { Action } from '@/lib/workspace'
 import { keyProblem, type SubmittedAction } from '@/lib/idempotency'
-import { batchProblem } from '@/lib/actionShape'
+import { batchProblem, validatedKinds } from '@/lib/actionShape'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,103 +25,25 @@ export const dynamic = 'force-dynamic'
 /** A queue drain should never be unbounded; anything larger is a client bug, not a workload. */
 const MAX_BATCH = 200
 
-/** Action kinds the endpoint will replay. Anything else is refused rather than guessed at. */
-const KINDS = new Set([
-  'create',
-  'duplicate',
-  'updateNode',
-  'updateIssue',
-  'updateActivity',
-  'softDelete',
-  'restore',
-  'move',
-  'link',
-  'unlink',
-  'setDates',
-  'addDependency',
-  'removeDependency',
-  'addEvidence',
-  'updateEvidence',
-  'removeEvidence',
-  'addNote',
-  'updateNote',
-  'removeNote',
-  'setEstimate',
-  'baselineEstimate',
-  'addTime',
-  'updateTime',
-  'removeTime',
-  'requestApproval',
-  'decideApproval',
-  'requestDocumentReview',
-  'decideDocumentReview',
-  'withdrawDocumentReview',
-  'setDocumentVisibility',
-  'markNotificationRead',
-  'setNotificationPref',
-  'setClientChoice',
-  'updateCareerProfile',
-  'upsertSow',
-  'archiveSow',
-  'attributeToSow',
-  'upsertAllocation',
-  'removeAllocation',
-  'upsertCommitment',
-  'decideLeave',
-  'removeCommitment',
-  'upsertMeeting',
-  'cancelMeeting',
-  'recordVersion',
-  'correctVersion',
-  'removeVersion',
-  'upsertChangeRequest',
-  'withdrawChangeRequest',
-  'decideChangeRequest',
-  'recordRate',
-  'correctRate',
-  'recordPersonSkill',
-  'correctPersonSkill',
-  'removePersonSkill',
-  'recordDocument',
-  'removeDocument',
-  'upsertScopeItem',
-  'removeScopeItem',
-  'decideScopeItem',
-  'upsertMilestone',
-  'removeMilestone',
-  'deliverMilestone',
-  'decideMilestone',
-  'submitTimesheet',
-  'decideTimesheet',
-  'upsertApplication',
-  'removeApplication',
-  'upsertIntegrationLink',
-  'removeIntegrationLink',
-  'raiseInvoice',
-  'updateInvoiceStatus',
-  'upsertChecklistItem',
-  'toggleChecklistItem',
-  'removeChecklistItem',
-  // `notify` is deliberately absent. Notifications are raised by rules, and the server plans
-  // the same rules the browser does — so a notify action arriving over the wire could only be
-  // one the client invented.
-  'buildLifecycle',
-  'clearLifecycle',
-  'config',
-  'setAssignment',
-  'updateEngagement',
-  'addProjectMember',
-  'updateProjectMember',
-  'removeProjectMember',
-  'addPersonalEvent',
-  'updatePersonalEvent',
-  'removePersonalEvent',
-  'addPersonalAction',
-  'updatePersonalAction',
-  'removePersonalAction',
-  'convertToPersonalAction',
-  'dismissProposal',
+/**
+ * Action kinds the endpoint will replay: every kind `lib/actionShape.ts` can validate, minus the
+ * ones only the server may originate. Derived, not transcribed (12 Sep 2026): this used to be a
+ * third hand-maintained literal beside `SHAPES` and `ACTION_PERMISSIONS`, and it drifted twice
+ * — nine kinds in I1, then `takeSnapshot`/`upsertSavedView`/`deleteSavedView` — each time
+ * making a built, typechecked, scenario-passing action unreachable from the UI, and because the
+ * batch is refused whole and the queue treats a 4xx as terminal, each time silently stopping
+ * persistence for the session. `scripts/action-kinds-audit.mjs` (`npm run audit:kinds`) checks
+ * the three registries and every client dispatch against each other in CI.
+ */
+const SERVER_ONLY = new Set([
+  // Raised by rules and the scheduled pass; the server plans the same rules the browser does,
+  // so a notify arriving over the wire could only be one the client invented.
+  'notify',
+  // Written by intake and the notification drain respectively — machine-only by design.
+  'recordInboundMail',
+  'markNotificationDelivery',
 ])
+const KINDS = new Set(validatedKinds().filter((k) => !SERVER_ONLY.has(k)))
 
 export async function POST(req: Request) {
   // The request is validated BEFORE the database is considered.
