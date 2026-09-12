@@ -550,3 +550,16 @@ or this document.
    pinhole altogether. It is more infrastructure, and it is the correct end state.
 9. **Approval on the production environment.** Whether a person must approve each deploy is a
    policy decision, and the GitHub environment is where it would be expressed.
+
+## Alert rules (12 September 2026)
+
+Four metric alerts exist in the resource group, all on the action group
+`axiomate-scheduled-pass-operators`, which emails the operator: the two the scheduled-pass and
+intake modules create (`RunsFailed` on each Logic App) and two on the App Service created on
+12 Sep by the enterprise audit (H3) — `axiomate-tms-unhealthy` (HealthCheckStatus below 100 for
+five minutes) and `axiomate-tms-5xx` (more than five 5xx in fifteen minutes). The App Service
+pair was created with the CLI and is mirrored in `infra/alerts.bicep`; apply that module rather
+than recreating them by hand. The log-query rules in `docs/observability.md` (pass absence,
+intake silence, `database: not configured`) need the Log Analytics workspace that
+`infra/observability.bicep` creates, and that module has never been deployed — nothing in the
+resource group is a workspace or an Application Insights component.

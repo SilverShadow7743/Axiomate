@@ -411,9 +411,23 @@ export async function loadModelOnly(tenantId: TenantId): Promise<OperatingModel>
 
 function readModel(raw: unknown, owners: string[], types: string[]): OperatingModel {
   const seed = initModel([...new Set(owners)], [...new Set(types)])
-  if (!raw || typeof raw !== 'object') return seed
-  const stored = raw as Partial<OperatingModel>
-  if (!stored.agents || !stored.responsibilities) return seed
+  // No row yet is a first boot, and the seed is the right answer.
+  if (raw === null || raw === undefined) return seed
+  const stored = typeof raw === 'object' ? (raw as Partial<OperatingModel>) : null
+  /*
+   * A row that EXISTS but cannot be read is not a first boot, and this used to treat it as one
+   * (12 Sep 2026 audit, C2b). Substituting the seed here promoted every sign-in to the shipped
+   * fallback role, and the next model-writing action — even a notification preference —
+   * persisted the seed whole over the stored document: the directory, the grants, the rates
+   * policy and the SLAs gone for good, with everyone an administrator. Refusing is the only
+   * honest answer: the page fails closed with this sentence, nobody is promoted, and the stored
+   * document is left exactly as it was for somebody to repair or restore.
+   */
+  if (!stored || !stored.agents || !stored.responsibilities) {
+    throw new Error(
+      'The stored operating model cannot be read. Refusing to substitute the shipped defaults or to overwrite it — restore the OperatingModel row from a backup or repair it by hand.',
+    )
+  }
   return {
     ...seed,
     ...stored,

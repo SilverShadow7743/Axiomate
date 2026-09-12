@@ -423,6 +423,16 @@
       "impact": "The pass can only ever send a complete period, once."
     },
     {
+      "id": "CLM1",
+      "title": "A second trigger of the pass in the same morning finds every due send already claimed",
+      "expected": "claimDelivery (12 Sep audit, H10): the stamps the pass writes inside its transaction BEFORE sending are exactly the stamps that make deliveryDue answer 'nothing' — so a retry or a manual run beside the daily one serialises behind the first and sends nothing. A kind that was not due is left untouched, and a claim carries the pre-claim stamps forward for every other kind.",
+      "verdict": "PASS",
+      "actual": "before the claim: ims=true, weekly=2026-09-07, monthly=null; after: ims=false, weekly=null, monthly=null; monthly stamp carried=2026-08; claiming twice changes nothing.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Report delivery is the one thing the pass does that reaches people outside the firm. Before the claim, a Logic App retry after a timeout that had in fact succeeded emailed every client pack twice."
+    },
+    {
       "id": "DL2",
       "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
       "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",

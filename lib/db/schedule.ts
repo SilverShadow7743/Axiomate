@@ -12,7 +12,7 @@ import { buildTree } from '../tree'
 import { buildDailyIms } from '../reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, underScopeOf } from '../reports/clientPack'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../reports/pdf'
-import { deliveryDue, parseReportDelivery, type DeliveryStamps } from '../reports/delivery'
+import { claimDelivery, deliveryDue, parseReportDelivery, type DeliveryStamps } from '../reports/delivery'
 import { resolveOperatorAddress } from '../reports/notifyBundle'
 import { externalPartyKinds, tiersOf } from '../config'
 import { sendAsMailbox } from '../mail'
@@ -80,6 +80,14 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
       /** Report-delivery stamps ride the same memory. Read defensively like the rest of it. */
       const stamps: DeliveryStamps =
         raw?.delivery && typeof raw.delivery === 'object' ? { ...raw.delivery } : {}
+      /*
+       * The delivery CLAIM (12 Sep audit, H10): what the stamps will read once today's due
+       * sends have gone, written in this transaction before anything is sent. A second trigger
+       * in the same morning — a Logic App retry after a timeout that in fact succeeded, or a
+       * manual run beside the daily one — serialises behind this one and reads the claim as
+       * "already sent". A send that fails after commit has its stamp put back below.
+       */
+      const claimed = claimDelivery(parseReportDelivery(state.model.reportDelivery), stamps, today)
 
       const run = runWatch(state, previous, today, now, actor)
 
@@ -185,8 +193,8 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
        * workspace that has never sent carries no `delivery` key at all, keeping this write
        * byte-identical to what it always was.
        */
-      const observation = Object.keys(stamps).length
-        ? ({ ...run.observation, delivery: stamps } as unknown as object)
+      const observation = Object.keys(claimed).length
+        ? ({ ...run.observation, delivery: claimed } as unknown as object)
         : (run.observation as unknown as object)
       await tx.scheduleWatch.upsert({
         where: { tenantId },
@@ -205,6 +213,7 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
         state: calendarState,
         observation: run.observation,
         stamps,
+        claimed,
       }
     },
     { isolationLevel: 'Serializable', timeout: 30_000, maxWait: 10_000 },
@@ -212,13 +221,24 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
 
   /*
    * Report delivery runs AFTER the transaction commits — Graph HTTP inside a Serializable
-   * transaction would hold locks through network I/O and race its 30s timeout. The cost,
-   * stated: two concurrent MANUAL triggers can both pass the due-check and double-send (the
-   * daily Logic App alone cannot); a duplicate email to the operator is accepted over ever
-   * blocking the watch on the network. Stamps advance only after every send of a kind
-   * succeeded, so a refused send retries on the next pass.
+   * transaction would hold locks through network I/O and race its 30s timeout. What used to
+   * follow from that — two triggers in one morning both passing the due-check and both
+   * emailing — no longer does: the transaction above wrote the CLAIM, so a second trigger reads
+   * "already sent". Sending still works from the pre-claim stamps, and what it actually
+   * achieved is written back afterwards: a kind whose sends all succeeded keeps its claim, a
+   * kind that was refused has its stamp put back so the next pass retries it.
    */
-  const delivery = await runDelivery(tenantId, inner.state, inner.observation, inner.stamps, today)
+  const { next: achieved, ...delivery } = await runDelivery(tenantId, inner.state, inner.observation, inner.stamps, today)
+  if (JSON.stringify(achieved) !== JSON.stringify(inner.claimed)) {
+    /* `withTenant` because scheduleWatch carries the RLS policy like every tenant table — a
+     * bare update would be filtered to nothing. */
+    await withTenant(tenantId, (tx) =>
+      tx.scheduleWatch.update({
+        where: { tenantId },
+        data: { observation: { ...inner.observation, delivery: achieved } as unknown as object },
+      }),
+    )
+  }
 
   const summary = delivery.sent.length
     ? `${inner.summary} Emailed ${delivery.sent.join(', ')}.`
@@ -237,24 +257,30 @@ export async function runScheduledPass(tenantId: TenantId, actor: Actor): Promis
   }
 }
 
-/** One report kind's sends, all-or-the-stamp-stays: returns the label list and refusals. */
+/**
+ * One report kind's sends, all-or-the-stamp-stays: returns the label list, the refusals, and
+ * `next` — the stamps as actually achieved, advanced only for a kind whose every send succeeded.
+ * The caller compares `next` with the claim it wrote before sending and puts back what was
+ * claimed but not achieved. This function writes nothing.
+ */
 async function runDelivery(
   tenantId: TenantId,
   state: WorkspaceState,
   observation: Observation,
   stamps: DeliveryStamps,
   today: string,
-): Promise<ScheduledRun['delivery']> {
+): Promise<ScheduledRun['delivery'] & { next: DeliveryStamps }> {
+  void observation
   const sent: string[] = []
   const refused: { what: string; status: number; detail: string }[] = []
   const config = parseReportDelivery(state.model.reportDelivery)
   const due = deliveryDue(config, stamps, today)
-  if (!due.ims && !due.weeklyFor && !due.monthlyFor) return { sent, refused }
+  if (!due.ims && !due.weeklyFor && !due.monthlyFor) return { sent, refused, next: { ...stamps } }
 
   const mailbox = state.model.intake.find((m) => m.enabled)?.address
   if (!mailbox) {
     refused.push({ what: 'delivery', status: 0, detail: 'No enabled intake mailbox to send as — Configuration → Routing & intake.' })
-    return { sent, refused }
+    return { sent, refused, next: { ...stamps } }
   }
   const org = state.model.organization
   const next: DeliveryStamps = { ...stamps }
@@ -388,16 +414,5 @@ async function runDelivery(
     }
   }
 
-  if (JSON.stringify(next) !== JSON.stringify(stamps)) {
-    /* The observation written moments ago in this same request, held in memory, plus the
-     * advanced stamps. `withTenant` because scheduleWatch carries the RLS policy like every
-     * tenant table — a bare update would be filtered to nothing. */
-    await withTenant(tenantId, (tx) =>
-      tx.scheduleWatch.update({
-        where: { tenantId },
-        data: { observation: { ...observation, delivery: next } as unknown as object },
-      }),
-    )
-  }
-  return { sent, refused }
+  return { sent, refused, next }
 }

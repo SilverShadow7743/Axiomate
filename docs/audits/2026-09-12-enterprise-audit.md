@@ -301,3 +301,28 @@ H11 the boot payload; H12 a second registration with a certificate; M4, M5, M6.
   some agent in Configuration → Agent registry is configured to use it, or it is the code
   default; anything else lands on the default. The routes load the operating model alone
   (`loadModelOnly`) for the registry. Pinned by `MC1`. Rate limiting itself remains owed.
+- **12 Sep, decisions taken by Nishant:** C2 — empty the fallback, he is the sole administrator;
+  H2 — leave the database network as it is; H3 — alerts to his address; H10 — claim-then-send.
+- **12 Sep, C2 (checked live first):** the production `defaultRoleIds` was **already empty** —
+  the live risk had been closed in Configuration → Permissions before this audit, and the finding
+  was true of the shipped default and of any deployment that has not made that change. What
+  remained was C2b, and it is fixed: a stored operating model that exists but cannot be read now
+  makes `readModel` **throw** rather than substitute the seed, so nobody is promoted and the
+  stored document is never overwritten; a missing row (first boot) still seeds. The shipped
+  default stays as the single-operator bootstrap and `.env.example` still says to empty it.
+  Noted for the directory: 13 of 25 people have no email recorded and match by display name
+  only — weaker than an address, worth filling in.
+- **12 Sep, H3 (corrected):** the live action group `axiomate-scheduled-pass-operators` already
+  carried Nishant's address — the "reaches nobody" reading came from the template's empty
+  default, not the deployed group. Two App Service metric alerts now exist beside the Logic App
+  ones: `axiomate-tms-unhealthy` (HealthCheckStatus < 100 over 5 min, severity 1) and
+  `axiomate-tms-5xx` (more than five 5xx in 15 min, severity 2), both on that group. The
+  observability doc's log-query rules (pass absence, intake silence, `not configured`) need the
+  Log Analytics workspace the observability module would create — that module has **never been
+  deployed** (no workspace or Application Insights component exists in the resource group), so
+  those three remain owed with it. Created by CLI; mirrored in `infra/alerts.bicep`.
+- **12 Sep, H10:** the pass now writes its delivery **claim** inside the serializable
+  transaction before sending (`claimDelivery`, pure), sends from the pre-claim stamps, and
+  writes back only what was achieved — a refused kind has its stamp put back for the next pass.
+  A second trigger in the same morning serialises behind the first and reads "already sent".
+  Pinned by `CLM1`.

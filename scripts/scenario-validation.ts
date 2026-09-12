@@ -146,7 +146,7 @@ import { resolveModelId } from '../lib/modelChoice'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
 import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
-import { deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
+import { claimDelivery, deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { resolutionNotices } from '../lib/reports/resolutionNotice'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
@@ -2383,6 +2383,38 @@ scenario(
     return good
       ? { verdict: 'PASS', actual: 'A Wednesday owes only the IMS; Monday owes the PRIOR week (2026-08-17 for the 24th) and the 1st the PRIOR month (2026-08 for Sep 1, 2025-12 across the year end); Saturday owes nothing; every stamp holds its own report back; the shipped default sends nothing at all; an empty recipient list silences the IMS; and a junk stored blob parses to disabled. PDF smoke is appended by the async block below.', stops: '—', severity: '—', impact: 'The pass can only ever send a complete period, once.' } as const
       : { verdict: 'FAIL', actual: `midweek=${midweek} priorWeek=${priorWeek} (${monday.weeklyFor}) priorMonth=${priorMonth} (${first.monthlyFor}) yearRollover=${yearRollover} weekendQuiet=${weekendQuiet} stampHolds=${stampHolds} weekStampHolds=${weekStampHolds} monthStampHolds=${monthStampHolds} offByDefault=${offByDefault} noRecipients=${noRecipients} failsClosed=${failsClosed}`, stops: 'at the due-logic — a period still in flight would be mailed, a send repeated, or a disabled workspace would email', severity: 'P1', impact: 'unattended automation that spams, goes silent, or mails an incomplete week to be forwarded to a client' } as const
+  },
+)
+
+scenario(
+  'CLM1',
+  'A second trigger of the pass in the same morning finds every due send already claimed',
+  "claimDelivery (12 Sep audit, H10): the stamps the pass writes inside its transaction BEFORE sending are exactly the stamps that make deliveryDue answer 'nothing' — so a retry or a manual run beside the daily one serialises behind the first and sends nothing. A kind that was not due is left untouched, and a claim carries the pre-claim stamps forward for every other kind.",
+  () => {
+    const monday = '2026-09-14'
+    const config: ReportDeliveryConfig = {
+      ...DEFAULT_REPORT_DELIVERY,
+      imsEnabled: true,
+      imsRecipients: ['ops@example.test'],
+      packsEnabled: true,
+    }
+    const stamps = { imsSentOn: '2026-09-11', weeklySentFor: '2026-08-31', monthlySentFor: '2026-08' }
+    const before = deliveryDue(config, stamps, monday)
+    const claimed = claimDelivery(config, stamps, monday)
+    const after = deliveryDue(config, claimed, monday)
+    const dueBefore = before.ims && before.weeklyFor === '2026-09-07' && before.monthlyFor === null
+    const nothingAfter = !after.ims && after.weeklyFor === null && after.monthlyFor === null
+    const carried = claimed.monthlySentFor === '2026-08' && claimed.imsSentOn === monday && claimed.weeklySentFor === '2026-09-07'
+    const idempotent = JSON.stringify(claimDelivery(config, claimed, monday)) === JSON.stringify(claimed)
+    const good = dueBefore && nothingAfter && carried && idempotent
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `before the claim: ims=${before.ims}, weekly=${before.weeklyFor}, monthly=${before.monthlyFor}; after: ims=${after.ims}, weekly=${after.weeklyFor}, monthly=${after.monthlyFor}; monthly stamp carried=${claimed.monthlySentFor}; claiming twice ${idempotent ? 'changes nothing' : 'CHANGES the stamps'}.`,
+      stops: good ? '—' : 'at claimDelivery / deliveryDue — the claim does not make the second trigger read as sent',
+      severity: good ? '—' : 'P1',
+      impact:
+        'Report delivery is the one thing the pass does that reaches people outside the firm. Before the claim, a Logic App retry after a timeout that had in fact succeeded emailed every client pack twice.',
+    }
   },
 )
 

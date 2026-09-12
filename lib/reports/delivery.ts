@@ -115,3 +115,21 @@ export function deliveryDue(
 
   return { ims, weeklyFor, monthlyFor }
 }
+
+/**
+ * The stamps as they will read once every send that is due today has gone — the CLAIM the
+ * pass writes inside its serializable transaction before it sends anything (12 Sep 2026 audit,
+ * H10). Two triggers in one morning used to both read the pre-send stamps and both email; with
+ * the claim written first, the second trigger's transaction sees nothing due. A send that then
+ * fails has its kind's stamp put back by the caller, so the next pass retries it. Pure: the
+ * caller decides what to write and when.
+ */
+export function claimDelivery(config: ReportDeliveryConfig, stamps: DeliveryStamps, today: string): DeliveryStamps {
+  const due = deliveryDue(config, stamps, today)
+  return {
+    ...stamps,
+    ...(due.ims ? { imsSentOn: today } : {}),
+    ...(due.weeklyFor ? { weeklySentFor: due.weeklyFor } : {}),
+    ...(due.monthlyFor ? { monthlySentFor: due.monthlyFor } : {}),
+  }
+}
