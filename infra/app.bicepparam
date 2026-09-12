@@ -60,10 +60,10 @@ param tags = {
  * Size
  * -------------------------------------------------------------------------------------------- */
 
-// B1 for a firm of this size. See the note in app.bicep for what it does not buy — chiefly
-// deployment slots, which is why every deploy interrupts anyone mid-edit. Move to P0v3 when
-// that interruption starts being noticed, not before.
-param skuName = 'B1'
+// P0v3, which is what is live: it buys the staging slot the deploy pipeline swaps and Always
+// On. This said B1 until 12 Sep 2026 — running the documented command with it would have
+// downgraded the plan and deleted the slot the pipeline depends on (enterprise audit, C3).
+param skuName = 'P0v3'
 
 // One instance. Not a capacity judgement: the first render against an empty database races
 // itself across instances during initial seeding, so the second instance is added after the
@@ -82,9 +82,9 @@ param nodeVersion = 'NODE|22-lts'
 // back off if that route is ever removed; a 404 here evicts working instances.
 param healthCheckPath = '/api/health'
 
-// The artifact is built in CI. Without `output: 'standalone'` that artifact has to carry
-// node_modules; building here instead would put a Next production build on a single 1.75 GB
-// core that is also serving requests.
+// The artifact is built in CI as a standalone server and shipped whole; building here instead
+// would put a Next production build on the instance that is also serving requests, and would
+// produce a different artefact from the one the gates passed.
 param buildOnDeploy = false
 
 /* -------------------------------------------------------------------------------------------- *

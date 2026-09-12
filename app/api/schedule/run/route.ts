@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { loadWorkspace } from '@/lib/db/repo'
 import { runScheduledPass } from '@/lib/db/schedule'
@@ -49,7 +50,15 @@ export async function POST(req: Request) {
     )
   }
 
-  const byToken = Boolean(TOKEN) && (req.headers.get('authorization') ?? '') === `Bearer ${TOKEN}`
+  // Constant-time, the same way the intake door compares its bearer (12 Sep audit, M2): a plain
+  // `===` short-circuits on the first differing byte and leaks the match length through timing.
+  // `timingSafeEqual` throws on a length mismatch, so the length check comes first.
+  const byToken = (() => {
+    if (!TOKEN) return false
+    const given = Buffer.from(req.headers.get('authorization') ?? '')
+    const expected = Buffer.from(`Bearer ${TOKEN}`)
+    return given.length === expected.length && timingSafeEqual(given, expected)
+  })()
   const session = getSession(req)
 
   /**

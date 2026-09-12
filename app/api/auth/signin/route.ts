@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { beginSignIn, configured, entraConfig } from '@/lib/auth/entra'
-import { signingConfigured } from '@/lib/auth/cookie'
+import { publicOrigin, signingConfigured } from '@/lib/auth/cookie'
 
 /**
  * Start a sign-in.
@@ -34,8 +34,15 @@ export async function GET(req: Request) {
   }
 
   const pending = await beginSignIn(config)
-  const secure = new URL(req.url).protocol === 'https:'
-  const attrs = ['Path=/', 'HttpOnly', 'SameSite=Lax', secure ? 'Secure' : '', 'Max-Age=600']
+  /*
+   * `publicOrigin`, not `req.url` (12 Sep audit, M1): behind App Service the request URL is the
+   * container's own address, so `Secure` on these three cookies depended on the environment
+   * while the session cookie derived it from the public origin. Twenty minutes rather than ten:
+   * a first sign-in with a consent screen and an MFA prompt is exactly the flow that runs long,
+   * and an expired state cookie used to be reported as "did not start in this browser".
+   */
+  const secure = publicOrigin(req).startsWith('https:')
+  const attrs = ['Path=/', 'HttpOnly', 'SameSite=Lax', secure ? 'Secure' : '', 'Max-Age=1200']
     .filter(Boolean)
     .join('; ')
 

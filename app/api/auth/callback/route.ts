@@ -58,13 +58,18 @@ export async function GET(req: Request) {
   const state = url.searchParams.get('state')
   if (!code || !state) return back(req, 'Entra returned no authorisation code.', 'no-code')
 
-  // The state cookie is what ties this response to the request this browser started.
-  if (state !== cookie(req, 'axiomate_state')) {
-    return back(req, 'This sign-in did not start in this browser.', 'wrong-browser')
-  }
+  // Presence first, then identity (12 Sep audit, M1): the three cookies share one lifetime and
+  // one response, so when they have expired the state is missing — and comparing before
+  // checking presence reported every expiry as "did not start in this browser", leaving the
+  // friendlier branch below unreachable.
+  const stateCookie = cookie(req, 'axiomate_state')
   const verifier = cookie(req, 'axiomate_verifier')
   const nonce = cookie(req, 'axiomate_nonce')
-  if (!verifier || !nonce) return back(req, 'The sign-in took too long. Try again.', 'expired')
+  if (!stateCookie || !verifier || !nonce) return back(req, 'The sign-in took too long. Try again.', 'expired')
+  // The state cookie is what ties this response to the request this browser started.
+  if (state !== stateCookie) {
+    return back(req, 'This sign-in did not start in this browser.', 'wrong-browser')
+  }
 
   try {
     const { identity, tokens } = await completeSignIn(config, code, verifier, nonce)

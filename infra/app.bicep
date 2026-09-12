@@ -14,17 +14,19 @@
   connection through `@prisma/adapter-pg`, and sign cookies with `node:crypto`. There is a
   Node process behind every request; there is nothing to put on a CDN.
 
-  `next.config.ts` sets only `reactStrictMode`. It does **not** set `output: 'standalone'`,
-  and this module deliberately does not ask for it to be — that file belongs to the
-  application. What follows from its absence is the whole deployment contract:
+  `next.config.ts` sets `output: 'standalone'` (it did not when this note was first written,
+  and this note said the opposite until 12 Sep 2026 — found by the enterprise audit, C3, with
+  the live slots already running the right command by hand). What follows from standalone is
+  the whole deployment contract:
 
-    - `next build` writes `.next/` plus `.next/*.nft.json` file traces. It does *not* write
-      `.next/standalone/server.js`. There is no self-contained server to launch.
-    - Therefore the startup command is `npm run start`, which runs `next start`, and that
-      command requires the full production `node_modules` tree to be present on the instance
-      beside `.next/`. Pointing `appCommandLine` at `node .next/standalone/server.js` — the
-      usual App Service recipe for Next — would fail on every boot with MODULE_NOT_FOUND.
-    - `next start` binds to `process.env.PORT`, which the App Service Linux Node image sets.
+    - `next build` writes `.next/standalone/server.js`, a self-contained server that traces
+      only the modules it reaches, plus `.next/static` and `public`, which the deploy step
+      places beside it (`.github/workflows/deploy.yml`, the packaging step).
+    - Therefore the startup command is `node server.js`, run from the package root. The
+      standalone package carries **no** `next` CLI, so `npm run start` (`next start`) cannot
+      execute there — a template apply that set it would boot a container that serves nothing,
+      at the *following* restart, hours after the apply, with no deploy run to blame.
+    - `server.js` binds to `process.env.PORT`, which the App Service Linux Node image sets.
       Nothing here needs to pin a port, and `WEBSITES_PORT` is deliberately absent: it applies
       to custom containers, and setting it against a blessed image is a red herring that
       survives in configuration long after whoever added it has left.
@@ -339,10 +341,10 @@ resource webApp 'Microsoft.Web/sites@2024-04-01' = {
     siteConfig: {
       linuxFxVersion: nodeVersion
       alwaysOn: alwaysOnAvailable
-      // Explicit rather than left to Oryx's guess. Oryx usually infers `npm start` for a Next
-      // app, but "usually" is not a deployment contract, and the failure mode is a container
-      // that starts and serves nothing.
-      appCommandLine: 'npm run start'
+      // Explicit rather than left to Oryx's guess, and the standalone server, not `npm run
+      // start` — the package the pipeline ships has no `next` CLI (note 1 above). Both live
+      // slots ran this value by hand before the template said so.
+      appCommandLine: 'node server.js'
       minTlsVersion: '1.2'
       scmMinTlsVersion: '1.2'
       ftpsState: 'Disabled'
