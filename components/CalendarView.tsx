@@ -16,11 +16,18 @@ export default function CalendarView({
   today,
   selectedId,
   onSelect,
+  selectedIds,
+  onToggleSelect,
 }: {
   rows: ScheduleRow[]
   today: string
   selectedId: string | null
   onSelect: (id: string) => void
+  /** Chips checked for a bulk action — separate from `selectedId`, the open detail record. */
+  selectedIds: Set<string>
+  /** Ctrl/Cmd-click toggles one chip; Shift-click has no range meaning across day cells (arrow
+   *  keys move between days, not chips), so it toggles too — same as Ctrl-click here. */
+  onToggleSelect: (id: string, extendRange: boolean) => void
 }) {
   const [monthIso, setMonthIso] = useState(today.slice(0, 10))
   const [dayIso, setDayIso] = useState<string | null>(null)
@@ -111,7 +118,7 @@ export default function CalendarView({
               </h3>
               {!dayRows.length && <p className="board-lane-empty">Nothing planned to span this day.</p>}
               {dayRows.map((r) => (
-                <RailRow key={r.id} row={r} selectedId={selectedId} onSelect={onSelect} />
+                <RailRow key={r.id} row={r} selectedId={selectedId} onSelect={onSelect} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />
               ))}
             </>
           ) : (
@@ -122,7 +129,7 @@ export default function CalendarView({
                 a planned end in the tree and it appears in the grid.
               </p>
               {m.undated.map((r) => (
-                <RailRow key={r.id} row={r} selectedId={selectedId} onSelect={onSelect} />
+                <RailRow key={r.id} row={r} selectedId={selectedId} onSelect={onSelect} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />
               ))}
             </>
           )}
@@ -136,15 +143,24 @@ function RailRow({
   row,
   selectedId,
   onSelect,
+  selectedIds,
+  onToggleSelect,
 }: {
   row: ScheduleRow
   selectedId: string | null
   onSelect: (id: string) => void
+  selectedIds: Set<string>
+  onToggleSelect: (id: string, extendRange: boolean) => void
 }) {
   return (
     <button
-      className={`board-card${row.id === selectedId ? ' selected' : ''}`}
-      onClick={() => onSelect(row.id)}
+      className={`board-card${row.id === selectedId ? ' selected' : ''}${selectedIds.has(row.id) ? ' bulk-selected' : ''}`}
+      onClick={(e) => {
+        // No range meaning across day cells (arrow keys move between days, not rows) — Shift
+        // and Ctrl/Cmd both just toggle here, unlike Tree/Board's Shift-click range.
+        if (e.shiftKey || e.ctrlKey || e.metaKey) return onToggleSelect(row.id, false)
+        onSelect(row.id)
+      }}
       title="Open in the detail panel"
     >
       <span className="board-card-id mono">{row.displayId}</span>

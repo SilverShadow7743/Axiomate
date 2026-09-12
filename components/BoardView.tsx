@@ -25,6 +25,8 @@ export default function BoardView({
   selectedId,
   onSelect,
   onCommitStatus,
+  selectedIds,
+  onToggleSelect,
 }: {
   rows: ScheduleRow[]
   policy: StatusPolicy
@@ -34,6 +36,12 @@ export default function BoardView({
   onSelect: (id: string) => void
   /** commitCell(rowId, 'status', status, reason) — returns false when the funnel refuses. */
   onCommitStatus: (rowId: string, status: IssueStatus, reason: string) => boolean
+  /** Cards checked for a bulk action — separate from `selectedId`, the open detail record. */
+  selectedIds: Set<string>
+  /** Ctrl/Cmd-click toggles one card; Shift-click (`extendRange`) extends from the last click,
+   *  bounded to the third argument — the dragged-from card's own lane, since "the cards
+   *  between these two" has no meaning once two different lanes are involved. */
+  onToggleSelect: (id: string, extendRange: boolean, within: ScheduleRow[]) => void
 }) {
   const lanes = boardLanes(rows)
   const dragId = useRef<string | null>(null)
@@ -118,12 +126,16 @@ export default function BoardView({
               {lane.rows.map((row) => (
                 <div
                   key={row.id}
-                  className={`board-card${row.id === selectedId ? ' selected' : ''}`}
+                  className={`board-card${row.id === selectedId ? ' selected' : ''}${selectedIds.has(row.id) ? ' bulk-selected' : ''}`}
                   draggable
                   onDragStart={() => {
                     dragId.current = row.id
                   }}
-                  onClick={() => onSelect(row.id)}
+                  onClick={(e) => {
+                    if (e.shiftKey) return onToggleSelect(row.id, true, lane.rows)
+                    if (e.ctrlKey || e.metaKey) return onToggleSelect(row.id, false, lane.rows)
+                    onSelect(row.id)
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()

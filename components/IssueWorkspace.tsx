@@ -823,6 +823,7 @@ export default function IssueWorkspace({
         setDirty(false)
       }
       setSelectedId(id)
+      setSelectedIds(new Set())
       return true
     },
     [dirty, selectedId],
@@ -965,6 +966,56 @@ export default function IssueWorkspace({
     () => visibleRows(sortedRows, filters, collapsed, externalPartyKinds(tiersOf(state.model)), scope),
     [sortedRows, filters, collapsed, state.model, scope],
   )
+
+  /**
+   * The bulk-action selection (12 Sep multi-select design/plan) — deliberately separate from
+   * `selectedId`. `selectedId` is "the record whose detail drawer is open"; `selectedIds` is
+   * "the records checked for a bulk action." A plain click (`requestSelect`, below) always
+   * clears this; a modified click never touches `selectedId` or the drawer.
+   */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const lastClickedId = useRef<string | null>(null)
+
+  /**
+   * Toggle one row, or extend/collapse a contiguous range from `lastClickedId` to `id` — bounded
+   * to `within` when given, so Board's Shift-click never spans lanes (there is no single "the
+   * cards between these two" once lanes are involved). Walks `rows`, the same order every view
+   * already renders from, so a collapsed subtree's hidden rows are never silently swept in.
+   *
+   * `lastClickedId` moves only on a plain toggle, never on a range extension — a range call
+   * recomputes the WHOLE span from the fixed anchor to `id` every time, the same way Shift+Click
+   * and Shift+ArrowDown behave in every desktop list. Moving the anchor to the range's far end
+   * after each call would turn repeated Shift+ArrowDown into a sliding one-row window instead of
+   * a selection that keeps growing from where it started.
+   */
+  const toggleSelect = useCallback(
+    (id: string, extendRange = false, within?: ScheduleRow[]) => {
+      setSelectedIds((prev) => {
+        const from = lastClickedId.current
+        if (extendRange && from) {
+          const pool = within ?? rows
+          const fromIdx = pool.findIndex((r) => r.id === from)
+          const toIdx = pool.findIndex((r) => r.id === id)
+          if (fromIdx === -1 || toIdx === -1) return prev
+          const [lo, hi] = fromIdx <= toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx]
+          const next = new Set(prev)
+          for (let i = lo; i <= hi; i++) next.add(pool[i].id)
+          return next
+        }
+        const next = new Set(prev)
+        next.has(id) ? next.delete(id) : next.add(id)
+        return next
+      })
+      // A range call with no prior anchor (the very first Shift-click/arrow of a session)
+      // becomes the anchor itself, exactly as a plain toggle would — otherwise a range call
+      // with nothing to range from silently toggles one row and never establishes an anchor
+      // for the next one to extend from.
+      if (!extendRange || !lastClickedId.current) lastClickedId.current = id
+    },
+    [rows],
+  )
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
   const facets = useMemo(() => facetsOf(state, scope), [state, scope])
@@ -2536,7 +2587,14 @@ export default function IssueWorkspace({
       ) : view === 'people' && isInternal ? (
         <PeopleDirectory state={state} actor={actor} onOpenProfile={setOpenProfileId} onConfig={applyConfigOp} docked />
       ) : view === 'calendar' ? (
-        <CalendarView rows={rows} today={today} selectedId={selectedId} onSelect={requestSelect} />
+        <CalendarView
+          rows={rows}
+          today={today}
+          selectedId={selectedId}
+          onSelect={requestSelect}
+          selectedIds={selectedIds}
+          onToggleSelect={(id, extendRange) => toggleSelect(id, extendRange)}
+        />
       ) : view === 'board' ? (
         <BoardView
           rows={rows}
@@ -2547,6 +2605,8 @@ export default function IssueWorkspace({
           selectedId={selectedId}
           onSelect={requestSelect}
           onCommitStatus={(rowId, status, reason) => commitCell(rowId, 'status', status, reason)}
+          selectedIds={selectedIds}
+          onToggleSelect={(id, extendRange, withinLane) => toggleSelect(id, extendRange, withinLane)}
         />
       ) : view === 'timesheet' ? (
         <TimesheetPanel
@@ -2695,6 +2755,8 @@ export default function IssueWorkspace({
             ownerOptions={ownerOptionsFor}
           statusPolicy={state.model.statusPolicy}
           actions={rowActions}
+          selectedIds={selectedIds}
+          onToggleSelect={(id, extendRange) => toggleSelect(id, extendRange)}
           />
         </div>
 

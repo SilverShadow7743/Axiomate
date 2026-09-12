@@ -62,6 +62,10 @@ interface Props {
    * doing different things under the same word — see `RowActions`.
    */
   actions: RowActions
+  /** Rows checked for a bulk action — separate from `selectedId`, the open detail record. */
+  selectedIds: Set<string>
+  /** Ctrl/Cmd-click toggles one row; Shift-click (`extendRange`) extends from the last click. */
+  onToggleSelect: (id: string, extendRange: boolean) => void
 }
 
 export default function TreeGrid({
@@ -78,6 +82,8 @@ export default function TreeGrid({
   onToggle,
   selectedId,
   onSelect,
+  selectedIds,
+  onToggleSelect,
   sort,
   setSort,
   bodyRef,
@@ -103,6 +109,17 @@ export default function TreeGrid({
     if (selectedId && rows.some((r) => r.id === selectedId)) return selectedId
     return rows[0]?.id ?? null
   }, [selectedId, rows])
+
+  /**
+   * Where a Shift+Arrow range currently reaches — independent of `tabStopId`/`selectedId`,
+   * neither of which moves while extending a bulk selection by keyboard. Reset whenever a
+   * plain click starts a fresh selection, so a later Shift+Arrow session begins at the new
+   * tab stop rather than resuming an old, unrelated range.
+   */
+  const shiftFarId = useRef<string | null>(null)
+  useEffect(() => {
+    shiftFarId.current = null
+  }, [selectedId])
 
   /**
    * Which column carries the `⋮`.
@@ -233,6 +250,27 @@ export default function TreeGrid({
         e.preventDefault()
         onSelect(next.id)
         focusRow(next.id)
+      }
+
+      /**
+       * Shift+Arrow extends the bulk selection from the current tab stop by one row, without
+       * moving `selectedId` or opening a different record — that is what a plain arrow does,
+       * and the two must stay distinguishable the same way a plain click and a modified click
+       * do. The anchor is `toggleSelect`'s own (fixed at the first Shift-action, unmoved by
+       * further range calls), not tracked again here.
+       */
+      if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        const far = shiftFarId.current ?? tabStopId
+        const from = far ? rows.findIndex((r) => r.id === far) : -1
+        if (from < 0) return
+        const nextIdx = Math.max(0, Math.min(rows.length - 1, from + (e.key === 'ArrowDown' ? 1 : -1)))
+        const next = rows[nextIdx]
+        if (!next) return
+        e.preventDefault()
+        onToggleSelect(next.id, true)
+        shiftFarId.current = next.id
+        focusRow(next.id)
+        return
       }
 
       switch (e.key) {
@@ -505,14 +543,18 @@ export default function TreeGrid({
                 data-row-id={r.id}
                 role="row"
                 aria-level={r.depth + 1}
-                aria-selected={selectedId === r.id}
+                aria-selected={selectedId === r.id || selectedIds.has(r.id)}
                 aria-rowindex={rowIdx + 1}
                 aria-expanded={hasChildren.has(r.id) ? !collapsed.has(r.id) : undefined}
                 // Roving tabindex: one stop for the whole grid, not one per row.
                 tabIndex={r.id === tabStopId ? 0 : -1}
-                className={`grid-row kind-${r.kind}${selectedId === r.id ? ' selected' : ''}`}
+                className={`grid-row kind-${r.kind}${selectedId === r.id ? ' selected' : ''}${selectedIds.has(r.id) ? ' bulk-selected' : ''}`}
                 style={{ height: ROW_H }}
-                onClick={() => onSelect(r.id)}
+                onClick={(e) => {
+                  if (e.shiftKey) return onToggleSelect(r.id, true)
+                  if (e.ctrlKey || e.metaKey) return onToggleSelect(r.id, false)
+                  onSelect(r.id)
+                }}
               >
                 {columns.map((c, i) => {
                   const frozen = i < frozenCount
