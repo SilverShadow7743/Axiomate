@@ -130,6 +130,12 @@ jobs:
         # files. Design: docs/plans/2026-09-05-agentic-operating-model-design.md Part 6.
         run: npm run audit:contracts
 
+      - name: Audit — accessibility
+        # The jsx-a11y lint over components/ and app/. It existed since August and ran on
+        # nobody's machine automatically (12 Sep audit, H9); two errors sat in it for weeks.
+        # Static, needs nothing but node_modules.
+        run: npm run audit:a11y
+
       - name: Apply migrations to the CI database
         # The same command the deploy job runs against production, executed here first. If the
         # migration history cannot be applied to an empty database, this is where that is found —
@@ -155,6 +161,19 @@ jobs:
           DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
           NODE_OPTIONS: --conditions=react-server
         run: npm run audit:persistence
+
+      - name: Audit — row-level security
+        # The proof that matters most (scripts/rls-proof.ts): a connection that skips every
+        # wrapped point asks Postgres for another tenant's row and must get nothing. It needs
+        # the same service container and the same migration the step above already applied,
+        # and until 12 Sep (audit H9) it ran nowhere automated — RLS on new tables was asserted
+        # in migrations and never exercised. Same env, same reasons as the persistence gate.
+        # `audit:integrity` is deliberately NOT here: it reads the real tenant's stored state and
+        # an empty CI database has nothing to say about it.
+        env:
+          DATABASE_URL: postgresql://axiomate:axiomate@localhost:5432/axiomate_ci
+          NODE_OPTIONS: --conditions=react-server
+        run: npm run audit:rls
 
       - name: Keep the committed validation baseline
         # `validate:scenarios` overwrites data/validation.json in place, so the committed copy is
