@@ -39,6 +39,7 @@ interface View {
   messages: DiscussionMessage[]
   following: boolean
   followerCount: number
+  followers: { id: string; name: string }[]
 }
 
 export default function DiscussionTab({
@@ -74,6 +75,16 @@ export default function DiscussionTab({
   const [suggestNote, setSuggestNote] = useState<string | null>(null)
   const alive = useRef(true)
 
+  /*
+   * @mention autocomplete for this plain-text composer (12 Sep collaboration design) — Notes
+   * has this already via a real Tiptap node (RichTextExtensions.tsx); this input has no rich
+   * editor to hang a node off, so it's a small, local dropdown instead. `mentionQuery` is the
+   * "@" offset and the text typed since it, or null when the cursor isn't mid-mention.
+   */
+  const [mentionQuery, setMentionQuery] = useState<{ start: number; text: string } | null>(null)
+  const [mentionSel, setMentionSel] = useState(0)
+  const draftRef = useRef<HTMLInputElement>(null)
+
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(
@@ -88,7 +99,13 @@ export default function DiscussionTab({
       }
       setProblem(null)
       setStale(false)
-      setView({ thread: data.thread, messages: data.messages, following: data.following, followerCount: data.followerCount })
+      setView({
+        thread: data.thread,
+        messages: data.messages,
+        following: data.following,
+        followerCount: data.followerCount,
+        followers: data.followers ?? [],
+      })
     } catch {
       if (alive.current) setStale(true)
     }
@@ -206,6 +223,40 @@ export default function DiscussionTab({
   const mine = (m: DiscussionMessage) =>
     m.authorId ? m.authorId === meId : m.author.trim().toLowerCase() === actor.name.trim().toLowerCase()
 
+  /**
+   * The "@" nearest the cursor with no whitespace between it and the cursor — the same shape
+   * `lib/mentions.ts`'s own scan uses (any "@" is a candidate start; what follows decides
+   * whether it resolves), so what triggers this dropdown is what could actually parse as a
+   * mention there, never a second, drifting definition of "mid-mention."
+   */
+  const detectMention = (value: string, cursor: number): { start: number; text: string } | null => {
+    const at = value.lastIndexOf('@', cursor - 1)
+    if (at < 0) return null
+    const between = value.slice(at + 1, cursor)
+    if (/\s/.test(between)) return null
+    return { start: at, text: between }
+  }
+
+  const mentionCandidates = mentionQuery
+    ? people.filter((p) => p.name.toLowerCase().includes(mentionQuery.text.toLowerCase())).slice(0, 8)
+    : []
+
+  /** Splice the picked name in at the query's own offset, replacing the partial text typed
+   *  since the "@", followed by a space — never at the CURRENT cursor, which may have moved
+   *  since the dropdown opened if the field re-rendered. */
+  const pickMention = (name: string) => {
+    if (!mentionQuery) return
+    const before = draft.slice(0, mentionQuery.start)
+    const after = draft.slice(mentionQuery.start + 1 + mentionQuery.text.length)
+    const next = `${before}@${name} ${after}`
+    setDraft(next)
+    setMentionQuery(null)
+    // Cursor after the inserted name + space — the field re-renders controlled, so this must
+    // be applied post-render, not read off the (stale) native input synchronously here.
+    const pos = before.length + 1 + name.length + 1
+    requestAnimationFrame(() => draftRef.current?.setSelectionRange(pos, pos))
+  }
+
   const mail =
     scopeKind === 'issue'
       ? issueMailTimeline(
@@ -225,9 +276,16 @@ export default function DiscussionTab({
     <div className="discussion">
       <div className="ts-week-bar">
         <b>Discussion</b>
-        <span className="prov">
+        <span className="prov" title={view && view.followers.length ? `Following: ${view.followers.map((f) => f.name).join(', ')}` : undefined}>
           internal — clients never see this
-          {view && view.followerCount > 0 && ` · ${view.followerCount} following`}
+          {view && view.followerCount > 0 && (
+            <>
+              {' · '}
+              {view.followers.length <= 3
+                ? `Following: ${view.followers.map((f) => f.name).join(', ')}`
+                : `${view.followerCount} following`}
+            </>
+          )}
         </span>
         <span className="grow" />
         {stale && <span className="prov">refresh failed — showing what was loaded</span>}
@@ -322,13 +380,44 @@ export default function DiscussionTab({
         </ul>
       )}
 
-      <div className="time-row">
+      <div className="time-row" style={{ position: 'relative' }}>
         <input
+          ref={draftRef}
           className="fld-input grow"
           placeholder={`Message this ${scopeKind === 'issue' ? 'record' : 'project'}’s discussion — @name to summon somebody`}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            const q = detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length)
+            setMentionQuery(q)
+            setMentionSel(0)
+          }}
           onKeyDown={(e) => {
+            // The dropdown's own keys take priority over "Enter sends" -- checked FIRST, not
+            // as a fallthrough, so an open dropdown can never let a raw "@partial" reach Send.
+            if (mentionQuery) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setMentionSel((i) => (mentionCandidates.length ? (i + 1) % mentionCandidates.length : 0))
+                return
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setMentionSel((i) => (mentionCandidates.length ? (i - 1 + mentionCandidates.length) % mentionCandidates.length : 0))
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (mentionCandidates[mentionSel]) pickMention(mentionCandidates[mentionSel].name)
+                else setMentionQuery(null)
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setMentionQuery(null)
+                return
+              }
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               void post()
@@ -338,6 +427,31 @@ export default function DiscussionTab({
         <button className="btn primary" disabled={!draft.trim() || sending} onClick={() => void post()}>
           {sending ? 'Sending…' : 'Send'}
         </button>
+        {mentionQuery && (
+          <div className="rte-suggest-popup" style={{ top: '100%', left: 0 }}>
+            {mentionCandidates.length ? (
+              <ul className="rte-suggest-list" role="listbox">
+                {mentionCandidates.map((p, i) => (
+                  <li
+                    key={p.id}
+                    role="option"
+                    aria-selected={i === mentionSel}
+                    className={i === mentionSel ? 'on' : ''}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      pickMention(p.name)
+                    }}
+                    onMouseEnter={() => setMentionSel(i)}
+                  >
+                    <span className="rte-suggest-label">{p.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="rte-suggest-empty">No matches</div>
+            )}
+          </div>
+        )}
       </div>
 
       {scopeKind === 'issue' && mail.length > 0 && (

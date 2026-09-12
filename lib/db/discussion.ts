@@ -42,6 +42,11 @@ export interface ThreadView {
   following: boolean
   /** How many people follow — the tab shows it beside the toggle. */
   followerCount: number
+  /** Who — the same rows `followerCount` already counted, named (12 Sep collaboration
+   *  design). A directory id with nobody behind it (a deleted person) falls back to the
+   *  raw id rather than disappearing, same as every other name-resolution miss in this
+   *  codebase. */
+  followers: { id: string; name: string }[]
 }
 
 const PAGE = 50
@@ -80,7 +85,7 @@ export async function listThread(
     const threadRow = await tx.discussionThread.findUnique({
       where: { tenantId_scopeKind_scopeId: { tenantId, scopeKind, scopeId } },
     })
-    if (!threadRow) return { thread: null, messages: [], following: false, followerCount: 0 }
+    if (!threadRow) return { thread: null, messages: [], following: false, followerCount: 0, followers: [] }
     const rows = await tx.discussionMessage.findMany({
       where: {
         tenantId,
@@ -96,6 +101,7 @@ export async function listThread(
       messages: rows.map(discussionMessageFromRow).reverse(),
       following: Boolean(meId && follows.some((f) => f.personId === meId)),
       followerCount: follows.length,
+      followers: follows.map((f) => ({ id: f.personId, name: gate.model.people[f.personId]?.name ?? f.personId })),
     }
   })
 }
