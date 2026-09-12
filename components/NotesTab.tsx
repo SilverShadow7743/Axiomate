@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { canAddNote, canEditNote } from '@/lib/permissions'
+import { MACHINE_ROLE_ID, rolesFor } from '@/lib/access'
 import { NOTE_TYPES, DEFAULT_NOTE_TYPE, notesFor, wasEdited, type IssueNote, type NoteType } from '@/lib/notes'
 import { emptyRichDoc, isEmptyRichDoc, richDocsEqual, type RichDoc } from '@/lib/richText'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -51,11 +52,24 @@ export default function NotesTab({
     [state.issues],
   )
 
+  /*
+   * Born visible for the actors an issue itself is born visible for (12 Sep review,
+   * client-transparency domain). Without this, a client's note defaulted internal on this
+   * same checkbox and then vanished from the client's own view on the next load — the
+   * "ask a question" affordance hid the client's own question from them. An explicit toggle
+   * still overrides this default either way.
+   */
+  const bornVisible = useMemo(() => {
+    const actorRoles = rolesFor(state.model, actor)
+    const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+    return actorRoles.includes(MACHINE_ROLE_ID) || actorRoles.some((r) => clientRoles.includes(r))
+  }, [state.model, actor])
+
   const [draft, setDraft] = useState<RichDoc>(emptyRichDoc())
   const [draftType, setDraftType] = useState<NoteType>(DEFAULT_NOTE_TYPE)
   const [draftPinned, setDraftPinned] = useState(false)
-  /** Born internal unless the writer says otherwise — the boundary's default, restated here. */
-  const [draftVisible, setDraftVisible] = useState(false)
+  /** Born internal unless the writer says otherwise — except a client's own note, born visible to them. */
+  const [draftVisible, setDraftVisible] = useState(bornVisible)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editBody, setEditBody] = useState<RichDoc>(emptyRichDoc())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -66,7 +80,7 @@ export default function NotesTab({
     setDraft(emptyRichDoc())
     setDraftType(DEFAULT_NOTE_TYPE)
     setDraftPinned(false)
-    setDraftVisible(false)
+    setDraftVisible(bornVisible)
   }
 
   return (
@@ -110,7 +124,11 @@ export default function NotesTab({
             </label>
             <label
               className="note-pin-toggle"
-              title="Client seats see this note. Unticked, it stays internal — the default."
+              title={
+                bornVisible
+                  ? 'Client seats see this note — the default for your own notes. Untick to keep it internal.'
+                  : 'Client seats see this note. Unticked, it stays internal — the default.'
+              }
             >
               <input
                 type="checkbox"

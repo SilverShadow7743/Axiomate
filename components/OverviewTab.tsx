@@ -146,6 +146,16 @@ export default function OverviewTab({
   const labels = useLabels()
   const record = state.issues[issue.id]
   const may = canEditIssue(state.model, actor)
+  /**
+   * Custom-responsibility assignment (12 Sep review, People domain) is free text, not a picker
+   * over the directory the way Owner and Allocate-to-project now are — so it cannot filter a
+   * departed name out of a list that doesn't exist here. Flagged instead, the same way an
+   * already-selected departed manager stays visible and labeled rather than silently hidden.
+   */
+  const departedNames = useMemo(
+    () => new Set(Object.values(state.model.people ?? {}).filter((p) => p.status === 'Departed').map((p) => p.name)),
+    [state.model.people],
+  )
   const workTypes = useMemo(() => liveWorkTypes(state.model).map((t) => t.label), [state.model])
   /** `issue.type` is the stored value — an id on older/discovered records, a label on records
    *  created since (`upsertIssue`'s `type` write already uses the label). Resolving both
@@ -1090,6 +1100,11 @@ export default function OverviewTab({
                         if (next.join(', ') !== t.values.join(', ')) onSetAssignment(t.id, next)
                       }}
                     />
+                    {t.values.some((v) => departedNames.has(v)) && (
+                      <span className="prov" style={{ color: 'var(--h-overdue)', display: 'block' }}>
+                        {t.values.filter((v) => departedNames.has(v)).join(', ')} departed — reassign when convenient.
+                      </span>
+                    )}
                   </dd>
                 </Fragment>
               ))}

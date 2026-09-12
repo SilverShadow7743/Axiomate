@@ -3827,13 +3827,23 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
 
       const seq = state.seq + 1
       const id = `note-${seq}`
+      /*
+       * Born visible for the same actors an issue is (12 Sep review, client-transparency
+       * domain). Without this, a client's own note defaults `clientVisible: false` on the
+       * composer and then `clientView()` filters it out — the client who wrote it can no
+       * longer see it. An explicit choice on the draft still wins either way.
+       */
+      const actorRoles = rolesFor(state.model, actor)
+      const clientRoles = ['ROLE_CLIENT_SPONSOR', 'ROLE_CLIENT_LEAD', 'ROLE_CLIENT_USER']
+      const bornVisible =
+        actorRoles.includes(MACHINE_ROLE_ID) || actorRoles.some((r) => clientRoles.includes(r))
       const note: IssueNote = {
         id,
         issueId: a.issueId,
         body,
         noteType: a.noteType ?? DEFAULT_NOTE_TYPE,
         pinned: a.pinned,
-        clientVisible: a.clientVisible ?? false,
+        clientVisible: a.clientVisible ?? bornVisible,
         createdBy: by,
         createdAt: a.now,
         updatedBy: null,

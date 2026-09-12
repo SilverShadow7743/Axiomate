@@ -349,7 +349,9 @@ export default function CapacityPanel({
 
       {may.allowed ? (
         <AllocateForm
-          people={Object.values(state.model.people).map((p) => p.name)}
+          people={Object.values(state.model.people)
+            .filter((p) => p.status !== 'Departed')
+            .map((p) => p.name)}
           defaultFrom={from}
           defaultTo={to}
           capMode={state.model.allocationPolicy.cap}
