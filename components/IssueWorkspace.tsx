@@ -16,6 +16,7 @@ import FactBoxBlade from './FactBoxBlade'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ResourcingPanel from './ResourcingPanel'
+import CommercialRegister from './CommercialRegister'
 import ApplicationLandscape from './ApplicationLandscape'
 import AnalyticsView from './AnalyticsView'
 import PeopleDirectory from './PeopleDirectory'
@@ -934,6 +935,11 @@ export default function IssueWorkspace({
    *  `CLIENT_GROUPS`, and this stops a stale or forced choice from rendering it anyway. */
   useEffect(() => {
     if (view === 'resourcing' && !can(state.model, actor, 'capacity.allocate').allowed) setView('mywork')
+  }, [view, state.model, actor, setView])
+  /** Same reasoning again, for Commercial: it never reaches `CLIENT_GROUPS`, gated on the same
+   *  `rate.view` grant `CommercialPanel`'s own cost figures already require. */
+  useEffect(() => {
+    if (view === 'commercial' && !can(state.model, actor, 'rate.view').allowed) setView('mywork')
   }, [view, state.model, actor, setView])
   /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
    *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
@@ -2640,6 +2646,8 @@ export default function IssueWorkspace({
         />
       ) : view === 'resourcing' ? (
         <ResourcingPanel state={state} today={today} onOpenProfile={setOpenProfileId} docked />
+      ) : view === 'commercial' ? (
+        <CommercialRegister state={state} today={today} docked />
       ) : view === 'applications' ? (
         <ApplicationLandscape
           state={state}
