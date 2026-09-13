@@ -233,7 +233,7 @@ import {
   type ChangeStatus,
 } from '../lib/changeRequest'
 import { applicableApprovalRules, issueApprovalGate } from '../lib/approval'
-import { profileAt, profilesAt, describeCapacity } from '../lib/capacity'
+import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity'
 import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
   issueWeekCells, daysOfWeek,
@@ -6738,6 +6738,67 @@ scenario(
           stops: 'bulkDropOutcome disagrees with dropOutcome on evidence or the no-op case',
           severity: 'P1',
           impact: 'a bulk closure could refuse a row that should succeed, or silently succeed on one missing required evidence',
+        } as const
+  },
+)
+
+scenario(
+  'RSC1',
+  'actualHoursByPerson counts what is logged in-window, and capacityFor sums allocations across projects',
+  'an entry inside [from, to] counts, one before or after does not, one deleted does not; a person allocated to two different projects has capacityFor sum both, not just one -- the firm-wide claim this design rests on',
+  () => {
+    const entry = (over: Partial<import('../lib/time').TimeEntry>): [string, import('../lib/time').TimeEntry] => {
+      const e = {
+        id: `rsc-${Math.random()}`, issueId: 'OAPIL-1', person: 'Priya', personId: 'PERSON_PRIYA',
+        date: '2026-09-10', hours: 4, activity: 'Resolution' as const, billable: true, note: '',
+        justification: null, createdBy: 'Priya', createdAt: NOW, updatedBy: null, updatedAt: null,
+        deletedAt: null, ...over,
+      }
+      return [e.id, e]
+    }
+    const entries = Object.fromEntries([
+      entry({ id: 'rsc-in', date: '2026-09-10', hours: 4 }),
+      entry({ id: 'rsc-before', date: '2026-09-01', hours: 5 }),
+      entry({ id: 'rsc-after', date: '2026-09-20', hours: 6 }),
+      entry({ id: 'rsc-deleted', date: '2026-09-10', hours: 7, deletedAt: '2026-09-11T00:00:00.000Z' }),
+    ])
+    const hours = actualHoursByPerson(entries, '2026-09-08', '2026-09-14')
+    const onlyInWindowCounts = hours['PERSON_PRIYA'] === 4
+
+    const base = rowsOf(BASE).find((r) => r.kind === 'issue')!
+    const commitments: import('../lib/capacity').Commitment[] = []
+    const allocations: import('../lib/capacity').Allocation[] = [
+      {
+        id: 'rsc-alloc-1', person: 'Priya', personId: 'PERSON_PRIYA', projectId: base.parentId ?? base.id,
+        startDate: '2026-09-01', endDate: '2026-09-30', percentage: 50, note: '',
+        createdBy: 'Priya', createdAt: NOW, deletedAt: null,
+      },
+      {
+        id: 'rsc-alloc-2', person: 'Priya', personId: 'PERSON_PRIYA', projectId: base.id,
+        startDate: '2026-09-01', endDate: '2026-09-30', percentage: 50, note: '',
+        createdBy: 'Priya', createdAt: NOW, deletedAt: null,
+      },
+    ]
+    const position = capacityFor('Priya', undefined, commitments, allocations, '2026-09-01', '2026-09-30', 'PERSON_PRIYA')
+    // Two allocations at 50% each, same person, different projectId -- if capacityFor only
+    // saw one of them this would read ~50% utilisation instead of ~100%.
+    const summedAcrossProjects = position.utilisationPct !== null && position.utilisationPct >= 90
+
+    const okAll = onlyInWindowCounts && summedAcrossProjects
+    return okAll
+      ? {
+          verdict: 'PASS',
+          actual: `actualHoursByPerson: only the in-window, non-deleted entry counts (4h, window 08-14 Sep)=${onlyInWindowCounts}; capacityFor sums two different-project allocations for one person into one utilisation figure (${position.utilisationPct}%)=${summedAcrossProjects}`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `hours[PERSON_PRIYA]=${hours['PERSON_PRIYA']} utilisationPct=${position.utilisationPct}`,
+          stops: 'actualHoursByPerson\'s date/deleted filter, or capacityFor being fed project-scoped rather than firm-wide allocations',
+          severity: 'P1',
+          impact: 'Resourcing would either miscount actual hours or understate a person\'s true cross-project allocation -- the exact number the whole page exists to fix',
         } as const
   },
 )

@@ -1064,6 +1064,16 @@
       "impact": "none"
     },
     {
+      "id": "RSC1",
+      "title": "actualHoursByPerson counts what is logged in-window, and capacityFor sums allocations across projects",
+      "expected": "an entry inside [from, to] counts, one before or after does not, one deleted does not; a person allocated to two different projects has capacityFor sum both, not just one -- the firm-wide claim this design rests on",
+      "verdict": "PASS",
+      "actual": "actualHoursByPerson: only the in-window, non-deleted entry counts (4h, window 08-14 Sep)=true; capacityFor sums two different-project allocations for one person into one utilisation figure (100%)=true",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "RW1",
       "title": "The cadence arithmetic: clamping, catch-up, and the strictly-after guard",
       "expected": "Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing",

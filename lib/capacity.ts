@@ -2,6 +2,7 @@ import { workingDaysBetween } from './dates'
 import { availabilityFor, overlapWorkingDays } from './availability'
 import type { Meeting } from './meetings'
 import { valueAt, type Version } from './versioning'
+import type { TimeEntry } from './time'
 
 /**
  * How much time a person actually has, and what is already committed against it.
@@ -327,6 +328,31 @@ export function capacityFor(
     utilisationPct: p.utilisationPct,
     basis: p.basis,
   }
+}
+
+/**
+ * Hours actually logged per person, in [from, to] — every entry, not only approved ones. The
+ * point is a live check-in ("allocated but not billing" — 12 Sep review), a different question
+ * from buildFinanceReport's (approved hours ready to bill), so this counts everything logged
+ * rather than reusing that report's approval-gated total.
+ *
+ * Keyed id-first with a name fallback, the same join `lib/reports/finance.ts`'s own person-week
+ * grouping already uses — a caller resolving a person's actual hours by this same shape never
+ * has a second, drifting definition of "the same person."
+ */
+export function actualHoursByPerson(
+  entries: Record<string, TimeEntry>,
+  from: string,
+  to: string,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const e of Object.values(entries)) {
+    if (e.deletedAt) continue
+    if (e.date < from || e.date > to) continue
+    const key = e.personId ?? e.person.trim().toLowerCase()
+    out[key] = (out[key] ?? 0) + e.hours
+  }
+  return out
 }
 
 /**
