@@ -375,10 +375,12 @@ export default function DetailPanel({
    */
   /*
    * Order is priority order (I25 Tier 2, item 8) — `FastTabs` below stacks these sections in
-   * this order, as the available width holds, and collapses the rest into a trailing `⋯ More`.
-   * Overview, Checklist, Discussion and Time lead as the proposed most-touched four; nothing in
-   * this codebase tracks per-tab usage to check that against, so it is a stated assumption, not
-   * a measured one — reorder here if that assumption turns out wrong.
+   * this order, one collapsed header per section, all of them rendered (there is no width-based
+   * truncation or trailing "More" — a vertical stack has nothing to overflow off-screen the way
+   * the old horizontal tab strip did). Overview, Checklist, Discussion and Time lead as the
+   * proposed most-touched four; nothing in this codebase tracks per-tab usage to check that
+   * against, so it is a stated assumption, not a measured one — reorder here if that assumption
+   * turns out wrong.
    */
   const TABS: Tab[] = issue
     ? ['Overview', 'Checklist', 'Discussion', 'Time', 'Skills', 'Fields', 'Notes', 'Estimation', 'Schedule', 'Links', 'History']
