@@ -203,6 +203,7 @@ export function underScopeOf(
 function milestonesOf(state: WorkspaceState, clientScopeId: string): MilestonePackLine[] {
   return Object.values(state.milestones)
     .filter((m) => {
+      if (m.deletedAt) return false
       const sow = state.sows[m.sowId]
       return sow && underScopeOf(state, sow.engagementId, clientScopeId)
     })
