@@ -49,6 +49,7 @@ import {
   initModel, mergeModel, customFieldsFor, DEFAULT_HEALTH_SCORE,
 } from '../lib/config'
 import { describePosition, sowPosition } from '../lib/sow'
+import { issuesUnder } from '../lib/engagement'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
@@ -6799,6 +6800,68 @@ scenario(
           stops: 'actualHoursByPerson\'s date/deleted filter, or capacityFor being fed project-scoped rather than firm-wide allocations',
           severity: 'P1',
           impact: 'Resourcing would either miscount actual hours or understate a person\'s true cross-project allocation -- the exact number the whole page exists to fix',
+        } as const
+  },
+)
+
+scenario(
+  'COM1',
+  'A SOW\'s issue set unions every project attributed to it, not just the first one found',
+  'Commercial does per-engagement the same join CommercialPanel already does, at portfolio scope: find every project naming a SOW, union issuesUnder across all of them. Two sibling projects under one engagement, each with its own module and issue, both attributed to one SOW -- if the register only walked the first matching project it would silently under-report the SOW\'s true consumption.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const mk = (s: WorkspaceState, parentId: string, kind: string, name: string) =>
+      ok(s, { t: 'create', parentId, kind, draft: { name }, now: NOW } as Action)
+
+    const withProjectA = mk(BASE, engagementId, 'project', 'COM Project A')
+    const projectAId = Object.values(withProjectA.nodes).find((n) => n.kind === 'project' && n.name === 'COM Project A')!.id
+    const withProjectB = mk(withProjectA, engagementId, 'project', 'COM Project B')
+    const projectBId = Object.values(withProjectB.nodes).find((n) => n.kind === 'project' && n.name === 'COM Project B')!.id
+    const withModA = mk(withProjectB, projectAId, 'module', 'COM Mod A')
+    const modAId = Object.values(withModA.nodes).find((n) => n.kind === 'module' && n.name === 'COM Mod A')!.id
+    const withModB = mk(withModA, projectBId, 'module', 'COM Mod B')
+    const modBId = Object.values(withModB.nodes).find((n) => n.kind === 'module' && n.name === 'COM Mod B')!.id
+    const withIssueA = mk(withModB, modAId, 'issue', 'COM Issue A')
+    const issueAId = Object.values(withIssueA.issues).find((i) => i.subject === 'COM Issue A')!.id
+    const withIssueB = mk(withIssueA, modBId, 'issue', 'COM Issue B')
+    const issueBId = Object.values(withIssueB.issues).find((i) => i.subject === 'COM Issue B')!.id
+
+    const withSow = ok(withIssueB, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-COM1', title: 'Commercial register proof', effortHours: 100, value: 50000, currency: 'GBP', status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(withSow.sows).find((s) => s.reference === 'SOW-COM1')!.id
+
+    const withAttrA = ok(withSow, { t: 'attributeToSow', nodeId: projectAId, sowId, now: NOW } as Action)
+    const withAttrB = ok(withAttrA, { t: 'attributeToSow', nodeId: projectBId, sowId, now: NOW } as Action)
+
+    /* The register's own join: find every project naming this SOW, union issuesUnder across them. */
+    const sowProjects = Object.values(withAttrB.nodes).filter((n) => n.kind === 'project' && !n.deletedAt && n.sowId === sowId)
+    const bothProjectsFound = sowProjects.length === 2 &&
+      sowProjects.some((p) => p.id === projectAId) && sowProjects.some((p) => p.id === projectBId)
+    const issueIds = new Set(sowProjects.flatMap((p) => issuesUnder(withAttrB, p.id).map((i) => i.id)))
+    const hasBoth = issueIds.has(issueAId) && issueIds.has(issueBId)
+
+    /* Reading only the first project (the bug this scenario exists to catch) would miss Issue B. */
+    const firstProjectOnly = new Set(issuesUnder(withAttrB, projectAId).map((i) => i.id))
+    const firstProjectAloneWouldMiss = !firstProjectOnly.has(issueBId)
+
+    const good = bothProjectsFound && hasBoth && firstProjectAloneWouldMiss
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `Both sibling projects are found under one SOW (${bothProjectsFound}); the union of issuesUnder across them contains both Issue A and Issue B (${hasBoth}); reading only the first project alone would have missed Issue B (${firstProjectAloneWouldMiss}) -- proving the join must go firm-wide across every attributed project, not stop at the first.`,
+          stops: '',
+          severity: 'P2',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `bothProjectsFound=${bothProjectsFound} hasBoth=${hasBoth} firstProjectAloneWouldMiss=${firstProjectAloneWouldMiss}`,
+          stops: 'attributeToSow\'s node write, or the register\'s project-filter/issuesUnder union',
+          severity: 'P1',
+          impact: 'The Commercial register would under-report a SOW\'s true consumption whenever its work spans more than one project -- exactly the multi-project engagements this page exists to surface',
         } as const
   },
 )

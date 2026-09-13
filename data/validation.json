@@ -1074,6 +1074,16 @@
       "impact": "none"
     },
     {
+      "id": "COM1",
+      "title": "A SOW's issue set unions every project attributed to it, not just the first one found",
+      "expected": "Commercial does per-engagement the same join CommercialPanel already does, at portfolio scope: find every project naming a SOW, union issuesUnder across all of them. Two sibling projects under one engagement, each with its own module and issue, both attributed to one SOW -- if the register only walked the first matching project it would silently under-report the SOW's true consumption.",
+      "verdict": "PASS",
+      "actual": "Both sibling projects are found under one SOW (true); the union of issuesUnder across them contains both Issue A and Issue B (true); reading only the first project alone would have missed Issue B (true) -- proving the join must go firm-wide across every attributed project, not stop at the first.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "none"
+    },
+    {
       "id": "RW1",
       "title": "The cadence arithmetic: clamping, catch-up, and the strictly-after guard",
       "expected": "Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing",
