@@ -126,8 +126,14 @@ records survive and WHAT fields they carry; the component decides how to word th
 | Planned      | (n/a)                | ○    | Planned · due `<date>`    |
 | InProgress   | (n/a)                | ●    | In progress · due `<date>`|
 | Delivered    | Pending              | ●    | Delivered · awaiting review |
-| Delivered    | Accepted             | ✓    | Delivered `<acceptedAt>`  |
+| (any)        | Accepted             | ✓    | Delivered `<deliveredAt>` · Accepted `<acceptedAt>` |
 | (any)        | Rejected             | ✗    | Returned · `<rejectionNote>` withheld — see label below |
+
+The Accepted row is deliberately not keyed to `delivery === 'Delivered'`: a signature-billed
+milestone (`billOn: 'signature'`, owed on signing) can be accepted before delivery even
+starts — `acceptProblem` in `lib/milestone.ts` only requires `delivery === 'Delivered'` when
+`billOn !== 'signature'` — so `deliveredAt` is not guaranteed to exist on an accepted row and
+the label omits the "Delivered" clause when it does not.
 
 Rejected carries no `rejectionNote` in the projection (it is process detail, not a date or a
 name) — the label reads "Returned for rework" with no reason text, matching the same

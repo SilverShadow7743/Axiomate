@@ -20,7 +20,10 @@ import type { WorkspaceState } from '@/lib/workspace'
 function statusOf(m: ClientMilestoneLine): { icon: string; label: string } {
   if (m.acceptance === 'Rejected') return { icon: '✗', label: 'Returned for rework' }
   if (m.acceptance === 'Accepted') {
-    return { icon: '✓', label: `Delivered${m.acceptedAt ? ` ${formatIso(m.acceptedAt)}` : ''}` }
+    // A signature-billed milestone (owed on signing) can be accepted before delivery even
+    // starts — see acceptProblem in lib/milestone.ts — so `deliveredAt` is not guaranteed here.
+    const delivered = m.deliveredAt ? `Delivered ${formatIso(m.deliveredAt)} · ` : ''
+    return { icon: '✓', label: `${delivered}Accepted${m.acceptedAt ? ` ${formatIso(m.acceptedAt)}` : ''}` }
   }
   if (m.delivery === 'Delivered') return { icon: '●', label: 'Delivered · awaiting review' }
   const due = m.plannedDate ? ` · due ${formatIso(m.plannedDate)}` : ''
