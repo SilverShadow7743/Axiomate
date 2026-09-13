@@ -15,6 +15,7 @@ import MyTodosPanel from './MyTodosPanel'
 import FactBoxBlade from './FactBoxBlade'
 import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
+import ResourcingPanel from './ResourcingPanel'
 import ApplicationLandscape from './ApplicationLandscape'
 import AnalyticsView from './AnalyticsView'
 import PeopleDirectory from './PeopleDirectory'
@@ -929,6 +930,11 @@ export default function IssueWorkspace({
   useEffect(() => {
     if (view === 'people' && !isInternal) setView('mywork')
   }, [view, isInternal, setView])
+  /** Same reasoning as the guard above, for the same reason: Resourcing never reaches
+   *  `CLIENT_GROUPS`, and this stops a stale or forced choice from rendering it anyway. */
+  useEffect(() => {
+    if (view === 'resourcing' && !can(state.model, actor, 'capacity.allocate').allowed) setView('mywork')
+  }, [view, state.model, actor, setView])
   /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
    *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
    *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
@@ -2632,6 +2638,8 @@ export default function IssueWorkspace({
           onReleaseAllocation={(id) => dispatch({ t: 'removeAllocation', id, now: new Date().toISOString() })}
           docked
         />
+      ) : view === 'resourcing' ? (
+        <ResourcingPanel state={state} today={today} onOpenProfile={setOpenProfileId} docked />
       ) : view === 'applications' ? (
         <ApplicationLandscape
           state={state}
