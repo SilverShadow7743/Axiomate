@@ -6866,6 +6866,106 @@ scenario(
   },
 )
 
+scenario(
+  'CMS1',
+  'clientMilestones carries only the reader\'s own, non-deleted milestones, with no commercial field aboard',
+  'A disclosure proof, not a join proof (docs/plans/2026-09-13-client-milestones-design.md). Two clients, each with a milestone naming a cost sentinel; one client\'s own milestone soft-deleted. The surviving row must belong to the right client only, carry none of the money fields, and match the source record field-for-field on everything it does carry.',
+  () => {
+    const companyId = Object.values(BASE.nodes).find((n) => n.kind === 'company')!.id
+    const oapilId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const oapilEngagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement' && n.parentId === oapilId)!.id
+
+    /* A second client with its own engagement, mirroring the existing Rival Ltd precedent. */
+    let st = ok(BASE, { t: 'create', parentId: companyId, kind: 'client', draft: { name: 'Rival Ltd' }, now: NOW } as Action)
+    const rivalId = Object.values(st.nodes).find((n) => n.kind === 'client' && n.name === 'Rival Ltd')!.id
+    st = ok(st, { t: 'create', parentId: rivalId, kind: 'engagement', draft: { name: 'Rival Engagement' }, now: NOW } as Action)
+    const rivalEngId = Object.values(st.nodes).find((n) => n.kind === 'engagement' && n.name === 'Rival Engagement')!.id
+
+    const COST_SENTINEL = 999999.99
+    const RIVAL_SENTINEL = 'SENTINEL-RIVAL-MILESTONE'
+    const DELETED_SENTINEL = 'SENTINEL-DELETED-MILESTONE'
+
+    st = ok(st, {
+      t: 'upsertSow', id: null, engagementId: oapilEngagementId,
+      patch: { reference: 'SOW-CLM1', title: 'Client milestones proof', effortHours: 10, value: 1000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const oapilSowId = Object.values(st.sows).find((s) => s.reference === 'SOW-CLM1')!.id
+
+    st = ok(st, {
+      t: 'upsertSow', id: null, engagementId: rivalEngId,
+      patch: { reference: 'SOW-RIVAL', title: 'Rival work', effortHours: 10, value: 1000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const rivalSowId = Object.values(st.sows).find((s) => s.reference === 'SOW-RIVAL')!.id
+
+    /* The client's own, live milestone -- what should survive, exactly as recorded. */
+    st = ok(st, {
+      t: 'upsertMilestone', id: null, sowId: oapilSowId,
+      patch: { name: 'UAT sign-off', sequence: 1, basis: 'amount', amount: COST_SENTINEL, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-15', delivery: 'InProgress' },
+      now: NOW,
+    } as Action)
+    const liveMilestone = Object.values(st.milestones).find((m) => m.sowId === oapilSowId)!
+
+    /* The client's own milestone, but removed from the schedule -- must not survive either. */
+    st = ok(st, {
+      t: 'upsertMilestone', id: null, sowId: oapilSowId,
+      patch: { name: DELETED_SENTINEL, sequence: 2, basis: 'amount', amount: COST_SENTINEL, currency: 'USD', billOn: 'delivery', plannedDate: '2026-11-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+    const deletedMilestone = Object.values(st.milestones).find((m) => m.name === DELETED_SENTINEL)!
+    st = ok(st, { t: 'removeMilestone', id: deletedMilestone.id, now: NOW } as Action)
+
+    /* Rival's own milestone -- must never reach OAPIL's view. */
+    st = ok(st, {
+      t: 'upsertMilestone', id: null, sowId: rivalSowId,
+      patch: { name: RIVAL_SENTINEL, sequence: 1, basis: 'amount', amount: COST_SENTINEL, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+
+    const view = clientView(st, oapilId)
+    const rows = Object.values(view.clientMilestones)
+    const onlyLive = rows.length === 1 && rows[0]?.id === liveMilestone.id
+    const row = rows[0]
+    const fieldsMatch = Boolean(
+      row &&
+        row.sowReference === 'SOW-CLM1' &&
+        row.name === liveMilestone.name &&
+        row.sequence === liveMilestone.sequence &&
+        row.plannedDate === liveMilestone.plannedDate &&
+        row.delivery === liveMilestone.delivery &&
+        row.deliveredAt === liveMilestone.deliveredAt &&
+        row.acceptance === liveMilestone.acceptance &&
+        row.acceptedAt === liveMilestone.acceptedAt,
+    )
+
+    const payload = JSON.stringify(view.clientMilestones)
+    const noLeak =
+      !payload.includes(RIVAL_SENTINEL) &&
+      !payload.includes(DELETED_SENTINEL) &&
+      !payload.includes(String(COST_SENTINEL))
+
+    const nullScopeEmpty = Object.keys(clientView(st, null).clientMilestones).length === 0
+
+    const good = onlyLive && fieldsMatch && noLeak && nullScopeEmpty
+    return good
+      ? {
+          verdict: 'PASS',
+          actual: `Exactly one milestone survives for OAPIL, the client's own live one (${onlyLive}), its fields match the source record exactly (${fieldsMatch}); Rival's milestone, the soft-deleted one, and every cost/percentage/currency sentinel are absent from the payload string (${noLeak}); an unscoped reader gets nothing (${nullScopeEmpty}).`,
+          stops: '',
+          severity: 'P1',
+          impact: 'none',
+        }
+      : {
+          verdict: 'FAIL',
+          actual: `onlyLive=${onlyLive} fieldsMatch=${fieldsMatch} noLeak=${noLeak} nullScopeEmpty=${nullScopeEmpty} rows=${JSON.stringify(rows)}`,
+          stops: 'clientView()\'s clientMilestones projection -- its underScope call, its deletedAt checks, or its hand-written field list',
+          severity: 'P0',
+          impact: 'A client seat could see another client\'s contracted milestone, a milestone withdrawn from their own schedule, or the firm\'s own price/margin against one -- the exact disclosure this page exists to avoid, not merely a wrong number on screen',
+        } as const
+  },
+)
+
 /* ================================================================== *
  * Recurring work (design 2026-08-19)
  * ================================================================== */

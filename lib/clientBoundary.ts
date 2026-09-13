@@ -1,4 +1,24 @@
 import type { WorkspaceState } from './workspace'
+import type { AcceptanceState, DeliveryState } from './milestone'
+
+/**
+ * A statement of work's payment-schedule line, stripped to what a client may see of their own
+ * contracted milestones — never `amount`/`percentage`/`currency`/`basis`/`billOn`/
+ * `acceptedValue`/`rejectionNote`. Hand-written rather than `Omit<Milestone, ...>` so a new
+ * field added to `Milestone` later does not silently become client-visible by inheritance —
+ * see docs/plans/2026-09-13-client-milestones-design.md's own named standing risk.
+ */
+export interface ClientMilestoneLine {
+  id: string
+  sowReference: string
+  name: string
+  sequence: number
+  plannedDate: string | null
+  delivery: DeliveryState
+  deliveredAt: string | null
+  acceptance: AcceptanceState
+  acceptedAt: string | null
+}
 
 /**
  * The client boundary's withholding, as a pure function — what a reader WITHOUT
@@ -39,6 +59,41 @@ export function clientView(
         ),
       )
     : {}
+  /**
+   * The one deliberate, narrow carve-out from `milestones: {}` below — see
+   * docs/plans/2026-09-13-client-milestones-design.md. Read straight off the FULL `state`
+   * this function receives, before the wholesale zeroing further down, and projected onto a
+   * genuinely narrower type rather than a field-stripped `Milestone` — the invariant below
+   * ("never redacting a field inside one" record) stays true because this was never that
+   * record to begin with. No `clientVisible` flag: every milestone under a SOW whose
+   * engagement is under this reader's own scope, or none — the ask is contracted
+   * transparency, not curation.
+   */
+  const clientMilestones: Record<string, ClientMilestoneLine> = clientScopeId
+    ? Object.fromEntries(
+        Object.values(state.milestones)
+          .filter((m) => {
+            if (m.deletedAt) return false
+            const sow = state.sows[m.sowId]
+            return Boolean(sow) && !sow!.deletedAt && underScope(sow!.engagementId)
+          })
+          .map((m) => {
+            const sow = state.sows[m.sowId]!
+            const line: ClientMilestoneLine = {
+              id: m.id,
+              sowReference: sow.reference,
+              name: m.name,
+              sequence: m.sequence,
+              plannedDate: m.plannedDate,
+              delivery: m.delivery,
+              deliveredAt: m.deliveredAt,
+              acceptance: m.acceptance,
+              acceptedAt: m.acceptedAt,
+            }
+            return [m.id, line] as const
+          }),
+      )
+    : {}
   const keepNodes = new Set<string>()
   for (const i of Object.values(issues)) {
     let cur: string | null | undefined = i.parentId
@@ -64,6 +119,7 @@ export function clientView(
   return {
     ...state,
     issues,
+    clientMilestones,
     nodes: Object.fromEntries(Object.entries(state.nodes).filter(([id]) => keepNodes.has(id))),
     activities: Object.fromEntries(
       Object.entries(state.activities).filter(([, a]) => issues[a.issueId]),
@@ -107,8 +163,9 @@ export function clientView(
     changes: {},
     personSkills: {},
     documentReviews: {},
-    milestones: {},
     // Same sensitivity class as rates/sows above — a frozen cost figure is still a cost figure.
+    // `clientMilestones` above is the one deliberate, narrow carve-out; this stays zeroed whole.
+    milestones: {},
     snapshots: {},
     scopeItems: {},
     approvals: {},

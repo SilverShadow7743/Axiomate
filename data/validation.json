@@ -1084,6 +1084,16 @@
       "impact": "none"
     },
     {
+      "id": "CMS1",
+      "title": "clientMilestones carries only the reader's own, non-deleted milestones, with no commercial field aboard",
+      "expected": "A disclosure proof, not a join proof (docs/plans/2026-09-13-client-milestones-design.md). Two clients, each with a milestone naming a cost sentinel; one client's own milestone soft-deleted. The surviving row must belong to the right client only, carry none of the money fields, and match the source record field-for-field on everything it does carry.",
+      "verdict": "PASS",
+      "actual": "Exactly one milestone survives for OAPIL, the client's own live one (true), its fields match the source record exactly (true); Rival's milestone, the soft-deleted one, and every cost/percentage/currency sentinel are absent from the payload string (true); an unscoped reader gets nothing (true).",
+      "stops": "",
+      "severity": "P1",
+      "impact": "none"
+    },
+    {
       "id": "RW1",
       "title": "The cadence arithmetic: clamping, catch-up, and the strictly-after guard",
       "expected": "Day 31 means last-of-month everywhere; a stale rule owes exactly one occurrence; a same-day re-run owes nothing; a disabled rule owes nothing",

@@ -153,6 +153,7 @@ import {
   refusesAssignment,
 } from './assignment'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
+import type { ClientMilestoneLine } from './clientBoundary'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
 import type { ReportDeliveryConfig } from './reports/delivery'
@@ -441,6 +442,13 @@ export interface WorkspaceState {
    * `milestonePosition` reports that as a different thing from having made no progress.
    */
   milestones: Record<string, Milestone>
+  /**
+   * The client-safe projection of `milestones` — never populated by the reducer, never
+   * persisted, always `{}` here. Computed fresh inside `clientView()` (`./clientBoundary`)
+   * from this same state, for that one caller alone. See
+   * docs/plans/2026-09-13-client-milestones-design.md.
+   */
+  clientMilestones: Record<string, ClientMilestoneLine>
   /**
    * A client's own technology landscape — what they run, and how it connects. See
    * `./application` and `docs/plans/2026-09-07-application-suite-design.md`.
@@ -776,6 +784,7 @@ export function initWorkspace(
     documents: {},
     documentReviews: {},
     milestones: {},
+    clientMilestones: {},
     applications: {},
     integrationLinks: {},
     invoices: {},

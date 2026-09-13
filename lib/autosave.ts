@@ -237,6 +237,9 @@ export function loadWorkspaceLocally(tenantId: string, seed: WorkspaceState): Wo
       documents: parsed.documents ?? {},
       // `?? {}` because a mirror written before milestones existed has no such key.
       milestones: parsed.milestones ?? {},
+      // Always empty here, like every collection `clientView()` computes — this mode never
+      // redacts (see the invariant note above), so `clientView()` is never called to populate it.
+      clientMilestones: parsed.clientMilestones ?? {},
       // `?? {}` because a mirror written before applications existed has no such key.
       applications: parsed.applications ?? {},
       integrationLinks: parsed.integrationLinks ?? {},

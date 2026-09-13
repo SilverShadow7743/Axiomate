@@ -20,7 +20,7 @@ re-run, unchanged, after every later step touches anything nearby.
   the one seed constructor (~line 778, beside `milestones: {}`). Nowhere else constructs a
   full `WorkspaceState` literal — confirmed by grep for `milestones:\s*\{\}` before writing
   this plan, one interface site and one seed site.
-- `scripts/scenario-validation.ts`: new scenario (`CLM1`), built on the sentinel-payload
+- `scripts/scenario-validation.ts`: new scenario (`CMS1`), built on the sentinel-payload
   pattern already at ~2195 (proving the same class of claim for `milestonesOf()`). Two SOWs
   under two different clients' engagements, a milestone on each — the test client's own
   milestone carrying real dates, the other client's carrying a name sentinel; a third
@@ -36,13 +36,13 @@ re-run, unchanged, after every later step touches anything nearby.
     `COST_SENTINEL` already uses at ~2195, not just "the field isn't in the type");
   - `clientView(st, null).clientMilestones` is `{}`.
 
-**Verified by:** `npx tsc --noEmit`; `npm run validate:scenarios` showing `CLM1` `PASS`;
+**Verified by:** `npx tsc --noEmit`; `npm run validate:scenarios` showing `CMS1` `PASS`;
 `git diff data/validation.json` additive-only (one new row).
 
 **This is the step most likely to be got wrong, and how:** reusing `underScope` correctly
 means calling it with `sow.engagementId`, not `m.sowId` or the milestone's own (nonexistent)
 parent — the same mistake would compile, since both are strings, and would only be caught by
-`CLM1` actually asserting scope (a milestone under the WRONG client's engagement must be
+`CMS1` actually asserting scope (a milestone under the WRONG client's engagement must be
 absent, not just present-with-wrong-data). The second likely mistake: filtering `deletedAt`
 on the wrong record (checking `sow.deletedAt` instead of `m.deletedAt`, or neither) —
 `milestonesOf()`'s own history (fixed this session, commit `7fe7305`) is the concrete
@@ -101,13 +101,13 @@ clean; `npm run validate:scenarios` re-run, byte-identical (no new pure logic be
 Step 1, and only step 1 — named explicitly per the design's own "Risk" section. Every other
 step in this plan is ordinary read-only rendering once `clientMilestones` is correct. A wrong
 `underScope` call, or a `!m.deletedAt` check on the wrong record, both compile and both pass
-`npx tsc --noEmit` and `npx eslint` clean — only `CLM1`'s scope-leak and sentinel assertions
+`npx tsc --noEmit` and `npx eslint` clean — only `CMS1`'s scope-leak and sentinel assertions
 catch either, which is why step 1 is not allowed to proceed on typecheck alone the way the
 later steps are.
 
 ## What would send the design back
 
-- If `CLM1` cannot construct two distinct clients each resolving their own `clientScopeId`
+- If `CMS1` cannot construct two distinct clients each resolving their own `clientScopeId`
   from `BASE` (the existing fixture seeds exactly one client, per `scripts/scenario-
   validation.ts`'s own "one client, one engagement" comment near the PK sentinel scenario) —
   would mean fabricating a second client node the same way that scenario fabricates a second

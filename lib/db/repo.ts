@@ -302,6 +302,9 @@ async function loadWorkspaceInner(tenantId: TenantId, db: Reader): Promise<Loade
     // endpoint needs them to fetch. `boot()` is the one place they are stripped.
     documents: Object.fromEntries(documents.map((d) => [d.id, documentFromRow(d)])),
     milestones: Object.fromEntries(milestones.map((m) => [m.id, milestoneFromRow(m)])),
+    // Never persisted — computed fresh inside clientView() (lib/clientBoundary.ts) from
+    // `milestones` above, at the `boot()` boundary, for a client reader alone.
+    clientMilestones: {},
     applications: Object.fromEntries(applications.map((a) => [a.id, applicationFromRow(a)])),
     integrationLinks: Object.fromEntries(integrationLinks.map((l) => [l.id, integrationLinkFromRow(l)])),
     invoices: Object.fromEntries(invoices.map((i) => [i.id, invoiceFromRow(i)])),
