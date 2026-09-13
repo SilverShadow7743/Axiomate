@@ -17,6 +17,7 @@ import MailLog from './MailLog'
 import PortfolioPanel from './PortfolioPanel'
 import ResourcingPanel from './ResourcingPanel'
 import CommercialRegister from './CommercialRegister'
+import ClientMilestonesPanel from './ClientMilestonesPanel'
 import ApplicationLandscape from './ApplicationLandscape'
 import AnalyticsView from './AnalyticsView'
 import PeopleDirectory from './PeopleDirectory'
@@ -941,6 +942,13 @@ export default function IssueWorkspace({
   useEffect(() => {
     if (view === 'commercial' && !can(state.model, actor, 'rate.view').allowed) setView('mywork')
   }, [view, state.model, actor, setView])
+  /** The one guard in this family that runs the other direction: Milestones is
+   *  `CLIENT_GROUPS`-only, with no internal equivalent (an internal reader already has
+   *  `CommercialPanel`'s full milestone view), so a stale or forced choice here is guarded
+   *  against HAVING `internal.view`, not lacking it. */
+  useEffect(() => {
+    if (view === 'milestones' && isInternal) setView('mywork')
+  }, [view, isInternal, setView])
   /** The Client filter's per-person view (ART-20260905-024 step 15; BR9-BR12): the stakeholder
    *  set and project ancestry `matchesFilters`, `visibleRows` and `facetsOf` narrow through, so
    *  Tree, Board, Calendar, the counts strip, the Daily IMS and the client pack all agree with
@@ -2648,6 +2656,8 @@ export default function IssueWorkspace({
         <ResourcingPanel state={state} today={today} onOpenProfile={setOpenProfileId} docked />
       ) : view === 'commercial' ? (
         <CommercialRegister state={state} today={today} docked />
+      ) : view === 'milestones' ? (
+        <ClientMilestonesPanel state={state} docked />
       ) : view === 'applications' ? (
         <ApplicationLandscape
           state={state}

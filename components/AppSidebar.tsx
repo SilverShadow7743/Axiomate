@@ -36,7 +36,7 @@ const GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
  * invited to click, not what left the server.
  */
 const CLIENT_GROUPS: readonly { title: string; items: readonly WorkspaceView[] }[] = [
-  { title: 'Workspace', items: ['tree', 'board', 'calendar'] },
+  { title: 'Workspace', items: ['tree', 'board', 'calendar', 'milestones'] },
 ]
 
 const VIEW_LABEL: Record<WorkspaceView, string> = {
@@ -55,6 +55,7 @@ const VIEW_LABEL: Record<WorkspaceView, string> = {
   mail: 'Mail',
   people: 'People',
   commercial: 'Commercial',
+  milestones: 'Milestones',
 }
 const VIEW_TITLE: Record<WorkspaceView, string> = {
   mywork: 'Everything waiting on you, across every engagement',
@@ -72,6 +73,7 @@ const VIEW_TITLE: Record<WorkspaceView, string> = {
   mail: 'Your inbox, and what arrived at the project mailbox',
   people: 'Every colleague in the directory — open a profile for identity, career and skills',
   commercial: 'Every statement of work at once — reference, value, margin and what\'s next',
+  milestones: 'What was promised, when it lands, and where it stands',
 }
 
 interface Props {
