@@ -96,7 +96,7 @@ export default function CommercialRegister({
 
   const daysOverdue = (plannedDate: string) => Math.round((Date.parse(today) - Date.parse(plannedDate)) / 86_400_000)
 
-  return (
+  const panel = (
     <>
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- pointer-only dismissal; keyboard path is Escape via useOverlay */}
       {!docked && <div className="drawer-scrim" onMouseDown={onClose} />}
@@ -313,4 +313,14 @@ export default function CommercialRegister({
       </aside>
     </>
   )
+
+  /**
+   * Docked (the only way this is ever reached — see IssueWorkspace's view ternary) must render
+   * inside `.view-dock`, the same wrapper Portfolio/My work use to turn this `.evi` markup from
+   * a slide-over drawer into a static peer of Tree/Board/Calendar. Without it, `.evi`'s own
+   * `position: fixed` and `z-index` (built for the drawer case) float over the app's top bar
+   * instead of sitting in the page's own layout — the bug this wrap exists to prevent.
+   */
+  if (docked) return <div className="view-dock">{panel}</div>
+  return panel
 }
