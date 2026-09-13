@@ -22,7 +22,14 @@
 SELECT format('CREATE ROLE axiomate_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L VALID UNTIL ''infinity''', :app_password)
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'axiomate_app') \gexec
 
-SELECT format('ALTER ROLE axiomate_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L VALID UNTIL ''infinity''', :app_password) \gexec
+-- Password only, not the attribute list CREATE ROLE already set. Azure's flexible-server
+-- administrator login (tmsadmin) is not a full superuser and holds no BYPASSRLS itself, so it
+-- cannot execute ALTER ROLE ... NOBYPASSRLS on any role -- even a no-op re-assertion of an
+-- attribute the role already has. Nothing in this script (or in the application, which never
+-- issues an ALTER ROLE) can move axiomate_app off NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/
+-- NOCREATEROLE once CREATE ROLE above sets them, so re-asserting them here on every run added
+-- no safety and cost the administrator a permission it doesn't have.
+SELECT format('ALTER ROLE axiomate_app PASSWORD %L VALID UNTIL ''infinity''', :app_password) \gexec
 
 GRANT CONNECT ON DATABASE axiomate_tms TO axiomate_app;
 GRANT USAGE ON SCHEMA public TO axiomate_app;
