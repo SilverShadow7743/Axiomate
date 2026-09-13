@@ -4293,6 +4293,14 @@ select.cell-editor {
 .cfg-rail-group:first-child {
   padding-top: 4px;
 }
+/* A second-level heading under `.cfg-rail-group`, not a second first-level one — lighter
+   weight, no letter-spacing, indented slightly to read as nested rather than sibling. */
+.cfg-rail-subgroup {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 8px 14px 2px 20px;
+  white-space: nowrap;
+}
 .cfg-rail-item {
   display: block;
   width: calc(100% - 16px);
@@ -4851,8 +4859,9 @@ select.cell-editor {
     height: 0;
   }
   /* Group headings organise a vertical list; in a scrolling strip they are just
-     unreachable width. */
-  .cfg-rail-group {
+     unreachable width. Same reasoning for the second-level heading below it. */
+  .cfg-rail-group,
+  .cfg-rail-subgroup {
     display: none;
   }
   .cfg-rail-item {

@@ -115,35 +115,45 @@ type Tab =
   | 'scopes'
   | 'duplicates'
 
-const TABS: { id: Tab; label: string; group: string }[] = [
+/**
+ * `subgroup` entries for one name MUST stay contiguous — the rail render groups by
+ * first-seen order within a `group`, not by collecting every match up front, so a later
+ * `Operating model` addition dropped between two `'Rules & permissions'` rows without the
+ * same (or no) subgroup would split that header into two or land under the wrong one.
+ */
+const TABS: { id: Tab; label: string; group: string; subgroup?: string }[] = [
   { id: 'index', label: 'All settings', group: 'Operating model' },
-  { id: 'capabilities', label: 'Capabilities', group: 'Operating model' },
-  { id: 'goals', label: 'Goals', group: 'Governance' },
-  { id: 'healthScore', label: 'Health score', group: 'Governance' },
-  { id: 'terminology', label: 'Terminology', group: 'Operating model' },
-  { id: 'roles', label: 'Roles & people', group: 'Operating model' },
-  { id: 'workTypes', label: 'Work types', group: 'Operating model' },
-  { id: 'disciplines', label: 'Disciplines', group: 'Operating model' },
-  { id: 'rates', label: 'Rates', group: 'Governance' },
-  { id: 'skills', label: 'Skills', group: 'Operating model' },
-  { id: 'customFields', label: 'Custom fields', group: 'Operating model' },
-  { id: 'serviceLevels', label: 'Service levels', group: 'Operating model' },
-  { id: 'transitions', label: 'Status transitions', group: 'Operating model' },
-  { id: 'permissions', label: 'Permissions', group: 'Operating model' },
-  { id: 'approvals', label: 'Approvals', group: 'Operating model' },
-  { id: 'automation', label: 'Automation', group: 'Operating model' },
-  { id: 'watch', label: 'Scheduled pass', group: 'Operating model' },
-  { id: 'timePolicy', label: 'Time recording', group: 'Operating model' },
-  { id: 'allocationPolicy', label: 'Allocation', group: 'Operating model' },
-  { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model' },
-  { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model' },
+  { id: 'terminology', label: 'Terminology', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'workTypes', label: 'Work types', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'disciplines', label: 'Disciplines', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'skills', label: 'Skills', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'customFields', label: 'Custom fields', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'roles', label: 'Roles & people', group: 'Operating model', subgroup: 'Roles & people' },
+  /* Capabilities lives here, not with Roles & people: it reconciles unreachable permission
+     grants (the same logic scripts/reconcile-grants.ts runs), not a people/skills screen. */
+  { id: 'capabilities', label: 'Capabilities', group: 'Operating model', subgroup: 'Rules & permissions' },
+  { id: 'transitions', label: 'Status transitions', group: 'Operating model', subgroup: 'Rules & permissions' },
+  { id: 'permissions', label: 'Permissions', group: 'Operating model', subgroup: 'Rules & permissions' },
+  { id: 'approvals', label: 'Approvals', group: 'Operating model', subgroup: 'Rules & permissions' },
+  /* Labelled "Automation rules" rather than "Automation" so it reads as distinct from the
+     top-level Automation group (Agent registry, Recurring work, ...) one click away. */
+  { id: 'automation', label: 'Automation rules', group: 'Operating model', subgroup: 'Rules & permissions' },
+  { id: 'watch', label: 'Scheduled pass', group: 'Operating model', subgroup: 'Rules & permissions' },
+  { id: 'sizing', label: 'T-shirt sizing', group: 'Operating model', subgroup: 'Estimation & capacity' },
+  { id: 'timePolicy', label: 'Time recording', group: 'Operating model', subgroup: 'Estimation & capacity' },
+  { id: 'allocationPolicy', label: 'Allocation', group: 'Operating model', subgroup: 'Estimation & capacity' },
+  { id: 'serviceLevels', label: 'Service levels', group: 'Operating model', subgroup: 'Estimation & capacity' },
+  { id: 'activityTemplates', label: 'Activity templates', group: 'Operating model', subgroup: 'Templates' },
+  { id: 'issueTemplates', label: 'Issue templates', group: 'Operating model', subgroup: 'Templates' },
   { id: 'agents', label: 'Agent registry', group: 'Automation' },
   { id: 'recurring', label: 'Recurring work', group: 'Automation' },
   { id: 'workflows', label: 'Workflows & templates', group: 'Automation' },
   { id: 'routing', label: 'Routing & intake', group: 'Automation' },
+  { id: 'goals', label: 'Goals', group: 'Governance' },
+  { id: 'healthScore', label: 'Health score', group: 'Governance' },
+  { id: 'rates', label: 'Rates', group: 'Governance' },
   { id: 'blueprints', label: 'Blueprints', group: 'Governance' },
-  { id: 'activityTemplates', label: 'Activity templates', group: 'Operating model' },
-  { id: 'issueTemplates', label: 'Issue templates', group: 'Operating model' },
   { id: 'scopes', label: 'Scope overrides', group: 'Governance' },
   { id: 'duplicates', label: 'Duplicates', group: 'Governance' },
 ]
@@ -290,29 +300,47 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
 
       <div className="cfg-body">
         <nav className="cfg-rail" aria-label="Configuration sections">
-          {['Operating model', 'Automation', 'Governance'].map((group) => (
-            <div key={group}>
-              <div className="cfg-rail-group">{group}</div>
-              {TABS.filter((t) => t.group === group)
-                /*
-                  * Absent, not empty. `boot()` strips rates from the payload for anybody without
-                  * `rate.view`, so this tab would render an empty table and read as "no rates
-                  * have been recorded" — which is a different statement from "you may not see
-                  * them", and the wrong one.
-                  */
-                .filter((t) => t.id !== 'rates' || can(state.model, actor, 'rate.view').allowed)
-                .map((t) => (
-                <button
-                  key={t.id}
-                  className={`cfg-rail-item${tab === t.id ? ' on' : ''}`}
-                  onClick={() => setTab(t.id)}
-                  aria-current={tab === t.id}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          ))}
+          {['Operating model', 'Automation', 'Governance'].map((group) => {
+            const visible = TABS.filter((t) => t.group === group)
+              /*
+                * Absent, not empty. `boot()` strips rates from the payload for anybody without
+                * `rate.view`, so this tab would render an empty table and read as "no rates
+                * have been recorded" — which is a different statement from "you may not see
+                * them", and the wrong one.
+                */
+              .filter((t) => t.id !== 'rates' || can(state.model, actor, 'rate.view').allowed)
+            /*
+             * Clustered by adjacent-run, not collected by name — TABS' own contiguity comment
+             * is what makes this correct. A subgroup-less item (today: only `index`, and every
+             * Automation/Governance entry) becomes its own one-item, header-less cluster.
+             */
+            const clusters: { subgroup?: string; items: typeof visible }[] = []
+            for (const t of visible) {
+              const last = clusters[clusters.length - 1]
+              if (last && last.subgroup === t.subgroup) last.items.push(t)
+              else clusters.push({ subgroup: t.subgroup, items: [t] })
+            }
+            return (
+              <div key={group}>
+                <div className="cfg-rail-group">{group}</div>
+                {clusters.map((c, i) => (
+                  <div key={c.subgroup ?? `flat-${i}`}>
+                    {c.subgroup && <div className="cfg-rail-subgroup">{c.subgroup}</div>}
+                    {c.items.map((t) => (
+                      <button
+                        key={t.id}
+                        className={`cfg-rail-item${tab === t.id ? ' on' : ''}`}
+                        onClick={() => setTab(t.id)}
+                        aria-current={tab === t.id}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </nav>
 
         <div className="cfg-panel">
