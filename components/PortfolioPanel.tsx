@@ -188,7 +188,7 @@ export default function PortfolioPanel({
       </aside>
 
       {replanning && onApplyAllocation && onReleaseAllocation && (
-        <DetailDrawer wide={false} onClose={() => setReplanning(null)}>
+        <DetailDrawer onClose={() => setReplanning(null)}>
           <ReplanningDrawer
             state={state}
             today={today}

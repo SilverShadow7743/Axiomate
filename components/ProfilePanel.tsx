@@ -137,7 +137,7 @@ export default function ProfilePanel({
   const save = (patch: Partial<Parameters<typeof upsertOf>[1]>) => (person && onConfig ? onConfig(upsertOf(person, patch)) : false)
 
   return (
-    <DetailDrawer wide={false} onClose={onClose} className="above-overlay">
+    <DetailDrawer onClose={onClose} className="above-overlay">
       {!person ? (
         <div className="cfg-empty" style={{ padding: 16 }}>That person is no longer in the directory.</div>
       ) : (

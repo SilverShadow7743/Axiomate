@@ -826,6 +826,9 @@ export default function IssueWorkspace({
         if (!go) return false
         setDirty(false)
       }
+      // Covers closing (id === null) as well as switching to a different record — a stale
+      // `true` here would otherwise wait for the next open with nothing left to reset it.
+      if (id !== selectedId) setDrawerFull(false)
       setSelectedId(id)
       setSelectedIds(new Set())
       return true
@@ -2045,7 +2048,15 @@ export default function IssueWorkspace({
 
   /** Whether the current view pairs with the detail drawer at all. */
   const drawerOffered = !DETAIL_INCOMPATIBLE_VIEWS.has(view)
-  const [drawerWide, setDrawerWide] = useState(false)
+  /** Wide by default on desktop (≥900px, this app's own established line — see the mobile-nav
+   *  fix's own breakpoint) rather than something to discover via the ⤢ toggle. Lazy initializer:
+   *  read once on mount, not re-evaluated on resize — a window resized mid-session doesn't
+   *  silently override a choice the person already made via the toggle. */
+  const [drawerWide, setDrawerWide] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 900)
+  /** Full-screen (100vw), independent of `drawerWide` — turning it off returns to whatever
+   *  `drawerWide` already was, the same way `drawerWide` off doesn't forget standard. Reset per
+   *  record below, never persisted: "focus on THIS complex issue" is a per-record action. */
+  const [drawerFull, setDrawerFull] = useState(false)
   /* F&O's FactBox pane beside the record — collapsed to its edge tab by default. */
   const [bladeOpen, setBladeOpen] = useState(false)
 
@@ -2896,7 +2907,7 @@ export default function IssueWorkspace({
           along at the top — beside the record they act on. */}
       {selectedId !== null && drawerOffered && (
       <DetailDrawer
-        wide={drawerWide}
+        width={drawerFull ? 'full' : drawerWide ? 'wide' : 'standard'}
         onClose={() => requestSelect(null)}
         bladeOpen={bladeOpen}
         blade={
@@ -2970,6 +2981,8 @@ export default function IssueWorkspace({
           height={viewportH}
           panelState={drawerWide ? 'expanded' : 'standard'}
           panelLocked={false}
+          full={drawerFull}
+          onToggleFull={() => setDrawerFull((v) => !v)}
           onResize={() => {}}
           onSetPanel={drawerSetPanel}
           onTabChange={() => {}}
@@ -3298,7 +3311,7 @@ export default function IssueWorkspace({
       )}
 
       {snapshotTarget && (
-        <DetailDrawer wide={false} onClose={() => setSnapshotTarget(null)}>
+        <DetailDrawer onClose={() => setSnapshotTarget(null)}>
           <SnapshotDrawer
             state={state}
             actor={actor}

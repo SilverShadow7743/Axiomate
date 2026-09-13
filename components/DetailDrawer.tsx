@@ -21,9 +21,13 @@ import { useEffect, useRef, type ReactNode } from 'react'
  * the evidence manager open from inside this drawer and must stack over it, and the
  * assistant stays usable beside an open record — its panel rides above the scrim.
  */
+/** `wide` (92vw) and `full` (100vw) are mutually exclusive by construction — one value, not
+ *  two booleans that could disagree. Driven by DetailPanel's own ⤢/⛶ controls through the
+ *  workspace. */
+export type DrawerWidth = 'standard' | 'wide' | 'full'
+
 interface Props {
-  /** Wide mode (92vw), driven by DetailPanel's own ⤢ control through the workspace. */
-  wide: boolean
+  width?: DrawerWidth
   /** Must route through the workspace's dirty-checking deselect, never a bare unmount. */
   onClose: () => void
   children: ReactNode
@@ -44,7 +48,7 @@ interface Props {
   className?: string
 }
 
-export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen, className }: Props) {
+export default function DetailDrawer({ width = 'standard', onClose, children, blade, bladeOpen, className }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Focus lands in the drawer on open and returns to the element that opened it on close,
@@ -68,7 +72,7 @@ export default function DetailDrawer({ wide, onClose, children, blade, bladeOpen
       }}
     >
       <div
-        className={`drawer${wide ? ' wide' : ''}${bladeOpen ? ' blade-open' : ''}`}
+        className={`drawer${width !== 'standard' ? ` ${width}` : ''}${bladeOpen ? ' blade-open' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label="Record detail"

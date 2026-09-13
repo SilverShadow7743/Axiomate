@@ -206,7 +206,7 @@ export default function ApplicationLandscape({
       )}
 
       {opening && (
-        <DetailDrawer wide onClose={() => setOpenId(null)}>
+        <DetailDrawer width="wide" onClose={() => setOpenId(null)}>
           <ApplicationDetail
             state={state}
             app={opening}

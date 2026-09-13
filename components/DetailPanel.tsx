@@ -104,6 +104,10 @@ interface Props {
    *  regardless of preference — the size controls below have nothing to change, so they render
    *  disabled rather than as live buttons that silently do nothing. */
   panelLocked?: boolean
+  /** Full-screen (100vw), independent of `panelState`'s standard/expanded axis — turning it
+   *  off returns to whatever width `panelState` already had. */
+  full: boolean
+  onToggleFull: () => void
   /** Report a dragged pixel height; the workspace stores it as a fraction. */
   onResize: (px: number) => void
   onSetPanel: (s: PanelState) => void
@@ -251,6 +255,8 @@ export default function DetailPanel({
   height,
   panelState,
   panelLocked = false,
+  full,
+  onToggleFull,
   onResize,
   onSetPanel,
   onTabChange,
@@ -616,12 +622,27 @@ export default function DetailPanel({
               panelLocked
                 ? 'The detail pane is not shown on this tab'
                 : panelState === 'expanded'
-                  ? 'Restore normal height'
-                  : 'Expand the detail pane'
+                  ? 'Restore normal width'
+                  : 'Widen the detail pane'
             }
             aria-label="Expand detail pane"
           >
             {panelState === 'expanded' ? '⤡' : '⤢'}
+          </button>
+          <button
+            className="btn ghost"
+            onClick={onToggleFull}
+            disabled={panelLocked}
+            title={
+              panelLocked
+                ? 'The detail pane is not shown on this tab'
+                : full
+                  ? 'Exit full-screen'
+                  : 'Full-screen this issue'
+            }
+            aria-label={full ? 'Exit full-screen detail' : 'Full-screen detail'}
+          >
+            ⛶
           </button>
         </div>
       </div>

@@ -1534,6 +1534,9 @@ select.cell-editor {
 .drawer.wide {
   width: 92vw;
 }
+.drawer.full {
+  width: 100vw;
+}
 @media (prefers-reduced-motion: no-preference) {
   .drawer {
     animation: drawer-in 0.16s ease-out;
