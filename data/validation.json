@@ -434,13 +434,13 @@
     },
     {
       "id": "OWN1",
-      "title": "The owner picker offers the firm's active people and only THIS client's seats, and keeps a stored name that matches nobody until it is replaced",
-      "expected": "ownerChoicesFor (12 Sep 2026, Nishant: 'where is the owner dropdown which should come from people' → a strict pick from the directory). Team = every active non-client person; client = active seats attached to the record's own client node, never another client's or an unattached seat; a departed person is not offered; a stored dual owner is carried as `unlisted` so the control can still show it, and drops out once the value is one of the offered names.",
+      "title": "The owner picker offers only the organization's own active people, never a client seat, and keeps a stored name that matches nobody until it is replaced",
+      "expected": "ownerChoicesFor (12 Sep 2026 → 14 Sep 2026 reversal, Nishant: 'owner field will be exactly people from our organization'). team = every active non-client person; a client seat is never offered, on any record; a departed person is not offered; a stored dual owner is carried as `unlisted` so the control can still show it, and drops out once the value is one of the offered names.",
       "verdict": "PASS",
-      "actual": "team=[Client, Priya, Sam, Tessa Team]; client=[Cleo Client]; dual owner carried as unlisted; a listed name is not unlisted; flat list starts Unassigned and ends Michael Thomas (POS) / Amolak (D365); off a client the client group has 0.",
+      "actual": "team=[Client, Priya, Sam, Tessa Team]; dual owner carried as unlisted; a listed name is not unlisted; flat list starts Unassigned and ends Michael Thomas (POS) / Amolak (D365); a client seat is never offered.",
       "stops": "—",
       "severity": "—",
-      "impact": "The owner is the join to My work, availability checks and notifications. A picker that offers another client's guest, or drops a stored dual owner on first open, either names the wrong person on a client's work or silently unassigns nine live issues."
+      "impact": "The owner is the join to My work, availability checks and notifications. A picker that offers a client seat, or drops a stored dual owner on first open, either names someone outside the firm on the firm's own work or silently unassigns nine live issues."
     },
     {
       "id": "DL2",

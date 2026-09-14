@@ -1488,15 +1488,10 @@ function FieldStrip({
     [state.timeEntries, state.estimates, issue.id, state.model.sizeBands],
   )
   /**
-   * Who may be named as owner — the People directory, the firm's side and this record's
-   * client's seats, plus the stored value when it names nobody offered
-   * (`ownerChoicesFor`, `lib/ownerChoices.ts`). The record's client resolves through the same
-   * scope chain every other scoped lookup in this panel walks.
+   * Who may be named as owner — the People directory's own active people, plus the stored
+   * value when it names nobody offered (`ownerChoicesFor`, `lib/ownerChoices.ts`).
    */
-  const ownerChoices = useMemo(
-    () => ownerChoicesFor(state, row.id, issue.owner),
-    [state, row.id, issue.owner],
-  )
+  const ownerChoices = useMemo(() => ownerChoicesFor(state, issue.owner), [state, issue.owner])
   const [pendingStatus, setPendingStatus] = useState<IssueStatus | null>(null)
   const [statusNote, setStatusNote] = useState('')
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -1626,15 +1621,6 @@ function FieldStrip({
           {ownerChoices.team.length > 0 && (
             <optgroup label="Team">
               {ownerChoices.team.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {ownerChoices.client.length > 0 && (
-            <optgroup label="Client">
-              {ownerChoices.client.map((p) => (
                 <option key={p.id} value={p.name}>
                   {p.name}
                 </option>

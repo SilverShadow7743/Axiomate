@@ -7,7 +7,7 @@ import type { Actor } from '@/lib/actor'
 import type { DocumentRecord } from '@/lib/documents'
 import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
-import { ownerChoicesFor, ownerOptionValues, clientNodeOf, UNASSIGNED } from '@/lib/ownerChoices'
+import { ownerChoicesFor, ownerOptionValues, UNASSIGNED } from '@/lib/ownerChoices'
 import { bulkStatusChoices } from '@/lib/board'
 import MyWorkPanel from './MyWorkPanel'
 import MyCalendarPanel from './MyCalendarPanel'
@@ -1067,18 +1067,9 @@ export default function IssueWorkspace({
     [selectedRows, dispatchMany],
   )
 
-  /**
-   * Which client seats are safe to offer for a bulk reassign: the directory's own team always,
-   * and a client's seats only when every selected row's own client node (`clientNodeOf`, the
-   * same resolution `ownerOptionsFor` uses per row) agrees on which client that is. A selection
-   * spanning two clients falls back to team-only rather than guessing which client's seats
-   * belong on the other client's records.
-   */
-  const bulkOwnerOptions = useMemo(() => {
-    const clientNodes = new Set(selectedRows.map((r) => clientNodeOf(state, r.id)))
-    const sharedAnchor = clientNodes.size === 1 ? (selectedRows[0]?.id ?? null) : null
-    return ownerOptionValues(ownerChoicesFor(state, sharedAnchor, null))
-  }, [state, selectedRows])
+  /** A bulk reassign has no single row to scope by, so it always resolves the org-wide list
+   *  (`lib/ownerChoices.ts`) -- no per-row logic here, so this has no per-row dependency. */
+  const bulkOwnerOptions = useMemo(() => ownerOptionValues(ownerChoicesFor(state, null)), [state])
 
   const onBulkReassign = useCallback(
     (owner: string): boolean => {
@@ -1108,10 +1099,10 @@ export default function IssueWorkspace({
 
   const hasChildren = useMemo(() => parentIds(sortedRows), [sortedRows])
   const facets = useMemo(() => facetsOf(state, scope), [state, scope])
-  /** The grid's owner cell and Quick edit: the directory's people for this row's client,
-   *  "Unassigned" first, the stored value appended when it names nobody (`lib/ownerChoices.ts`). */
+  /** The grid's owner cell and Quick edit: the directory's own active people, "Unassigned"
+   *  first, the stored value appended when it names nobody (`lib/ownerChoices.ts`). */
   const ownerOptionsFor = useCallback(
-    (row: ScheduleRow) => ownerOptionValues(ownerChoicesFor(state, row.id, row.owner)),
+    (row: ScheduleRow) => ownerOptionValues(ownerChoicesFor(state, row.owner)),
     [state],
   )
 

@@ -29,19 +29,16 @@ import { ownerChoicesFor, UNASSIGNED } from '@/lib/ownerChoices'
  */
 function OwnerSelect({
   state,
-  anchorId,
   value,
   onChange,
   autoFocus,
 }: {
   state: WorkspaceState
-  /** The record being edited, or the parent a new one is created under — for the client. */
-  anchorId: string
   value: string
   onChange: (v: string) => void
   autoFocus?: boolean
 }) {
-  const choices = useMemo(() => ownerChoicesFor(state, anchorId, value), [state, anchorId, value])
+  const choices = useMemo(() => ownerChoicesFor(state, value), [state, value])
   return (
     <select
       autoFocus={autoFocus}
@@ -52,15 +49,6 @@ function OwnerSelect({
       {choices.team.length > 0 && (
         <optgroup label="Team">
           {choices.team.map((p) => (
-            <option key={p.id} value={p.name}>
-              {p.name}
-            </option>
-          ))}
-        </optgroup>
-      )}
-      {choices.client.length > 0 && (
-        <optgroup label="Client">
-          {choices.client.map((p) => (
             <option key={p.id} value={p.name}>
               {p.name}
             </option>
@@ -308,7 +296,7 @@ function AddForm({
 
       {isStructural && (
         <Field label={labels.ISSUE_OWNER} hint="Optional">
-          <OwnerSelect state={state} anchorId={dialog.parentId} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
+          <OwnerSelect state={state} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
         </Field>
       )}
 
@@ -384,7 +372,7 @@ function AddForm({
             </Field>
           </div>
           <Field label={labels.ISSUE_OWNER} hint="Optional">
-            <OwnerSelect state={state} anchorId={dialog.parentId} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
+            <OwnerSelect state={state} value={f.owner ?? ''} onChange={(v) => set('owner', v)} />
           </Field>
           <Field label="Next action" hint="Optional">
             <input value={f.nextAction ?? ''} onChange={(e) => set('nextAction', e.target.value)} />
@@ -477,7 +465,7 @@ function EditForm({
             <input autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
           <Field label={labels.ISSUE_OWNER}>
-            <OwnerSelect state={state} anchorId={id} value={f.owner} onChange={(v) => set('owner', v)} />
+            <OwnerSelect state={state} value={f.owner} onChange={(v) => set('owner', v)} />
           </Field>
         </>
       )}
@@ -488,7 +476,7 @@ function EditForm({
             <input autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
           <Field label={labels.ISSUE_OWNER}>
-            <OwnerSelect state={state} anchorId={id} value={f.owner} onChange={(v) => set('owner', v)} />
+            <OwnerSelect state={state} value={f.owner} onChange={(v) => set('owner', v)} />
           </Field>
           <div className="fld-row">
             <Field label="Start">
