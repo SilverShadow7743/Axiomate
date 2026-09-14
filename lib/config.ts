@@ -333,10 +333,14 @@ export interface Person {
    * administrator permission implies a seniority nobody awarded. Both are wrong, and both are
    * the kind of wrong that is discovered long after the fact.
    *
-   * Free text rather than an enum. Grades and tracks are a firm's own vocabulary and they change
-   * — a firm that opens a data-engineering track should not need a release to say so. The cost
-   * is that two spellings of the same grade will not match; that is a reporting problem, and it
-   * is smaller than a list nobody can extend.
+   * As of 14 Sep 2026, chosen from `CareerOption`s of the matching `kind` rather than typed —
+   * the same free-text-to-managed-select reversal Owner went through on 12 Sep, for the same
+   * reason: two spellings of the same grade not matching was a reporting problem nobody could
+   * fix from a list nobody could extend, and a value the picker no longer offers is not deleted
+   * for it. A value stored before the list existed, or naming a since-retired option, still
+   * shows and stays selectable — `ownerChoicesFor`'s `unlisted` carry, reused rather than
+   * reinvented. The reducer itself stays permissive, same as Owner's write path: the picker is
+   * what constrains an ordinary edit, not a refusal on write.
    */
   grade?: string
   track?: string
@@ -534,6 +538,49 @@ export function liveDisciplines(model: OperatingModel): Discipline[] {
 export function disciplineLabel(model: OperatingModel, id: string): string {
   if (!id) return ''
   return model.disciplines?.[id]?.label ?? id
+}
+
+/**
+ * One entry in a firm's own career vocabulary — a grade, a track, or a developing-toward
+ * target `Person.grade`/`track`/`developingToward` can be set to (`lib/config.ts`'s own
+ * doc comment on those three fields has the history).
+ *
+ * One entity with a `kind` discriminator rather than three near-identical types, the same
+ * shape `WorkType`'s `type`/module/discipline comment argues for keeping three *axes* apart —
+ * grade, track and developing-toward are not independent axes of one thing, they are three
+ * separate short lists a firm names and retires over time, identical in every way except which
+ * of a person's three fields they populate. Uniqueness is checked within a `kind`, not across
+ * all three: "Analyst" can sensibly be both a grade and a developing-toward target.
+ */
+export interface CareerOption {
+  /** `career-N`, minted from a max-based counter — see `nextCareerOptionId`. */
+  id: string
+  kind: 'grade' | 'track' | 'developingToward'
+  label: string
+  deletedAt: string | null
+}
+
+/** The career options on offer for one axis, alphabetically — there is no seeded order to
+ *  preserve, unlike `liveDisciplines`. */
+export function liveCareerOptions(model: OperatingModel, kind: CareerOption['kind']): CareerOption[] {
+  // `?? {}` for the same reason `liveDisciplines` has it — reachable with a model parsed from
+  // storage that predates the key, where `mergeModel` has not run.
+  return Object.values(model.careerOptions ?? {})
+    .filter((o) => !o.deletedAt && o.kind === kind)
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** Next `career-N`, counting retired options too — same reasoning as `nextApplicationId`:
+ *  reusing a removed option's position would put a new one where an old one sits in an audit
+ *  trail somebody may be reading beside it. Max-based rather than a shared counter, because
+ *  this is minted from a top-level action arm with no model-level `seq` to bump. */
+export function nextCareerOptionId(careerOptions: Record<string, CareerOption>): string {
+  let max = 0
+  for (const id of Object.keys(careerOptions)) {
+    const m = /^career-(\d+)$/.exec(id)
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  return `career-${max + 1}`
 }
 
 /**
@@ -962,6 +1009,14 @@ export interface OperatingModel {
    * attributed and dated, and they live in their own table.
    */
   skills: Record<string, Skill>
+  /**
+   * A firm's own vocabulary for `Person.grade`/`track`/`developingToward`. See `CareerOption`.
+   *
+   * Ships **empty**, the same reasoning as `skills`: a firm's grades and tracks are its own
+   * shape, not a universal fact like a Work type's Risk or Decision, and a shipped list would
+   * be a guess presented as a starting point.
+   */
+  careerOptions: Record<string, CareerOption>
   /**
    * A firm's own fields on an Issue. See `lib/customFields.ts`.
    *
@@ -1433,6 +1488,9 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   // Empty on purpose — see `OperatingModel.skills`. There is no `SEED_SKILLS`.
   const skills: Record<string, Skill> = {}
 
+  // Empty on purpose — see `OperatingModel.careerOptions`. There is no shipped grade or track.
+  const careerOptions: Record<string, CareerOption> = {}
+
   // Empty on purpose — see `OperatingModel.customFieldDefs`. There is no shipped default.
   const customFieldDefs: Record<string, CustomFieldDef> = {}
 
@@ -1463,6 +1521,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
     workTypes,
     disciplines,
     skills,
+    careerOptions,
     customFieldDefs,
     sla: { ...DEFAULT_SLA },
     healthScore: {
@@ -1812,6 +1871,8 @@ export function mergeModel(seed: OperatingModel, stored: Partial<OperatingModel>
     // `Object.values(model.skills)` in the UI turns into a crash, in production, on the
     // workspace that has data and never on the seed that does not.
     skills: { ...seed.skills, ...(stored.skills ?? {}) },
+    // Same reasoning, same failure mode: absent on any model stored before this key existed.
+    careerOptions: { ...seed.careerOptions, ...(stored.careerOptions ?? {}) },
     // Same reasoning, same failure mode: absent on any model stored before this key existed.
     customFieldDefs: { ...seed.customFieldDefs, ...(stored.customFieldDefs ?? {}) },
     // Explicit, like every other key: a model stored before this existed has no `sla`, and the

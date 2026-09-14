@@ -234,6 +234,8 @@ import { type IntakeForm,
   type RoutingRule,
   type ActivityTemplate,
   type IssueTemplate,
+  type CareerOption,
+  nextCareerOptionId,
 } from './config'
 import { MEASURES, type Goal } from './goals'
 
@@ -1271,6 +1273,14 @@ export type Action =
       now: string
     }
   | { t: 'removeApplication'; id: string; now: string }
+  /*
+   * CAREER OPTIONS — a dedicated pair rather than a `ConfigOp`, deliberately: `config` is
+   * gated by one blanket `config.manage` check in `apply()`'s funnel, and `career.manage` is a
+   * second, narrower authority over this one vocabulary — see the design's own reasoning for
+   * why that couldn't be expressed as a carve-out inside that single check instead.
+   */
+  | { t: 'upsertCareerOption'; id: string | null; kind: CareerOption['kind']; label: string; now: string }
+  | { t: 'removeCareerOption'; id: string; now: string }
   | {
       t: 'upsertIntegrationLink'
       id: string | null
@@ -5604,6 +5614,60 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
     }
 
+    case 'upsertCareerOption': {
+      const label = a.label.trim()
+      if (!label) return { state, error: 'A career option needs a label.' }
+      const existing = a.id ? state.model.careerOptions?.[a.id] : null
+      if (a.id && !existing) return { state, error: 'That career option no longer exists.' }
+      const id = existing?.id ?? nextCareerOptionId(state.model.careerOptions ?? {})
+      // Scoped to `kind`, unlike `upsertSkill`'s catalogue-wide check: "Analyst" can
+      // legitimately be both a grade and a developing-toward target for different people.
+      const clash = Object.values(state.model.careerOptions ?? {}).find(
+        (o) => o.id !== id && !o.deletedAt && o.kind === a.kind && o.label.toLowerCase() === label.toLowerCase(),
+      )
+      if (clash) return { state, error: `"${clash.label}" already exists for this list.` }
+      const option: CareerOption = { id, kind: a.kind, label, deletedAt: null }
+      return {
+        state: {
+          ...state,
+          model: { ...state.model, careerOptions: { ...state.model.careerOptions, [id]: option } },
+          audit: log(actor, state, {
+            rowId: id, field: 'careerOption', from: existing?.label ?? null, to: label, at: a.now, by,
+          }),
+        },
+        createdId: existing ? undefined : id,
+        message: existing ? `"${label}" updated.` : `"${label}" added.`,
+      }
+    }
+
+    case 'removeCareerOption': {
+      const existing = state.model.careerOptions?.[a.id]
+      if (!existing || existing.deletedAt) return { state, error: 'That career option no longer exists.' }
+      const field = existing.kind
+      const holders = Object.values(state.model.people ?? {}).filter(
+        (p) => p.status !== 'Departed' && p[field] === existing.label,
+      )
+      if (holders.length) {
+        return {
+          state,
+          error: `${holders.length} ${holders.length === 1 ? 'person' : 'people'} currently hold "${existing.label}". Change their career field first.`,
+        }
+      }
+      return {
+        state: {
+          ...state,
+          model: {
+            ...state.model,
+            careerOptions: { ...state.model.careerOptions, [a.id]: { ...existing, deletedAt: a.now } },
+          },
+          audit: log(actor, state, {
+            rowId: a.id, field: 'careerOption', from: existing.label, to: null, at: a.now, by,
+          }),
+        },
+        message: `"${existing.label}" removed.`,
+      }
+    }
+
     case 'upsertIntegrationLink': {
       const existing = a.id ? state.integrationLinks[a.id] : null
       if (a.id && !existing) return { state, error: 'That integration no longer exists.' }
@@ -6559,14 +6623,20 @@ Question: ${review.question}`),
       }
       /*
        * The same shape as `setNotificationPref` just above: self-service is the gate, not a
-       * grant, and the one exception is the operator who configures the platform. The arm knows
-       * whose record this is; the permission table cannot.
+       * grant, and the one exception is whoever holds `career.manage` — the Engagement Leader
+       * by default, and the Administrator once the platform grant has been extended to them
+       * post-deploy (see the design's own note: a new permission key does not reach an
+       * already-provisioned tenant just by being added to the shipped defaults). Was
+       * `config.manage` until 14 Sep; `career.manage` names the actual authority rather than
+       * riding on the broadest one, so a firm can narrow `config.manage` away from Engagement
+       * Leader later without silently taking this with it. The arm knows whose record this is;
+       * the permission table cannot.
        */
       const self = directoryPersonFor(state.model, actor)?.id === a.id
-      if (!self && !can(state.model, actor, 'config.manage').allowed) {
+      if (!self && !can(state.model, actor, 'career.manage').allowed) {
         return {
           state,
-          error: `Grade, track and development are the person's own to state. Changing ${person.name}'s needs “Configure the platform”.`,
+          error: `Grade, track and development are the person's own to state. Changing ${person.name}'s needs “Manage career levels”.`,
         }
       }
       /*

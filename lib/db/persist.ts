@@ -1045,6 +1045,20 @@ export async function persistSteps(
     case 'setClientChoice':
     case 'upsertSavedView':
     case 'deleteSavedView':
+    /*
+     * Found while adding `upsertCareerOption`/`removeCareerOption` below (14 Sep 2026):
+     * `updateCareerProfile` — self-editing a grade, track or developing-toward target,
+     * shipped 24 Aug — was never in this list. It is exactly the same shape as
+     * `setNotificationPref` right above it: a person's own small edit to `model.people`, not a
+     * `config` op. Missing here means it applied optimistically in the browser, replayed
+     * correctly in memory on the server, and was never written — silently gone on the next
+     * load. Fixed in the same pass rather than filed as a follow-up, since the four people who
+     * do have career data today got it through a one-off script's `config`/`upsertPerson` op,
+     * never through this action, which is consistent with this bug having always been live.
+     */
+    case 'updateCareerProfile':
+    case 'upsertCareerOption':
+    case 'removeCareerOption':
     case 'config':
       await tx.operatingModel.upsert({
         where: { tenantId },

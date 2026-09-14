@@ -996,6 +996,13 @@ const SHAPES = {
     now,
   },
   removeApplication: { id: req(id), now },
+  upsertCareerOption: {
+    id: req(idOrNull),
+    kind: req(oneOf(new Set(['grade', 'track', 'developingToward']))),
+    label: req(text),
+    now,
+  },
+  removeCareerOption: { id: req(id), now },
   upsertIntegrationLink: {
     id: req(idOrNull),
     sourceApplicationId: opt(id),

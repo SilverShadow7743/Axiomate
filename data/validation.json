@@ -443,6 +443,16 @@
       "impact": "The owner is the join to My work, availability checks and notifications. A picker that offers a client seat, or drops a stored dual owner on first open, either names someone outside the firm on the firm's own work or silently unassigns nine live issues."
     },
     {
+      "id": "CAR1",
+      "title": "career.manage stands on its own from config.manage: it alone reaches upsertCareerOption/removeCareerOption and the override half of updateCareerProfile; config.manage alone reaches neither; self-editing needs neither",
+      "expected": "docs/plans/2026-09-14-career-master-lists-design.md — the 14 Sep reversal that gives Engagement Leader a narrow authority over the career vocabulary instead of riding on the broadest platform permission. Proves: a role holding only career.manage may add a career option and set it on somebody else's profile; a role holding only config.manage is refused both; the person themself may always set their own, regardless of either grant; upsertCareerOption refuses a same-kind label clash but allows the identical label under a different kind; removeCareerOption refuses while a live person holds the value and succeeds once nobody does.",
+      "verdict": "PASS",
+      "actual": "add: career=OK (\"\"), config=refused; same-kind clash refused (\"\"Test Grade\" already exists for this list.\"), different-kind OK; override: career=OK, config=refused; self-edit OK; removeCareerOption while held refused (\"1 person currently hold \"Test Grade\". Change their career field first.\"), once free OK; a value predating the list is untouched.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "Career management was designed to decouple from the broadest platform permission specifically so a firm could narrow config.manage away from Engagement Leader later without silently breaking this. If the two permissions are not genuinely independent, that decoupling does not exist and the whole reason for a new permission key is undone."
+    },
+    {
       "id": "DL2",
       "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
       "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",
@@ -1008,7 +1018,7 @@
       "title": "A permission is added to the product and somebody can actually use it",
       "expected": "Every permission the code defines is granted to at least one shipped role, so a new feature is not born unusable.",
       "verdict": "PASS",
-      "actual": "All 47 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
+      "actual": "All 48 permissions the code defines are granted to at least one shipped role. No grant names a key that does not exist, which would grant nothing while reading as a control. The administrator holds every one, which is what keeps the role able to repair a configuration that has locked somebody out. What this cannot see is a LIVE workspace whose stored grants predate a key: mergeModel lets stored win, so a permission added after a firm was seeded reaches nobody until scripts/reconcile-grants.ts is run. That is a database question, not a code one, and it is reported there.",
       "stops": "at the stored model — this proves the shipped defaults are complete, not that a running deployment has caught up with them",
       "severity": "—",
       "impact": "Four features shipped usable-looking and unusable before this existed. The failure is silent by construction: the key is checked, the screen renders, and the refusal reads like a permissions decision somebody made."
@@ -1775,10 +1785,10 @@
     },
     {
       "id": "PS4",
-      "title": "updateCareerProfile refuses somebody editing a colleague's career profile without config.manage, naming them",
-      "expected": "The self check must be false for a mismatched id — this is the security-sensitive case named as the plan's highest risk.",
+      "title": "updateCareerProfile refuses somebody editing a colleague's career profile without career.manage, naming them",
+      "expected": "The self check must be false for a mismatched id — this is the security-sensitive case named as the plan's highest risk. Was config.manage until 14 Sep 2026, when career.manage took over the override half of this check — see the career master-lists design.",
       "verdict": "PASS",
-      "actual": "Grade, track and development are the person's own to state. Changing Sam's needs “Configure the platform”.",
+      "actual": "Grade, track and development are the person's own to state. Changing Sam's needs “Manage career levels”.",
       "stops": "",
       "severity": "P1",
       "impact": "none"
@@ -2348,7 +2358,7 @@
       "title": "The Client filter's scope is the person's projects plus ungated records — under 'All' and under a chosen client alike, for an exempt seat too",
       "expected": "BR9-BR12 of ART-20260905-023 through steps 6 and 7 of ART-20260905-024: over a fixture of two clients (OAPIL with projects P1 and P2, Rival Ltd with P3), an issue under each project and one directly under the Rival Ltd node with no project-tier ancestor, and the signed-in person a live member of P1 only — (a) visibleRows under 'All' with clientFilterScopeFor lists the P1 issue and the ungated issue, never P2's or P3's, and neither P2 nor P3 rides along as an empty branch; (b) facetsOf with the scope lists exactly those two rows' clients, and without the scope still both clients; (c) client 'OAPIL' with the scope lists P1's issue only — P2's, same client, is out, so an explicit choice is scoped too (BR10); (d) a null personId lists no project row and only the ungated issue under 'All', and its facets only that issue's client (BR11); (e) the same holds for a ROLE_ADMIN holder (isExempt true) over the unredacted state, so the narrowing is the scope's and not the read gate's (BR12); (f) the ungated issue is in under 'All' for the member, a non-member and the null person alike (BR12); (g) isExempt and can(...) for the exempt actor read the same before and after the scope is built and applied — a view default, not an authorisation (ADR 0002 decision 1).",
       "verdict": "PASS",
-      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 47 keys read the same before and after for both actors; projectView not called.",
+      "actual": "4 live issues: OAPIL-004 under P1, OAPIL-005 under P2 (both OAPIL), RIVALLTD-001 under P3 (Rival Ltd), RIVALLTD-002 directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [OAPIL-004,RIVALLTD-002] with P2 and P3 absent; facets [OAPIL,Rival Ltd] vs unscoped [OAPIL,Rival Ltd]; 'OAPIL' lists [OAPIL-004]. Null person: [RIVALLTD-002], facets [Rival Ltd]. Sam (ROLE_ADMIN, exempt=true, on P1) over the unredacted state: 'All' lists [OAPIL-004,RIVALLTD-002], 'OAPIL' lists [OAPIL-004]. Dev (on nothing): [RIVALLTD-002]. isExempt and can() over 48 keys read the same before and after for both actors; projectView not called.",
       "stops": "",
       "severity": "P1",
       "impact": "none"

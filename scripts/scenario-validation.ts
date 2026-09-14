@@ -2457,6 +2457,83 @@ scenario(
 )
 
 scenario(
+  'CAR1',
+  "career.manage stands on its own from config.manage: it alone reaches upsertCareerOption/removeCareerOption and the override half of updateCareerProfile; config.manage alone reaches neither; self-editing needs neither",
+  'docs/plans/2026-09-14-career-master-lists-design.md — the 14 Sep reversal that gives Engagement Leader a narrow authority over the career vocabulary instead of riding on the broadest platform permission. Proves: a role holding only career.manage may add a career option and set it on somebody else\'s profile; a role holding only config.manage is refused both; the person themself may always set their own, regardless of either grant; upsertCareerOption refuses a same-kind label clash but allows the identical label under a different kind; removeCareerOption refuses while a live person holds the value and succeeds once nobody does.',
+  () => {
+    let s = ok(BASE, { t: 'config', op: { k: 'upsertRole', id: 'ROLE_CAR1_CAREER', label: 'Career-only (test)', description: '' }, now: NOW } as Action)
+    s = ok(s, { t: 'config', op: { k: 'upsertRole', id: 'ROLE_CAR1_CONFIG', label: 'Config-only (test)', description: '' }, now: NOW } as Action)
+    s = ok(s, {
+      t: 'config',
+      op: { k: 'setAccess', patch: { grants: { ROLE_CAR1_CAREER: ['career.manage'], ROLE_CAR1_CONFIG: ['config.manage'] } } },
+      now: NOW,
+    } as Action)
+    const person = (name: string, roleIds: string[]) => {
+      s = ok(s, { t: 'config', op: { k: 'upsertPerson', id: null, name, roleIds }, now: NOW } as Action)
+      return Object.values(s.model.people).find((p) => p.name === name)!.id
+    }
+    const caraId = person('Cara CareerOnly', ['ROLE_CAR1_CAREER'])
+    const colinId = person('Colin ConfigOnly', ['ROLE_CAR1_CONFIG'])
+    const petraId = person('Petra Plain', ['ROLE_FUNCTIONAL'])
+    const cara: Actor = { id: caraId, name: 'Cara CareerOnly' }
+    const colin: Actor = { id: colinId, name: 'Colin ConfigOnly' }
+    const petra: Actor = { id: petraId, name: 'Petra Plain' }
+
+    // (a) upsertCareerOption: career.manage may, config.manage may not.
+    const addedByCara = apply(s, { t: 'upsertCareerOption', id: null, kind: 'grade', label: 'Test Grade', now: NOW } as Action, cara)
+    const careerCanAdd = addedByCara.error === undefined
+    const refusedForColin = apply(s, { t: 'upsertCareerOption', id: null, kind: 'grade', label: 'Another Grade', now: NOW } as Action, colin)
+    const configCannotAdd = refusedForColin.error !== undefined
+    s = addedByCara.state
+    const gradeOptionId = Object.values(s.model.careerOptions).find((o) => o.label === 'Test Grade')!.id
+
+    // (c) same label, different kind: no clash.
+    const trackAdded = apply(s, { t: 'upsertCareerOption', id: null, kind: 'track', label: 'Test Grade', now: NOW } as Action, cara)
+    const differentKindOk = trackAdded.error === undefined
+    // Same label, same kind: refused.
+    const sameKindClash = apply(s, { t: 'upsertCareerOption', id: null, kind: 'grade', label: 'test grade', now: NOW } as Action, cara)
+    const sameKindRefused = sameKindClash.error !== undefined
+
+    // (b) updateCareerProfile override: career.manage may set somebody else's, config.manage may not.
+    const overrideByCara = apply(s, { t: 'updateCareerProfile', id: petraId, patch: { grade: 'Test Grade' }, now: NOW } as Action, cara)
+    const careerCanOverride = overrideByCara.error === undefined && overrideByCara.state.model.people[petraId].grade === 'Test Grade'
+    const overrideByColin = apply(s, { t: 'updateCareerProfile', id: petraId, patch: { grade: 'Test Grade' }, now: NOW } as Action, colin)
+    const configCannotOverride = overrideByColin.error !== undefined
+    s = overrideByCara.state
+
+    // Self-editing needs neither grant.
+    const selfEdit = apply(s, { t: 'updateCareerProfile', id: petraId, patch: { developingToward: 'Test Grade' }, now: NOW } as Action, petra)
+    const selfNeedsNothing = selfEdit.error === undefined
+
+    // (d) removeCareerOption refuses while Petra holds it, succeeds once she doesn't.
+    const removeWhileHeld = apply(s, { t: 'removeCareerOption', id: gradeOptionId, now: NOW } as Action, cara)
+    const refusedInUse = removeWhileHeld.error !== undefined
+    const cleared = ok(s, { t: 'updateCareerProfile', id: petraId, patch: { grade: 'Unassigned' }, now: NOW } as Action)
+    const removedAfter = apply(cleared, { t: 'removeCareerOption', id: gradeOptionId, now: NOW } as Action, cara)
+    const removedOnceFree = removedAfter.error === undefined && removedAfter.state.model.careerOptions[gradeOptionId].deletedAt !== null
+
+    // (e) a value predating the list is not touched or refused by any of the above.
+    const historic = ok(s, { t: 'config', op: { k: 'upsertPerson', id: null, name: 'Hank Historic', roleIds: ['ROLE_FUNCTIONAL'], grade: 'Grandfathered Title' }, now: NOW } as Action)
+    const hankId = Object.values(historic.model.people).find((p) => p.name === 'Hank Historic')!.id
+    const historicUntouched = historic.model.people[hankId].grade === 'Grandfathered Title'
+
+    const good =
+      careerCanAdd && configCannotAdd && differentKindOk && sameKindRefused &&
+      careerCanOverride && configCannotOverride && selfNeedsNothing &&
+      refusedInUse && removedOnceFree && historicUntouched
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `add: career=${careerCanAdd ? 'OK' : 'REFUSED'} ("${addedByCara.error ?? ''}"), config=${configCannotAdd ? 'refused' : 'WRONGLY ALLOWED'}; same-kind clash ${sameKindRefused ? 'refused' : 'WRONGLY ALLOWED'} ("${sameKindClash.error ?? ''}"), different-kind ${differentKindOk ? 'OK' : 'WRONGLY REFUSED'}; override: career=${careerCanOverride ? 'OK' : 'REFUSED'}, config=${configCannotOverride ? 'refused' : 'WRONGLY ALLOWED'}; self-edit ${selfNeedsNothing ? 'OK' : 'WRONGLY REFUSED'}; removeCareerOption while held ${refusedInUse ? 'refused' : 'WRONGLY ALLOWED'} ("${removeWhileHeld.error ?? ''}"), once free ${removedOnceFree ? 'OK' : 'REFUSED'}; a value predating the list is ${historicUntouched ? 'untouched' : 'LOST OR REWRITTEN'}.`,
+      stops: good ? '—' : 'at career.manage — it either does not stand on its own from config.manage, or the reducer is not as permissive toward pre-existing values as designed',
+      severity: good ? '—' : 'P1',
+      impact:
+        'Career management was designed to decouple from the broadest platform permission specifically so a firm could narrow config.manage away from Engagement Leader later without silently breaking this. If the two permissions are not genuinely independent, that decoupling does not exist and the whole reason for a new permission key is undone.',
+    }
+  },
+)
+
+scenario(
   'DL2',
   "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
   "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",
@@ -9506,8 +9583,8 @@ scenario(
 
 scenario(
   'PS4',
-  'updateCareerProfile refuses somebody editing a colleague\'s career profile without config.manage, naming them',
-  'The self check must be false for a mismatched id — this is the security-sensitive case named as the plan\'s highest risk.',
+  'updateCareerProfile refuses somebody editing a colleague\'s career profile without career.manage, naming them',
+  'The self check must be false for a mismatched id — this is the security-sensitive case named as the plan\'s highest risk. Was config.manage until 14 Sep 2026, when career.manage took over the override half of this check — see the career master-lists design.',
   () => {
     const priyaId = Object.values(BASE.model.people).find((pp) => pp.name === 'Priya')!.id
     const samId = Object.values(BASE.model.people).find((pp) => pp.name === 'Sam')!.id
@@ -9517,11 +9594,11 @@ scenario(
     )
     const priyaActor: Actor = { id: priyaId, name: 'Priya' }
     const result = apply(st, { t: 'updateCareerProfile', id: samId, patch: { grade: 'Principal' }, now: NOW }, priyaActor)
-    const good = Boolean(result.error) && /Sam/.test(result.error ?? '') && /Configure the platform/i.test(result.error ?? '')
+    const good = Boolean(result.error) && /Sam/.test(result.error ?? '') && /Manage career levels/i.test(result.error ?? '')
 
     return good
       ? { verdict: 'PASS', actual: result.error ?? '', stops: '', severity: 'P1', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `error=${result.error}`, stops: 'a non-admin can edit a colleague\'s career profile, or the refusal does not name whose record it is', severity: 'P0', impact: 'anybody could edit anybody else\'s grade, track or development without ever holding config.manage' } as const
+      : { verdict: 'FAIL', actual: `error=${result.error}`, stops: 'a non-admin can edit a colleague\'s career profile, or the refusal does not name whose record it is', severity: 'P0', impact: 'anybody could edit anybody else\'s grade, track or development without ever holding career.manage' } as const
   },
 )
 

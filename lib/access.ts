@@ -131,6 +131,17 @@ export const PERMISSIONS = [
     label: 'See skill levels',
     what: 'How good somebody is said to be, who said so, and any note. Without it the directory still shows WHO holds a skill and when they last used it — the levels are removed from the page payload, not merely hidden, and your own are never withheld from you.',
   },
+  /*
+   * Deliberately not folded into `config.manage`, though every role that holds it today also
+   * holds that one. Grade, track and developing-toward stay the person's own to state without
+   * this — see `updateCareerProfile`'s arm — so this is only the override: adding or retiring
+   * an entry in the vocabulary, and setting a field on somebody else's profile directly.
+   */
+  {
+    key: 'career.manage',
+    label: 'Manage career levels',
+    what: "Add or retire grades, tracks and developing-toward targets, and set them directly on anyone's profile.",
+  },
   { key: 'approval.request', label: 'Ask for approval', what: 'Raise an approval against a record so it can proceed.' },
   { key: 'approval.decide', label: 'Decide an approval', what: 'Approve or reject. The rule also names which roles may — both are required.' },
   { key: 'document.review', label: 'Review deliverables', what: 'Answer approve or request changes on a document sent to you. The review names its reviewers — both are required.' },
@@ -251,7 +262,7 @@ export const DEFAULT_GRANTS: Record<string, PermissionKey[]> = {
    * is not delivery information, and a role that needs it in a particular firm can be given it
    * deliberately.
    */
-  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff', 'application.edit', 'invoice.manage'],
+  ROLE_ENGAGEMENT_LEAD: [...DELIVERY_CORE, 'approval.decide', 'document.review', 'time.approve', 'leave.approve', 'rate.view', 'rate.edit', 'change.approve', 'skill.assess', 'skill.view', 'milestone.edit', 'milestone.accept', 'scope.edit', 'scope.approve', 'time.recordForOthers', 'work.move', 'work.archive', 'work.restore', 'estimate.agree', 'engagement.edit', 'sow.edit', 'sow.attribute', 'capacity.allocate', 'capacity.record', 'note.editAny', 'evidence.remove', 'document.remove', 'config.manage', 'project.staff', 'application.edit', 'invoice.manage', 'career.manage'],
   /*
    * A principal assesses but does not staff, so they read levels and record them and get none of
    * the commercial grants. This is the role the word "assessed" is really for: a senior person
@@ -665,9 +676,15 @@ export const ACTION_PERMISSIONS = {
   // Any delivery seat may save a shared view; the ARM enforces creator-or-admin on rewrites.
   upsertSavedView: 'work.edit',
   deleteSavedView: 'work.edit',
-  // Self-or-admin, decided in the arm — the same shape as setNotificationPref, for grade/track/
-  // developingToward instead of a notification preference.
+  // Self-or-career.manage, decided in the arm — the same shape as setNotificationPref, for
+  // grade/track/developingToward instead of a notification preference.
   updateCareerProfile: null,
+  // Managing the career vocabulary itself — not a `config` op, so it needs its own line here
+  // rather than one blanket `config.manage` check: `career.manage` is deliberately narrower,
+  // see the design's reasoning for why this couldn't be a permission-OR carve-out in apply()'s
+  // single funnel check instead.
+  upsertCareerOption: 'career.manage',
+  removeCareerOption: 'career.manage',
   /* The drain stamping what happened to a queued message after it happened — a record of an
    * outcome, not a grant. Never accepted over the wire; see the workspace endpoint's KINDS. */
   markNotificationDelivery: null,
