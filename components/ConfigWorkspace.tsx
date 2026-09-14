@@ -16,6 +16,8 @@ import {
   liveRoles,
   liveSkills,
   skillName,
+  liveCareerOptions,
+  type CareerOption,
   liveCustomFields,
   customFieldsFor,
   agentEnabledSource,
@@ -99,6 +101,7 @@ type Tab =
   | 'disciplines'
   | 'rates'
   | 'skills'
+  | 'careerOptions'
   | 'customFields'
   | 'serviceLevels'
   | 'healthScore'
@@ -127,6 +130,7 @@ const TABS: { id: Tab; label: string; group: string; subgroup?: string }[] = [
   { id: 'workTypes', label: 'Work types', group: 'Operating model', subgroup: 'Vocabulary & classification' },
   { id: 'disciplines', label: 'Disciplines', group: 'Operating model', subgroup: 'Vocabulary & classification' },
   { id: 'skills', label: 'Skills', group: 'Operating model', subgroup: 'Vocabulary & classification' },
+  { id: 'careerOptions', label: 'Career levels', group: 'Operating model', subgroup: 'Vocabulary & classification' },
   { id: 'customFields', label: 'Custom fields', group: 'Operating model', subgroup: 'Vocabulary & classification' },
   { id: 'responsibilities', label: 'Responsibilities', group: 'Operating model', subgroup: 'Vocabulary & classification' },
   { id: 'roles', label: 'Roles & people', group: 'Operating model', subgroup: 'Roles & people' },
@@ -191,6 +195,14 @@ interface Props {
   onRecordSkill: (r: { personId: string; skillId: string; level: SkillLevel; source: SkillSource; assessedBy: string | null; lastUsedOn: string | null; note: string }) => boolean
   onCorrectSkill: (id: string, patch: { level?: SkillLevel; source?: SkillSource; assessedBy?: string | null; lastUsedOn?: string | null; note?: string }) => boolean
   onRemoveSkill: (id: string) => boolean
+  /**
+   * The career vocabulary is a catalogue the firm owns, like work types — but `career.manage`
+   * is a deliberately narrower authority than `config.manage` (14 Sep 2026), so it travels its
+   * own path rather than through `onConfig`, the same reasoning that keeps rates and skill
+   * levels off it.
+   */
+  onUpsertCareerOption: (r: { id: string | null; kind: CareerOption['kind']; label: string }) => boolean
+  onRemoveCareerOption: (id: string) => boolean
   onOpenProfile: (personId: string) => void
   /**
    * Confirming a duplicate group mints `link`/`DUPLICATE_OF` actions — work-record edits, not
@@ -202,7 +214,8 @@ interface Props {
 }
 
 export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig,
-  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill, onOpenProfile, onLink, onClose,
+  onApplyBlueprint, onRecordRate, onCorrectRate, onRecordSkill, onCorrectSkill, onRemoveSkill,
+  onUpsertCareerOption, onRemoveCareerOption, onOpenProfile, onLink, onClose,
   initialTab, initialBlueprintSource }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'index')
   const [scopeId, setScopeId] = useState<string>(ROOT_SCOPE)
@@ -369,6 +382,9 @@ export default function ConfigWorkspace({ state, actor, signedIn, pass, onConfig
           {tab === 'disciplines' && <Disciplines state={state} onConfig={onConfig} />}
           {tab === 'rates' && <Rates state={state} actor={actor} onRecord={onRecordRate} onCorrect={onCorrectRate} />}
           {tab === 'skills' && <Skills state={state} actor={actor} onConfig={onConfig} onRecord={onRecordSkill} onCorrect={onCorrectSkill} onRemove={onRemoveSkill} />}
+          {tab === 'careerOptions' && (
+            <CareerOptions state={state} actor={actor} onUpsert={onUpsertCareerOption} onRemove={onRemoveCareerOption} />
+          )}
           {tab === 'customFields' && <CustomFields state={state} onConfig={onConfig} />}
           {tab === 'serviceLevels' && <ServiceLevels state={state} onConfig={onConfig} />}
           {tab === 'healthScore' && <HealthScoreSection state={state} onConfig={onConfig} />}
@@ -1560,7 +1576,107 @@ function WorkTypes({
   )
 }
 
+const CAREER_KINDS: { kind: CareerOption['kind']; label: string; hint: string }[] = [
+  { kind: 'grade', label: 'Grade', hint: 'Seniority — "Senior Technical Consultant", "Intern".' },
+  { kind: 'track', label: 'Track', hint: 'The specialism deployed on — "X++", "SCM / manufacturing".' },
+  { kind: 'developingToward', label: 'Developing toward', hint: 'What somebody is working toward, when that is not what they are yet.' },
+]
 
+function CareerOptions({
+  state,
+  actor,
+  onUpsert,
+  onRemove,
+}: {
+  state: WorkspaceState
+  actor: Actor
+  onUpsert: (r: { id: string | null; kind: CareerOption['kind']; label: string }) => boolean
+  onRemove: (id: string) => boolean
+}) {
+  const mayManage = can(state.model, actor, 'career.manage')
+  const people = Object.values(state.model.people)
+  const [drafts, setDrafts] = useState<Record<CareerOption['kind'], string>>({
+    grade: '', track: '', developingToward: '',
+  })
+
+  return (
+    <section className="cfg-section">
+      <h3 className="cfg-h">Career levels</h3>
+      <p className="cfg-note">
+        Grade, track and developing-toward — the firm&rsquo;s own vocabulary for a person&rsquo;s
+        career, chosen from these lists on the person&rsquo;s own page rather than typed. Held by
+        the Engagement Leader by default, not tied to platform configuration.
+      </p>
+
+      {CAREER_KINDS.map(({ kind, label, hint }) => {
+        const options = liveCareerOptions(state.model, kind)
+        return (
+          <Fragment key={kind}>
+            <h4 className="cfg-sub">{label}</h4>
+            <p className="cfg-note">{hint}</p>
+            {options.length === 0 ? (
+              <p className="cfg-note">Nothing here yet.</p>
+            ) : (
+              <table className="cfg-table est-table">
+                <thead>
+                  <tr>
+                    <th>{label}</th>
+                    <th>Held by</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {options.map((o) => {
+                    const held = people.filter((p) => p.status !== 'Departed' && p[kind] === o.label).length
+                    return (
+                      <tr key={o.id}>
+                        <td>{o.label}</td>
+                        <td className="mono">{held}</td>
+                        <td>
+                          {mayManage.allowed && (
+                            <button
+                              className="btn-link"
+                              disabled={held > 0}
+                              title={held > 0 ? `${held} ${held === 1 ? 'person holds' : 'people hold'} this. Change their career field first.` : 'Retire it'}
+                              onClick={() => onRemove(o.id)}
+                            >
+                              Retire
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+            {mayManage.allowed ? (
+              <div className="cfg-inline">
+                <input
+                  value={drafts[kind]}
+                  placeholder={`Add a ${label.toLowerCase()}`}
+                  aria-label={`New ${label.toLowerCase()}`}
+                  onChange={(e) => setDrafts({ ...drafts, [kind]: e.target.value })}
+                />
+                <button
+                  className="btn primary"
+                  disabled={!drafts[kind].trim()}
+                  onClick={() => {
+                    if (onUpsert({ id: null, kind, label: drafts[kind] })) setDrafts({ ...drafts, [kind]: '' })
+                  }}
+                >
+                  Add {label.toLowerCase()}
+                </button>
+              </div>
+            ) : (
+              <p className="cfg-note">{mayManage.reason ?? 'This list is read only for you.'}</p>
+            )}
+          </Fragment>
+        )
+      })}
+    </section>
+  )
+}
 
 /* ================================================================== *
  * Landing

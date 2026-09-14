@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import DetailDrawer from './DetailDrawer'
-import { directReportsOf, isExternalPartyKind, liveRoles, liveSkills, skillName, tiersOf } from '@/lib/config'
+import { directReportsOf, isExternalPartyKind, liveCareerOptions, liveRoles, liveSkills, skillName, tiersOf, type CareerOption, type OperatingModel } from '@/lib/config'
 import { can, directoryPersonFor } from '@/lib/access'
 import { formatIso } from '@/lib/dates'
 import { isTerminal } from '@/lib/schedule'
@@ -62,6 +62,11 @@ export default function ProfilePanel({
   const person = model.people[personId]
   const isSelf = directoryPersonFor(model, actor)?.id === personId
   const mayConfigure = Boolean(onConfig) && can(model, actor, 'config.manage').allowed
+  // career.manage alone, not `|| config.manage` (14 Sep 2026) — this must read consistently
+  // with `updateCareerProfile`'s own arm, which checks career.manage alone. An OR here would
+  // show an enabled control the reducer then refuses, on any tenant where a career.manage
+  // holder isn't also a config.manage holder.
+  const mayManageCareer = can(model, actor, 'career.manage').allowed
   const today = new Date().toISOString().slice(0, 10)
 
   const [section, setSection] = useState<Section>('Overview')
@@ -290,15 +295,27 @@ export default function ProfilePanel({
 
                         {s === 'Career' && (
                           <>
-                            {!isSelf && (
+                            {!isSelf && !mayManageCareer && (
                               <p className="cfg-note">
                                 Grade, track and development are {person.name}&rsquo;s own to state — you can see them, not edit them.
                               </p>
                             )}
                             <div className="profile-facts">
-                              <CareerField label="Grade" self={isSelf} value={grade} stored={person.grade ?? ''} setValue={setGrade} onSave={(v) => onUpdateCareer(person.id, { grade: v })} />
-                              <CareerField label="Track" self={isSelf} value={track} stored={person.track ?? ''} setValue={setTrack} onSave={(v) => onUpdateCareer(person.id, { track: v })} />
-                              <CareerField label="Developing toward" self={isSelf} value={developingToward} stored={person.developingToward ?? ''} setValue={setDevelopingToward} onSave={(v) => onUpdateCareer(person.id, { developingToward: v })} />
+                              <CareerField
+                                label="Grade" kind="grade" model={model}
+                                editable={isSelf || mayManageCareer} value={grade} stored={person.grade ?? ''}
+                                setValue={setGrade} onSave={(v) => onUpdateCareer(person.id, { grade: v })}
+                              />
+                              <CareerField
+                                label="Track" kind="track" model={model}
+                                editable={isSelf || mayManageCareer} value={track} stored={person.track ?? ''}
+                                setValue={setTrack} onSave={(v) => onUpdateCareer(person.id, { track: v })}
+                              />
+                              <CareerField
+                                label="Developing toward" kind="developingToward" model={model}
+                                editable={isSelf || mayManageCareer} value={developingToward} stored={person.developingToward ?? ''}
+                                setValue={setDevelopingToward} onSave={(v) => onUpdateCareer(person.id, { developingToward: v })}
+                              />
                             </div>
                           </>
                         )}
@@ -496,33 +513,50 @@ function Fact({
 
 function CareerField({
   label,
-  self,
+  kind,
+  model,
+  editable,
   value,
   stored,
   setValue,
   onSave,
 }: {
   label: string
-  self: boolean
+  kind: CareerOption['kind']
+  model: OperatingModel
+  editable: boolean
   value: string
   stored: string
   setValue: (v: string) => void
   onSave: (v: string) => boolean
 }) {
+  // The live list, plus the stored value carried along when it names nothing currently
+  // offered — a value that predates the master list, or names a since-retired option. Mirrors
+  // `ownerOptionValues`'s `unlisted` carry exactly: nothing is ever silently dropped or blanked.
+  const live = liveCareerOptions(model, kind)
+  const unlisted = stored && !live.some((o) => o.label === stored) ? stored : null
   return (
     <label className="fld">
       <span className="fld-label">{label}</span>
-      {self ? (
-        <input
+      {editable ? (
+        <select
           value={value}
-          placeholder="none recorded"
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={() => {
-            const next = value.trim()
-            if (next === stored) return
-            if (!onSave(next)) setValue(stored)
+          onChange={(e) => {
+            const next = e.target.value
+            setValue(next)
+            if (next !== stored) {
+              if (!onSave(next)) setValue(stored)
+            }
           }}
-        />
+        >
+          <option value="">none recorded</option>
+          {live.map((o) => (
+            <option key={o.id} value={o.label}>
+              {o.label}
+            </option>
+          ))}
+          {unlisted && <option value={unlisted}>{unlisted}</option>}
+        </select>
       ) : (
         <span>{stored || <span className="prov">none recorded</span>}</span>
       )}

@@ -3374,6 +3374,12 @@ export default function IssueWorkspace({
           onRemoveSkill={(id) =>
             dispatch({ t: 'removePersonSkill', id, now: new Date().toISOString() })
           }
+          onUpsertCareerOption={(r) =>
+            dispatch({ t: 'upsertCareerOption', ...r, now: new Date().toISOString() })
+          }
+          onRemoveCareerOption={(id) =>
+            dispatch({ t: 'removeCareerOption', id, now: new Date().toISOString() })
+          }
           onOpenProfile={setOpenProfileId}
           onLink={(actions) => dispatchMany(actions).ok}
         />
