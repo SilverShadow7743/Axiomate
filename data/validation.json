@@ -453,6 +453,16 @@
       "impact": "Career management was designed to decouple from the broadest platform permission specifically so a firm could narrow config.manage away from Engagement Leader later without silently breaking this. If the two permissions are not genuinely independent, that decoupling does not exist and the whole reason for a new permission key is undone."
     },
     {
+      "id": "EMP1",
+      "title": "Person.employeeId: assigned once, lazily, only to a person whose roles grant internal.view — never reassigned, never revoked",
+      "expected": "docs/plans/2026-09-16-employee-id-design.md — a visible AX-#### id distinct from the internal PERSON_n key, given automatically to internal team members and to nobody else, via the existing internal.view permission rather than a hardcoded role list. Proves: a person created with an internal role (ROLE_TECHNICAL) gets an id matching AX-\\d{4}; a person created with only a client role (ROLE_CLIENT_USER) gets none; editing an unrelated field on an existing internal person leaves their id exactly as it was (the carry-forward branch, not just the assignment branch); removing every internal role from a person who already holds an id does not strip the id already assigned.",
+      "verdict": "PASS",
+      "actual": "internal hire: AX-0001; client contact: no id (correct); unrelated edit: id unchanged; role removal: id retained.",
+      "stops": "—",
+      "severity": "—",
+      "impact": "A wrongly-assigned id reaches a client contact's profile; a wrongly-revoked id changes what was meant to be a permanent, once-assigned identifier into one that can silently disappear on an unrelated edit."
+    },
+    {
       "id": "DL2",
       "title": "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
       "expected": "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",

@@ -45,7 +45,7 @@ import { ACTIVITY_PHASES, NO_CLIENT_CHOSEN } from './types'
 export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
-import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, isStaffedOn, permissionForAction, rolesFor, type AccessPolicy, type PermissionKey } from './access'
+import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, isStaffedOn, permissionForAction, rolesFor, rolesGrant, type AccessPolicy, type PermissionKey } from './access'
 import { rateProblem, type PersonRate, type RateKind } from './rates'
 import {
   LOG_FOR_OTHERS,
@@ -236,6 +236,7 @@ import { type IntakeForm,
   type IssueTemplate,
   type CareerOption,
   nextCareerOptionId,
+  nextEmployeeId,
 } from './config'
 import { MEASURES, type Goal } from './goals'
 
@@ -8935,11 +8936,24 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
         }
       }
 
+      const roleIds = op.roleIds.filter((r) => m.roles[r] && !m.roles[r].deletedAt)
       const person: Person = {
         id,
         name,
-        roleIds: op.roleIds.filter((r) => m.roles[r] && !m.roles[r].deletedAt),
+        roleIds,
         fromSource: existing?.fromSource ?? false,
+        /*
+         * Assigned once, lazily, the first time these roles grant `internal.view` — never
+         * reassigned or revoked afterward, even by a later edit that would make the person
+         * ineligible if this check ran fresh against it. `roleIds` here (not `op.roleIds`,
+         * which is unfiltered) is what the person is about to hold. See `Person.employeeId`'s
+         * doc comment for why there is no location segment yet.
+         */
+        ...(existing?.employeeId
+          ? { employeeId: existing.employeeId }
+          : rolesGrant(m, roleIds, 'internal.view')
+            ? { employeeId: nextEmployeeId(m.people) }
+            : {}),
         // Undefined when cleared rather than an empty string, so "no address recorded" is one
         // state rather than two that compare unequal.
         ...(email ? { email } : existing?.email && op.email === undefined ? { email: existing.email } : {}),

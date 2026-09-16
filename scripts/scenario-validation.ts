@@ -2534,6 +2534,37 @@ scenario(
 )
 
 scenario(
+  'EMP1',
+  'Person.employeeId: assigned once, lazily, only to a person whose roles grant internal.view — never reassigned, never revoked',
+  'docs/plans/2026-09-16-employee-id-design.md — a visible AX-#### id distinct from the internal PERSON_n key, given automatically to internal team members and to nobody else, via the existing internal.view permission rather than a hardcoded role list. Proves: a person created with an internal role (ROLE_TECHNICAL) gets an id matching AX-\\d{4}; a person created with only a client role (ROLE_CLIENT_USER) gets none; editing an unrelated field on an existing internal person leaves their id exactly as it was (the carry-forward branch, not just the assignment branch); removing every internal role from a person who already holds an id does not strip the id already assigned.',
+  () => {
+    const technical = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: null, name: 'Tia Technical', roleIds: ['ROLE_TECHNICAL'] }, now: NOW } as Action)
+    const tiaId = Object.values(technical.model.people).find((p) => p.name === 'Tia Technical')!.id
+    const tiaGotId = /^AX-\d{4}$/.test(technical.model.people[tiaId].employeeId ?? '')
+
+    const client = ok(BASE, { t: 'config', op: { k: 'upsertPerson', id: null, name: 'Cindy Client', roleIds: ['ROLE_CLIENT_USER'] }, now: NOW } as Action)
+    const cindyId = Object.values(client.model.people).find((p) => p.name === 'Cindy Client')!.id
+    const clientGotNoId = client.model.people[cindyId].employeeId === undefined
+
+    const retitled = ok(technical, { t: 'config', op: { k: 'upsertPerson', id: tiaId, name: 'Tia Technical', roleIds: ['ROLE_TECHNICAL'], title: 'Senior Technical Consultant' }, now: NOW } as Action)
+    const idSurvivedUnrelatedEdit = retitled.model.people[tiaId].employeeId === technical.model.people[tiaId].employeeId
+
+    const strippedRoles = ok(retitled, { t: 'config', op: { k: 'upsertPerson', id: tiaId, name: 'Tia Technical', roleIds: [] }, now: NOW } as Action)
+    const idSurvivedRoleRemoval = strippedRoles.model.people[tiaId].employeeId === technical.model.people[tiaId].employeeId
+
+    const good = tiaGotId && clientGotNoId && idSurvivedUnrelatedEdit && idSurvivedRoleRemoval
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `internal hire: ${tiaGotId ? technical.model.people[tiaId].employeeId : 'NO ID ASSIGNED'}; client contact: ${clientGotNoId ? 'no id (correct)' : `WRONGLY GOT ${client.model.people[cindyId].employeeId}`}; unrelated edit: ${idSurvivedUnrelatedEdit ? 'id unchanged' : 'id CHANGED OR LOST'}; role removal: ${idSurvivedRoleRemoval ? 'id retained' : 'id REVOKED'}.`,
+      stops: good ? '—' : 'at the upsertPerson reducer arm — either the internal.view predicate is wrong, or the carry-forward/revocation behaviour does not match the design',
+      severity: good ? '—' : 'P1',
+      impact: 'A wrongly-assigned id reaches a client contact\'s profile; a wrongly-revoked id changes what was meant to be a permanent, once-assigned identifier into one that can silently disappear on an unrelated edit.',
+    }
+  },
+)
+
+scenario(
   'DL2',
   "setReportDelivery: imsScopeNodeId narrows the daily IMS to one engagement or is refused if it names nothing live; imsPerEngagement toggles the packs' own fan-out shape for it",
   "docs/plans/2026-09-09-daily-ims-engagement-scope-design.md — the daily IMS's two delivery shapes: narrowed to one engagement, or fanned out one-per-engagement like the packs already are. Proves: a live engagement id is accepted and stored; a deleted node's id is refused, so a scope quietly going stale narrows the report to nothing rather than teaching the mistake; an id that never existed is refused the same way; clearing it back to null (unscoped) succeeds; imsPerEngagement sets and clears independently of imsScopeNodeId (the send-time choice between the two lives in lib/db/schedule.ts, which this pure reducer test cannot reach — see the design doc's own note on that limit).",

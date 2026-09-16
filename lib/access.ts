@@ -394,6 +394,20 @@ export function permissionsFor(model: OperatingModel, actor: Actor): Set<Permiss
   return out
 }
 
+/**
+ * The same question `permissionsFor` asks of a signed-in actor's own roles, asked directly of a
+ * roster a caller already has in hand — a reducer mid-`upsertPerson` has `roleIds` for a person
+ * who may not exist in `model.people` yet, so it cannot route through `rolesFor`/
+ * `directoryPersonFor`, both of which resolve an actor by looking themselves up there first.
+ *
+ * Reads `model.access.grants` — stored config — not `DEFAULT_GRANTS`. A tenant's custom role is
+ * not in `DEFAULT_GRANTS` at all, and answering from the shipped default here would be the I27
+ * mistake in a new place: treating what a role ships with as what it actually holds.
+ */
+export function rolesGrant(model: OperatingModel, roleIds: string[], key: PermissionKey): boolean {
+  return roleIds.some((r) => (model.access.grants[r] ?? []).includes(key))
+}
+
 export function can(model: OperatingModel, actor: Actor, key: PermissionKey): Decision {
   if (!model.access?.enforced) return YES
   if (permissionsFor(model, actor).has(key)) return YES

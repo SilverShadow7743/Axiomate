@@ -289,6 +289,20 @@ export interface Person {
   name: string
   roleIds: string[]
   /**
+   * A visible, human-facing identifier — `AX-0001`, `AX-0002`, ... — distinct from `id` above,
+   * which is the internal `PERSON_n` key nothing outside the database ever shows anyone.
+   *
+   * Assigned once, lazily, inside `upsertPerson`'s reducer arm the first time a person's roles
+   * grant `internal.view` (see `rolesGrant` in `lib/access.ts`) — never reassigned and never
+   * revoked afterward, even if a later role change would make them ineligible if evaluated
+   * fresh. A client contact never gets one. No location segment: the original ask wanted an id
+   * "strong to handle multiple country or location," but no location field exists anywhere on
+   * this record as of 16 Sep 2026, and assigning one to every current person is real data entry
+   * nobody has done — see `docs/plans/2026-09-16-employee-id-design.md`. A location-coded scheme
+   * is a later, separate design, not an oversight in this one.
+   */
+  employeeId?: string
+  /**
    * The work address, when it is known.
    *
    * Added for one reason: it is what an identity provider returns, and matching a signed-in
@@ -581,6 +595,21 @@ export function nextCareerOptionId(careerOptions: Record<string, CareerOption>):
     if (m) max = Math.max(max, Number(m[1]))
   }
   return `career-${max + 1}`
+}
+
+/**
+ * The next `Person.employeeId` — scanned from what's already assigned, same max-based shape as
+ * `nextCareerOptionId` above, for the same reason: no separate counter to keep in sync with
+ * `m.seq` (the node counter) or drift out of step with it.
+ */
+export function nextEmployeeId(people: Record<string, Person>): string {
+  let max = 0
+  for (const p of Object.values(people)) {
+    const m = /^AX-(\d+)$/.exec(p.employeeId ?? '')
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  const n = max + 1
+  return `AX-${n < 10000 ? String(n).padStart(4, '0') : String(n)}`
 }
 
 /**
