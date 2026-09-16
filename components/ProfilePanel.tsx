@@ -200,6 +200,7 @@ export default function ProfilePanel({
                       <div className="fasttab-body">
                         {s === 'Overview' && (
                           <div className="profile-facts">
+                            <Fact label="Employee ID" editable={false} value={person.employeeId ?? ''} display={person.employeeId ?? '—'} onSave={() => true} />
                             <Fact label="Work address" editable={mayConfigure} value={person.email ?? ''} type="email" onSave={(v) => save({ email: v })} />
                             <Fact label="Title" editable={mayConfigure} value={person.title ?? ''} onSave={(v) => save({ title: v })} />
                             <Fact label="Phone" editable={mayConfigure} value={person.phone ?? ''} type="tel" onSave={(v) => save({ phone: v })} />

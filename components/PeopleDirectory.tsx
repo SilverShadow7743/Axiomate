@@ -238,6 +238,7 @@ export default function PeopleDirectory({
             <table className="cfg-table est-table people-list">
               <thead>
                 <tr>
+                  <th>ID</th>
                   {header('name', 'Name')}
                   {header('title', 'Title')}
                   <th>Roles</th>
@@ -251,6 +252,7 @@ export default function PeopleDirectory({
                   const manager = p.managerId ? model.people[p.managerId] : null
                   return (
                     <tr key={p.id} className={p.status === 'Departed' ? 'pdir-row-departed' : undefined}>
+                      <td className="mono">{p.employeeId || <span className="prov">—</span>}</td>
                       <td>
                         <button className="btn-link" onClick={() => onOpenProfile(p.id)}>
                           {p.name}
