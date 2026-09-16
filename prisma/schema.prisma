@@ -145,6 +145,7 @@ model Tenant {
   documentReviews DocumentReview[]
   milestones    Milestone[]
   scopeItems    ScopeItem[]
+  catalogueEntries  CatalogueEntry[]
   discussionThreads  DiscussionThread[]
   discussionMessages DiscussionMessage[]
   discussionFollows  DiscussionFollow[]
@@ -206,6 +207,11 @@ model HierarchyNode {
   /// tiers (see `isExternalPartyKind` in lib/config.ts) — usually 'client', never checked
   /// against that literal string. Empty on every other tier.
   applications Application[] @relation("ApplicationClient")
+  /// Provenance only — the D365 Business Process Catalogue row this node (level process-area
+  /// only, enforced at the write path) was imported from. Never consulted by canParent/
+  /// parentProblem. See ADR 0006.
+  catalogueEntryId String?
+  catalogueEntry   CatalogueEntry? @relation(fields: [tenantId, catalogueEntryId], references: [tenantId, id], onDelete: Restrict)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -213,6 +219,7 @@ model HierarchyNode {
   @@index([tenantId, parentId])
   @@index([tenantId, deletedAt])
   @@index([tenantId, sowId])
+  @@index([tenantId, catalogueEntryId])
 }
 
 model Issue {
@@ -1608,9 +1615,57 @@ model ScopeItem {
   recordedAt DateTime
   deletedAt  DateTime?
 
+  /// Provenance only — the D365 Business Process Catalogue row this scope item (level process |
+  /// scenario | configuration-deliverable only, enforced at the write path) was imported from.
+  /// Never consulted by checkScopeItem. See ADR 0006.
+  catalogueEntryId String?
+  catalogueEntry   CatalogueEntry? @relation(fields: [tenantId, catalogueEntryId], references: [tenantId, id], onDelete: Restrict)
+
   @@id([tenantId, id])
   @@index([tenantId, sowId, sequence])
   @@index([tenantId, parentId])
+  @@index([tenantId, catalogueEntryId])
+}
+
+/// A row from the Microsoft D365 Business Process Catalogue, imported by
+/// `scripts/import-d365-catalogue.ts` — see ADR 0006 / ART-20260914-003. Reference data only:
+/// never a tier of the tree, never consulted by `canParent`/`checkScopeItem`/`parentProblem`.
+/// `HierarchyNode.catalogueEntryId` and `ScopeItem.catalogueEntryId` reference this table for
+/// provenance; nothing here is ever written by the reducer.
+///
+/// Keyed on the catalogue's own hierarchical id alone (e.g. `99.10.010.100`), following this
+/// schema's universal `@@id([tenantId, id])` pattern — not on (id, workbookVersion), which would
+/// mint a new row per quarterly release and orphan every existing reference (ADR 0006 point 2).
+/// `workbookVersion` is an ordinary attribute, updated in place on re-import (last-write-wins).
+/// No `deletedAt`: the app never deletes a `CatalogueEntry`.
+model CatalogueEntry {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// The catalogue's own hierarchical id, verbatim from the workbook.
+  id    String
+  /// process-area | process | scenario | configuration-deliverable.
+  level String
+  name  String
+
+  /// live | deprecated | deleted.
+  status String
+
+  /// Present on a Deprecated row that names its replacement — recorded verbatim from the
+  /// workbook, never used to re-point an existing HierarchyNode/ScopeItem reference (ADR 0006 /
+  /// BR3).
+  alternateId String?
+  /// The workbook version/release this row was last confirmed against. Updated in place on
+  /// re-import, not part of the key.
+  workbookVersion String?
+
+  hierarchyNodes HierarchyNode[]
+  scopeItems     ScopeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, id])
 }
 
 /// What was promised against a statement of work, when it lands, and what it is worth.
