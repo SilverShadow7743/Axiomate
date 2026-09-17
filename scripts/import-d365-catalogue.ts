@@ -15,16 +15,18 @@
  *
  * Reads the workbook with `exceljs` — the `extract-wbs.ts` precedent — turns each row into a
  * `WorkbookRow`, hands the rows to step 1's `orderForImport` (parse, classify, parent-before-child
- * order, honest skip reasons), queries this tenant's existing `CatalogueEntry` ids directly
- * (`prisma.catalogueEntry.findMany({ where: { tenantId } })`) to tell "would create" apart from
- * "ALREADY PRESENT", and prints the plan. Writes nothing.
+ * order, honest skip reasons), queries this tenant's existing `CatalogueEntry` ids
+ * (`prisma.catalogueEntry.findMany({ where: { tenantId } })`, run inside `runAsTenant` — see that
+ * function's doc comment) to tell "would create" apart from "ALREADY PRESENT", and prints the
+ * plan. Writes nothing.
  *
  * ---------------------------------------------------------------------------
  * What step 5 adds (the `--apply` write path)
  *
- * Direct, tenant-scoped Prisma creates against `AXIOMATE_TENANT` — no `Action` arm, no
- * `persistActions`, no `lib/access.ts` entry (BR8; ART-20260914-003 v2 Alt B). Three choices this
- * step makes that the plan states as constraints but leaves to the script to work out in code:
+ * Tenant-scoped Prisma creates against `AXIOMATE_TENANT`, each wrapped in `runAsTenant` now that
+ * `CatalogueEntry` carries row-level security (see that function's doc comment) — no `Action` arm,
+ * no `persistActions`, no `lib/access.ts` entry (BR8; ART-20260914-003 v2 Alt B). Three choices
+ * this step makes that the plan states as constraints but leaves to the script to work out in code:
  *
  *   - **Create-only, never upsert.** BR6 calls `workbookVersion` "updated in place on re-import" —
  *     but that is the diff-and-reconcile capability the design doc explicitly defers (scope_out:
@@ -70,7 +72,7 @@ import { config as loadEnv } from 'dotenv'
 loadEnv()
 
 import ExcelJS from 'exceljs'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Prisma } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import {
   orderForImport,
@@ -107,6 +109,28 @@ if (!URL) {
   process.exit(1)
 }
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: URL }) })
+
+/**
+ * `CatalogueEntry` carries row-level security as of `prisma/migrations/20260916075746_add_catalogue_entry`
+ * (`FORCE ROW LEVEL SECURITY` + a `tenant_isolation` policy — fixed alongside this wrapping; see
+ * that migration and ART-20260916-002). Every `prisma.catalogueEntry.*` call below must therefore
+ * run inside a transaction that sets `app.tenant_id` first, the same discipline `lib/db/client.ts`'s
+ * real `withTenant` applies to every RLS-covered table — otherwise a `FOR ALL` policy with no
+ * separate `WITH CHECK` applies its `USING` clause to reads AND writes alike: a `findMany` on a
+ * connection with no `app.tenant_id` set returns zero rows silently (not an error), and a `create`
+ * is rejected outright.
+ *
+ * `withTenant` itself is not imported here because it begins `import 'server-only'`, which throws
+ * under a bare `tsx` run — this script's own usage line (and step 5's fixed verify_command) runs it
+ * with no extra flags. `scripts/catalogue-tenant-fk-proof.ts` hits the identical constraint and
+ * reimplements the same three lines locally; this is that same precedent, not a new pattern.
+ */
+async function runAsTenant<T>(tenantId: TenantId, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`
+    return fn(tx)
+  })
+}
 
 /* ------------------------------------------------------------------ *
  * Workbook reading — no interpretation here, just cells into WorkbookRow (extract-wbs.ts split)
@@ -348,7 +372,9 @@ async function main() {
 
   const order = orderForImport(rows)
 
-  const existing = await prisma.catalogueEntry.findMany({ where: { tenantId: TENANT }, select: { id: true } })
+  const existing = await runAsTenant(TENANT, (tx) =>
+    tx.catalogueEntry.findMany({ where: { tenantId: TENANT }, select: { id: true } }),
+  )
   const existingIds = new Set(existing.map((e) => e.id))
 
   const toCreate = order.ordered.filter((o) => !existingIds.has(o.id))
@@ -448,17 +474,19 @@ async function main() {
   let concurrentlyPresent = 0
   for (const c of creatable) {
     try {
-      await prisma.catalogueEntry.create({
-        data: {
-          tenantId: TENANT,
-          id: c.id,
-          level: c.level,
-          name: c.name,
-          status: c.status,
-          alternateId: c.alternateId,
-          workbookVersion: WORKBOOK_VERSION,
-        },
-      })
+      await runAsTenant(TENANT, (tx) =>
+        tx.catalogueEntry.create({
+          data: {
+            tenantId: TENANT,
+            id: c.id,
+            level: c.level,
+            name: c.name,
+            status: c.status,
+            alternateId: c.alternateId,
+            workbookVersion: WORKBOOK_VERSION,
+          },
+        }),
+      )
       created += 1
     } catch (e) {
       if ((e as { code?: string })?.code === 'P2002') {

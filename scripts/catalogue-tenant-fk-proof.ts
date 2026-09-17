@@ -31,21 +31,18 @@
  * would refuse the insert before the FK constraint ever had a chance to run, and a pass would
  * prove the wrong thing.
  *
- * **`CatalogueEntry` itself carries no RLS policy at all** — its migration
- * (`20260916075746_add_catalogue_entry`) adds the table, its FKs and its indexes but, unlike
- * every other table added after 2026-08-24 (`DiscussionThread`, `Meeting`, `Snapshot`,
- * `Application`, `Invoice`, `ChecklistItem`, `PersonalAction`, `PersonalGraphToken` all got their
- * own `ENABLE/FORCE ROW LEVEL SECURITY` in the migration that created them), contains no RLS
- * statement. That is a real gap against this codebase's own established pattern — flagged here
- * as a checked note, not fixed here, because `prisma/schema.prisma` and `prisma/migrations/`
- * belong to the `schema` workstream, not `import-script`'s owns list. AC7's FK guarantee still
- * holds regardless (a composite FK check does not depend on RLS being present on either side of
- * it — see the "What this proves" note above), so this gap does not weaken what this proof
- * demonstrates; it is a separate, narrower finding about defense-in-depth this script surfaces
- * because writing it required reading every RLS migration to know which client to use where.
- * `CatalogueEntry` is read and written directly here, without `runAsTenant`, matching how
- * `scripts/import-d365-catalogue.ts` already reads and writes it (see this script's own module
- * doc note on `npm run audit:tenancy` below).
+ * **`CatalogueEntry` now carries row-level security.** Its creation migration
+ * (`20260916075746_add_catalogue_entry`) originally shipped with no RLS statement at all — a real
+ * gap against this codebase's own established pattern, flagged here as a checked note when this
+ * script was first written. That gap has since been closed in the same migration (fix recorded
+ * against ART-20260914-004's finding; see ART-20260916-002): `CatalogueEntry` now gets the
+ * identical `ENABLE/FORCE ROW LEVEL SECURITY` + `tenant_isolation` policy every other table added
+ * after 2026-08-24 gets in the migration that creates it. AC7's FK guarantee never depended on
+ * this either way (a composite FK check runs outside row security — see the "What this proves"
+ * note above), so nothing about what this proof demonstrates changes. What does change: every
+ * `prisma.catalogueEntry.*` call in this file now runs inside `runAsTenant`, same as every other
+ * RLS-covered table here — an unwrapped call would now see zero rows (`findMany`/`count`) or be
+ * rejected outright (`create`), not the real behaviour.
  *
  * ---------------------------------------------------------------------------
  * AC8/AC9 — checked note, not a code change
@@ -94,9 +91,8 @@ if (!URL) {
   process.exit(1)
 }
 
-// The app's own client, going through runAsTenant for every RLS-covered table — this is the
-// control path. CatalogueEntry itself has no RLS policy (see the module doc), so it is read and
-// written on this same client directly, without runAsTenant.
+// The app's own client, going through runAsTenant for every RLS-covered table, CatalogueEntry
+// included as of this migration's fix (see the module doc) — this is the control path.
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: URL }) })
 
 /**
@@ -146,8 +142,7 @@ async function scrub() {
       await tx.hierarchyNode.deleteMany({ where: { tenantId } })
     })
   }
-  // No RLS on CatalogueEntry — see the module doc.
-  await prisma.catalogueEntry.deleteMany({ where: { tenantId: TENANT_A, id: ENTRY_ID } })
+  await runAsTenant(TENANT_A, (tx) => tx.catalogueEntry.deleteMany({ where: { tenantId: TENANT_A, id: ENTRY_ID } }))
 }
 
 async function main() {
@@ -167,9 +162,11 @@ async function main() {
   await scrub()
 
   /* ---------------- 1. seed a CatalogueEntry under tenant A only ---------------- */
-  const entry = await prisma.catalogueEntry.create({
-    data: { tenantId: TENANT_A, id: ENTRY_ID, level: 'process-area', name: 'Proof catalogue entry', status: 'live' },
-  })
+  const entry = await runAsTenant(TENANT_A, (tx) =>
+    tx.catalogueEntry.create({
+      data: { tenantId: TENANT_A, id: ENTRY_ID, level: 'process-area', name: 'Proof catalogue entry', status: 'live' },
+    }),
+  )
   check(
     'CatalogueEntry created under tenant A, not tenant B',
     entry.tenantId === TENANT_A && entry.id === ENTRY_ID,
@@ -293,7 +290,7 @@ async function main() {
   const [leftA, leftB, leftEntries] = await Promise.all([
     countTenant(TENANT_A),
     countTenant(TENANT_B),
-    prisma.catalogueEntry.count({ where: { tenantId: TENANT_A, id: ENTRY_ID } }),
+    runAsTenant(TENANT_A, (tx) => tx.catalogueEntry.count({ where: { tenantId: TENANT_A, id: ENTRY_ID } })),
   ])
   check(
     'cleanup removed every proof row (HierarchyNode, Sow, ScopeItem, CatalogueEntry) from both tenants',
