@@ -33,3 +33,15 @@ ALTER TABLE "ScopeItem" ADD CONSTRAINT "ScopeItem_tenantId_catalogueEntryId_fkey
 
 -- AddForeignKey
 ALTER TABLE "CatalogueEntry" ADD CONSTRAINT "CatalogueEntry_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- RowLevelSecurity: CatalogueEntry is tenant-scoped ("tenantId" is part of its own primary key,
+-- same shape as every table below). New tables get RLS in their own creation migration, per the
+-- discipline every table since 20260824000004_row_level_security has followed (see that
+-- migration's header for why FORCE, not just ENABLE, is required). The tenant-composite FKs
+-- above constrain what HierarchyNode/ScopeItem may *link to*; they do nothing to protect a
+-- direct query or mutation against CatalogueEntry itself that omits an explicit tenantId filter
+-- — this policy is that backstop.
+ALTER TABLE "CatalogueEntry" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "CatalogueEntry" FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON "CatalogueEntry"
+  USING ("tenantId" = current_setting('app.tenant_id', true));
