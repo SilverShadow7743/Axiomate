@@ -1,6 +1,7 @@
 import { startOfWeek, addDays, formatShort } from './dates'
 import type { TimeEntry } from './time'
 import type { ApprovalDecision } from './approval'
+import type { Stamped } from './versioning'
 
 /**
  * A week of somebody's hours, and whether it is still theirs to change.
@@ -43,6 +44,19 @@ export interface Timesheet {
   submittedBy: string
   decidedAt: string | null
   decidedBy: string | null
+  /**
+   * The working pattern this week was judged against, frozen at the moment it was approved —
+   * see `docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md`. Null on anything
+   * not (yet) approved, and null on an approval for a person with no pattern recorded — both
+   * real states, not gaps: the same "null is the feature" rule `valueAt` itself follows. A
+   * later correction to the pattern moves the timeline; this does not move.
+   *
+   * `Stamped<unknown>`, not a specific shape — a version's value is opaque here the same way
+   * `lib/capacity.ts`'s own `WorkingPattern` treats it, and this is a copy of exactly that
+   * value, no more validated than the version it was taken from. A future reader casts and
+   * checks at the point of use, the same discipline `profileAt`'s `usable()` already follows.
+   */
+  workingPatternStamp: Stamped<unknown> | null
   /** Why it was returned. Required on a rejection, absent on an approval — see `decideProblem`. */
   reason: string | null
 }

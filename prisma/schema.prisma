@@ -1313,6 +1313,13 @@ model Timesheet {
   /// its own, "no" is not.
   reason String? @db.Text
 
+  /// A Stamped<{hoursPerDay, daysPerWeek}> (lib/versioning.ts), frozen at approval so a later
+  /// correction to the pattern cannot retroactively move an already-approved week's figures.
+  /// Null on a rejected sheet, and null on an approval for a person with no pattern recorded —
+  /// both real states, not gaps. See
+  /// docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
+  workingPatternStamp Json?
+
   @@id([tenantId, id])
   @@unique([tenantId, person, weekStarting])
   @@index([tenantId, status])

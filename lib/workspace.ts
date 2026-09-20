@@ -129,7 +129,7 @@ import {
   type StatusPolicy,
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time'
-import { overlapProblem, type Version } from './versioning'
+import { overlapProblem, valueAt, stamp, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
 import { actionProblem, type PersonalAction } from './personalActions'
@@ -141,6 +141,7 @@ import {
   checkAllocation,
   defaultProfile,
   describeCapacity,
+  WORKING_PATTERN,
   type Allocation,
   type AllocationPolicy,
   type Commitment,
@@ -5949,6 +5950,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         decidedAt: null,
         decidedBy: null,
         reason: null,
+        // A submitted (or resubmitted) week has not been approved, so it has nothing stamped —
+        // an approved week is frozen and can never reach this arm, so `existing` here is always
+        // one that was never stamped in the first place.
+        workingPatternStamp: null,
       }
       /* The approvers hear a week is waiting — resubmissions included, since a returned week
        * coming back is exactly what a decider is waiting on. Counter continues from THIS
@@ -6015,12 +6020,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const problem = decideProblem(sheet, a.decision, a.reason, attester, directoryPersonFor(state.model, actor)?.id ?? null)
       if (problem) return { state, error: problem }
 
+      /*
+       * Frozen at approval, read at the week's own Monday rather than at `a.now` — the pattern
+       * that governed the work, not whatever the timeline says on whatever day somebody got
+       * round to deciding it. A rejection commits nothing, so it keeps whatever stamp the sheet
+       * already carried rather than clearing it. See
+       * docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
+       */
+      const workingPatternStamp =
+        a.decision === 'approved'
+          ? stamp(
+              sheet!.personId ? valueAt(Object.values(state.versions), WORKING_PATTERN, sheet!.personId, sheet!.weekStarting) : null,
+              a.now,
+            )
+          : sheet!.workingPatternStamp
+
       const next: Timesheet = {
         ...sheet!,
         status: statusAfter(a.decision),
         decidedAt: a.now,
         decidedBy: by,
         reason: a.decision === 'rejected' ? (a.reason ?? '').trim() : null,
+        workingPatternStamp,
       }
       /* The submitter hears the answer, rejection reason included — a timesheet reason is a
        * working instruction, not a private fact like a leave reason. */

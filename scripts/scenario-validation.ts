@@ -2331,9 +2331,9 @@ scenario(
         f6: entry('f6', 'Sam', samId, '2026-08-19', 4, true), // rejected, not re-submitted
       },
       timesheets: {
-        t1: { id: 't1', person: 'Priya', personId: priyaId, weekStarting: '2026-08-10', status: 'Approved', submittedAt: 'x', submittedBy: 'Priya', decidedAt: 'x', decidedBy: 'Lead', reason: null },
-        t2: { id: 't2', person: 'Priya', personId: priyaId, weekStarting: '2026-08-17', status: 'Submitted', submittedAt: 'x', submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null },
-        t3: { id: 't3', person: 'Sam', personId: samId, weekStarting: '2026-08-17', status: 'Rejected', submittedAt: 'x', submittedBy: 'Sam', decidedAt: 'x', decidedBy: 'Lead', reason: 'Wrong issue.' },
+        t1: { id: 't1', person: 'Priya', personId: priyaId, weekStarting: '2026-08-10', status: 'Approved', submittedAt: 'x', submittedBy: 'Priya', decidedAt: 'x', decidedBy: 'Lead', reason: null, workingPatternStamp: null },
+        t2: { id: 't2', person: 'Priya', personId: priyaId, weekStarting: '2026-08-17', status: 'Submitted', submittedAt: 'x', submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null, workingPatternStamp: null },
+        t3: { id: 't3', person: 'Sam', personId: samId, weekStarting: '2026-08-17', status: 'Rejected', submittedAt: 'x', submittedBy: 'Sam', decidedAt: 'x', decidedBy: 'Lead', reason: 'Wrong issue.', workingPatternStamp: null },
       },
       rates: { r1: { id: 'r1', amount: 77123.45, person: 'Priya' } as never },
       commitments: {
@@ -3256,6 +3256,7 @@ scenario(
     const submitted: Timesheet = {
       id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
 
     /* Twice is refused, and says which state it is already in. */
@@ -3315,6 +3316,7 @@ scenario(
     const submitted: Timesheet = {
       id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
 
     /* The rule that has no configuration switch: the asker may never be the decider. */
@@ -4118,28 +4120,24 @@ scenario(
   'What was true is preserved with its period, and a later correction cannot move a figure already computed.',
   () => {
     /*
-     * Driven against lib/versioning.ts directly rather than through the reducer — boundary
-     * arithmetic is where this kind of code goes wrong and it goes wrong quietly, so it is
-     * proven here on its own terms, not inferred from a capacity figure looking plausible.
+     * Driven against lib/versioning.ts directly first — boundary arithmetic is where this kind
+     * of code goes wrong and it goes wrong quietly, so it is proven on its own terms before
+     * anything about a caller is asked. Then, below, through the reducer for real: record a
+     * pattern, approve a week, correct the pattern, and check the approved week's own figure
+     * held — the same shift scenario `E` made this session, from a pure function proven alone
+     * to the reducer path that actually uses it.
      *
      * Re-checked directly, 20 Sep 2026: this scenario used to say "no version has been stored,
-     * and nothing in the application stamps anything yet" — false about storage. `recordVersion`/
-     * `correctVersion` are wired end to end: a real call site (`onRecordPattern`, IssueWorkspace.tsx),
-     * a reducer case, `state.versions`, and full persistence (`lib/db/repo.ts` loads it,
-     * `lib/db/persist.ts` upserts it, both proven by the Prisma `Version` model existing and
-     * being read/written there). `lib/capacity.ts` already reads `valueAt` for real capacity
-     * figures. What is checked below, freshly, rather than assumed: whether `stamp()` — the one
-     * piece that makes a correction safe — has an application caller yet.
+     * and nothing in the application stamps anything yet" — false about storage and reading.
+     * `recordVersion`/`correctVersion` were already wired end to end (a real UI call site,
+     * `onRecordPattern` in IssueWorkspace.tsx; full persistence via the Prisma `Version` model);
+     * `lib/capacity.ts` was already reading `valueAt` for real capacity figures. The one caller
+     * that genuinely did not exist — `stamp()`, called nowhere in the application — is built in
+     * the same change that corrected this scenario: `decideTimesheet`'s approval arm now stamps
+     * `Timesheet.workingPatternStamp`. See docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
      */
     const storageWired = mentions(/onRecordPattern/).length > 0 && mentions(/versionFromRow/).length > 0
     const capacityReadsIt = mentions(/valueAt\(versions, WORKING_PATTERN/).length > 0
-    /*
-     * A bare `/\bstamp\(/` check was tried first and immediately caught its own false positive:
-     * lib/db/schedule.ts has an unrelated local closure also named `stamp()`. The only claim
-     * worth making is "some file imports `stamp` from this module" — checked on the import
-     * line specifically, which a same-named local function never touches.
-     */
-    const stampWired = mentions(/import\s*\{[^}]*\bstamp\b[^}]*\}\s*from\s*['"][^'"]*\/versioning['"]/).length > 0
     const v = (id: string, from: string, to: string | null, hours: number): Version<number> => ({
       id, subjectKind: 'person.workingPattern', subjectId: 'P1', validFrom: from, validTo: to,
       value: hours, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
@@ -4192,14 +4190,70 @@ scenario(
       affected.length === 1 &&
       stillSevenAndAHalf
 
+    /*
+     * The round trip, for real: record a pattern, approve a week against it, correct the
+     * pattern, and check the approved week's own figure held. Priya and Sam are both already
+     * seeded in BASE — Sam deliberately gets no pattern recorded, proving the null case reaches
+     * all the way through the reducer, not only through `valueAt` in isolation.
+     */
+    // `submitTimesheet` is refused unless the submitter is the person named on it
+    // ("A timesheet is submitted by the person whose week it is") — `A` (Validator) isn't
+    // Priya or Sam, so that one step needs an actor whose name actually matches.
+    const okAs = (st: WorkspaceState, a: Action, who: Actor): WorkspaceState => {
+      const r = apply(st, a, who)
+      if (r.error) throw new Error(`${a.t} refused: ${r.error}`)
+      return r.state
+    }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const samActor: Actor = { id: samId, name: 'Sam' }
+    const patterned = ok(BASE, {
+      t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: priyaId,
+      validFrom: '2026-08-01', validTo: null, value: { hoursPerDay: 7.5 },
+      reason: 'Standard week, recorded for the test.', now: NOW,
+    } as Action)
+    const versionId = Object.values(patterned.versions).find((ver) => ver.subjectId === priyaId)!.id
+    const withHours = ok(patterned, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-10', hours: 4,
+      activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const submitted = okAs(withHours, { t: 'submitTimesheet', person: 'Priya', weekStarting: '2026-08-10', now: NOW } as Action, priyaActor)
+    const sheetId = Object.values(submitted.timesheets).find((t) => t.person === 'Priya')!.id
+    const approved = ok(submitted, { t: 'decideTimesheet', id: sheetId, decision: 'approved', now: NOW } as Action)
+    const patternStamp = approved.timesheets[sheetId].workingPatternStamp
+    const stampCaptured =
+      patternStamp?.stampedFrom === versionId &&
+      (patternStamp.value as { hoursPerDay: number }).hoursPerDay === 7.5
+
+    /* The correction that must not move an already-approved figure. */
+    const corrected = ok(approved, {
+      t: 'correctVersion', id: versionId, patch: { value: { hoursPerDay: 6 } },
+      reason: 'Moved to a four-day week from August, recorded for the test.', now: NOW,
+    } as Action)
+    const stampAfterCorrection = corrected.timesheets[sheetId].workingPatternStamp
+    const stampUnmoved =
+      stampAfterCorrection?.stampedFrom === versionId &&
+      (stampAfterCorrection.value as { hoursPerDay: number }).hoursPerDay === 7.5
+
+    /* Approving a week for somebody with no recorded pattern stamps nothing — not a default. */
+    const noPatternHours = ok(BASE, {
+      t: 'addTime', issueId: 'OAPIL-2', person: 'Sam', date: '2026-08-10', hours: 3,
+      activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const noPatternSubmitted = okAs(noPatternHours, { t: 'submitTimesheet', person: 'Sam', weekStarting: '2026-08-10', now: NOW } as Action, samActor)
+    const noPatternSheetId = Object.values(noPatternSubmitted.timesheets).find((t) => t.person === 'Sam')!.id
+    const noPatternApproved = ok(noPatternSubmitted, { t: 'decideTimesheet', id: noPatternSheetId, decision: 'approved', now: NOW } as Action)
+    const stampNullWhenNoPattern = noPatternApproved.timesheets[noPatternSheetId].workingPatternStamp === null
+
+    const roundTrip = stampCaptured && stampUnmoved && stampNullWhenNoPattern
+
     return {
-      verdict: good && storageWired && capacityReadsIt ? (stampWired ? 'PASS' : 'PARTIAL') : 'FAIL',
-      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it: a held copy still reads ${held?.value}h from ${held?.stampedFrom}, proven here by calling \`stamp()\` directly. ${storageWired ? 'The round trip is real, not hypothetical: recording a pattern has a UI call site and full persistence, and capacity figures already read it.' : 'Recording has no application caller yet.'} ${stampWired ? '' : 'What genuinely is not wired: nothing in the application calls `stamp()` — an approved timesheet does not yet freeze the pattern it was judged against, so a later correction would retroactively move an already-approved week’s figures instead of leaving them held.'}`,
-      stops: stampWired ? '' : 'at the one caller this needs and does not have — `decideTimesheet`’s approval arm — not at the mechanism, which is proven and already has two other real callers',
+      verdict: good && storageWired && capacityReadsIt && roundTrip ? 'PASS' : 'FAIL',
+      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it. That last property is now proven through the reducer, not only through \`stamp()\` in isolation: recording a pattern, logging time, submitting and approving the week stamps the timesheet with ${patternStamp && (patternStamp.value as { hoursPerDay: number }).hoursPerDay}h from the version just recorded; correcting that same pattern to 6h afterwards leaves the approved week reading ${stampAfterCorrection && (stampAfterCorrection.value as { hoursPerDay: number }).hoursPerDay}h — unmoved, exactly as designed. Approving a week for somebody with no recorded pattern (Sam) stamps null, not a default.`,
+      stops: '',
       severity: 'P2',
-      impact: stampWired
-        ? 'The rules hold, are wired to capacity, and a correction cannot move an already-committed figure.'
-        : 'The rules hold and are wired to capacity today. Until an approval stamps the pattern it relied on, a later correction would move an already-approved week’s figures rather than leave them held — the one gap this scenario can still name precisely.',
+      impact: 'The rules hold, are wired to capacity, and a correction cannot move an already-approved week’s figure — proven through the reducer, the whole way from recording a pattern to an approval that outlives a later correction to it.',
     }
   },
 )
@@ -8398,6 +8452,7 @@ scenario(
     const submittedSheet: Timesheet = {
       id: 'ts-tg3', person: 'Priya', personId: 'P-1', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
     const validCells = [{ date: '2026-08-11', hours: 4 }]
     const frozenResult = gridSaveProblem(validCells, [submittedSheet], 'Priya', week, '2026-08-12', 7)

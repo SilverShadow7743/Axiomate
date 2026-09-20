@@ -1809,6 +1809,11 @@ export function timesheetToRow(tenantId: TenantId, t: Timesheet): Prisma.Timeshe
     decidedAt: t.decidedAt ? new Date(t.decidedAt) : null,
     decidedBy: t.decidedBy,
     reason: t.reason,
+    // DbNull, not JsonNull — see the note on the Version mapper above: this column being empty
+    // means no stamp was taken, not that a JSON null was deliberately recorded.
+    workingPatternStamp: t.workingPatternStamp
+      ? (t.workingPatternStamp as unknown as Prisma.InputJsonValue)
+      : Prisma.DbNull,
   }
 }
 
@@ -1821,6 +1826,11 @@ export function timesheetFromRow(r: TimesheetRow): Timesheet {
     status: r.status as TimesheetStatus,
     submittedAt: r.submittedAt.toISOString(),
     submittedBy: r.submittedBy,
+    // Cast, not validated: this only ever arrives here having been written by `stamp()` on the
+    // way in, the same trust boundary every other Json column in this mapper already keeps.
+    workingPatternStamp: r.workingPatternStamp
+      ? (r.workingPatternStamp as unknown as Timesheet['workingPatternStamp'])
+      : null,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
     decidedBy: r.decidedBy,
     reason: r.reason,
