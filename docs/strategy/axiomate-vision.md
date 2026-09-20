@@ -5,6 +5,10 @@ real in this codebase today. Not a transcript — the source conversation had 36
 sections; this keeps the thesis, drops the repetition, and adds the one thing the original
 didn't have: which parts already exist in Axiomate TMS, which are genuinely blocked, and why.*
 
+*The root `README.md` describes the current build on its own narrower terms — a planning
+surface for two named clients — because that is what is actually shipped today. This document
+is the wider frame that build sits inside, not a replacement for it.*
+
 ---
 
 ## 1. The thesis

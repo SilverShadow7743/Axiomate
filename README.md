@@ -4,6 +4,9 @@ A Microsoft Project-style planning surface for the OAPIL and SLG issue log: a hi
 issue tree on the left, a synchronised Gantt timeline on the right, lifecycle activities,
 dependencies, milestones and schedule health.
 
+This describes the build as it stands — the shipped shell, not the product's full ambition.
+`docs/strategy/axiomate-vision.md` records the wider strategy this fits inside.
+
 ```
 npm install
 npm run dev          # http://localhost:3000
