@@ -55,11 +55,11 @@
       "id": "E",
       "title": "The same defect is reported twice",
       "expected": "The duplicate is detected, linked to the original, and does not become a second stream of work.",
-      "verdict": "PARTIAL",
-      "actual": "The link and the Superseded status both work, closing sets actualEnd to 2026-08-15, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.",
-      "stops": "at detection — a person must notice",
-      "severity": "P2",
-      "impact": "Duplicates are found late, after two people have worked the same fault."
+      "verdict": "PASS",
+      "actual": "Detected: duplicateGroups groups the pair (client + parent + reply-stripped subject) and names OAPIL-2 canonical as the more recently active — the exact candidate a reviewer would confirm. The link and the Superseded status both work, closing sets actualEnd to 2026-08-15, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. What is still manual, correctly: a person reviews Configuration → Duplicates and confirms the link — the function surfaces a candidate, it does not merge records on its own, which is the right division of labour for a data-correcting action. The narrower real gap is that this is a pull screen, not a push: nothing notifies anyone when a new group appears: a duplicate sits undetected until someone opens Configuration → Duplicates.",
+      "stops": "",
+      "severity": "P3",
+      "impact": "Detection is real and proven; the residual gap is that reviewing it is not prompted, only available."
     },
     {
       "id": "F",

@@ -566,6 +566,24 @@ scenario(
   'The same defect is reported twice',
   'The duplicate is detected, linked to the original, and does not become a second stream of work.',
   () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say "detection
+     * is still manual: the duplicate-detection agent is a registry record with no runtime" —
+     * true of that one agent record, but not a fair account of the capability: `duplicateGroups`
+     * (lib/intake.ts, proven independently by IT6/IT7/IT9) is a real, working detection function,
+     * surfaced live at Configuration → Duplicates for a person to review and confirm. This
+     * scenario never actually called it, so it never earned the claim either way. It does now,
+     * against a same-shape pair built locally (BASE itself is untouched, shared by every other
+     * scenario) — a reply-prefixed subject on the second report, same client, same parent.
+     */
+    const dupIssues: Record<string, IssueRecord> = {
+      'OAPIL-1': { ...BASE.issues['OAPIL-1'], subject: 'Batch posting failure', lastActivity: '2026-08-03' },
+      'OAPIL-2': { ...BASE.issues['OAPIL-2'], subject: 'Re: Batch posting failure', lastActivity: '2026-08-05' },
+    }
+    const groups = duplicateGroups(dupIssues)
+    const detected = groups.length === 1 && groups[0].canonical === 'OAPIL-2' &&
+      groups[0].duplicates.length === 1 && groups[0].duplicates[0] === 'OAPIL-1'
+
     const s = ok(BASE, {
       t: 'link', sourceIssueId: 'OAPIL-2', targetIssueId: 'OAPIL-1',
       relationshipType: 'Duplicate of', note: 'Same batch failure.', now: NOW,
@@ -576,11 +594,13 @@ scenario(
       reason: 'Duplicate of OAPIL-1 — same batch failure, same root cause.',
     } as Action)
     return {
-      verdict: linked ? 'PARTIAL' : 'FAIL',
-      actual: `The link and the Superseded status both work, closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.`,
-      stops: 'at detection — a person must notice',
-      severity: 'P2',
-      impact: 'Duplicates are found late, after two people have worked the same fault.',
+      verdict: detected && linked ? 'PASS' : linked ? 'PARTIAL' : 'FAIL',
+      actual: `${detected ? 'Detected: duplicateGroups groups the pair (client + parent + reply-stripped subject) and names OAPIL-2 canonical as the more recently active — the exact candidate a reviewer would confirm.' : 'duplicateGroups did not group the pair — detection itself has regressed.'} The link and the Superseded status both work, closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. What is still manual, correctly: a person reviews Configuration → Duplicates and confirms the link — the function surfaces a candidate, it does not merge records on its own, which is the right division of labour for a data-correcting action. The narrower real gap is that this is a pull screen, not a push: nothing notifies anyone when a new group appears: a duplicate sits undetected until someone opens Configuration → Duplicates.`,
+      stops: detected && linked ? '' : 'at detection — a person must notice',
+      severity: detected && linked ? 'P3' : 'P2',
+      impact: detected && linked
+        ? 'Detection is real and proven; the residual gap is that reviewing it is not prompted, only available.'
+        : 'Duplicates are found late, after two people have worked the same fault.',
     }
   },
 )
