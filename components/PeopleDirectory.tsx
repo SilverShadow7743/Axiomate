@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOverlay } from './useOverlay'
 import { useQuickFilterFocus } from './useQuickFilterFocus'
 import { can } from '@/lib/access'
@@ -22,6 +22,10 @@ import type { ConfigOp, WorkspaceState } from '@/lib/workspace'
  */
 type SortKey = 'name' | 'joined' | 'status' | 'title'
 
+/** See docs/plans/2026-09-20-pagination-pilot-design.md — the pilot for the four list views
+ *  the 32-area review found rendering their full result set unconditionally. */
+const PAGE_SIZE = 50
+
 export default function PeopleDirectory({
   state,
   actor,
@@ -42,8 +46,13 @@ export default function PeopleDirectory({
   useOverlay(rootRef, !docked, onClose)
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'name', dir: 1 })
+  const [page, setPage] = useState(1)
   const quick = useRef<HTMLInputElement>(null)
   useQuickFilterFocus(quick)
+
+  // A new search or sort invalidates whatever page was open — landing on an empty page 4
+  // after typing a narrower search is the failure this specifically avoids.
+  useEffect(() => setPage(1), [filter, sort])
 
   const model = state.model
   const mayConfigure = Boolean(onConfig) && can(model, actor, 'config.manage').allowed
@@ -84,6 +93,12 @@ export default function PeopleDirectory({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roleLabel reads model.roles, which is listed
   }, [model.people, model.roles, filter, sort])
+
+  // The summary line and "N active, M departed" below both read `people` (the whole filtered
+  // set) unchanged — only the table body reads the sliced page, so pagination never touches
+  // what those counts describe.
+  const pageCount = Math.max(1, Math.ceil(people.length / PAGE_SIZE))
+  const pagePeople = people.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const activeCount = Object.values(model.people).filter((p) => p.status !== 'Departed').length
   const total = Object.keys(model.people).length
@@ -248,7 +263,7 @@ export default function PeopleDirectory({
                 </tr>
               </thead>
               <tbody>
-                {people.map((p) => {
+                {pagePeople.map((p) => {
                   const manager = p.managerId ? model.people[p.managerId] : null
                   return (
                     <tr key={p.id} className={p.status === 'Departed' ? 'pdir-row-departed' : undefined}>
@@ -281,6 +296,19 @@ export default function PeopleDirectory({
                 })}
               </tbody>
             </table>
+          )}
+          {pageCount > 1 && (
+            <div className="cfg-inline" style={{ justifyContent: 'center', marginTop: 10 }}>
+              <button type="button" className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                ‹ Prev
+              </button>
+              <span className="prov">
+                Page {page} of {pageCount}
+              </span>
+              <button type="button" className="btn" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                Next ›
+              </button>
+            </div>
           )}
         </div>
       </aside>
