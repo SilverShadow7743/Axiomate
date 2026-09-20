@@ -2677,7 +2677,15 @@ export default function IssueWorkspace({
           docked
         />
       ) : view === 'analytics' ? (
-        <AnalyticsView state={state} today={today} docked />
+        <AnalyticsView
+          state={state}
+          today={today}
+          onDrillDown={(patch) => {
+            setFilters({ ...filters, ...patch })
+            setView('tree')
+          }}
+          docked
+        />
       ) : view === 'people' && isInternal ? (
         <PeopleDirectory state={state} actor={actor} onOpenProfile={setOpenProfileId} onConfig={applyConfigOp} docked />
       ) : view === 'calendar' ? (

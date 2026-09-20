@@ -5,6 +5,7 @@ import { useOverlay } from './useOverlay'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '@/lib/analytics'
 import { holidaySetOf } from '@/lib/config'
 import type { WorkspaceState } from '@/lib/workspace'
+import type { FilterState } from '@/lib/types'
 
 /**
  * Firm-wide cross-tabs over the live register.
@@ -32,12 +33,17 @@ export default function AnalyticsView({
   today,
   onClose,
   docked = false,
+  onDrillDown,
 }: {
   state: WorkspaceState
   today: string
   onClose?: () => void
   /** A first-class view in the main pane: no scrim, no trap, no Close — see MyWorkPanel. */
   docked?: boolean
+  /** Patches the filter bar and switches to Tree — the same shape MyWorkPanel's onShowInTree
+   *  already proves. "Unassigned" rows and the age-bucket table have no real filter counterpart
+   *  (see the design doc) and stay un-clickable rather than landing on an empty Tree. */
+  onDrillDown?: (patch: Partial<FilterState>) => void
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   useOverlay(rootRef, !docked, onClose)
@@ -99,7 +105,19 @@ export default function AnalyticsView({
                 <tbody>
                   {severityStatus.map((c) => (
                     <tr key={`${c.severity}-${c.status}`}>
-                      <td>{c.severity}</td>
+                      <td>
+                        {onDrillDown ? (
+                          <button
+                            type="button"
+                            className="btn-link"
+                            onClick={() => onDrillDown({ severity: c.severity, status: c.status })}
+                          >
+                            {c.severity}
+                          </button>
+                        ) : (
+                          c.severity
+                        )}
+                      </td>
                       <td>{c.status}</td>
                       <td className="mono" style={barStyle(c.count, maxSeverityStatus)}>{c.count}</td>
                     </tr>
@@ -125,7 +143,15 @@ export default function AnalyticsView({
                 <tbody>
                   {clients.map((c) => (
                     <tr key={c.client}>
-                      <td>{c.client}</td>
+                      <td>
+                        {onDrillDown && c.client !== 'Unassigned' ? (
+                          <button type="button" className="btn-link" onClick={() => onDrillDown({ client: c.client })}>
+                            {c.client}
+                          </button>
+                        ) : (
+                          c.client
+                        )}
+                      </td>
                       <td className="mono" style={barStyle(c.open, maxOpen)}>{c.open}</td>
                       <td className="mono" style={barStyle(c.openHigh, maxOpenHigh)}>{c.openHigh}</td>
                     </tr>
@@ -172,7 +198,15 @@ export default function AnalyticsView({
                 <tbody>
                   {owners.map((o) => (
                     <tr key={o.owner}>
-                      <td>{o.owner}</td>
+                      <td>
+                        {onDrillDown && o.owner !== 'Unassigned' ? (
+                          <button type="button" className="btn-link" onClick={() => onDrillDown({ owner: o.owner })}>
+                            {o.owner}
+                          </button>
+                        ) : (
+                          o.owner
+                        )}
+                      </td>
                       <td className="mono" style={barStyle(o.open, maxOwnerOpen)}>{o.open}</td>
                     </tr>
                   ))}
