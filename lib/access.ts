@@ -9,9 +9,11 @@ import type { ProjectMember } from './staffing'
  * Authentication and authorisation are different problems, and only one is solved here
  *
  * This module answers "may *this* actor do *that*". It does not answer "is this actor who
- * they claim to be" — there is still no login, no session and no identity provider, and
- * `currentActor()` reads one configured operator from the environment. Anyone who can reach
- * the server is that operator.
+ * they claim to be" — that question now has a real answer, and it does not live here.
+ * `lib/principal.ts`'s `getSession()` reads a verified Entra session where one is configured,
+ * falling back to one unverified configured operator (`currentActor()`, in `lib/identity.ts`)
+ * only where it isn't. Authentication and authorisation stay two modules on purpose — this
+ * one takes whichever actor it's handed and does not care which mode produced it.
  *
  * Both halves used to be missing, and while they were, a permission model would have been
  * theatre: rules deciding what an unverified party may do, reading as a security boundary in
@@ -23,15 +25,18 @@ import type { ProjectMember } from './staffing'
  * agree an estimate, or that only an administrator may change the operating model — and
  * validation could not test any of it, because there was nothing to test. So the authorisation
  * half is built now, enforced in the reducer rather than in the screens, and configurable.
- * When authentication arrives, `currentActor` starts returning a verified principal and
- * nothing below this line changes.
+ * Authentication has since arrived too, but not by changing `currentActor` — see
+ * `lib/principal.ts` for how the two are joined, and nothing below this line moved.
  *
- * **Be exact about what this is worth today.** It stops a mistake, not an attacker. Until
- * there is a login, a determined party sets an environment variable and becomes whoever they
- * like. `defaultRoleIds` is where that honesty is concentrated: an actor nobody has assigned a
- * role to falls back to it, and it ships as Administrator, because a deployment with one
- * configured operator and no login must still be usable by that operator. On the day a login
- * exists, that field should become empty and every real person should carry real roles.
+ * **Be exact about what this is worth today, and in which deployment.** Where Entra is not
+ * configured, this still stops a mistake, not an attacker: a determined party sets an
+ * environment variable and becomes whoever they like. `defaultRoleIds` is where that honesty
+ * is concentrated: an actor nobody has assigned a role to falls back to it, and it ships as
+ * Administrator, because a deployment with one configured operator and no login must still be
+ * usable by that operator. Where Entra *is* configured — the production deployment, as of this
+ * writing — a login exists and `getSession()` fails closed rather than falling back to that
+ * operator when nobody has signed in; `defaultRoleIds` should be emptied there and every real
+ * person given real roles, the same standard this paragraph always named as the destination.
  */
 
 /* ================================================================== *

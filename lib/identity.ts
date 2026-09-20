@@ -24,18 +24,25 @@ import type { Actor } from './actor'
  * ---------------------------------------------------------------------------
  * What this is NOT
  *
- * **This is not authentication.** Nothing here verifies anybody. There is no login, no
- * session, no token, no password, and no way for two people to be told apart. This resolves
- * *one configured operator* — the person running this deployment — so that the trail says
- * something true about a single-operator installation instead of something invented.
+ * **This is not authentication, and still isn't, even now that authentication exists.**
+ * Nothing here verifies anybody. This resolves *one configured operator* — the person running
+ * a deployment that has not chosen an identity provider at all — so that the trail says
+ * something true about that case instead of something invented.
  *
- * It follows that this does not make the Permissions column implementable. Authorisation
- * needs a principal that has proved who it is; attribution only needs a name that was not
- * made up. Those are different problems and only the second one is solved here.
+ * It follows that this does not make the Permissions column implementable on its own.
+ * Authorisation needs a principal that has proved who it is; attribution only needs a name
+ * that was not made up. Those are different problems.
  *
- * When authentication does arrive — Entra ID is the intended source — this is the function
- * that learns to read the session, and nothing downstream moves, because everything
- * downstream already takes the result as a parameter. That is the whole point of the seam.
+ * Entra ID authentication has since arrived, but not by changing this function the way this
+ * comment once expected. `lib/principal.ts`'s `getSession()` sits above `currentActor` rather
+ * than inside it, and calls this function in exactly one case: no identity provider is
+ * configured at all. Where a provider *is* configured, a valid session returns a verified
+ * principal, and an invalid or missing one returns an explicit "not signed in" — never this
+ * function's operator, on purpose, so a deployment that chose Entra can never fall back to
+ * running requests as someone nobody signed in as. Everything downstream still takes the
+ * result as a parameter — that part of the seam held — but the function that learned to read
+ * the session is `getSession`, not this one, and callers that need to know whether an actor is
+ * verified must go there.
  */
 export function currentActor(): Actor {
   const configured = process.env.AXIOMATE_OPERATOR?.trim()
