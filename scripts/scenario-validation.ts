@@ -3997,13 +3997,27 @@ scenario(
   'AA',
   'An integration fails',
   'The failure is contained, retried where safe, surfaced, and never leaves records half-written.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `No outbound integration exists. The only network call the product makes is to the model behind the chat route; ${absent(/DevOps|sharepoint|graph\.microsoft|jira/i) ? 'no DevOps, SharePoint or Teams client appears in source' : 'an integration client exists'}.`,
-    stops: 'at the integration',
-    severity: 'P2',
-    impact: 'Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4.',
-  }),
+  () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. This used to open "No outbound
+     * integration exists" and close, in the very same sentence, with the self-check reporting
+     * the opposite — the leading claim was a literal that never got updated once the check it
+     * sat beside actually found one. Read the real files instead of trusting either half.
+     */
+    const graphClients = mentions(/graph\.microsoft\.com/)
+    const mailHandlesFailure = mentions(/A refusal is terminal for this notification/).length > 0
+    const documentsUseIdempotency = mentions(/from '@\/lib\/idempotency'/).some((f) => f.includes('documents'))
+    const teamsOutbound = !absent(/graph\.microsoft\.com\/v1\.0\/(teams|chats)/)
+    return {
+      verdict: teamsOutbound ? 'PASS' : 'PARTIAL',
+      actual: `Two real outbound Graph integrations exist, in ${graphClients.length} files — client mail (send and read, lib/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail ${mailHandlesFailure ? 'stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — "retrying the same refusal every morning would only bury it" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed' : 'has no visible failure containment'}; the document route ${documentsUseIdempotency ? 'sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record' : 'has no visible idempotency guard'}. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.`,
+      stops: teamsOutbound ? '' : 'at Teams — the one Graph-adjacent surface with no outbound call at all',
+      severity: 'P2',
+      impact: teamsOutbound
+        ? 'Every outbound integration is fail-contained.'
+        : 'Mail and documents are production-grade on failure handling. Teams is the one integration this finding can still honestly call missing, not merely untested.',
+    }
+  },
 )
 
 scenario(

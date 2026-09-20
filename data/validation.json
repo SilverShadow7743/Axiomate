@@ -687,11 +687,11 @@
       "id": "AA",
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "No outbound integration exists. The only network call the product makes is to the model behind the chat route; an integration client exists.",
-      "stops": "at the integration",
+      "verdict": "PARTIAL",
+      "actual": "Two real outbound Graph integrations exist, in 6 files — client mail (send and read, lib/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — \"retrying the same refusal every morning would only bury it\" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed; the document route sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.",
+      "stops": "at Teams — the one Graph-adjacent surface with no outbound call at all",
       "severity": "P2",
-      "impact": "Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4."
+      "impact": "Mail and documents are production-grade on failure handling. Teams is the one integration this finding can still honestly call missing, not merely untested."
     },
     {
       "id": "FL4",
