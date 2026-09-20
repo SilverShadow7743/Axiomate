@@ -33,9 +33,11 @@
 //    a single table where it does not hold is a table two tenants can collide in.
 //
 //    What this does NOT do is enforce isolation. Nothing here stops a query that forgets its
-//    `where`; the compiler does that (see `TenantId` in lib/tenant.ts), and row-level
-//    security would do it properly — but RLS needs a database role per request, which needs
-//    identity, which this application does not yet have. Stated rather than implied.
+//    `where`; the compiler does that (see `TenantId` in lib/tenant.ts). Row-level security
+//    would do it properly, and identity to build it on now exists (Entra, via
+//    lib/principal.ts) — but it is a deliberate, accepted risk, not merely deferred: a
+//    20 Sep 2026 review confirmed single-tenant-per-deployment as this product's permanent
+//    model, so the scenario RLS protects against does not apply here. See lib/tenant.ts.
 //
 // 3. DERIVED VALUES ARE NOT STORED AS FACT.
 //    `duration`, `scheduleHealth` and `projectedCompletionDate` used to have columns here.

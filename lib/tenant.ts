@@ -25,11 +25,17 @@ import 'server-only'
  * one is configured — but `currentTenantId`, below, does not read it: it resolves one
  * configured environment value, unconditionally, the same as before identity existed. Nothing
  * establishes *which* tenant a request belongs to from who is making it. `currentTenantId`
- * is the single seam where that resolution would plug in, and it is still open. Until it's
- * filled, isolation is a discipline the code follows, not a guarantee the database enforces;
- * the guarantee is row-level security, and per this deployment's own single-firm-per-instance
- * model it may never be needed — but if that model changes, identity being available is not
- * the same as this function using it, and that gap should not be mistaken for closed.
+ * is the single seam where that resolution would plug in, and it is still open.
+ *
+ * **Decided, not merely deferred (20 Sep 2026 review): single-tenant-per-deployment is this
+ * product's permanent model, not a stepping stone to multi-tenant.** Row-level security is the
+ * guarantee that would close this gap for real, and it is deliberately not being built — the
+ * scenario it protects against (two firms sharing one deployment) is not one this product plans
+ * to support. What this means in practice: isolation stays a discipline the code follows (every
+ * query and write in `lib/db` naming its tenant explicitly), not a guarantee the database
+ * enforces, and that is an accepted risk for a single-firm-per-instance deployment, not an
+ * unclosed TODO. If the single-tenant model ever changes, RLS has to be built before it does —
+ * identity being available elsewhere in the app would still not make this function use it.
  */
 
 /**
