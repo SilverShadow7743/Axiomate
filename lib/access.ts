@@ -635,6 +635,7 @@ export const ACTION_PERMISSIONS = {
   upsertSow: 'sow.edit',
   archiveSow: 'sow.edit',
   attributeToSow: 'sow.attribute',
+  setIssueMilestone: 'sow.attribute',
   takeSnapshot: 'sow.edit',
   updateEngagement: 'engagement.edit',
   addProjectMember: 'project.staff',

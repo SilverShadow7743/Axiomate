@@ -296,6 +296,15 @@ export interface IssueRecord {
   /** A real Application this issue is about, when one has been recorded. Additive to `module`
    *  above, never a replacement — see `./application`. */
   applicationId: string | null
+  /**
+   * Which milestone this issue's effort counts toward, when the SOW it is attributed to (via
+   * its project's `sowId`) has more than one. Null means "not attributed to a specific
+   * milestone" — the default for every issue and for any SOW with only one milestone, where
+   * the distinction carries no information. Set by `setIssueMilestone`, which refuses a
+   * milestone belonging to a different SOW than the one the issue's project already names. See
+   * docs/plans/2026-09-20-milestone-issue-attribution-design.md.
+   */
+  milestoneId: string | null
   /** What this piece of work needs — read by `candidatesFor` (`./skills`) to answer "who could
    *  do this." Empty is the honest default; typing one is a person's judgement, never inferred. */
   requiredSkills: Requirement[]
@@ -754,6 +763,8 @@ export function initWorkspace(
       discipline: i.discipline ?? '',
       // Null, not guessed — same reasoning as discipline. The seed predates this field.
       applicationId: i.applicationId ?? null,
+      // Null, not guessed — same reasoning again. The seed predates milestone attribution too.
+      milestoneId: null,
       // Empty, not guessed — same reasoning as discipline. The seed predates this field too.
       requiredSkills: [],
       // Empty, not guessed — same reasoning again. The seed predates custom fields entirely.
@@ -1373,6 +1384,9 @@ export type Action =
   | { t: 'archiveSow'; id: string; now: string }
   /** Which SOW a project is delivered under. `sowId: null` detaches it. */
   | { t: 'attributeToSow'; nodeId: string; sowId: string | null; now: string }
+  /** Which milestone an issue's effort counts toward, one level finer than `attributeToSow`.
+   *  See `docs/plans/2026-09-20-milestone-issue-attribution-design.md`. */
+  | { t: 'setIssueMilestone'; issueId: string; milestoneId: string | null; now: string }
   /** A point-in-time copy of a project or engagement's planned dates and cost. See `./snapshot`. */
   | { t: 'takeSnapshot'; nodeId: string; now: string }
   /* ---- CAPACITY ---- */
@@ -2357,6 +2371,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // Not settable on create — an application link is added afterwards, through
           // `updateIssue`, the same way `discipline` usually is.
           applicationId: null,
+          // Same reasoning again: milestone attribution needs a SOW to already be in place,
+          // which a brand-new issue's project may not have yet — added afterwards, through
+          // `setIssueMilestone`.
+          milestoneId: null,
           // Same reasoning: nobody types a required skill in the same breath as raising the
           // work — it is added afterwards, through `updateIssue`.
           requiredSkills: [],
@@ -2637,6 +2655,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         // description.
         discipline: original.discipline,
         applicationId: original.applicationId,
+        // Carried, same reasoning as applicationId/discipline above: a duplicate is still the
+        // same kind of work, counting toward whatever it was already counting toward.
+        milestoneId: original.milestoneId,
         requiredSkills: original.requiredSkills,
         customFields: original.customFields,
         // Created here, so there is no earlier classification to preserve — as in `create`.
@@ -6909,6 +6930,42 @@ Question: ${review.question}`),
           }),
         },
         message: a.sowId ? 'Attributed.' : 'Detached from the statement of work.',
+      }
+    }
+
+    case 'setIssueMilestone': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'That record no longer exists.' }
+      if (a.milestoneId) {
+        const milestone = state.milestones[a.milestoneId]
+        if (!milestone) return { state, error: 'That milestone no longer exists.' }
+        /*
+         * The issue's own SOW attribution — via its project's `sowId`, one level up, the same
+         * way `attributeToSow` itself works — has to match the milestone's SOW, or a variance
+         * figure would count effort against a contract that never named it.
+         */
+        const projectId = projectOf(state, a.issueId)
+        const projectSowId = projectId ? (state.nodes[projectId]?.sowId ?? null) : null
+        if (milestone.sowId !== projectSowId) {
+          return { state, error: 'That milestone belongs to a different statement of work than this issue is attributed to.' }
+        }
+      }
+      const was = issue.milestoneId ? (state.milestones[issue.milestoneId]?.name ?? issue.milestoneId) : ''
+      const now = a.milestoneId ? state.milestones[a.milestoneId]!.name : ''
+      return {
+        state: {
+          ...state,
+          issues: { ...state.issues, [a.issueId]: { ...issue, milestoneId: a.milestoneId } },
+          audit: log(actor, state, {
+            rowId: a.issueId,
+            field: 'milestone',
+            from: was,
+            to: now,
+            at: a.now,
+            by,
+          }),
+        },
+        message: a.milestoneId ? 'Attributed to the milestone.' : 'Detached from the milestone.',
       }
     }
 

@@ -187,9 +187,29 @@
       "expected": "The variance is visible on the issue, and it is honest about what it is measured against.",
       "verdict": "PARTIAL",
       "actual": "12h spent against 8h agreed — +4h, 50%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.",
-      "stops": "here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW's baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.",
+      "stops": "here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW's baselined issues, shown in CommercialPanel. Milestone-level attribution is no longer open either — see `K2`, which proves `setIssueMilestone` and `milestonePosition` directly, the finer read this scenario used to say would be its own design.",
       "severity": "P2",
-      "impact": "A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap."
+      "impact": "A consultant can see the overrun on the record, and — proven at SOW level elsewhere and now at milestone level too (`K2`) — so can a partner on the engagement."
+    },
+    {
+      "id": "K2",
+      "title": "An issue is attributed to a milestone, one level finer than the SOW it already belongs to",
+      "expected": "Attributing works only within the issue's own SOW, refuses across SOWs, and clears cleanly — through the reducer, not assumed from the model alone.",
+      "verdict": "PASS",
+      "actual": "Attributing OAPIL-1 to Phase 1 lands (milestoneId=\"ms-5\") and is audited. Attributing it to a milestone on a different SOW is refused — \"That milestone belongs to a different statement of work than this issue is attributed to.\" — because the issue's own project names SOW-K2, not SOW-K2-RIVAL. Clearing the attribution back to null succeeds. Attributing an issue whose project carries no SOW at all (OAPIL-3) is refused the same way — \"That milestone belongs to a different statement of work than this issue is attributed to.\" — there is no SOW for the milestone to belong to in common with.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "Milestone-level attribution is real, refuses the cases that would make a variance figure count effort against the wrong contract, and cannot silently orphan an issue against a milestone its own SOW never priced."
+    },
+    {
+      "id": "K3",
+      "title": "milestoneEffortPosition sums only its own milestone's issues, and does not disagree with the SOW-level figure it is a slice of",
+      "expected": "Two milestones under one SOW, one issue each — each milestone counts only its own, and the two together equal the SOW total for the same issues.",
+      "verdict": "PASS",
+      "actual": "Milestone A (OAPIL-1 only) plans 8h, 4h spent; Milestone B (OAPIL-2 only) plans 4h, 2h spent. Summed: 12h planned, 6h actual — matching sowPosition's own 12h / 6h for the identical two issues exactly. Neither milestone's figure leaks the other's issue.",
+      "stops": "",
+      "severity": "P3",
+      "impact": "A milestone-level variance figure can be trusted precisely because it never disagrees with the coarser SOW-level figure it is a slice of."
     },
     {
       "id": "N",

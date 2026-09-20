@@ -273,6 +273,15 @@ model Issue {
   applicationId String?
   application   Application? @relation(fields: [tenantId, applicationId], references: [tenantId, id])
 
+  /// Which milestone this issue's effort counts toward, when the SOW it is attributed to (via
+  /// its project's `sowId`) has more than one. No FK -- same convention as
+  /// `InvoiceLineItem.milestoneId`: a milestone later renegotiated or withdrawn must not orphan
+  /// or cascade-delete work with real hours logged against it. Null means "not attributed to a
+  /// specific milestone" -- the default for every issue today and for any SOW with only one
+  /// milestone, where the distinction carries no information. See
+  /// docs/plans/2026-09-20-milestone-issue-attribution-design.md.
+  milestoneId String?
+
   severity    Severity
   /// Free text rather than an enum: the seven statuses come from the source log, and the
   /// transform is the only thing entitled to interpret them.

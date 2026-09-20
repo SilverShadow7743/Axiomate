@@ -48,7 +48,7 @@ import {
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
   initModel, mergeModel, customFieldsFor, DEFAULT_HEALTH_SCORE,
 } from '../lib/config'
-import { describePosition, sowPosition } from '../lib/sow'
+import { describePosition, sowPosition, milestoneEffortPosition, type Sow } from '../lib/sow'
 import { issuesUnder } from '../lib/engagement'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
@@ -1221,12 +1221,162 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `${v.actual}h spent against ${v.estimated}h agreed — ${v.varianceHours! > 0 ? '+' : ''}${v.varianceHours}h, ${Math.round(v.variancePct!)}%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.`,
-      stops: 'here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW\'s baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.',
+      stops: 'here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW\'s baselined issues, shown in CommercialPanel. Milestone-level attribution is no longer open either — see `K2`, which proves `setIssueMilestone` and `milestonePosition` directly, the finer read this scenario used to say would be its own design.',
       severity: 'P2',
-      impact: 'A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap.',
+      impact: 'A consultant can see the overrun on the record, and — proven at SOW level elsewhere and now at milestone level too (`K2`) — so can a partner on the engagement.',
     }
   },
 )
+
+scenario(
+  'K2',
+  "An issue is attributed to a milestone, one level finer than the SOW it already belongs to",
+  'Attributing works only within the issue\'s own SOW, refuses across SOWs, and clears cleanly — through the reducer, not assumed from the model alone.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    /*
+     * The issue's own project and SOW, with two milestones to attribute between. Only OAPIL-1
+     * moves into it — OAPIL-3 stays exactly where BASE put it, under a module with no project
+     * ancestor at all, deliberately: that is check 4's fixture, not a separate setup.
+     */
+    let s = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'K2 project' }, now: NOW } as Action)
+    const projectId = Object.values(s.nodes).find((n) => n.kind === 'project' && n.name === 'K2 project')!.id
+    s = ok(s, { t: 'create', parentId: projectId, kind: 'module', draft: { name: 'K2 module' }, now: NOW } as Action)
+    const k2ModuleId = Object.values(s.nodes).find((n) => n.kind === 'module' && n.name === 'K2 module')!.id
+    s = ok(s, { t: 'move', id: 'OAPIL-1', newParentId: k2ModuleId, now: NOW } as Action)
+    s = ok(s, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-K2', title: 'K2 proof', effortHours: 40, value: 32_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(s.sows).find((x) => x.reference === 'SOW-K2')!.id
+    s = ok(s, { t: 'attributeToSow', nodeId: projectId, sowId, now: NOW } as Action)
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId,
+      patch: { name: 'Phase 1', sequence: 1, basis: 'amount', amount: 16_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+    const milestoneA = Object.values(s.milestones).find((m) => m.name === 'Phase 1')!.id
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId,
+      patch: { name: 'Phase 2', sequence: 2, basis: 'amount', amount: 16_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-11-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+
+    /* A second, unrelated SOW and milestone — what attribution must refuse to cross into. */
+    s = ok(s, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-K2-RIVAL', title: 'A different contract', effortHours: 10, value: 8_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const rivalSowId = Object.values(s.sows).find((x) => x.reference === 'SOW-K2-RIVAL')!.id
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId: rivalSowId,
+      patch: { name: 'Rival milestone', sequence: 1, basis: 'amount', amount: 8_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-15', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+    const rivalMilestoneId = Object.values(s.milestones).find((m) => m.name === 'Rival milestone')!.id
+
+    /* 1. Attributed, within the issue's own SOW. */
+    const attributed = ok(s, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: milestoneA, now: NOW } as Action)
+    const landed = attributed.issues['OAPIL-1'].milestoneId === milestoneA
+
+    /* 2. Refused across SOWs — OAPIL-1 belongs to SOW-K2, not SOW-K2-RIVAL. */
+    const crossSow = act(s, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: rivalMilestoneId, now: NOW } as Action)
+
+    /* 3. Cleared. */
+    const cleared = ok(attributed, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: null, now: NOW } as Action)
+    const clearedOk = cleared.issues['OAPIL-1'].milestoneId === null
+
+    /* 4. Refused when the issue's project has no SOW at all — OAPIL-3 was never attributed. */
+    const noSow = act(s, { t: 'setIssueMilestone', issueId: 'OAPIL-3', milestoneId: milestoneA, now: NOW } as Action)
+
+    const good =
+      landed &&
+      Boolean(crossSow.error) &&
+      clearedOk &&
+      Boolean(noSow.error)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Attributing OAPIL-1 to Phase 1 lands (milestoneId="${attributed.issues['OAPIL-1'].milestoneId}") and is audited. Attributing it to a milestone on a different SOW is refused — "${crossSow.error}" — because ${crossSow.error ? 'the issue\'s own project names SOW-K2, not SOW-K2-RIVAL' : 'nothing stopped it'}. Clearing the attribution back to null succeeds. Attributing an issue whose project carries no SOW at all (OAPIL-3) is refused the same way — "${noSow.error}" — there is no SOW for the milestone to belong to in common with.`,
+      stops: '',
+      severity: 'P2',
+      impact: 'Milestone-level attribution is real, refuses the cases that would make a variance figure count effort against the wrong contract, and cannot silently orphan an issue against a milestone its own SOW never priced.',
+    }
+  },
+)
+
+scenario(
+  'K3',
+  'milestoneEffortPosition sums only its own milestone\'s issues, and does not disagree with the SOW-level figure it is a slice of',
+  'Two milestones under one SOW, one issue each — each milestone counts only its own, and the two together equal the SOW total for the same issues.',
+  () => {
+    const bands = BASE.model.sizeBands
+    const sow: Sow = {
+      id: 'sow-k3', engagementId: 'eng-k3', reference: 'SOW-K3', title: 'K3 proof',
+      effortHours: 100, value: 50_000, currency: 'USD', status: 'Signed',
+      signedAt: NOW, createdBy: A.name, createdAt: NOW, deletedAt: null,
+    } as unknown as Sow
+    const milestoneA: Milestone = {
+      id: 'ms-a', sowId: sow.id, name: 'A', description: '', sequence: 1,
+      basis: 'amount', percentage: null, amount: 25_000, currency: 'USD', billOn: 'delivery',
+      plannedDate: null, delivery: 'Planned', deliveredAt: null, deliveredBy: null,
+      acceptance: 'Pending', acceptedAt: null, acceptedBy: null, rejectionNote: null,
+      acceptedValue: null, evidenceDocumentId: null,
+    } as unknown as Milestone
+    const milestoneB: Milestone = { ...milestoneA, id: 'ms-b', name: 'B', sequence: 2 }
+
+    let s = ok(BASE, {
+      t: 'setEstimate', issueId: 'OAPIL-1',
+      patch: { scores: { business: 2, technical: 2, integration: 1, testing: 2, data: 1 } }, now: NOW,
+    } as Action)
+    s = ok(s, { t: 'baselineEstimate', issueId: 'OAPIL-1', now: NOW } as Action)
+    s = ok(s, {
+      t: 'setEstimate', issueId: 'OAPIL-2',
+      patch: { scores: { business: 1, technical: 1, integration: 1, testing: 1, data: 1 } }, now: NOW,
+    } as Action)
+    s = ok(s, { t: 'baselineEstimate', issueId: 'OAPIL-2', now: NOW } as Action)
+    s = ok(s, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-11',
+      hours: 4, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    s = ok(s, {
+      t: 'addTime', issueId: 'OAPIL-2', person: A.name, date: '2026-08-12',
+      hours: 2, activity: 'Resolution', billable: true, now: NOW, note: '',
+    } as Action)
+
+    // milestonePosition takes issueIds directly, the same pre-filtered-by-the-caller contract
+    // sowPosition already uses — the attribution itself (issue.milestoneId, set through the
+    // reducer) is K2's job to prove, not this one's.
+    const bothIds = ['OAPIL-1', 'OAPIL-2']
+
+    const posA = milestoneEffortPosition(milestoneA, ['OAPIL-1'], s.estimates, s.timeEntries, bands)
+    const posB = milestoneEffortPosition(milestoneB, ['OAPIL-2'], s.estimates, s.timeEntries, bands)
+    const sowWhole = sowPosition(sow, bothIds, s.estimates, s.timeEntries, bands)
+
+    const onlyItsOwn = posA.issueIds.length === 1 && posA.issueIds[0] === 'OAPIL-1' &&
+      posB.issueIds.length === 1 && posB.issueIds[0] === 'OAPIL-2'
+    const sumsAgree =
+      round2(posA.plannedHours + posB.plannedHours) === round2(sowWhole.plannedHours) &&
+      round2(posA.actualHours + posB.actualHours) === round2(sowWhole.actualHours)
+
+    const good = onlyItsOwn && sumsAgree
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Milestone A (OAPIL-1 only) plans ${posA.plannedHours}h, ${posA.actualHours}h spent; Milestone B (OAPIL-2 only) plans ${posB.plannedHours}h, ${posB.actualHours}h spent. Summed: ${posA.plannedHours + posB.plannedHours}h planned, ${posA.actualHours + posB.actualHours}h actual — matching sowPosition's own ${sowWhole.plannedHours}h / ${sowWhole.actualHours}h for the identical two issues exactly. Neither milestone's figure leaks the other's issue.`,
+      stops: '',
+      severity: 'P3',
+      impact: 'A milestone-level variance figure can be trusted precisely because it never disagrees with the coarser SOW-level figure it is a slice of.',
+    }
+  },
+)
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 /* ================================================================== *
  * 5 — Scope and change control
@@ -10012,6 +10162,7 @@ function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string
     parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
     subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
     applicationId: null,
+    milestoneId: null,
     requiredSkills: [],
     customFields: {},
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',

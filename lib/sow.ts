@@ -3,6 +3,7 @@ import { deriveEffort } from './estimation'
 import type { TimeEntry } from './time'
 import { hoursOn, effortVariance } from './time'
 import { contractedPosition, type ChangeRequest } from './changeRequest'
+import type { Milestone } from './milestone'
 
 /**
  * What has been contracted, and how much of it is left.
@@ -153,21 +154,17 @@ export interface SowPosition {
  * work it could not see. A forecast that silently treats unestimated work as zero is the
  * reason a project looks fine until the week it does not.
  */
-export function sowPosition(
-  sow: Sow,
+/**
+ * Effort and variance over a set of issues — the loop `sowPosition` and `milestoneEffortPosition`
+ * both need, factored out so a milestone's narrower read cannot silently drift from what the
+ * SOW-level figure it is a slice of already does.
+ */
+function effortAndVariance(
   issueIds: string[],
   estimates: Record<string, IssueEstimate>,
   timeEntries: Record<string, TimeEntry>,
   bands: SizeBand[],
-  /**
-   * Every change request in the workspace; this filters to its own.
-   *
-   * Defaulted to none so a caller that has not been updated still compiles AND still gets the
-   * old answer rather than a wrong one — with no changes recorded, contracted equals baseline
-   * and every figure below is exactly what it was before this parameter existed.
-   */
-  changes: ChangeRequest[] = [],
-): SowPosition {
+) {
   let plannedHours = 0
   let estimatedCount = 0
   let unestimatedCount = 0
@@ -194,6 +191,27 @@ export function sowPosition(
   }
 
   const actualHours = issueIds.reduce((n, id) => n + hoursOn(timeEntries, id), 0)
+
+  return { plannedHours, estimatedCount, unestimatedCount, varianceHours, varianceIssueCount, actualHours }
+}
+
+export function sowPosition(
+  sow: Sow,
+  issueIds: string[],
+  estimates: Record<string, IssueEstimate>,
+  timeEntries: Record<string, TimeEntry>,
+  bands: SizeBand[],
+  /**
+   * Every change request in the workspace; this filters to its own.
+   *
+   * Defaulted to none so a caller that has not been updated still compiles AND still gets the
+   * old answer rather than a wrong one — with no changes recorded, contracted equals baseline
+   * and every figure below is exactly what it was before this parameter existed.
+   */
+  changes: ChangeRequest[] = [],
+): SowPosition {
+  const { plannedHours, estimatedCount, unestimatedCount, varianceHours, varianceIssueCount, actualHours } =
+    effortAndVariance(issueIds, estimates, timeEntries, bands)
   const baselineHours = sow.effortHours
 
   /*
@@ -219,6 +237,61 @@ export function sowPosition(
     consumedPct: contractedHours > 0 ? round((actualHours / contractedHours) * 100) : null,
     forecastPct: contractedHours > 0 ? round((plannedHours / contractedHours) * 100) : null,
     forecastOverrun: contractedHours > 0 && plannedHours > contractedHours,
+    estimatedCount,
+    unestimatedCount,
+    varianceHours: round(varianceHours),
+    varianceIssueCount,
+  }
+}
+
+/**
+ * Where a single milestone's EFFORT stands — a narrower read of exactly what `sowPosition`
+ * already sums, filtered to the issues attributed to this one milestone rather than to the
+ * whole SOW. No baseline, contracted or pending-change figures here: those are the SOW's own
+ * contractual facts (and, separately, a milestone's `percentage`/`amount` price it) — this only
+ * reports what was spent delivering the work attributed to it. See
+ * docs/plans/2026-09-20-milestone-issue-attribution-design.md.
+ *
+ * Named `MilestoneEffortPosition`, not `MilestonePosition` — that name is already taken, by a
+ * genuinely different thing: `lib/milestone.ts`'s `MilestonePosition` is a SOW-wide rollup of
+ * every milestone's delivery/acceptance/billing state (`delivered`, `accepted`, `billableValue`,
+ * …), computed across the whole schedule. This is effort for exactly one milestone. A design
+ * doc proposed the collision without checking; caught at the first `npx tsc --noEmit` this
+ * session ran after writing it, not left for a later build to catch.
+ */
+export interface MilestoneEffortPosition {
+  milestoneId: string
+  /** Issues attributed to this milestone specifically — a subset of the SOW's own `issueIds`. */
+  issueIds: string[]
+  plannedHours: number
+  actualHours: number
+  estimatedCount: number
+  unestimatedCount: number
+  /** Same rule as `SowPosition.varianceHours`: signed, and only from baselined estimates. */
+  varianceHours: number
+  varianceIssueCount: number
+}
+
+/**
+ * `issueIds` is the caller's own pre-filtered list (every issue with `milestoneId` equal to
+ * this one) — this function does not query `state.issues` itself, the same no-I-O discipline
+ * `sowPosition` already holds to.
+ */
+export function milestoneEffortPosition(
+  milestone: Milestone,
+  issueIds: string[],
+  estimates: Record<string, IssueEstimate>,
+  timeEntries: Record<string, TimeEntry>,
+  bands: SizeBand[],
+): MilestoneEffortPosition {
+  const { plannedHours, estimatedCount, unestimatedCount, varianceHours, varianceIssueCount, actualHours } =
+    effortAndVariance(issueIds, estimates, timeEntries, bands)
+
+  return {
+    milestoneId: milestone.id,
+    issueIds,
+    plannedHours: round(plannedHours),
+    actualHours: round(actualHours),
     estimatedCount,
     unestimatedCount,
     varianceHours: round(varianceHours),
