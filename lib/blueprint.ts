@@ -314,3 +314,69 @@ export function describeBlueprint(bp: Blueprint): string {
   const applied = bp.applications.length
   return `${bp.entries.length} entries — ${tiers} structural, ${items} work items, ${dated} carrying offsets, ${bp.links.length} dependencies. Version ${bp.version}, applied ${applied === 0 ? 'never' : applied === 1 ? 'once' : `${applied} times`}.`
 }
+
+export interface TemplateAdoption {
+  state: WorkspaceState
+  message: string
+  /** Set only when adoption itself was refused — a missing template, typically. Distinct from
+   *  `blueprintRefusals`, which can be non-empty on an otherwise successful adoption. */
+  error?: string
+  /** Entries the blueprint itself refused to create — surfaced, never swallowed, the same
+   *  discipline `applyBlueprint`'s own caller (the by-hand apply screen) already follows. */
+  blueprintRefusals: BlueprintRun['refusals']
+}
+
+/**
+ * Adopt a template at a scope, and build the structure it names — CF3 (20 Sep 2026 review).
+ *
+ * Two actions, composed, not one new reducer case. `adoptTemplate` (`lib/workspace.ts`) is
+ * unchanged and still does only what it always did — agent/workflow defaults, nothing
+ * structural — so every existing caller keeps its existing behaviour exactly. This function is
+ * the new, optional second step: it calls `adoptTemplate` first, and only if the adopted
+ * template names a `blueprintId` does it go on to `applyBlueprint` against the same scope,
+ * anchored on the day of adoption (there is no prior dated work to derive an anchor from — the
+ * scope being adopted onto is new, unlike `extractBlueprint`'s own source-engagement case).
+ *
+ * Deliberately lives here rather than as a reducer case inside `lib/workspace.ts`: this module
+ * already depends one-way on that one (`apply`, `WorkspaceState`), and `applyBlueprint` itself
+ * is a sequence of ordinary actions, not a single atomic one — the same shape this function is,
+ * one level up.
+ */
+export function applyTemplateBlueprint(
+  state: WorkspaceState,
+  scopeId: string,
+  templateId: string,
+  actor: Actor,
+  now: string,
+): TemplateAdoption {
+  const adopted = apply(state, { t: 'config', op: { k: 'adoptTemplate', scopeId, templateId }, now } as Action, actor)
+  if (adopted.error) {
+    return { state, message: '', error: adopted.error, blueprintRefusals: [] }
+  }
+
+  const tpl = adopted.state.model.templates[templateId]
+  if (!tpl?.blueprintId) {
+    return { state: adopted.state, message: adopted.message ?? '', blueprintRefusals: [] }
+  }
+
+  const bp = adopted.state.model.blueprints[tpl.blueprintId]
+  if (!bp) {
+    return {
+      state: adopted.state,
+      message: `${adopted.message ?? ''} The template names a blueprint that no longer exists — nothing structural was built.`,
+      blueprintRefusals: [],
+    }
+  }
+
+  const anchor = now.slice(0, 10)
+  const keep = new Set(bp.entries.map((e) => e.id))
+  const run = applyBlueprint(adopted.state, bp, scopeId, anchor, actor, keep, now)
+
+  const built = run.mapping.size
+  const refusalNote = run.refusals.length ? ` ${run.refusals.length} entr${run.refusals.length === 1 ? 'y was' : 'ies were'} refused — see below.` : ''
+  return {
+    state: run.state,
+    message: `${adopted.message ?? ''} Built ${built} of ${bp.entries.length} entries from “${bp.name}”.${refusalNote}`,
+    blueprintRefusals: run.refusals,
+  }
+}

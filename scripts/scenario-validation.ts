@@ -119,7 +119,7 @@ import type { StatusPolicy } from '../lib/statusPolicy'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
-import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
+import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
 import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
@@ -2315,10 +2315,10 @@ scenario(
     ].filter(Boolean)
     return {
       verdict: applied ? 'PARTIAL' : 'FAIL',
-      actual: `Adopting "${template.name}" at a scope works and carries ${carries.join(', ') || 'nothing'}. It creates no work items, applies no SLA of its own and configures no notifications — a template is a set of defaults, not a project setup.`,
-      stops: 'at everything the template does not carry',
+      actual: `Adopting "${template.name}" at a scope works and carries ${carries.join(', ') || 'nothing'} — proven here exactly as before. A template that also names a blueprint now builds real structure too: see TPL5, which proves that path end to end. What neither path carries yet: an issue built from a blueprint entry does not reference an IssueTemplate, so it arrives with no starting checklist. SLA and automation-rule notifications are not separately proven for blueprint-created issues — they run through the same create action every issue does, which is reason to expect they apply the same way, but "reason to expect" is not a scenario, so it's named rather than claimed.`,
+      stops: 'at checklists for blueprint-built issues, and at an explicit proof that SLA/notifications reach them the same way they reach any other issue',
       severity: 'P2',
-      impact: 'Mobilising a project is still manual; only the operating-model defaults are inherited.',
+      impact: 'Mobilising a project from a blueprint-linked template now creates real structure and inherited defaults together; the remaining gap is narrower than before, not gone.',
     }
   },
 )
@@ -13614,6 +13614,66 @@ scenario(
       severity: 'P2',
       impact: passed ? 'none' : 'an issue template could be saved pointing at an activity template that does not exist',
     }
+  },
+)
+
+scenario(
+  'TPL5',
+  'Adopting a template that names a blueprint builds the blueprint too',
+  'CF3 (docs/plans/2026-09-20-project-template-cf3-plan.md, Slice 2): a template names at most one blueprint (20 Sep 2026 review). Adopting it still sets agent/workflow defaults exactly as before — adoptTemplate itself is unchanged — and now also builds the blueprint’s structure under the same scope, in one composed call.',
+  () => {
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    let src = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Shape source' }, now: NOW } as Action)
+    const projectId = Object.values(src.nodes).find((n) => n.kind === 'project' && n.name === 'Shape source')!.id
+    src = ok(src, { t: 'create', parentId: projectId, kind: 'outcome', draft: { name: 'Go-live readiness' }, now: NOW } as Action)
+    const outcomeId = Object.values(src.nodes).find((n) => n.kind === 'outcome')!.id
+    src = ok(src, { t: 'create', parentId: outcomeId, kind: 'module', draft: { name: 'Cutover' }, now: NOW } as Action)
+
+    const proposal = extractBlueprint(src, engagementId)
+    const stored = ok(src, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: null, patch: { name: 'Mobilisation shape', sourceEngagementId: engagementId, entries: proposal.entries, links: proposal.links } },
+      now: NOW,
+    } as Action)
+    const bp = Object.values(stored.model.blueprints).find((b) => b.name === 'Mobilisation shape')!
+
+    /* No upsertProjectTemplate op exists (ProjectTemplate is seed-only today) — the fixture
+       links a real seed template to the stored blueprint directly, the same direct-override
+       pattern other scenarios already use to reach a precondition the reducer has no action
+       for. adoptTemplate itself never needs to know or care how a template came to name one. */
+    const lightTouch = Object.values(stored.model.templates).find((t) => t.id === 'TPL_LIGHT_TOUCH')!
+    const withLink: typeof stored = {
+      ...stored,
+      model: {
+        ...stored.model,
+        templates: { ...stored.model.templates, [lightTouch.id]: { ...lightTouch, blueprintId: bp.id } },
+      },
+    }
+
+    // Both counted, not just nodes: the source engagement's own pre-existing issues ride along
+    // in the extracted blueprint too (extractBlueprint takes the whole subtree, not just the
+    // three structural entries this scenario added), and an issue entry lands in `.issues`,
+    // never `.nodes` — counting only one would read as a shortfall that never happened.
+    const beforeNodes = Object.keys(withLink.nodes).length
+    const beforeIssues = Object.keys(withLink.issues).length
+    const result = applyTemplateBlueprint(withLink, clientId, lightTouch.id, A, NOW)
+
+    const adopted = result.state.model.overrides[clientId]?.templateId === lightTouch.id
+    const newNodes = Object.keys(result.state.nodes).length - beforeNodes
+    const newIssues = Object.keys(result.state.issues).length - beforeIssues
+    const structureBuilt = newNodes + newIssues === bp.entries.length
+    const noRefusals = result.blueprintRefusals.length === 0
+    const newProject = Object.values(result.state.nodes).find((n) => n.kind === 'project' && n.name === 'Shape source' && n.parentId === clientId)
+    const newOutcome = newProject && Object.values(result.state.nodes).find((n) => n.kind === 'outcome' && n.parentId === newProject.id)
+    const newModule = newOutcome && Object.values(result.state.nodes).find((n) => n.kind === 'module' && n.parentId === newOutcome.id)
+    const chainIntact = Boolean(newProject && newOutcome && newModule)
+
+    const okAll = adopted && structureBuilt && noRefusals && chainIntact
+    return okAll
+      ? { verdict: 'PASS', actual: `Adopting "${lightTouch.name}" at the client both sets the template override and builds all ${bp.entries.length} blueprint entries under it — project → outcome → module reproduced as a real, freshly-created chain, not a copy of the source`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `adopted=${adopted} structureBuilt=${structureBuilt}(nodes+${newNodes} issues+${newIssues} of ${bp.entries.length} entries) noRefusals=${noRefusals}(${result.blueprintRefusals[0]?.error ?? ''}) chainIntact=${chainIntact}`, stops: 'adopting a blueprint-linked template does not reliably build its structure', severity: 'P2', impact: 'a template naming a blueprint would silently stay defaults-only' } as const
   },
 )
 

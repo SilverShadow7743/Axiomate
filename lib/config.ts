@@ -762,8 +762,14 @@ export interface WorkflowRecord {
 }
 
 /**
- * A bundle a project can adopt: which agents it turns on, and whether a human signs off.
+ * A bundle a project can adopt: which agents it turns on, whether a human signs off, and —
+ * optionally — the structural shape (`Blueprint`) to build under the scope it's adopted at.
  * This is the object that makes agents composable per project instead of global.
+ *
+ * One template names at most one blueprint (CF3, 20 Sep 2026 review). A template offering a
+ * menu of several was considered and set aside: it would add a selection step and branching
+ * logic to `adoptTemplate` for a distinction better carried by having more templates, each with
+ * its own single blueprint, rather than one template that means several different things.
  */
 export interface ProjectTemplate {
   id: string
@@ -773,6 +779,9 @@ export interface ProjectTemplate {
   workflowIds: string[]
   /** Applied to every agent the template enables, overriding the agent's own default. */
   requireApproval: boolean
+  /** The structural shape to build when this template is adopted, or null for a template that
+   *  is agent/workflow defaults only — most templates, until CF3's design doc, all of them. */
+  blueprintId: string | null
 }
 
 /**
@@ -1412,6 +1421,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     ],
     workflowIds: ['WF_INBOUND_ISSUE', 'WF_SLA_WATCH'],
     requireApproval: true,
+    blueprintId: null,
   },
   {
     id: 'TPL_HYPERCARE',
@@ -1431,6 +1441,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     ],
     workflowIds: ['WF_INBOUND_ISSUE', 'WF_SLA_WATCH'],
     requireApproval: true,
+    blueprintId: null,
   },
   {
     id: 'TPL_LIGHT_TOUCH',
@@ -1440,6 +1451,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     agentIds: ['AGENT_WORKSPACE_ASSISTANT'],
     workflowIds: [],
     requireApproval: true,
+    blueprintId: null,
   },
 ]
 
