@@ -110,6 +110,7 @@ export default function OverviewTab({
   onManageEvidence,
   onMove,
   onConvertToPersonalAction,
+  onSetIssueMilestone,
 }: {
   row: ScheduleRow
   issue: NonNullable<ScheduleRow['issue']>
@@ -142,10 +143,30 @@ export default function OverviewTab({
   /** Opens the Move dialog for this record. Optional so callers that have not been updated
    *  still compile — the hint text next to Process Area is the only thing that needs it. */
   onMove?: () => void
+  /** Which milestone this issue's effort counts toward, one level finer than the SOW its
+   *  project already names. See docs/plans/2026-09-20-milestone-issue-attribution-design.md. */
+  onSetIssueMilestone: (milestoneId: string | null) => void
 }) {
   const labels = useLabels()
   const record = state.issues[issue.id]
   const may = canEditIssue(state.model, actor)
+  const maySetMilestone = can(state.model, actor, 'sow.attribute')
+  /*
+   * The issue's own SOW, via its project — an issue carries no `sowId` itself. Absent
+   * entirely (not shown, not disabled) when there is none: a control with nothing to choose
+   * between must not be shown, the same rule FiltersHeader's own facets already follow.
+   */
+  const milestoneProjectId = projectOf(state, issue.id)
+  const projectSowId = milestoneProjectId ? (state.nodes[milestoneProjectId]?.sowId ?? null) : null
+  const sowMilestones = useMemo(
+    () =>
+      projectSowId
+        ? Object.values(state.milestones)
+            .filter((m) => m.sowId === projectSowId && !m.deletedAt)
+            .sort((a, b) => a.sequence - b.sequence)
+        : [],
+    [state.milestones, projectSowId],
+  )
   /**
    * Custom-responsibility assignment (12 Sep review, People domain) is free text, not a picker
    * over the directory the way Owner and Allocate-to-project now are — so it cannot filter a
@@ -959,6 +980,30 @@ export default function OverviewTab({
                   <span className="prov"> · recorded in the log as “{issue.sourceType}”</span>
                 )}
               </dd>
+              {projectSowId && (
+                <>
+                  <dt>Milestone</dt>
+                  <dd>
+                    {maySetMilestone.allowed ? (
+                      <select
+                        value={record?.milestoneId ?? ''}
+                        onChange={(e) => onSetIssueMilestone(e.target.value || null)}
+                        aria-label="Milestone"
+                      >
+                        <option value="">Not attributed to a milestone</option>
+                        {sowMilestones.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      sowMilestones.find((m) => m.id === record?.milestoneId)?.name ??
+                      'Not attributed to a milestone'
+                    )}
+                  </dd>
+                </>
+              )}
               {raidKind === 'risk' && record && (
                 <>
                   <dt>Exposure</dt>

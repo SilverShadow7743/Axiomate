@@ -3102,6 +3102,9 @@ export default function IssueWorkspace({
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
           }
+          onSetIssueMilestone={(issueId, milestoneId) =>
+            dispatch({ t: 'setIssueMilestone', issueId, milestoneId, now: new Date().toISOString() })
+          }
           onRequestApproval={(subjectId, ruleId, note) =>
             dispatch({ t: 'requestApproval', subjectId, ruleId, note, now: new Date().toISOString() })
           }

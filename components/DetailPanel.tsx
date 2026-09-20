@@ -140,6 +140,9 @@ interface Props {
   onRemoveDependency: (dependencyId: string) => void
   evidence: EvidenceItem[]
   onManageEvidence: (issueId: string) => void
+  /** Which milestone an issue's effort counts toward, one level finer than the SOW its project
+   *  already names. See docs/plans/2026-09-20-milestone-issue-attribution-design.md. */
+  onSetIssueMilestone: (issueId: string, milestoneId: string | null) => void
   /** An image pasted, dropped or inserted through a description's or note's rich editor. */
   onUploadImage: (issueId: string, file: File) => Promise<{ documentId: string; alt: string } | null>
   hasLifecycle: (id: string) => boolean
@@ -273,6 +276,7 @@ export default function DetailPanel({
   onRemoveDependency,
   evidence,
   onManageEvidence,
+  onSetIssueMilestone,
   onUploadImage,
   hasLifecycle,
   sla,
@@ -800,6 +804,7 @@ export default function DetailPanel({
             setEditing={setEditing}
             onUploadImage={(file) => onUploadImage(issue.id, file)}
             onManageEvidence={onManageEvidence}
+            onSetIssueMilestone={(milestoneId) => onSetIssueMilestone(issue.id, milestoneId)}
             onMove={onMove}
             onConvertToPersonalAction={onConvertToPersonalAction}
           />

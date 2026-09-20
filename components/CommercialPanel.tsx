@@ -36,11 +36,21 @@ import {
   type InvoiceStatus,
   type RaiseInvoiceLine,
 } from '@/lib/invoice'
-import { LIVE_SOW_STATUSES, SOW_STATUSES, describePosition, sowPosition, type Sow, type SowStatus } from '@/lib/sow'
+import {
+  LIVE_SOW_STATUSES,
+  SOW_STATUSES,
+  describePosition,
+  sowPosition,
+  milestoneEffortPosition,
+  type Sow,
+  type SowStatus,
+} from '@/lib/sow'
 import { holidaySetOf } from '@/lib/config'
 import { sowCostOf, describeCost } from '@/lib/rates'
 import type { ScheduleRow } from '@/lib/types'
-import type { WorkspaceState } from '@/lib/workspace'
+import type { WorkspaceState, IssueRecord } from '@/lib/workspace'
+import type { IssueEstimate, SizeBand } from '@/lib/estimation'
+import type { TimeEntry } from '@/lib/time'
 import { formatIso, workingDaysBetween } from '@/lib/dates'
 import { issuesUnder as issuesUnderEngagement } from '@/lib/engagement'
 
@@ -327,6 +337,11 @@ export default function CommercialPanel({
               onRemove={onRemoveMilestone}
               onDeliver={onDeliverMilestone}
               onDecide={onDecideMilestone}
+              sowIssueIds={position.issueIds}
+              issues={state.issues}
+              estimates={state.estimates}
+              timeEntries={state.timeEntries}
+              bands={state.model.sizeBands}
             />
 
             <Invoices
@@ -806,6 +821,11 @@ function Milestones({
   onRemove,
   onDeliver,
   onDecide,
+  sowIssueIds,
+  issues,
+  estimates,
+  timeEntries,
+  bands,
 }: {
   sow: Sow
   milestones: Milestone[]
@@ -820,6 +840,13 @@ function Milestones({
   onRemove: (id: string) => void
   onDeliver: (id: string) => boolean
   onDecide: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
+  /** Every issue attributed to this SOW (via its project) — `SowPosition.issueIds`, from the
+   *  caller's own already-computed figure, not recomputed here. */
+  sowIssueIds: string[]
+  issues: Record<string, IssueRecord>
+  estimates: Record<string, IssueEstimate>
+  timeEntries: Record<string, TimeEntry>
+  bands: SizeBand[]
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -839,6 +866,25 @@ function Milestones({
   const ordered = milestones.slice().sort((a, b) => a.sequence - b.sequence)
   const ready = name.trim() !== '' && Number(pct) > 0 && Number(pct) <= 100
 
+  /*
+   * Effort per milestone — a different rollup from `position` above, which is billing/delivery
+   * state across the whole schedule. Not gated behind `rate.view`: hours, not money, the same
+   * unconditional treatment the SOW-level variance line a few lines up already gets (only
+   * `costPositions`, the money figure, is rate-gated in this panel).
+   */
+  const effortByMilestone = new Map(
+    ordered.map((m) => [
+      m.id,
+      milestoneEffortPosition(
+        m,
+        sowIssueIds.filter((id) => issues[id]?.milestoneId === m.id),
+        estimates,
+        timeEntries,
+        bands,
+      ),
+    ]),
+  )
+
   return (
     <section className="comm-changes">
       <h5 className="est-h">Payment schedule</h5>
@@ -852,6 +898,7 @@ function Milestones({
               <th>#</th>
               <th>Milestone</th>
               <th>Worth</th>
+              <th>Variance</th>
               <th>Due</th>
               <th>Delivery</th>
               <th>Acceptance</th>
@@ -865,6 +912,7 @@ function Milestones({
                  offered either. A button that can never succeed is worse than no button. */
               const theirs = m.deliveredBy?.trim().toLowerCase() === actorName.trim().toLowerCase()
               const risk = milestoneRisk(m, today, warnBeforeDays, holidays)
+              const effort = effortByMilestone.get(m.id)
               return [
                 <tr key={m.id} title={describeMilestone(m, value)}>
                   <td className="mono">{m.sequence}</td>
@@ -873,6 +921,19 @@ function Milestones({
                     {value === null ? '—' : `${m.currency} ${Math.round(value).toLocaleString()}`}
                     {m.basis === 'percentage' && <span className="est-block-note"> {m.percentage}%</span>}
                     {m.acceptedValue !== null && <span className="est-block-note"> · fixed at acceptance</span>}
+                  </td>
+                  <td className="mono">
+                    {/* Shown only once there is a baselined, attributed issue to report on —
+                        the same "nothing rather than a zero that means unknown" rule
+                        SowPosition.unestimatedCount already follows. */}
+                    {effort && effort.varianceIssueCount > 0 ? (
+                      <span className={effort.varianceHours > 0 ? 'est-over' : undefined}>
+                        {effort.varianceHours > 0 ? '+' : ''}
+                        {effort.varianceHours}h
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="mono">
                     {m.plannedDate ?? '—'}
