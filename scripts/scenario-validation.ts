@@ -14045,8 +14045,13 @@ for (const f of findings.filter((x) => x.verdict !== 'PASS')) {
   console.log(`  ${pad(f.id, 5)}${f.stops}`)
 }
 
-/* Machine-readable, so the report page and any future regression gate read the same run. */
+/* Machine-readable, so the report page and any future regression gate read the same run.
+ * `asAt` is when this run happened, not the fixture clock — TODAY is a fixed date the
+ * scenarios' own math depends on for reproducibility and must not move; the report's
+ * currency and the fixtures' stability are two different things and were wrongly sharing
+ * one constant, which left every report reading '2026-08-15' regardless of when it ran. */
+const RUN_DATE = new Date().toISOString().slice(0, 10)
 const out = path.join(ROOT, 'data', 'validation.json')
-fs.writeFileSync(out, JSON.stringify({ asAt: TODAY, findings }, null, 2) + '\n')
+fs.writeFileSync(out, JSON.stringify({ asAt: RUN_DATE, findings }, null, 2) + '\n')
 console.log('')
 console.log(`Written to ${path.relative(ROOT, out)} — ${findings.length} scenarios.`)
