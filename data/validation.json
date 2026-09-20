@@ -547,11 +547,11 @@
       "alias": "X",
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
-      "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (19 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
-      "stops": "at the autonomy fields — declared, unread",
-      "severity": "P1",
-      "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Autonomy level (off/suggest/propose/act) is read and enforced live — canPropose() gates whether the one live agent may render a proposal card at all (19 files participate) — and 'act' behaves identically to 'propose' in the code today: every proposal still needs a human click on Apply regardless of the configured level, so recommend-rather-than-act already holds unconditionally. No confidence field exists on ChatConfig, AgentRecord, or the chat route — there is nothing to threshold \"low confidence\" against, because nobody has specified what it would mean here.",
+      "stops": "at the premise — no confidence signal exists anywhere in the assistant/agent-registry domain to test",
+      "severity": "P3",
+      "impact": "The recommend-not-act guarantee this scenario names already holds unconditionally, by construction, at every autonomy level. A confidence-gated downgrade on top of it would be new scope — resolved 20 Sep 2026 as not-yet-specified rather than left open indefinitely as an unwired field."
     },
     {
       "id": "FL1",

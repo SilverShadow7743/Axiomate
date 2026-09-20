@@ -2986,13 +2986,26 @@ scenario(
   'The assistant proposes a change with low confidence',
   'It recommends rather than acts, and a person decides.',
   () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say autonomy
+     * levels have "no runtime that reads them" — false: canPropose() (lib/chat.ts) and the
+     * config route (app/api/chat/route.ts) both read and enforce the configured level live.
+     * What is actually missing is narrower and different in kind: no field anywhere in the
+     * chat/agent domain carries a confidence score, so "low confidence" has nothing to test
+     * against. That is a spec gap, not an unwired field, and NOT IMPLEMENTED is checked the
+     * way every other such verdict here is — by grepping the domain's own files, not assumed.
+     */
     const gated = mentions(/proposal|applyProposal|cards\[/).length
+    const CHAT_DOMAIN = ['lib/chat.ts', 'app/api/chat/route.ts', 'components/ChatPanel.tsx', 'lib/config.ts']
+    const noConfidenceConcept = !SRC.some(
+      (f) => CHAT_DOMAIN.includes(f) && /confidence/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')),
+    )
     return {
-      verdict: 'NOT TESTABLE',
-      actual: `One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (${gated} files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.`,
-      stops: 'at the autonomy fields — declared, unread',
-      severity: 'P1',
-      impact: '37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy.',
+      verdict: noConfidenceConcept ? 'NOT IMPLEMENTED' : 'PARTIAL',
+      actual: `Autonomy level (off/suggest/propose/act) is read and enforced live — canPropose() gates whether the one live agent may render a proposal card at all (${gated} files participate) — and 'act' behaves identically to 'propose' in the code today: every proposal still needs a human click on Apply regardless of the configured level, so recommend-rather-than-act already holds unconditionally. ${noConfidenceConcept ? 'No confidence field exists on ChatConfig, AgentRecord, or the chat route' : 'A confidence-shaped field now exists in the chat/agent domain'} — there is nothing to threshold "low confidence" against, because nobody has specified what it would mean here.`,
+      stops: 'at the premise — no confidence signal exists anywhere in the assistant/agent-registry domain to test',
+      severity: 'P3',
+      impact: 'The recommend-not-act guarantee this scenario names already holds unconditionally, by construction, at every autonomy level. A confidence-gated downgrade on top of it would be new scope — resolved 20 Sep 2026 as not-yet-specified rather than left open indefinitely as an unwired field.',
     }
   },
   'X',
