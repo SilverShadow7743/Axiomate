@@ -7710,6 +7710,45 @@ scenario(
   },
 )
 
+scenario(
+  'BP4',
+  'An Outcome-tier node survives the blueprint round-trip, holding a module the same as a project would',
+  'CF3 (docs/plans/2026-09-20-project-template-cf3-plan.md, Slice 1): extractBlueprint used to stop at project/module, dropping any outcome sitting between them. It now carries the tier through unchanged — extracted as a structural entry, applied as a real outcome node, still parenting the module beneath it.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    let src = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Finance transformation' }, now: NOW } as Action)
+    const projectId = Object.values(src.nodes).find((n) => n.kind === 'project' && n.name === 'Finance transformation')!.id
+    src = ok(src, { t: 'create', parentId: projectId, kind: 'outcome', draft: { name: 'Faster month-end close' }, now: NOW } as Action)
+    const outcomeId = Object.values(src.nodes).find((n) => n.kind === 'outcome')!.id
+    src = ok(src, { t: 'create', parentId: outcomeId, kind: 'module', draft: { name: 'Close automation' }, now: NOW } as Action)
+
+    const proposal = extractBlueprint(src, engagementId)
+    const outcomeEntry = proposal.entries.find((e) => e.kind === 'outcome' && e.name === 'Faster month-end close')
+    const moduleEntry = proposal.entries.find((e) => e.kind === 'module' && e.name === 'Close automation')
+    const extracted = Boolean(outcomeEntry) && moduleEntry?.parentEntryId === outcomeEntry?.id
+
+    const bp: Blueprint = {
+      id: 'BP_T4', name: 'Outcome shape', sourceEngagementId: engagementId, version: 1,
+      entries: proposal.entries, links: proposal.links, applications: [],
+    }
+    const keep = new Set(bp.entries.map((e) => e.id))
+    const run = applyBlueprint(src, bp, clientId, '2026-09-01', A, keep, NOW)
+
+    const newOutcomeId = run.mapping.get(outcomeEntry?.id ?? '')
+    const newModuleId = run.mapping.get(moduleEntry?.id ?? '')
+    const outcomeApplied = Boolean(newOutcomeId) && run.state.nodes[newOutcomeId ?? '']?.kind === 'outcome'
+    const moduleUnderOutcome = Boolean(newModuleId) && run.state.nodes[newModuleId ?? '']?.parentId === newOutcomeId
+    const noRefusals = run.refusals.length === 0
+
+    const okAll = extracted && outcomeApplied && moduleUnderOutcome && noRefusals
+    return okAll
+      ? { verdict: 'PASS', actual: 'The outcome and its module both survive extraction as structural entries, and both are recreated on apply — the module parented under the newly created outcome, not the client the blueprint was applied to', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `extracted=${extracted} outcomeApplied=${outcomeApplied} moduleUnderOutcome=${moduleUnderOutcome} noRefusals=${noRefusals}(${run.refusals[0]?.error ?? ''})`, stops: 'the outcome tier is dropped somewhere in the extract/apply round-trip', severity: 'P2', impact: 'a template built from an engagement using the Outcome tier would silently flatten it on reuse' } as const
+  },
+)
+
 /* ================================================================== *
  * Outbound mail (design 2026-08-19)
  * ================================================================== */

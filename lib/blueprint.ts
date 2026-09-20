@@ -38,7 +38,7 @@ export interface BlueprintEntry {
   /** Stable within the blueprint; never a workspace id. */
   id: string
   /** The STORED kind — 'module', whatever the terminology renders it as. */
-  kind: 'project' | 'module' | 'issue'
+  kind: 'project' | 'outcome' | 'module' | 'issue'
   name: string
   /** Another entry's id, or null for the blueprint's roots (applied under the target). */
   parentEntryId: string | null
@@ -102,7 +102,7 @@ export function extractBlueprint(state: WorkspaceState, engagementId: string): B
     const next: string[] = []
     for (const n of Object.values(state.nodes)) {
       if (n.deletedAt || !n.parentId) continue
-      if (frontier.includes(n.parentId) && (n.kind === 'project' || n.kind === 'module')) {
+      if (frontier.includes(n.parentId) && (n.kind === 'project' || n.kind === 'outcome' || n.kind === 'module')) {
         nodes.push({ id: n.id, kind: n.kind, name: n.name, parentId: n.parentId })
         next.push(n.id)
       }
@@ -131,7 +131,7 @@ export function extractBlueprint(state: WorkspaceState, engagementId: string): B
     ...nodes.map(
       (n): BlueprintEntry => ({
         id: entryIdFor.get(n.id)!,
-        kind: n.kind as 'project' | 'module',
+        kind: n.kind as 'project' | 'outcome' | 'module',
         name: n.name,
         // The engagement itself is not an entry: applying targets a parent, and the subtree
         // roots (whatever sat directly under the engagement) become the applied roots.
