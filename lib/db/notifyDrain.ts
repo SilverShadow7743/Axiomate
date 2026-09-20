@@ -25,6 +25,22 @@ import type { TenantId } from '../tenant'
 
 const PER_RUN = 20
 
+/**
+ * Whether Microsoft's refusal is the kind that clears on its own.
+ *
+ * `lib/queue.ts`'s `verdictFor` drew this line once already, for the autosave queue: 408 and
+ * 429 "live in a range that is otherwise permanent" but improve by waiting, and every other
+ * 4xx is refused identically on replay. That reasoning applies here unchanged — Graph's 429 is
+ * the same throttling signal, not a verdict on this message — so this reuses the line rather
+ * than drawing a second one. 5xx is treated as transient too, matching that module's own
+ * fallback for "a 5xx that could clear": Graph does not hand this client a way to tell a
+ * deterministic 5xx from an outage, unlike the endpoint `verdictFor` reads a `permanent` flag
+ * from, so every 5xx here is given the benefit of the doubt rather than none of it.
+ */
+export function isTransientGraphFailure(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500
+}
+
 function mark(id: string, delivery: Delivery, note: string, now: string): Action {
   return { t: 'markNotificationDelivery', id, delivery, note, now } as Action
 }
@@ -87,6 +103,13 @@ export async function drainEmailNotifications(
     if (res.ok) {
       stamps.push(mark(n.id, 'delivered', `Emailed to ${person.email} as ${mailbox}.`, now))
       sent++
+    } else if (isTransientGraphFailure(res.status)) {
+      // Stays pending, the same treatment as no-directory-email and no-enabled-mailbox above:
+      // nothing is wrong with this message, only with this attempt, and the next run tries
+      // again on its own. A refusal that will not improve still goes to 'failed', below.
+      console.error(`notification ${n.id} deferred: ${res.status} ${res.detail}`)
+      stamps.push(mark(n.id, 'pending', `Microsoft could not be reached (${res.status}) — retrying next run.`, now))
+      failed++
     } else {
       // A refusal is terminal for this notification: it names the outcome the operator must
       // investigate, and retrying the same refusal every morning would only bury it.
