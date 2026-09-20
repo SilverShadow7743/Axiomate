@@ -4118,10 +4118,28 @@ scenario(
   'What was true is preserved with its period, and a later correction cannot move a figure already computed.',
   () => {
     /*
-     * Driven against lib/versioning.ts directly, before it has a caller. Boundary arithmetic is
-     * where this kind of code goes wrong and it goes wrong quietly, so it is proven here rather
-     * than inferred from a capacity figure looking plausible.
+     * Driven against lib/versioning.ts directly rather than through the reducer — boundary
+     * arithmetic is where this kind of code goes wrong and it goes wrong quietly, so it is
+     * proven here on its own terms, not inferred from a capacity figure looking plausible.
+     *
+     * Re-checked directly, 20 Sep 2026: this scenario used to say "no version has been stored,
+     * and nothing in the application stamps anything yet" — false about storage. `recordVersion`/
+     * `correctVersion` are wired end to end: a real call site (`onRecordPattern`, IssueWorkspace.tsx),
+     * a reducer case, `state.versions`, and full persistence (`lib/db/repo.ts` loads it,
+     * `lib/db/persist.ts` upserts it, both proven by the Prisma `Version` model existing and
+     * being read/written there). `lib/capacity.ts` already reads `valueAt` for real capacity
+     * figures. What is checked below, freshly, rather than assumed: whether `stamp()` — the one
+     * piece that makes a correction safe — has an application caller yet.
      */
+    const storageWired = mentions(/onRecordPattern/).length > 0 && mentions(/versionFromRow/).length > 0
+    const capacityReadsIt = mentions(/valueAt\(versions, WORKING_PATTERN/).length > 0
+    /*
+     * A bare `/\bstamp\(/` check was tried first and immediately caught its own false positive:
+     * lib/db/schedule.ts has an unrelated local closure also named `stamp()`. The only claim
+     * worth making is "some file imports `stamp` from this module" — checked on the import
+     * line specifically, which a same-named local function never touches.
+     */
+    const stampWired = mentions(/import\s*\{[^}]*\bstamp\b[^}]*\}\s*from\s*['"][^'"]*\/versioning['"]/).length > 0
     const v = (id: string, from: string, to: string | null, hours: number): Version<number> => ({
       id, subjectKind: 'person.workingPattern', subjectId: 'P1', validFrom: from, validTo: to,
       value: hours, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
@@ -4175,12 +4193,13 @@ scenario(
       stillSevenAndAHalf
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it: the stamp still holds ${held?.value}h from ${held?.stampedFrom}. What is not proven is the round trip — no version has been stored, and nothing in the application stamps anything yet, because the first thing that will is an approved timesheet.`,
-      stops: 'at storage, and at a stamp made by the application rather than by this scenario',
+      verdict: good && storageWired && capacityReadsIt ? (stampWired ? 'PASS' : 'PARTIAL') : 'FAIL',
+      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it: a held copy still reads ${held?.value}h from ${held?.stampedFrom}, proven here by calling \`stamp()\` directly. ${storageWired ? 'The round trip is real, not hypothetical: recording a pattern has a UI call site and full persistence, and capacity figures already read it.' : 'Recording has no application caller yet.'} ${stampWired ? '' : 'What genuinely is not wired: nothing in the application calls `stamp()` — an approved timesheet does not yet freeze the pattern it was judged against, so a later correction would retroactively move an already-approved week’s figures instead of leaving them held.'}`,
+      stops: stampWired ? '' : 'at the one caller this needs and does not have — `decideTimesheet`’s approval arm — not at the mechanism, which is proven and already has two other real callers',
       severity: 'P2',
-      impact:
-        'The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys.',
+      impact: stampWired
+        ? 'The rules hold, are wired to capacity, and a correction cannot move an already-committed figure.'
+        : 'The rules hold and are wired to capacity today. Until an approval stamps the pattern it relied on, a later correction would move an already-approved week’s figures rather than leave them held — the one gap this scenario can still name precisely.',
     }
   },
 )
@@ -4388,6 +4407,16 @@ scenario(
     const atAllowance = backdated('2026-08-01', '2026-08-08')
     const pastAllowance = backdated('2026-08-01', '2026-08-09')
 
+    /*
+     * Re-checked directly, 20 Sep 2026: this scenario used to close saying "no cap is applied
+     * by anything, and no working pattern has been recorded as a version by the application" —
+     * false. `dayWarning` (lib/workspace.ts) calls exactly this pair — `dailyCap` then
+     * `dailyCapWarning` — live, inside `addTime`'s own success message, on every entry. Checked
+     * rather than assumed, the same discipline a NOT IMPLEMENTED verdict elsewhere in this
+     * suite already follows.
+     */
+    const wiredLive = mentions(/dailyCapWarning\(dailyCap\(/).length > 0
+
     const good =
       beforeAnything.kind === 'unenforced' &&
       beforeAnything.hoursPerDay === null &&
@@ -4415,12 +4444,12 @@ scenario(
       pastAllowance.approvalRequired
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.`,
+      verdict: good && wiredLive ? 'PASS' : good ? 'PARTIAL' : 'FAIL',
+      actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. ${wiredLive ? 'This is not just proven arithmetic: `addTime` calls exactly this pair, live, on every entry — a real cap, applied by the real application, not merely available in a library.' : 'The cap is proven correct but has no application caller yet.'}`,
       stops: 'at the action\'s own entry point, not at storage. `TimeEntry` has carried `personId` since the identity-ids migration (2026-08-22) — every entry it counts, and the `Version` it reads the cap from, are both id-first. What still resolves by name is the one thing that has no id yet: the incoming `addTime` action itself, which — like every write action in this codebase — arrives with only a free-text `person` field, never a `personId`. So the entry point looks the person up by name before anything id-first can begin, and a name that does not currently resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.',
-      severity: 'P2',
+      severity: 'P3',
       impact:
-        'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
+        'The cap is proven correct and applied live on every recorded entry. The one accepted, deliberate residual: a name that cannot be resolved to a directory id gets no cap rather than a wrong one — a missing remark, never a wrong refusal, and not something this finding treats as open work.',
     }
   },
 )
