@@ -2657,7 +2657,7 @@ export default function IssueWorkspace({
       ) : view === 'resourcing' ? (
         <ResourcingPanel state={state} today={today} onOpenProfile={setOpenProfileId} docked />
       ) : view === 'commercial' ? (
-        <CommercialRegister state={state} today={today} docked />
+        <CommercialRegister state={state} today={today} onSelect={revealIssue} docked />
       ) : view === 'milestones' ? (
         <ClientMilestonesPanel state={state} docked />
       ) : view === 'applications' ? (

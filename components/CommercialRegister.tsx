@@ -32,11 +32,15 @@ export default function CommercialRegister({
   today,
   docked = false,
   onClose,
+  onSelect,
 }: {
   state: WorkspaceState
   today: string
   docked?: boolean
   onClose?: () => void
+  /** Opens a row's engagement in its own detail drawer — the fast-follow this page's own
+   *  design doc named. Optional so a caller with no selection surface can still mount this. */
+  onSelect?: (id: string) => void
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   useOverlay(rootRef, !docked, onClose)
@@ -180,7 +184,13 @@ export default function CommercialRegister({
                   {visibleAll.map((r) => (
                     <tr key={r.sow.id}>
                       <td>
-                        {r.sow.reference}
+                        {onSelect && r.engagement ? (
+                          <button type="button" className="btn-link" onClick={() => onSelect(r.engagement!.id)}>
+                            {r.sow.reference}
+                          </button>
+                        ) : (
+                          r.sow.reference
+                        )}
                         <div className="prov">{r.sow.title}</div>
                       </td>
                       <td>{r.engagement?.name ?? <span className="prov">—</span>}</td>
@@ -228,7 +238,15 @@ export default function CommercialRegister({
                     .map(({ r, milestone }: { r: (typeof visibleAll)[number]; milestone: Milestone }) => (
                       <tr key={milestone.id}>
                         <td>{milestone.name}</td>
-                        <td>{r.sow.reference}</td>
+                        <td>
+                          {onSelect && r.engagement ? (
+                            <button type="button" className="btn-link" onClick={() => onSelect(r.engagement!.id)}>
+                              {r.sow.reference}
+                            </button>
+                          ) : (
+                            r.sow.reference
+                          )}
+                        </td>
                         <td>{r.engagement?.name ?? <span className="prov">—</span>}</td>
                         <td className="mono">{formatIso(milestone.plannedDate!)}</td>
                         <td className="mono" style={{ color: 'var(--h-overdue)' }}>
@@ -261,7 +279,15 @@ export default function CommercialRegister({
                     .map(({ r, invoice }: { r: (typeof visibleAll)[number]; invoice: Invoice }) => (
                       <tr key={invoice.id}>
                         <td>{invoice.reference || invoice.id}</td>
-                        <td>{r.sow.reference}</td>
+                        <td>
+                          {onSelect && r.engagement ? (
+                            <button type="button" className="btn-link" onClick={() => onSelect(r.engagement!.id)}>
+                              {r.sow.reference}
+                            </button>
+                          ) : (
+                            r.sow.reference
+                          )}
+                        </td>
                         <td>{r.engagement?.name ?? <span className="prov">—</span>}</td>
                         <td>
                           <span className={`comm-status st-${invoice.status.toLowerCase()}`}>{invoice.status}</span>
@@ -293,7 +319,15 @@ export default function CommercialRegister({
                     .sort((a, b) => (a.cost.marginPct ?? 0) - (b.cost.marginPct ?? 0))
                     .map((r) => (
                       <tr key={r.sow.id}>
-                        <td>{r.sow.reference}</td>
+                        <td>
+                          {onSelect && r.engagement ? (
+                            <button type="button" className="btn-link" onClick={() => onSelect(r.engagement!.id)}>
+                              {r.sow.reference}
+                            </button>
+                          ) : (
+                            r.sow.reference
+                          )}
+                        </td>
                         <td>{r.engagement?.name ?? <span className="prov">—</span>}</td>
                         <td className="mono" style={{ color: 'var(--h-overdue)' }}>
                           {r.cost.marginPct}%
