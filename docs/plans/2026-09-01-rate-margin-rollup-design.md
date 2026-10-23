@@ -9,10 +9,10 @@ reaches the project — the variance is per issue, and nothing rolls it up to a 
 a margin."*
 
 Neither claim is quite right, and finding out how was most of this round's work. `costOf()`
-(`lib/rates.ts`) already exists, is fully proven by scenario `RT1` (`PASS`), and correctly prices
+(`lib/commercial/rates.ts`) already exists, is fully proven by scenario `RT1` (`PASS`), and correctly prices
 worked hours against dated cost/bill rates with an honest-absence rule (a single unrated hour
 makes the whole total `null`, never a smaller number). It has **zero callers** anywhere outside
-`lib/rates.ts` and the suite. A Rates configuration tab (`recordRate`/`correctRate`,
+`lib/commercial/rates.ts` and the suite. A Rates configuration tab (`recordRate`/`correctRate`,
 `rate.view`/`rate.edit` gated) already exists too — `RT1`'s own `stops` text claiming "no screen
 records a rate" was itself stale, and is corrected as part of this round.
 
@@ -34,7 +34,7 @@ already aggregates issues into.
 
 ## Two additions, split by sensitivity
 
-**Variance — ordinary delivery data, joins `SowPosition` (`lib/sow.ts`).** Two new fields,
+**Variance — ordinary delivery data, joins `SowPosition` (`lib/commercial/sow.ts`).** Two new fields,
 computed inside `sowPosition()`'s existing `issueIds` loop:
 
 ```ts
@@ -54,7 +54,7 @@ export interface SowPosition {
 No permission gate: anyone who can see the SOW's issues can already see each one's individual
 variance, so a sum of visible facts needs no new gate.
 
-**Cost/margin — permission-sensitive, a new function in `lib/rates.ts`, beside `costOf`:**
+**Cost/margin — permission-sensitive, a new function in `lib/commercial/rates.ts`, beside `costOf`:**
 
 ```ts
 export function sowCostOf(
@@ -75,7 +75,7 @@ rather than silently dropped, so "this hour cannot be priced" reads as one hones
 the cause — a missing rate or an unresolved identity — never two different silent failure modes
 wearing the same blank space.
 
-`lib/sow.ts` gains no new import of `lib/rates.ts` — `sowCostOf` and `sowPosition` are called
+`lib/commercial/sow.ts` gains no new import of `lib/commercial/rates.ts` — `sowCostOf` and `sowPosition` are called
 separately by whoever needs both, keeping the ordinary-data module free of the permission-
 sensitive one, the same boundary `lib/portfolio.ts`'s own exclusion of commercial figures already
 draws at the screen level.

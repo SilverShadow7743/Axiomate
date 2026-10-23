@@ -87,7 +87,7 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 | Module | Feature | Status | Evidence | Current capability | Gap | Recommended action |
 |---|---|---|---|---|---|---|
 | SOW | Contract record | **Backend only / never used** | `Sow` schema:636; **0 rows** | reference, status, dates, effortHours, value+currency, scope, exclusions, acceptance | No deliverables, milestones, assumptions, risks, roles, versioning, document | Use it before extending it |
-| SOW | Consumption | **Implemented — needs validation** | `sowPosition` `lib/sow.ts:96` | baseline vs planned vs actual **hours** | Value never consumed against anything | Add money after rates exist |
+| SOW | Consumption | **Implemented — needs validation** | `sowPosition` `lib/commercial/sow.ts:96` | baseline vs planned vs actual **hours** | Value never consumed against anything | Add money after rates exist |
 | SOW | Variation | **Partial** | `SOW_STATUSES` includes `Varied` | A status says a variation happened | Nothing says what it was or what it was worth | Model CR as an entity |
 | Change Request | Commercial change | **Planned but missing** | `type = 'Change Request'` string only | An issue with a type | No scope, effort, value, approval, effective date, SOW link | **P1 — model it** |
 | Lead / Opportunity | Pre-sale | **Missing entirely** | repo-wide search: nothing | — | Chain starts at a signed contract | Decide if in scope |
@@ -112,7 +112,7 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 | Module | Feature | Status | Evidence | Capability | Gap | Action |
 |---|---|---|---|---|---|---|
 | Estimation | Complexity → size → hours | **Implemented & working** | `IssueEstimate`; 110 rows | 5 scores, T-shirt bands, breakdown, confidence | — | Keep |
-| Estimation agent | Auto-proposal | **Implemented & working** | `lib/estimator.ts`; 108 proposals | Domain-gated, provenance in assumptions, never baselined | Rule-based, not learned | Keep |
+| Estimation agent | Auto-proposal | **Implemented & working** | `lib/commercial/estimator.ts`; 108 proposals | Domain-gated, provenance in assumptions, never baselined | Rule-based, not learned | Keep |
 | Revisions | Post-baseline change log | **Backend only / not used** | `EstimateRevision`; **0 rows** | from/to snapshots + reason | Nothing baselined yet | Validate |
 
 ### Platform
@@ -186,7 +186,7 @@ working-weeks timeline), `archiveSow`, `deletePerson`, and `upsertDiscipline` / 
   overrun warning, the closed-issue window, the derived opening date and the daily cap are all
   built and none of it is consulted by `addTime`. This is Phase 5 of the plan and it is the
   largest single piece of finished-but-unwired code in the repo.
-- **`AGENT_ESTIMATION` is not reachable from the application.** `lib/estimator.ts` is imported
+- **`AGENT_ESTIMATION` is not reachable from the application.** `lib/commercial/estimator.ts` is imported
   only by `scripts/estimate-backlog.ts`, a CLI. So of 39 registry entries, **exactly one —
   the workspace assistant — changes anything a user can see.**
 - **`AgentRecord.requireApproval` is inert.** It is stored, rendered, and audited when changed.
@@ -283,7 +283,7 @@ milestones, effort, commercial model, roles, dependencies or risks from a docume
 document. `Sow.scope`, `exclusions` and `acceptanceCriteria` are three free-text blobs somebody
 types.
 
-The codebase states its own boundary honestly (`lib/sow.ts:22`): reading a scope statement and
+The codebase states its own boundary honestly (`lib/commercial/sow.ts:22`): reading a scope statement and
 deciding whether a request is inside it *"is a judgement, and pretending otherwise would be the
 worst kind of feature: a machine answer to a commercial question, wrong occasionally and
 confidently."*
@@ -480,7 +480,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 
 | Entity | Why | Priority |
 |---|---|---|
-| ~~`RateCard` / `PersonRate` (effective-dated)~~ | Unblocks cost, margin, billing, three agents | **BUILT** — `lib/rates.ts`, withheld whole from anybody without `rate.view` |
+| ~~`RateCard` / `PersonRate` (effective-dated)~~ | Unblocks cost, margin, billing, three agents | **BUILT** — `lib/commercial/rates.ts`, withheld whole from anybody without `rate.view` |
 | ~~`ChangeRequest`~~ | Commercial change is currently a string | **BUILT** — a signed delta; the SOW baseline is never edited |
 | ~~`Skill`, `PersonSkill` (with proficiency)~~ | Unblocks allocation intelligence and two agents | **BUILT** — named levels not numbers, provenance (`self`/`assessed`/`certified`), and `lastUsedOn` so a lapsed skill reads as lapsed. Catalogue in the model, levels in a table, judgement fields redacted at the boundary |
 | ~~`Document` / file storage~~ | Unblocks SOW intelligence and deliverable evidence | **BUILT** — SharePoint via Graph, not Blob. A row exists only when the bytes do; the locator never leaves the server. **One admin action outstanding**: grant `Files.ReadWrite.All` and name a drive |

@@ -6,8 +6,8 @@ Quotes below are that design's constraints, not restated from memory.
 ## What's already true, checked before writing this
 
 - **The complexity/sizing engine has zero scenario-suite coverage today.**
-  `scripts/scenario-validation.ts` imports only `summarise` from `lib/estimation.ts` and
-  nothing at all from `lib/estimator.ts` — no scenario exercises `isScored`,
+  `scripts/scenario-validation.ts` imports only `summarise` from `lib/commercial/estimation.ts` and
+  nothing at all from `lib/commercial/estimator.ts` — no scenario exercises `isScored`,
   `bandForScore`, `deriveEffort`, or `proposeEstimate` directly. Step 1 is not "update
   existing scoring scenarios," there are none; it's the first coverage this logic gets.
 - **Four existing scenarios use `setEstimate`** (`K` at line ~1052, `N` at line ~1122, one
@@ -40,11 +40,11 @@ Quotes below are that design's constraints, not restated from memory.
   shape-validate inside `scores` today and doesn't need to for this change — out of
   scope, unchanged.
 
-## Step 1 — Pure logic: `lib/estimation.ts`, `lib/estimator.ts`, and new scenarios
+## Step 1 — Pure logic: `lib/commercial/estimation.ts`, `lib/commercial/estimator.ts`, and new scenarios
 
-**Files:** `lib/estimation.ts`, `lib/estimator.ts`, `scripts/scenario-validation.ts`.
+**Files:** `lib/commercial/estimation.ts`, `lib/commercial/estimator.ts`, `scripts/scenario-validation.ts`.
 
-`lib/estimation.ts`:
+`lib/commercial/estimation.ts`:
 - `ComplexityScores` (line 76) → `Record<ComplexityKey, number | null>`.
 - `COMPLEXITY_LEVELS` (line 79) → the deck's table: `{0,'None'}, {1,'Very low'},
   {2,'Low'}, {3,'Moderate'}, {4,'High'}, {5,'Very high'}` — note `'Moderate'`, not the
@@ -70,7 +70,7 @@ Quotes below are that design's constraints, not restated from memory.
   score = normaliseScore(rawScore)`, then `bandForScore(bands, score)` — normalization
   inserted exactly where the design says, between the two existing calls.
 
-`lib/estimator.ts`:
+`lib/commercial/estimator.ts`:
 - Rule-weight loop (lines 264–269): `if (scores[key] === null || value > scores[key])
   scores[key] = value`.
 - `NO_SIGNAL_FLOOR` loop (lines 271–273): check `=== null` instead of `=== 0`.

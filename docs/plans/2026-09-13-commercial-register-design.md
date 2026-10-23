@@ -9,7 +9,7 @@ computation, `rate.view`-gated exactly as the cost figures already are inside `C
 ## What already does the work, and the one new resolution step
 
 `CommercialPanel` scopes `sows`/`projects` to one `row` (an engagement) before computing
-positions. The register needs every SOW firm-wide instead. `lib/engagement.ts` already
+positions. The register needs every SOW firm-wide instead. `lib/commercial/engagement.ts` already
 exports a general-purpose `issuesUnder(state, nodeId)` — works for any node, not only an
 engagement — so per SOW: find its projects (`state.nodes` where `kind === 'project' &&
 sowId === sow.id`), union `issuesUnder(state, project.id)` across them, exactly the same

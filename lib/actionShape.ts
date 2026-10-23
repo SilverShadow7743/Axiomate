@@ -12,7 +12,7 @@ import { SKILL_ORDER, SKILL_SOURCES } from './capacity/skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
 import { APPLICATION_STATUSES, INTEGRATION_STATUSES } from './application'
-import { INVOICE_STATUSES } from './invoice'
+import { INVOICE_STATUSES } from './commercial/invoice'
 import { SCOPE_KINDS, SCOPE_SOURCES } from './scope'
 
 /**

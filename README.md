@@ -152,7 +152,7 @@ edits. See *Multi-tenancy* under Persistence.
 
 An engagement is the commercial and delivery envelope around a body of work: code, type,
 status, start and end dates, engagement leader, project manager, client sponsor, SOW reference.
-None of that is in the issue log — the log records issues, not contracts — so `lib/engagement.ts`
+None of that is in the issue log — the log records issues, not contracts — so `lib/commercial/engagement.ts`
 keeps recorded fields and derived ones apart, and all nine recorded fields ship **blank**. They
 render as `Not recorded` rather than as a guess, and `recordedCount` reports how much of the
 record actually exists, because a plausible invented code or sponsor would make the screen look

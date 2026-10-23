@@ -18,7 +18,7 @@ stamps every created record with who and when.
 
 ## Steps
 
-**1. `lib/blueprint.ts` (new) — types and the pure halves.**
+**1. `lib/commercial/blueprint.ts` (new) — types and the pure halves.**
 `BlueprintEntry { id, kind: 'project'|'module'|'issue', name, parentEntryId: string|null,
 type, severity, discipline, startOffset: number|null, endOffset: number|null }` — note the
 stored node kind is `module` (NODE_KINDS, lib/types.ts:29); the screens may render the firm's
@@ -32,7 +32,7 @@ rows excluded. Pure; an engagement with no dated items yields all-null offsets.
 *Verify:* `npx tsc --noEmit` clean.
 
 **2. `applyBlueprint(state, blueprint, targetParentId, anchor, actor, keep: Set<string>)` —
-also in `lib/blueprint.ts`, mirroring `runRecurrences`' shape.**
+also in `lib/commercial/blueprint.ts`, mirroring `runRecurrences`' shape.**
 Sequential `apply` calls, parents before children (entries sorted so `parentEntryId` is
 always already applied; the root entry's parent is `targetParentId`): `create` for each kept
 entry (id learned by diffing state keys, as `runRecurrences` does), `setDates` where offsets

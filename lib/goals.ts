@@ -1,4 +1,4 @@
-import { issuesUnder } from './engagement'
+import { issuesUnder } from './commercial/engagement'
 import { isTerminal } from './schedule'
 import type { WorkspaceState } from './workspace'
 

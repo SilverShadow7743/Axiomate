@@ -12,7 +12,7 @@ own follow-up, not folded into this build.
 `workingDaysBetween`/`addWorkingDays` already took an optional `holidays` set; every caller
 now passes `holidaySetOf(state.model)`. Beyond the sites named in the draft
 (`proposeTargetDate`, `computeDurations`, `watch.ts`'s three checks, `milestoneRisk`), the same
-pass found and fixed the identical gap in `lib/estimation.ts` (`deriveTimeline`'s finish-date
+pass found and fixed the identical gap in `lib/commercial/estimation.ts` (`deriveTimeline`'s finish-date
 projection, `scheduleVarianceDays`'s working-days-late count — a different, working-day-based
 function from `criticalResolutionPath`'s own calendar-day `scheduleVarianceDays` field, which
 is a distinct, pre-existing name collision left as found), `lib/analytics.ts`'s `byAgeBucket`,

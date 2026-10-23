@@ -1,4 +1,4 @@
-import type { ApprovalDecision } from './approval'
+import type { ApprovalDecision } from '../approval'
 
 /**
  * A change to what was contracted, as a record rather than a status.

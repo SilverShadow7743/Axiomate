@@ -8,7 +8,7 @@ beginning a project" — planned start/end date per work item, plus "budget defi
 and other cost details at the time," taken manually from the Gantt view, multiple per project,
 compared later via a "View baseline" dropdown.
 
-Axiomate's `Estimate.baselinedAt` (`lib/estimation.ts`) is a false friend: per-issue, agreed
+Axiomate's `Estimate.baselinedAt` (`lib/commercial/estimation.ts`) is a false friend: per-issue, agreed
 once, locks *effort* only, never a date, never a frozen cost figure, and holds no history — only
 the current agreed value. There is no answer today to "what did the plan look like when the
 client signed off, versus now" (the user's own framing for why this matters) anywhere in this
@@ -17,7 +17,7 @@ codebase.
 ## What this is not
 
 Not a replacement for `Estimate.baselinedAt` (issue-level effort agreement) or `SowPosition`
-(live, always-current SOW cost/variance rollup, `lib/sow.ts`). This sits beside both: a
+(live, always-current SOW cost/variance rollup, `lib/commercial/sow.ts`). This sits beside both: a
 point-in-time copy a person deliberately takes, that never changes again once taken.
 
 ## Scope, settled during brainstorming
@@ -27,7 +27,7 @@ point-in-time copy a person deliberately takes, that never changes again once ta
 - **Content**: planned dates *and* cost together, matching Hive's Baseline exactly rather than
   a dates-only first cut.
 - **Node scope**: both projects and engagements. Unified by `issuesUnder(state, nodeId)`
-  (`lib/engagement.ts:156`) — already exported, already documented as reusable ("Exported for
+  (`lib/commercial/engagement.ts:156`) — already exported, already documented as reusable ("Exported for
   `lib/portfolio.ts`, which needs the same walk over every engagement at once. One
   implementation rather than two"), already walks any node at any depth. A snapshot's root can
   be a project or an engagement; the capture logic does not need to know which.
@@ -97,7 +97,7 @@ Three already-proven primitives, composed, not reimplemented:
    make.
 2. Map each issue to a `SnapshotEntry` — `plannedStart`/`plannedEnd` read straight off
    `IssueRecord` (`lib/workspace.ts:301-302`), no new computation.
-3. `sowCostOf(rates, issueIds, timeEntries)` (`lib/rates.ts`, this session's rate/margin
+3. `sowCostOf(rates, issueIds, timeEntries)` (`lib/commercial/rates.ts`, this session's rate/margin
    rollup) — called once, its `CostOfWork` output stored verbatim as `cost`. The caller decides
    whether to pass real rates or omit them (i.e., call this from a context that has already
    checked `rate.view`) — `takeSnapshot` itself takes no permission decision; the reducer arm

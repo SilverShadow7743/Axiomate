@@ -1,5 +1,5 @@
 /**
- * `lib/catalogueImport.ts` is pure logic with no I/O and no Prisma import — this proof runs it
+ * `lib/commercial/catalogueImport.ts` is pure logic with no I/O and no Prisma import — this proof runs it
  * against fixture rows in memory, no DB, the same shape as `scripts/attribution-proof.ts` /
  * `scripts/estimation-proof.ts`.
  *
@@ -29,7 +29,7 @@ import {
   orderForImport,
   parseCatalogueId,
   type WorkbookRow,
-} from '../lib/catalogueImport'
+} from '../lib/commercial/catalogueImport'
 
 const fail: string[] = []
 const check = (what: string, ok: boolean, detail = '') => {

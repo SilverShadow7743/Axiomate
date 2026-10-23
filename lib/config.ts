@@ -30,8 +30,8 @@
 
 import { DEFAULT_SLA, type DefaultNodeKind, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
 import type { Recurrence } from './recurrence'
-import type { Blueprint } from './blueprint'
-import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
+import type { Blueprint } from './commercial/blueprint'
+import { DEFAULT_SIZE_BANDS, type SizeBand } from './commercial/estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity/capacity'
@@ -1159,7 +1159,7 @@ export interface OperatingModel {
   intake: IntakeMailbox[]
   /** Public structured-capture forms feeding the same pipeline. */
   intakeForms: IntakeForm[]
-  /** Engagement shapes stored for reuse - offsets, never dates. See lib/blueprint.ts. */
+  /** Engagement shapes stored for reuse - offsets, never dates. See lib/commercial/blueprint.ts. */
   blueprints: Record<string, Blueprint>
   /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
   recurrences: Recurrence[]
@@ -1322,7 +1322,7 @@ const SEED_AGENTS: SeedAgent[] = [
    *
    * `maxAutonomy: 'propose'` is a ceiling, not a preference. It scores complexity by reading
    * words, and words are a proxy for the work; the estimate it writes is never baselined, so
-   * nothing downstream can mistake it for one a person agreed. See lib/estimator.ts.
+   * nothing downstream can mistake it for one a person agreed. See lib/commercial/estimator.ts.
    */
   { id: 'AGENT_ESTIMATION', name: 'Estimation', family: 'Issue & Delivery', description: 'Proposes complexity scores for an issue by reading it against known delivery patterns for the product. Sizes and hours are derived from those scores by the firm\'s own calibration, exactly as they are for a person\'s estimate. Never agreed, never baselined — a starting point for a conversation.', priority: 'P1', runtime: 'live', maxAutonomy: 'propose' },
 

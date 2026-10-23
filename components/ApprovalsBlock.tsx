@@ -9,7 +9,7 @@ import {
   describeApproval,
   type ApprovalDecision,
 } from '@/lib/approval'
-import { changeRequestFor } from '@/lib/changeRequest'
+import { changeRequestFor } from '@/lib/commercial/changeRequest'
 import type { IssueRecord, WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
 

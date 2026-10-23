@@ -5,7 +5,7 @@ import { addDays } from './dates'
 import { CONCERN_ORDER, holidaySetOf, type ConcernKind, type HealthScorePolicy } from './config'
 import { directoryIdByName } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
-import { issuesUnder } from './engagement'
+import { issuesUnder } from './commercial/engagement'
 
 import type { IssueRecord, WorkspaceState } from './workspace'
 import type { Severity } from './types'

@@ -196,7 +196,7 @@ export function underScopeOf(
  *
  * Only fields carried directly on `Milestone` itself are exposed — never a resolved dollar
  * value pulled from `ContractedPosition`/`milestoneValue()`, and never anything from
- * `lib/rates.ts`. A milestone's own `amount`/`percentage`/`currency` is the figure the client
+ * `lib/commercial/rates.ts`. A milestone's own `amount`/`percentage`/`currency` is the figure the client
  * already agreed to in the SOW; the firm's cost or margin against it is a different question
  * this function does not answer.
  */

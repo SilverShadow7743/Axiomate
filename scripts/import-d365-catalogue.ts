@@ -3,7 +3,7 @@
  * `CatalogueEntry` table (ADR 0006 / ART-20260914-003, Alt B — direct tenant-scoped Prisma,
  * outside `WorkspaceState`). Mirrors `add-project-tier.ts` and the WBS import
  * (`extract-wbs.ts` / `transform-wbs.mjs`) in shape: read the source, classify and order it
- * with pure functions from `lib/catalogueImport.ts`, print a plan, write nothing until
+ * with pure functions from `lib/commercial/catalogueImport.ts`, print a plan, write nothing until
  * `--apply` is passed and reviewed.
  *
  *   npx tsx scripts/import-d365-catalogue.ts "<path-to-workbook.xlsx>"              # dry run (default)
@@ -61,7 +61,7 @@
  * Alternate Process Sequence ID, the configuration-deliverable's related-process reference) but
  * neither names the workbook's literal column headers. `HEADER_CANDIDATES` below lists the
  * spellings judged most likely from Microsoft's own vocabulary (Microsoft Learn, fetched
- * 2026-09-16 — see `lib/catalogueImport.ts`'s module doc), matched case-insensitively and
+ * 2026-09-16 — see `lib/commercial/catalogueImport.ts`'s module doc), matched case-insensitively and
  * exactly, never by substring. If a real workbook uses different headers, this script refuses
  * with a clear "column not found" error rather than silently reading the wrong column or
  * guessing — never invent (CLAUDE.md principle 2). Add the real spelling to the relevant
@@ -81,7 +81,7 @@ import {
   type WorkbookRow,
   type OrderedImportRow,
   type SkippedImportRow,
-} from '../lib/catalogueImport'
+} from '../lib/commercial/catalogueImport'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'
 

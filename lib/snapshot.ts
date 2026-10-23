@@ -1,6 +1,6 @@
 import type { Actor } from './actor'
-import { issuesUnder } from './engagement'
-import { sowCostOf, type CostOfWork, type PersonRate } from './rates'
+import { issuesUnder } from './commercial/engagement'
+import { sowCostOf, type CostOfWork, type PersonRate } from './commercial/rates'
 import type { WorkspaceState } from './workspace'
 
 /**

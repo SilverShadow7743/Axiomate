@@ -18,7 +18,7 @@
  * trail exists for — so it goes through the same reducer and lands in the same History.
  */
 
-import type { Blueprint } from './blueprint'
+import type { Blueprint } from './commercial/blueprint'
 import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
 import type { RichDoc } from './richText'
 import { isEmptyRichDoc, richDocsEqual, richTextToPlainText, wrapPlainText } from './richText'
@@ -46,7 +46,7 @@ export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, isStaffedOn, permissionForAction, rolesFor, rolesGrant, type AccessPolicy, type PermissionKey } from './access'
-import { rateProblem, type PersonRate, type RateKind } from './rates'
+import { rateProblem, type PersonRate, type RateKind } from './commercial/rates'
 import {
   LOG_FOR_OTHERS,
   backdated,
@@ -100,7 +100,7 @@ import {
   type Invoice,
   type InvoiceLineItem,
   type InvoiceStatus,
-} from './invoice'
+} from './commercial/invoice'
 import { checkChecklistItem, nextChecklistSequence, type ChecklistItem } from './checklist'
 import {
   checkChange,
@@ -108,7 +108,7 @@ import {
   decideChangeProblem,
   statusAfterDecision,
   type ChangeRequest,
-} from './changeRequest'
+} from './commercial/changeRequest'
 import {
   isFrozen,
   frozenMessage,
@@ -153,7 +153,7 @@ import {
   availabilityNote,
   refusesAssignment,
 } from './capacity/assignment'
-import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
+import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './commercial/sow'
 import type { ClientMilestoneLine } from './clientBoundary'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
@@ -188,8 +188,8 @@ import {
   type EstimateRevision,
   type IssueEstimate,
   type SizeBand,
-} from './estimation'
-import { blankEngagement, type EngagementDetail } from './engagement'
+} from './commercial/estimation'
+import { blankEngagement, type EngagementDetail } from './commercial/engagement'
 import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
 import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
 import { commitmentCounts } from './capacity/availability'

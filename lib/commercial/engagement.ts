@@ -1,4 +1,4 @@
-import type { WorkspaceState } from './workspace'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * Engagement details.

@@ -30,7 +30,7 @@
  * third. `milestonePosition` therefore distinguishes *no milestones* from *no progress*.
  */
 
-import type { ContractedPosition } from './changeRequest'
+import type { ContractedPosition } from './commercial/changeRequest'
 import { workingDaysBetween } from './dates'
 
 /** Where the work has got to. Says nothing about money. */

@@ -32,7 +32,7 @@ export interface SeverityStatusCell {
 }
 
 /** Every severity/status combination that has at least one issue — empty combinations are not
- *  rows, the same "absence is the honest answer" rule `lib/engagement.ts`'s own summaries use. */
+ *  rows, the same "absence is the honest answer" rule `lib/commercial/engagement.ts`'s own summaries use. */
 export function bySeverityAndStatus(issues: Record<string, IssueRecord>): SeverityStatusCell[] {
   const counts = new Map<string, number>()
   for (const i of liveOnly(issues)) {

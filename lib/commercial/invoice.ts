@@ -6,7 +6,7 @@
  * not do (no tax/VAT, no PDF, no payment processing, no accounting-system integration).
  */
 
-import { isBillable, type Milestone } from './milestone'
+import { isBillable, type Milestone } from '../milestone'
 
 export const INVOICE_STATUSES = ['Draft', 'Sent', 'Paid', 'Cancelled'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]

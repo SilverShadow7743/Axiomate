@@ -36,7 +36,7 @@ import { runRecurrences,
   type WorkspaceState,
 } from '../lib/workspace'
 import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
-import { invoicePosition } from '../lib/invoice'
+import { invoicePosition } from '../lib/commercial/invoice'
 import { checkChecklistItem, checklistFor } from '../lib/checklist'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '../lib/analytics'
 import { inboxFor, undelivered } from '../lib/notifications'
@@ -48,8 +48,8 @@ import {
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
   initModel, mergeModel, customFieldsFor, DEFAULT_HEALTH_SCORE,
 } from '../lib/config'
-import { describePosition, sowPosition, milestoneEffortPosition, type Sow } from '../lib/sow'
-import { issuesUnder } from '../lib/engagement'
+import { describePosition, sowPosition, milestoneEffortPosition, type Sow } from '../lib/commercial/sow'
+import { issuesUnder } from '../lib/commercial/engagement'
 import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
@@ -119,7 +119,7 @@ import type { StatusPolicy } from '../lib/statusPolicy'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
 import { classifyForm } from '../lib/intake'
-import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
+import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/commercial/blueprint'
 import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
@@ -168,8 +168,8 @@ import {
   DEFAULT_SIZE_BANDS,
   MAX_COMPLEXITY,
   NORMALISED_MAX,
-} from '../lib/estimation'
-import { proposeEstimate } from '../lib/estimator'
+} from '../lib/commercial/estimation'
+import { proposeEstimate } from '../lib/commercial/estimator'
 import {
   emptyRichDoc,
   wrapPlainText,
@@ -182,7 +182,7 @@ import {
 } from '../lib/richText'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
-import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/rates'
+import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/commercial/rates'
 import { takeSnapshot } from '../lib/snapshot'
 import {
   candidatesFor,
@@ -232,7 +232,7 @@ import {
   changeRequestFor,
   type ChangeRequest,
   type ChangeStatus,
-} from '../lib/changeRequest'
+} from '../lib/commercial/changeRequest'
 import { applicableApprovalRules, issueApprovalGate } from '../lib/approval'
 import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity/capacity'
 import {
@@ -1490,7 +1490,7 @@ scenario(
     /*
      * Priced: a statement of work to vary, and the same movement raised against it as a
      * ChangeRequest — CommercialPanel's own raise form now offers exactly this issue as the
-     * link, since `issueId` was always on the model (see lib/changeRequest.ts) and only the
+     * link, since `issueId` was always on the model (see lib/commercial/changeRequest.ts) and only the
      * UI never set it.
      */
     const engagementId = Object.values(s.nodes).find((n) => n.kind === 'engagement')!.id
@@ -4863,7 +4863,7 @@ scenario(
     const abutting = rateProblem(rates, { personId: P, kind: 'bill', validFrom: '2025-06-01', validTo: '2026-01-01' })
 
     /*
-     * Real worked hours, gathered by lib/rates.ts's sowCostOf and lib/sow.ts's variance rollup —
+     * Real worked hours, gathered by lib/commercial/rates.ts's sowCostOf and lib/commercial/sow.ts's variance rollup —
      * the wiring this scenario used to say was still missing.
      */
     const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
@@ -13130,7 +13130,7 @@ scenario(
     return {
       verdict: passed ? 'PASS' : 'FAIL',
       actual: `refused=${JSON.stringify(refused.error)} emptyLines=${JSON.stringify(emptyLines.error)}`,
-      stops: passed ? '' : 'at checkRaiseInvoice in lib/invoice.ts',
+      stops: passed ? '' : 'at checkRaiseInvoice in lib/commercial/invoice.ts',
       severity: 'P1',
       impact: passed ? 'none' : 'an invoice could be raised against work nobody has agreed is billable, or with no lines at all',
     }
@@ -13198,7 +13198,7 @@ scenario(
     return {
       verdict: passed ? 'PASS' : 'FAIL',
       actual: `afterRaise=${JSON.stringify(positionAfterRaise)} afterCancel=${JSON.stringify(positionAfterCancel)}`,
-      stops: passed ? '' : 'at invoicePosition in lib/invoice.ts',
+      stops: passed ? '' : 'at invoicePosition in lib/commercial/invoice.ts',
       severity: 'P2',
       impact: passed ? 'none' : "a SOW's still-to-invoice figure is wrong, or a cancelled invoice is still counted as money billed",
     }

@@ -22,7 +22,7 @@ import {
   type Estimate,
   type EstimateStep,
   type TshirtSize,
-} from '@/lib/estimation'
+} from '@/lib/commercial/estimation'
 
 /**
  * Effort and timeline, kept visibly apart.

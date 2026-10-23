@@ -4,9 +4,9 @@ Follows `docs/plans/2026-09-01-rate-margin-rollup-design.md`, approved as writte
 follows the standard rule: the pure additions (`SowPosition`'s new fields, `sowCostOf`) are
 provable directly via a scenario before `CommercialPanel` consumes either.
 
-## Step 1 — `lib/sow.ts`: variance rollup on `SowPosition`
+## Step 1 — `lib/commercial/sow.ts`: variance rollup on `SowPosition`
 
-`SowPosition` (`lib/sow.ts:97-137`) gains two fields, next to `estimatedCount`/`unestimatedCount`:
+`SowPosition` (`lib/commercial/sow.ts:97-137`) gains two fields, next to `estimatedCount`/`unestimatedCount`:
 
 ```ts
 /** Signed sum of effortVariance across issues whose estimate has been baselined. Positive is a
@@ -16,7 +16,7 @@ varianceHours: number
 varianceIssueCount: number
 ```
 
-`sowPosition()` (`lib/sow.ts:146-205`) already loops `issueIds` once for `plannedHours`/
+`sowPosition()` (`lib/commercial/sow.ts:146-205`) already loops `issueIds` once for `plannedHours`/
 `estimatedCount`. Add the variance accumulation to that same loop rather than a second pass:
 
 ```ts
@@ -38,15 +38,15 @@ for (const id of issueIds) {
 }
 ```
 
-`lib/sow.ts` already imports `type TimeEntry` and `hoursOn` from `./time` — add `effortVariance`
+`lib/commercial/sow.ts` already imports `type TimeEntry` and `hoursOn` from `./time` — add `effortVariance`
 to that same import line. Round `varianceHours` the same way `plannedHours`/`actualHours` are
 rounded in the existing `return`.
 
 **Verification:** `npx tsc --noEmit`.
 
-## Step 2 — `lib/rates.ts`: `sowCostOf`
+## Step 2 — `lib/commercial/rates.ts`: `sowCostOf`
 
-Beside `costOf` (`lib/rates.ts:152-192`):
+Beside `costOf` (`lib/commercial/rates.ts:152-192`):
 
 ```ts
 /**
@@ -86,8 +86,8 @@ export function sowCostOf(
 }
 ```
 
-Needs `TimeEntry` imported into `lib/rates.ts` (check current imports — likely not present yet,
-since `lib/rates.ts` today only imports from `./versioning`).
+Needs `TimeEntry` imported into `lib/commercial/rates.ts` (check current imports — likely not present yet,
+since `lib/commercial/rates.ts` today only imports from `./versioning`).
 
 **Verification:** `npx tsc --noEmit`.
 
@@ -222,7 +222,7 @@ baseline across"` or `"no rate on the day it was worked"`) inside a deployed
 **Step 4's `mayViewRate` gate.** Every other step is additive (new fields, a new pure function,
 corrected scenario text). Step 4 is the one place a mistake has a real consequence beyond a
 wrong test result: if `costPositions` were ever computed or rendered without checking
-`mayViewRate.allowed` first, cost/margin figures — the one class of data `lib/rates.ts`'s own
+`mayViewRate.allowed` first, cost/margin figures — the one class of data `lib/commercial/rates.ts`'s own
 header comment explains was deliberately kept out of `WorkspaceState.versions` specifically to
 avoid this — would reach a reader without `rate.view`. `boot()`'s redaction of `state.rates` to
 `{}` for such an actor is a second, independent line of defense (an unpermissioned reader's

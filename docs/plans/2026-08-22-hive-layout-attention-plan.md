@@ -159,7 +159,7 @@ Client-safe visibility boundary is **done** (scenario `RP2`: PASS — internal r
 
 **Operator agenda**
 
-Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
+Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/commercial/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
 
 **Net**: weeks 2, 4, and 5 are all closed. The two items Week 4 still carried "Open" — the tab
 consolidation and the tab-strip overflow handling — were both already done and both mis-checked

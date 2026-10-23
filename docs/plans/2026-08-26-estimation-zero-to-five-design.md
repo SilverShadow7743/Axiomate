@@ -4,9 +4,9 @@
 
 The request was "Estimation should start from numbering 0 to 5 score instead of 1 to
 5." That reads simply, but the current 1–5 scale is load-bearing in three places at
-once: `lib/estimation.ts`'s `emptyScores()` already returns `0` per dimension as the
+once: `lib/commercial/estimation.ts`'s `emptyScores()` already returns `0` per dimension as the
 "nothing entered yet" sentinel, and `isScored()` checks `>= 1` specifically so a `0`
-reads as unscored — the doc comment says "a scored 0 is not a score." `lib/estimator.ts`
+reads as unscored — the doc comment says "a scored 0 is not a score." `lib/commercial/estimator.ts`
 independently depends on `0` meaning "no rule has touched this parameter yet," and
 floors every touched parameter to a minimum of 1 before returning. Widening the scale to
 include a real `0` breaks both without a design, not just a wider `<input>`.
@@ -69,7 +69,7 @@ never mix a 25-point raw score with 15-point thresholds." Every worked example i
 deck shows both numbers side by side (e.g. "Raw Total: 12" then "12/25×15=7.2→7", result
 M) — the raw total explains *why*, the normalized score decides the size.
 
-`lib/estimation.ts` gains:
+`lib/commercial/estimation.ts` gains:
 
 ```ts
 export const NORMALISED_MAX = 15 // the deck's fixed 0–15 band, not derived from COMPLEXITY_PARAMETERS.length
@@ -114,7 +114,7 @@ this change — `effortHours`/`storyPoints` are already firm-editable configurat
 exactly why they are editable"). Only `minScore`/`maxScore` change, because normalization
 makes the old raw-total ranges wrong regardless of what this request asked for.
 
-## The auto-estimator (`lib/estimator.ts`)
+## The auto-estimator (`lib/commercial/estimator.ts`)
 
 Its internal working scores also start `null`-based (reusing `emptyScores()`). Rule-weight
 assignment (`if (value > scores[key]) scores[key] = value`) treats `null` as lower than

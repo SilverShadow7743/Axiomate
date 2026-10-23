@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { issueApprovalGate, type ApprovalGateStatus } from '@/lib/approval'
-import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/changeRequest'
+import { contractedPosition, describeContracted, type ChangeRequest } from '@/lib/commercial/changeRequest'
 import {
   SCOPE_KINDS,
   SCOPE_KIND_LABEL,
@@ -35,7 +35,7 @@ import {
   type InvoiceLineItem,
   type InvoiceStatus,
   type RaiseInvoiceLine,
-} from '@/lib/invoice'
+} from '@/lib/commercial/invoice'
 import {
   LIVE_SOW_STATUSES,
   SOW_STATUSES,
@@ -44,15 +44,15 @@ import {
   milestoneEffortPosition,
   type Sow,
   type SowStatus,
-} from '@/lib/sow'
+} from '@/lib/commercial/sow'
 import { holidaySetOf } from '@/lib/config'
-import { sowCostOf, describeCost } from '@/lib/rates'
+import { sowCostOf, describeCost } from '@/lib/commercial/rates'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState, IssueRecord } from '@/lib/workspace'
-import type { IssueEstimate, SizeBand } from '@/lib/estimation'
+import type { IssueEstimate, SizeBand } from '@/lib/commercial/estimation'
 import type { TimeEntry } from '@/lib/time/time'
 import { formatIso, workingDaysBetween } from '@/lib/dates'
-import { issuesUnder as issuesUnderEngagement } from '@/lib/engagement'
+import { issuesUnder as issuesUnderEngagement } from '@/lib/commercial/engagement'
 
 /**
  * What has been contracted under this engagement, and how much of it is gone.

@@ -16,7 +16,7 @@ owner involved where commercial entitlement is affected. Classification recorded
 SOW / Out of SOW / Partially in SOW / Requires clarification**, with a required basis (SOW clause,
 approved deliverable, existing work item, change request).
 
-Checked against the code rather than assumed: `ChangeRequest` (`lib/changeRequest.ts`) already
+Checked against the code rather than assumed: `ChangeRequest` (`lib/commercial/changeRequest.ts`) already
 carries `sowId` (every change request is already tied to a specific statement of work — the
 object N's classification would be assessed against already exists as a real reference, not
 something to add) and its own `status: ChangeStatus`, whose values are `['Draft', 'Submitted',

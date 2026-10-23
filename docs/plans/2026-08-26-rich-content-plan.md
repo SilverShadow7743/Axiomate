@@ -252,9 +252,9 @@ intermediate state, not a smaller safe one.
 
 ## Step 4 — Downstream read consumers
 
-**Files:** `lib/estimator.ts:242`, `lib/tree.ts:380`.
+**Files:** `lib/commercial/estimator.ts:242`, `lib/tree.ts:380`.
 
-- `lib/estimator.ts`: `` `${issue.subject} ${issue.description} ${issue.module}`.toLowerCase() ``
+- `lib/commercial/estimator.ts`: `` `${issue.subject} ${issue.description} ${issue.module}`.toLowerCase() ``
   → `` `${issue.subject} ${richTextToPlainText(issue.description)} ${issue.module}`.toLowerCase() ``.
 - `lib/tree.ts`: the same swap in the search-string builder (line 380).
 

@@ -21,10 +21,10 @@ below depends on the label string itself; the reducer and schema work entirely i
 ## Ordered by provability, smallest first
 
 **Slice 1 — extend `Blueprint` to the `outcome` tier.**
-`extractBlueprint`'s subtree walk (`lib/blueprint.ts:105`) currently keeps `n.kind === 'project'
+`extractBlueprint`'s subtree walk (`lib/commercial/blueprint.ts:105`) currently keeps `n.kind === 'project'
 || n.kind === 'module'`; add `|| n.kind === 'outcome'`. `BlueprintEntry.kind`'s type union
 (`'project' | 'module' | 'issue'`) gains `'outcome'`. `applyBlueprint`'s `create` action
-(`lib/blueprint.ts:236`) already branches only on `entry.kind === 'issue'` vs. everything else
+(`lib/commercial/blueprint.ts:236`) already branches only on `entry.kind === 'issue'` vs. everything else
 for the draft shape (`{ name: entry.name }` for any non-issue kind) — an outcome entry needs no
 new branch, it falls into the existing "structural node" path unchanged. Mechanical, same shape
 as the existing project/module handling, highest confidence of the three slices.

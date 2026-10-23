@@ -1,9 +1,9 @@
 import type { IssueEstimate, SizeBand } from './estimation'
 import { deriveEffort } from './estimation'
-import type { TimeEntry } from './time/time'
-import { hoursOn, effortVariance } from './time/time'
+import type { TimeEntry } from '../time/time'
+import { hoursOn, effortVariance } from '../time/time'
 import { contractedPosition, type ChangeRequest } from './changeRequest'
-import type { Milestone } from './milestone'
+import type { Milestone } from '../milestone'
 
 /**
  * What has been contracted, and how much of it is left.

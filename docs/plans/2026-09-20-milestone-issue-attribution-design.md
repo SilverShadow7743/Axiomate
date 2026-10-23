@@ -13,7 +13,7 @@ calls for, not the migration itself. See `docs/strategy/2026-09-17-product-devel
 ## What already does the work
 
 - `effortVariance` (`lib/time/time.ts`) — per-issue, proven by `K` itself.
-- `sowPosition` (`lib/sow.ts`) — sums `varianceHours`/`varianceIssueCount` across every issue
+- `sowPosition` (`lib/commercial/sow.ts`) — sums `varianceHours`/`varianceIssueCount` across every issue
   attributed to a SOW's projects, proven by `RT1`, rendered in `CommercialPanel`'s SOW summary.
 - `HierarchyNode.sowId` — the existing attribution path. A **project** names its SOW; every
   issue under it inherits that attribution through the tree, not through a field on `Issue`
@@ -31,7 +31,7 @@ default for every issue today and for any issue whose SOW has only one milestone
 distinction carries no information.
 
 **`milestonePosition(milestone, issueIds, estimates, timeEntries, bands): MilestonePosition`**
-(new, `lib/sow.ts`, beside `sowPosition`) — the same computation, filtered to
+(new, `lib/commercial/sow.ts`, beside `sowPosition`) — the same computation, filtered to
 `issue.milestoneId === milestone.id`. Deliberately NOT a rewrite of `sowPosition`: a milestone's
 position is a narrower read of the same rows, not a different kind of fact. `issueIds` stays a
 caller-supplied list (as `sowPosition` already takes it) rather than a query the function runs

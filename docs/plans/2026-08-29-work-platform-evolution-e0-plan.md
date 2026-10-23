@@ -69,14 +69,14 @@ to generalize to the same two helpers (flag test, ancestor walk); Step 3's list 
 below. Two scoping findings, neither a send-back:
 
 - **Engagement is a well-known tier, not a generic one.** SOW filing (`lib/workspace.ts:5457`,
-  `:5988`), blueprints (`lib/blueprint.ts:105`, `components/RowMenu.tsx:220`), the
+  `:5988`), blueprints (`lib/commercial/blueprint.ts:105`, `components/RowMenu.tsx:220`), the
   `Engagement` Prisma relation ("present only on engagement nodes"), and the
-  default-engagement lookup (`lib/engagement.ts:183`) all key on the literal `'engagement'`
+  default-engagement lookup (`lib/commercial/engagement.ts:183`) all key on the literal `'engagement'`
   kind. E0 does **not** generalize these: default tier kinds are *well-known strings* that
   optional machinery may key on, and an org that omits the engagement tier simply has no SOW
   filing targets. Only the client boundary moves to the `externalParty` flag. This refines the
   design's tier-definition section without reopening it.
-- **Module literal tests** (`lib/autosave.ts:446`, `lib/blueprint.ts:105`,
+- **Module literal tests** (`lib/autosave.ts:446`, `lib/commercial/blueprint.ts:105`,
   `lib/workspace.ts:640/1808/2780`, `scripts/intake-mailbox.ts:97`) are Step 8's business,
   untouched by Step 3.
 

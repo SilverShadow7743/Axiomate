@@ -198,7 +198,7 @@
       "ScheduleRow kind/parentId chain and NODE_KINDS client | engagement | project via tiersOf (the control is at the client tier, the scoping at the project tier)",
       "Allocation (prisma/schema.prisma:622; lib/capacity/capacity.ts:234): projectId, optional personId, startDate/endDate, percentage, deletedAt",
       "ProjectMember and DEFAULT_PROJECT_ROLES incl. PROJROLE_SPONSOR, PROJROLE_CUSTOMER, PROJROLE_STAKEHOLDER (lib/capacity/staffing.ts; prisma/schema.prisma:652); memberProjectIdsFor and projectView (lib/projectBoundary.ts)",
-      "Engagement.engagementLeader / projectManager / clientSponsor (prisma/schema.prisma:543-546; lib/engagement.ts:49-52): free-text names, no personId, engagement tier",
+      "Engagement.engagementLeader / projectManager / clientSponsor (prisma/schema.prisma:543-546; lib/commercial/engagement.ts:49-52): free-text names, no personId, engagement tier",
       "Person.roleIds (organisation-wide) and Person.clientScopeId (client-scoped) (lib/config.ts:234-262)",
       "Actor, directoryPersonFor (lib/access.ts:348), isExempt (lib/access.ts:407), redactForReader (lib/db/boot.ts:315-425)",
       "SavedView and parseSavedFilters (lib/savedViews.ts); model.notificationPrefs and setNotificationPref (lib/workspace.ts:5810) as the per-person preference precedent; viewChoice (lib/viewChoice.ts) as the per-browser precedent",

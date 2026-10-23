@@ -94,7 +94,7 @@ not loudly, if hand-fed a JSON object instead. All five route through one shared
 nodes, represents an image as a bracketed placeholder and a reference node as its plain
 issue id) rather than five separate, drifting hacks:
 
-1. **`lib/estimator.ts:242`** — `proposeEstimate` text-matches
+1. **`lib/commercial/estimator.ts:242`** — `proposeEstimate` text-matches
    `` `${subject} ${description} ${module}`.toLowerCase() `` against its rule set. Needs
    the extractor in place of raw string interpolation.
 2. **`lib/tree.ts:380`** — the Tree view's own search/filter box concatenates

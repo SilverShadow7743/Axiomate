@@ -14,7 +14,7 @@ Two real, separate decisions exist today:
   move to `In Progress`. Decided by `ROLE_ENGAGEMENT_LEAD` or `ROLE_CLIENT_SPONSOR`, asking *"Do
   you approve this change, its effort and its effect on the agreed scope?"* Rendered by
   `ApprovalsBlock`, under the issue's status field.
-- **`decideChangeRequest`** (`lib/changeRequest.ts`) — decides the **priced** `ChangeRequest`
+- **`decideChangeRequest`** (`lib/commercial/changeRequest.ts`) — decides the **priced** `ChangeRequest`
   record (linked via `issueId`) to `Approved`/`Rejected`. Only `Approved` counts toward
   `contractedPosition` (the SOW's baseline plus approved movements). Rendered by
   `CommercialPanel`'s `Changes` table.
@@ -67,7 +67,7 @@ decision; `'approved'`/`'rejected'` once decided. Multiple approval events again
 (a rejection followed by a fresh request) resolve to the most recent, matching `ApprovalsBlock`'s
 own `mine.find((a) => !a.decision)` / `mine.find((a) => a.decision)` precedent.
 
-`lib/changeRequest.ts` gains the mirror lookup:
+`lib/commercial/changeRequest.ts` gains the mirror lookup:
 
 ```ts
 export function changeRequestFor(changes: ChangeRequest[], issueId: string): ChangeRequest | null

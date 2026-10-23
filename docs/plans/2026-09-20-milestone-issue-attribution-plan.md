@@ -59,7 +59,7 @@ a different thing: recording effort correctly, not about which milestone it coun
 
 **Verified by:** `npm run validate:scenarios` — `K2` reads PASS, `K` unchanged.
 
-## 3. `lib/sow.ts` — `milestonePosition`
+## 3. `lib/commercial/sow.ts` — `milestonePosition`
 
     export function milestonePosition(
       milestone: Milestone,

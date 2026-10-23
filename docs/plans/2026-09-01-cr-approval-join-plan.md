@@ -59,7 +59,7 @@ inline `applicable` is replaced by the import (step 3 does the replacement; this
 needs the new file to type-check standalone, which `tsc --noEmit` across the whole project
 covers).
 
-## Step 2 — `lib/changeRequest.ts`: add the lookup
+## Step 2 — `lib/commercial/changeRequest.ts`: add the lookup
 
 Beside `contractedPosition` (~line 176), a one-line addition:
 
@@ -163,7 +163,7 @@ real component edit).
 ## Step 5 — `CommercialPanel.tsx`: render the gate status (commercial side)
 
 `changeRequestIssues` (line 150-153) already returns full `IssueRecord[]` from `issuesUnder`
-(`lib/engagement.ts:156-171`), which already carries `.type` — no change needed to that
+(`lib/commercial/engagement.ts:156-171`), which already carries `.type` — no change needed to that
 computation itself.
 
 Widen `Changes`'s prop type for `candidateIssues` (line 470) from `{ id: string; subject: string

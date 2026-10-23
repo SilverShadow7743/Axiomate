@@ -14,7 +14,7 @@ import {
   type CommitmentKind,
 } from '@/lib/capacity/capacity'
 import { timelineOf } from '@/lib/versioning'
-import { summarise } from '@/lib/estimation'
+import { summarise } from '@/lib/commercial/estimation'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
 import { addDays } from '@/lib/dates'
