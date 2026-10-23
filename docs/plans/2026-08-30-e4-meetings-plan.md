@@ -135,7 +135,7 @@ Mappers `meetingToRow/FromRow` stamping tenantId. Persistence-proof scrub gains
 
 ## Step 5 — UI
 
-**Files:** `lib/personal/myCalendar.ts`, `components/MyCalendarPanel.tsx`,
+**Files:** `lib/personal/myCalendar.ts`, `components/personal/MyCalendarPanel.tsx`,
 `components/DetailPanel.tsx`, `components/IssueWorkspace.tsx`.
 
 - `myCalendarMonth` gains the fifth entry kind (`{ kind: 'meeting', id, title, date,

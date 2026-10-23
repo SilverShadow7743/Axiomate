@@ -44,7 +44,7 @@ scenarios and in production. What E1 did not build is anywhere for a person to *
 
 ### 1. My calendar grows the leave loop
 
-`components/MyCalendarPanel.tsx`, `lib/personal/myCalendar.ts`.
+`components/personal/MyCalendarPanel.tsx`, `lib/personal/myCalendar.ts`.
 
 - A **"Request leave"** button beside "Add event" opens a modal: start date, end date, hours per
   day (defaulted from the person's working pattern, falling back to 7.5), an optional **private

@@ -192,7 +192,7 @@ pass `audit:kinds`.
   shape `onUpsertApplication` already uses at line 2677-2678, not routed through `onConfig`
   (which is typed to accept only `ConfigOp`, and these deliberately are not one).
 
-### 9. `components/ProfilePanel.tsx` — the select, and the real override path
+### 9. `components/personal/ProfilePanel.tsx` — the select, and the real override path
 
 This is the step that closes the actual UI gap the design's research surfaced: today `CareerField`
 renders a plain read-only `<span>` for anybody who isn't the person themselves, full stop —
@@ -216,7 +216,7 @@ offered the control. That gap is what this step fixes, not a regression to guard
   Overview field today.
 
 **Verified by:** `npx tsc --noEmit`; `npx eslint components/ConfigWorkspace.tsx
-components/IssueWorkspace.tsx components/ProfilePanel.tsx`; then live, in the browser, once
+components/IssueWorkspace.tsx components/personal/ProfilePanel.tsx`; then live, in the browser, once
 deployed (no scenario reaches JSX) — see the manual check below.
 
 ### Commit 2

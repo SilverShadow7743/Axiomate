@@ -125,7 +125,7 @@ The script:
 - **People list** (`components/capacity/PeopleDirectory.tsx`): a new `ID` column, monospace like the
   existing `Joined` column, showing `p.employeeId` or an em dash for anyone not yet assigned
   (client contacts, or an internal person somehow still mid-backfill).
-- **Profile Overview** (`components/ProfilePanel.tsx`): a new read-only row using the existing
+- **Profile Overview** (`components/personal/ProfilePanel.tsx`): a new read-only row using the existing
   `Fact` component with `editable={false}` always (not gated on `mayConfigure` or any
   permission — it is never editable by anyone, so there is nothing to gate) and
   `display={person.employeeId ?? '—'}`.
@@ -147,7 +147,7 @@ The script:
 - `lib/access.ts` — `rolesGrant`.
 - `lib/workspace.ts` — `case 'upsertPerson':` gains the lazy-assignment lines.
 - `components/capacity/PeopleDirectory.tsx` — `ID` column.
-- `components/ProfilePanel.tsx` — Overview `Fact` row.
+- `components/personal/ProfilePanel.tsx` — Overview `Fact` row.
 - `scripts/` — one-off backfill script (not part of the app bundle; run manually once).
 - `scripts/scenario-validation.ts` — a scenario covering: new internal hire gets an id; new
   client contact does not; existing person's id survives an unrelated edit; a role change that

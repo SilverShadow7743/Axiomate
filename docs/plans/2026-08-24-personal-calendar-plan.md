@@ -157,7 +157,7 @@ contains zero rows belonging to any other `personId`.
 **Touches:** `lib/viewChoice.ts` (`WORKSPACE_VIEWS` gains `'mycalendar'`),
 `components/FilterBar.tsx` (`VIEW_ORDER`/`VIEW_LABEL`/`VIEW_TITLE` — label **"My calendar"**,
 deliberately distinct from the existing **"Calendar"** entry, per the design's naming decision),
-a new `components/MyCalendarPanel.tsx` (docked the same way `TimesheetPanel`/`Inbox` already are
+a new `components/personal/MyCalendarPanel.tsx` (docked the same way `TimesheetPanel`/`Inbox` already are
 — no scrim, no focus trap, the switcher is how you leave), `components/IssueWorkspace.tsx` (one
 more branch in the main-pane view switch, and the `addPersonalEvent`/`update`/`remove` dispatch
 wiring — a small add/edit form for one's own events, an unscheduled-work rail the same shape

@@ -18,7 +18,7 @@ identifying the user major details."*
   gained join date, manager, and initial role — one `upsertPerson` dispatch, per §3. Both manager
   `<select>`s exclude Departed people from new picks; the per-row select keeps an already-selected
   Departed manager visible, labeled "(departed)", never silently dropped.
-- `components/ProfilePanel.tsx` — a Departed banner and a Joined fact row. The banner names
+- `components/personal/ProfilePanel.tsx` — a Departed banner and a Joined fact row. The banner names
   exactly what changed (dropped from the manager picker) rather than the three pickers an earlier
   draft claimed — Owner, Allocate-to-project and Next-action assignment are not wired to `status`
   in this build; see §2.

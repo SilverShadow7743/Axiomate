@@ -9,9 +9,9 @@ import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
 import { ownerChoicesFor, ownerOptionValues, UNASSIGNED } from '@/lib/ownerChoices'
 import { bulkStatusChoices } from '@/lib/board'
-import MyWorkPanel from './MyWorkPanel'
-import MyCalendarPanel from './MyCalendarPanel'
-import MyTodosPanel from './MyTodosPanel'
+import MyWorkPanel from './personal/MyWorkPanel'
+import MyCalendarPanel from './personal/MyCalendarPanel'
+import MyTodosPanel from './personal/MyTodosPanel'
 import FactBoxBlade from './FactBoxBlade'
 import MailLog from './MailLog'
 import PortfolioPanel from './planning/PortfolioPanel'
@@ -115,7 +115,7 @@ const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false 
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
 const TimesheetPanel = dynamic(() => import('./time/TimesheetPanel'), { ssr: false })
 const SlaPlanPanel = dynamic(() => import('./planning/SlaPlanPanel'), { ssr: false })
-const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
+const ProfilePanel = dynamic(() => import('./personal/ProfilePanel'), { ssr: false })
 const StuckChangesPanel = dynamic(() => import('./planning/StuckChangesPanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {

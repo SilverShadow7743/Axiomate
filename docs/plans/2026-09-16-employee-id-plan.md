@@ -103,7 +103,7 @@ observable on its own.
 
 **Verified by:** `npx tsc --noEmit`; `npx eslint components/capacity/PeopleDirectory.tsx`.
 
-## 6. `components/ProfilePanel.tsx` — Overview row
+## 6. `components/personal/ProfilePanel.tsx` — Overview row
 
 - One new line inside the `Overview` section's `profile-facts` block (~203-206, alongside `Work
   address`/`Title`/`Phone`/`Joined`): `<Fact label="Employee ID" editable={false} value={person.
@@ -113,7 +113,7 @@ observable on its own.
   required prop; it is never invoked because `editable` is always false, so `() => true` is a
   type-satisfying no-op, not dead logic worth naming a real handler for.
 
-**Verified by:** `npx tsc --noEmit`; `npx eslint components/ProfilePanel.tsx`.
+**Verified by:** `npx tsc --noEmit`; `npx eslint components/personal/ProfilePanel.tsx`.
 
 ### Commit 2
 

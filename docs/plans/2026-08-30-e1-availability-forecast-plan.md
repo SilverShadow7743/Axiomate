@@ -163,7 +163,7 @@ commit. Nothing user-visible yet — deliberately provable before any screen sho
 `lib/config.ts`'s ConfigOp union, `lib/workspace.ts`'s config arm, and `actionShape.ts`'s
 CONFIG_OPS list), the Capacity panel component (leave request keeps its existing form; gains
 the reason field and, for `leave.approve` holders, an "awaiting your decision" list mirroring
-the timesheet queue's shape), `components/MyCalendarPanel.tsx` (a Requested row renders with a
+the timesheet queue's shape), `components/personal/MyCalendarPanel.tsx` (a Requested row renders with a
 pending marker — shown, never hidden; a Returned row says so), the Schedule tab component (the
 forecast sentence), `lib/planning/portfolio.ts` (worst shortfall as a
 `{ kind: 'forecast', phrase: 'shortest on X: short by Nh' }` concern), `app/globals.css`.

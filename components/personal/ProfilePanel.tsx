@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import DetailDrawer from './DetailDrawer'
+import DetailDrawer from '../DetailDrawer'
 import { directReportsOf, isExternalPartyKind, liveCareerOptions, liveRoles, liveSkills, skillName, tiersOf, type CareerOption, type OperatingModel } from '@/lib/config'
 import { can, directoryPersonFor } from '@/lib/access'
 import { formatIso } from '@/lib/dates'

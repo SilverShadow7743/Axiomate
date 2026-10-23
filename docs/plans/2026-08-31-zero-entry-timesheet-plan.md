@@ -118,7 +118,7 @@ the existing `../lib/mywork` and `../lib/inbox` imports.
 **Verify:** `npx tsc --noEmit` → `npm run validate:scenarios`: `ZE1` `PASS`, count 196 → 197,
 0 FAIL.
 
-### Step 3 — `components/MyWeek.tsx` wiring
+### Step 3 — `components/personal/MyWeek.tsx` wiring
 
 A new section, **"From your calendar"**, inserted between the existing `<p className="mw-total">`
 block (ends line 222) and the `<section className="mw-form" aria-label="Record hours">` block

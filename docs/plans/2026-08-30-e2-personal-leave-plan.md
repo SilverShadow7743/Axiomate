@@ -91,7 +91,7 @@ any UI exists.
 
 ## Step 4 — My calendar grows the leave loop
 
-**Files:** `components/MyCalendarPanel.tsx`, `components/IssueWorkspace.tsx`
+**Files:** `components/personal/MyCalendarPanel.tsx`, `components/IssueWorkspace.tsx`
 (`lib/personal/myCalendar.ts` deliberately untouched — see details list).
 
 - "Request leave" button beside "Add event" (~line 100). A `LeaveForm` modal modeled on the

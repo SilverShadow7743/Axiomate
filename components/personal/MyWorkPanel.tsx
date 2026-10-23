@@ -2,7 +2,7 @@
 
 import { useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useOverlay } from './useOverlay'
+import { useOverlay } from '../useOverlay'
 import {
   REASON_LABEL,
   REASON_ORDER,

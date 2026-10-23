@@ -3,7 +3,7 @@
 Follows `docs/plans/2026-08-24-docked-timesheet-inbox-design.md`, approved. The design's own
 words: "Extends `MyWorkPanel`'s docked prop... to `TimesheetPanel` and `Inbox` rather than
 inventing a new pattern" — every step below is checked against that existing, already-shipped
-implementation (`components/MyWorkPanel.tsx`) rather than invented fresh.
+implementation (`components/personal/MyWorkPanel.tsx`) rather than invented fresh.
 
 No pure-logic-first ordering applies here in the usual sense — this is UI wiring over already-
 correct business logic, not new domain rules. The ordering principle instead follows dependency:

@@ -15,7 +15,7 @@ confirmed by reading the actual file, not assumed from the design doc's estimate
 - `lib/personal/mywork.ts:185` — `myWork(state, actor, today)`, resolves via
   `directoryPersonFor(state.model, actor)` (imported line 81 from `./access`).
   `REASON_ORDER` at line 88.
-- `components/MyWorkPanel.tsx:80-87` — the `list.unrecognised` banner (80-85) sits directly
+- `components/personal/MyWorkPanel.tsx:80-87` — the `list.unrecognised` banner (80-85) sits directly
   above the reason-grouped `.evi-list` (87). The Today section's insertion point is between
   them.
 - `components/IssueWorkspace.tsx:696-707` — the landing effect. Current text, confirmed:
@@ -85,7 +85,7 @@ before moving on: nothing that was PASS may stop being PASS).
 **Commit 1** — this step alone. It is fully self-provable (a pure function plus the scenario
 that pins it) before anything depends on it, per the ordering principle.
 
-### Step 2 — the Today section in `components/MyWorkPanel.tsx`
+### Step 2 — the Today section in `components/personal/MyWorkPanel.tsx`
 
 Between the `list.unrecognised` block (ends line 85) and the `.evi-list` div (starts line 87),
 add:

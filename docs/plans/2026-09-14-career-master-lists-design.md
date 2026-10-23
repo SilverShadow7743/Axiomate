@@ -137,7 +137,7 @@ type has, not a picker resolving against a directory that people leave and rejoi
 
 ## ProfilePanel: three free-text inputs become three selects
 
-`CareerField` (`components/ProfilePanel.tsx:497`) currently renders a plain text input. It
+`CareerField` (`components/personal/ProfilePanel.tsx:497`) currently renders a plain text input. It
 becomes a `<select>` sourced from `liveCareerOptions(model, kind)`, options built the same way
 `ownerOptionValues` builds them: the live list for that kind, plus the stored value appended
 when it names nothing currently offered (covers the pre-master-list era and a retired option).
