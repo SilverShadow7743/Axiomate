@@ -28,14 +28,14 @@ lib/planning/statusPolicy.ts:95); (b) `calendarMonth` counts reconcile with the 
 filter. Also assert the board never invents a lane: every lane key ∈ `ISSUE_STATUSES`.
 *Verify:* `npm run validate:scenarios` — count rises by 2, nothing previously passing regresses.
 
-**3. `components/BoardView.tsx` (new) — render only.**
+**3. `components/planning/BoardView.tsx` (new) — render only.**
 Lanes from step 1, cards opening the existing detail panel via the same `onSelect` the grid
 uses. No drag yet. Persist the view choice with the columns-preference pattern
 (components/IssueWorkspace.tsx:1419 — "opening a tab never persists a preference the user did
 not choose").
 *Verify:* `npx tsc --noEmit`; `npm run build`.
 
-**4. The drop handler — `components/BoardView.tsx` + wiring in `IssueWorkspace.tsx`.**
+**4. The drop handler — `components/planning/BoardView.tsx` + wiring in `IssueWorkspace.tsx`.**
 **The step carrying the most regression risk, and it is not close.** It puts `checkTransition`
 in front of a gesture on a screen where every prior interaction succeeded. Three outcomes, all
 through `dropOutcome`: ok → dispatch the ordinary `updateIssue` (the same callback TreeGrid

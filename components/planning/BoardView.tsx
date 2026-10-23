@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { boardLanes, describeBoard, dropOutcome } from '@/lib/board'
 import { allowedNext, type StatusPolicy } from '@/lib/planning/statusPolicy'
 import type { IssueStatus, ScheduleRow } from '@/lib/types'
-import { useOverlay } from './useOverlay'
+import { useOverlay } from '../useOverlay'
 
 /**
  * The register as lanes, and a drag that is the grid’s own lever held sideways.

@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useOverlay } from './useOverlay'
-import DetailDrawer from './DetailDrawer'
+import { useOverlay } from '../useOverlay'
+import DetailDrawer from '../DetailDrawer'
 import ReplanningDrawer from './ReplanningDrawer'
 import { narrationFigures } from '@/lib/comms/assist'
 import { DEFAULT_HEALTH_SCORE } from '@/lib/config'
@@ -16,7 +16,7 @@ import {
   type PortfolioLine,
 } from '@/lib/planning/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
-import WhyThisWorks from './WhyThisWorks'
+import WhyThisWorks from '../WhyThisWorks'
 
 /**
  * Every engagement at once.

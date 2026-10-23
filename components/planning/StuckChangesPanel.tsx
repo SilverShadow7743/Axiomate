@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useOverlay } from './useOverlay'
+import { useOverlay } from '../useOverlay'
 import { describeAction } from '@/lib/pendingActions'
 import type { SubmittedAction } from '@/lib/idempotency'
 

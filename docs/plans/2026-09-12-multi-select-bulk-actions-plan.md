@@ -20,7 +20,7 @@ design's *intent* is unchanged, only the mechanism:
   trusts and which additionally handles the no-op case (`row.status === to`) and evidence
   correctly. Step 1 builds on `dropOutcome`, not on a fresh `allowedNext` intersection.
 - The design says a reason is collected "if the chosen target requires one." Board's own
-  comment (`components/BoardView.tsx:16-19`) and `commitCell`'s `'status'` case
+  comment (`components/planning/BoardView.tsx:16-19`) and `commitCell`'s `'status'` case
   (`components/IssueWorkspace.tsx:1481-1497`) both establish that **every** status change
   through this funnel requires a reason, not only the ones `checkTransition` itself flags. The
   bulk dialog collects one reason unconditionally.
@@ -79,7 +79,7 @@ refusal rule is wrong, this is where it is cheap to find out, exactly as `CV1` a
 
 ### 3. Selection state and interaction wiring — the step with the regression risk
 
-Touches `components/IssueWorkspace.tsx`, `components/TreeGrid.tsx`, `components/BoardView.tsx`,
+Touches `components/IssueWorkspace.tsx`, `components/TreeGrid.tsx`, `components/planning/BoardView.tsx`,
 `components/CalendarView.tsx`.
 
 - `IssueWorkspace.tsx`: add `selectedIds: Set<string>` state, `lastClickedId: string | null`
@@ -108,7 +108,7 @@ checked **before** the plain-click fallthrough, not as an early return inside it
 (ctrl) {...}; onSelect(id)` written without a `return` fires both paths on every modified click.
 
 **Verified by:** `npx tsc --noEmit` and `npx eslint components/TreeGrid.tsx
-components/BoardView.tsx components/CalendarView.tsx components/IssueWorkspace.tsx` clean;
+components/planning/BoardView.tsx components/CalendarView.tsx components/IssueWorkspace.tsx` clean;
 then a manual browser pass (`npm run dev`, since this step's actual behaviour is exactly what
 no scenario drives): a plain click on any row in all three views still opens the detail drawer
 and still triggers the unsaved-changes prompt when one is open and dirty; Ctrl-click on two

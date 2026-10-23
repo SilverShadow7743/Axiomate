@@ -78,7 +78,7 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 | Discipline | 3rd classification axis | **Implemented & working** | `Issue.discipline`, migration `…_discipline`; 14 seeded | Technical/Functional/Data… independent of type and module | 216 issues unclassified | Classify the back catalogue |
 | Lifecycle activities | Phases under an issue | **Backend only / not exposed in use** | `IssueActivity`; **0 rows** | Builder generates 5 phases | Nobody uses it | Validate before extending |
 | Dependencies | FS/SS/FF/SF between activities | **Backend only / not used** | `IssueDependency`; **0 rows** | Full scheduling constraint model | Unused | Validate |
-| Gantt | Timeline rendering | **Implemented — needs validation** | `components/GanttChart.tsx` | Renders from planned dates | Depends on activities, which are unused | Validate |
+| Gantt | Timeline rendering | **Implemented — needs validation** | `components/planning/GanttChart.tsx` | Renders from planned dates | Depends on activities, which are unused | Validate |
 | Row actions | ⋮ menu, inline edit | **Implemented — needs validation** | `components/RowMenu.tsx`, `StatusCellEditor.tsx` | Add/edit/move/duplicate/link/log time | Never opened in a browser | **Click it** |
 | Duplicate | Copy + `DUPLICATE_OF` | **Implemented & working** | `duplicate` arm `lib/workspace.ts` | Always records the link | — | Keep |
 

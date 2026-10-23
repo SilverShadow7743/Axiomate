@@ -146,7 +146,7 @@ needs no `requestSelect` gate.
 **Verify:** `npx tsc --noEmit`, `npm run build`, eslint on the touched files, `npm run
 audit:a11y`.
 
-**7. Workspaces — `components/MyWorkPanel.tsx`, `components/PortfolioPanel.tsx`, and a
+**7. Workspaces — `components/MyWorkPanel.tsx`, `components/planning/PortfolioPanel.tsx`, and a
 *Health score* Configuration section in `components/ConfigWorkspace.tsx`.**
 
 - **Home (My work) as an operational workspace:** a *Summary* tile row above the existing ranked

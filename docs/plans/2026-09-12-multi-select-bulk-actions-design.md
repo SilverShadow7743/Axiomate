@@ -60,7 +60,7 @@ grouping.
   `e.shiftKey` calls `onToggleSelect(r.id, lastClickedId)`. `onGridKeyDown`'s existing
   roving-tabindex arrow handling grows a `Shift+ArrowUp/Down` case that extends the range from
   the current tab stop, reusing the same `rows` order the mouse path uses.
-- **Board** (`components/BoardView.tsx`) — identical Ctrl/Shift-click semantics on cards.
+- **Board** (`components/planning/BoardView.tsx`) — identical Ctrl/Shift-click semantics on cards.
   Shift+Arrow is not wired here (arrow keys are not currently a Board navigation model at all);
   Shift-click range-select is bounded to cards within the same lane, where "the cards between
   these two" has an unambiguous meaning.

@@ -12,7 +12,7 @@ import {
 } from '@/lib/commercial/engagement'
 import { formatIso } from '@/lib/dates'
 import { isExternalPartyKind, tiersOf } from '@/lib/config'
-import { useLabels } from './labels'
+import { useLabels } from '../labels'
 
 /**
  * What a client or engagement row shows.

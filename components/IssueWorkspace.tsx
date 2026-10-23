@@ -14,7 +14,7 @@ import MyCalendarPanel from './MyCalendarPanel'
 import MyTodosPanel from './MyTodosPanel'
 import FactBoxBlade from './FactBoxBlade'
 import MailLog from './MailLog'
-import PortfolioPanel from './PortfolioPanel'
+import PortfolioPanel from './planning/PortfolioPanel'
 import ResourcingPanel from './capacity/ResourcingPanel'
 import CommercialRegister from './commercial/CommercialRegister'
 import ClientMilestonesPanel from './commercial/ClientMilestonesPanel'
@@ -79,12 +79,12 @@ import { searchWorkspace, type SearchHit } from '@/lib/search'
 import { planSlaDates, slaReason } from '@/lib/planning/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
-import BoardView from './BoardView'
+import BoardView from './planning/BoardView'
 import CalendarView from './CalendarView'
 import { loadStoredView, saveView, type WorkspaceView } from '@/lib/viewChoice'
 import { applyBlueprint } from '@/lib/commercial/blueprint'
 import type { RowActions } from './RowMenu'
-import GanttChart from './GanttChart'
+import GanttChart from './planning/GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
 import UnifiedInbox from './UnifiedInbox'
 import AuthNotice from './AuthNotice'
@@ -114,9 +114,9 @@ const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
 const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
 const TimesheetPanel = dynamic(() => import('./time/TimesheetPanel'), { ssr: false })
-const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
+const SlaPlanPanel = dynamic(() => import('./planning/SlaPlanPanel'), { ssr: false })
 const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
-const StuckChangesPanel = dynamic(() => import('./StuckChangesPanel'), { ssr: false })
+const StuckChangesPanel = dynamic(() => import('./planning/StuckChangesPanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {
   describeSave,

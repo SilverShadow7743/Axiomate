@@ -117,9 +117,9 @@ structurally on *which* tier is the client tier" — is decided here.
 completed enumeration: `components/ConfigWorkspace.tsx:869` and `:2798` (scope pickers),
 `components/DetailPanel.tsx:568` (node-detail branch), `components/Dialogs.tsx:178` (the
 client form branch — its own comment already says "derived from the tier list rather than
-named"; the flag completes that intent), `components/GanttChart.tsx:387` (bar color, may key
+named"; the flag completes that intent), `components/planning/GanttChart.tsx:387` (bar color, may key
 on tier order instead), `components/IssueWorkspace.tsx:1562` (default parent for "+ New
-Issue"), `components/ScopePanel.tsx:44/:229` (unassigned-under count), and
+Issue"), `components/planning/ScopePanel.tsx:44/:229` (unassigned-under count), and
 `components/TreeGrid.tsx:782` (top-of-tree banner styling — order-based, not flag-based: the
 banner belongs to the top two tier orders, whatever they are).
 
