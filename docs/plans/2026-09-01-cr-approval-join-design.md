@@ -92,7 +92,7 @@ one approval rule — the existing condition, unchanged), also compute
 Both only appear when `applicable.length` — an issue with no approval rule at all gets no new
 UI, since the cross-reference exists to serve exactly the case an approval gate is in play.
 
-**Commercial side — `CommercialPanel`'s `Changes` (`components/CommercialPanel.tsx`).**
+**Commercial side — `CommercialPanel`'s `Changes` (`components/commercial/CommercialPanel.tsx`).**
 `changeRequestIssues` (already computed, feeding `candidateIssues={id, subject}` today) widens to
 also carry `type`. `Changes` calls `issueApprovalGate(state.model.approvalRules, state.approvals,
 issue)` per linked change and renders a short status word beside the existing `→ {issueSubject}`

@@ -1,7 +1,7 @@
 import type { WeeklyClientPack, MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import type { ConcernKind, OrganizationIdentity } from '@/lib/config'
 import { CONCERN_LABEL, scoreTerms } from '@/lib/planning/portfolio'
-import ReportHeader from './reports/ReportHeader'
+import ReportHeader from '../reports/ReportHeader'
 
 /**
  * Why a term is left out of a client's score, in the client's own words. `capacity` is the one

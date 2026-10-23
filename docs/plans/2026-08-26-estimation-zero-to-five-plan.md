@@ -24,7 +24,7 @@ Quotes below are that design's constraints, not restated from memory.
 - **The reducer's merge is shallow and already correct for partial score patches.**
   `lib/workspace.ts`'s `setEstimate` arm (`case 'setEstimate'` at line 3511) does
   `{ ...base, ...a.patch, ... }` — a patch carrying `scores` replaces the whole `scores`
-  object, not a deep merge. `components/EstimationTab.tsx`'s dot click already sends the
+  object, not a deep merge. `components/commercial/EstimationTab.tsx`'s dot click already sends the
   full merged object (`put({ scores: { ...estimate.scores, [p.key]: l.score } })`), so no
   reducer change is needed for the sentinel change to work — the client already carries
   the other dimensions' current values (soon to include `null`) through untouched.
@@ -162,7 +162,7 @@ this session touched a schema).
 
 ## Step 3 — Wire the UI: `EstimationTab.tsx`, `ConfigWorkspace.tsx`
 
-**Files:** `components/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`.
+**Files:** `components/commercial/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`.
 
 Per the design, most of this "falls out" of Steps 1–2 with no code change — the dot-lit
 comparison (`estimate.scores[p.key] === l.score`, line 254) and the size-band editor

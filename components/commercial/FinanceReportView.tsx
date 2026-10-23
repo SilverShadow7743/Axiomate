@@ -1,6 +1,6 @@
 import type { FinanceReport } from '@/lib/reports/finance'
 import type { OrganizationIdentity } from '@/lib/config'
-import ReportHeader from './reports/ReportHeader'
+import ReportHeader from '../reports/ReportHeader'
 
 /**
  * The print half of the finance report — the same `.pack-scrim`/`.pack-page` pattern as

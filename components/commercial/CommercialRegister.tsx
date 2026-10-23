@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { useOverlay } from './useOverlay'
-import { useQuickFilterFocus } from './useQuickFilterFocus'
+import { useOverlay } from '../useOverlay'
+import { useQuickFilterFocus } from '../useQuickFilterFocus'
 import { issuesUnder } from '@/lib/commercial/engagement'
 import { sowPosition } from '@/lib/commercial/sow'
 import { sowCostOf } from '@/lib/commercial/rates'

@@ -129,7 +129,7 @@ auto-proposed total will generally read lower than today's for issues that don't
 speak to every dimension; that is the intended, more honest behavior, not a regression to
 guard against.
 
-## UI (`components/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`)
+## UI (`components/commercial/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`)
 
 Both already iterate `COMPLEXITY_LEVELS` and the configured size bands data-driven — the
 new `0` dot and the widened XS range need no separate UI code once the data model above
@@ -138,7 +138,7 @@ right thing once `null`, not `0`, is the unscored sentinel — today's bug (an u
 dimension rendering as if "0" were already chosen) disappears as a side effect of fixing
 the sentinel, not from a separate UI fix.
 
-The existing derivation chain at `components/EstimationTab.tsx`'s "A · Complexity and
+The existing derivation chain at `components/commercial/EstimationTab.tsx`'s "A · Complexity and
 effort" section (`{effort.scored ? effort.score : '—'} / {MAX_COMPLEXITY} → size → points
 → hours`) gains one more step for the normalized score, matching the deck's own
 presentation of raw → normalized → size: `raw / 25 → normalized / 15 → size → points →

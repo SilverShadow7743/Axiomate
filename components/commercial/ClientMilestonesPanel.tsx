@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { useOverlay } from './useOverlay'
+import { useOverlay } from '../useOverlay'
 import { formatIso } from '@/lib/dates'
 import type { ClientMilestoneLine } from '@/lib/clientBoundary'
 import type { WorkspaceState } from '@/lib/workspace'

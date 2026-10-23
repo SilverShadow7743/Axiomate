@@ -4,7 +4,7 @@ Fast-follow named in `docs/plans/2026-09-13-commercial-register-design.md` ("a g
 deep-link from register row to that specific SOW's tab is a real, separate piece of navigation
 plumbing, not a one-line addition — named explicitly rather than half-built"). Found live this
 session (Coverage Audit, sixth pass): a row in the Commercial sidebar page does not open
-anything, confirmed against `components/CommercialRegister.tsx`'s own source — its `<tr>`s carry
+anything, confirmed against `components/commercial/CommercialRegister.tsx`'s own source — its `<tr>`s carry
 no `onClick`.
 
 ## The plumbing already exists, unnoticed at the time the v1 doc was written

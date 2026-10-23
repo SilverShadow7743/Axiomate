@@ -69,7 +69,7 @@ precedent for exactly this slip.
 
 **Verified by:** `npx tsc --noEmit` and `npx eslint` on the three touched files, clean.
 
-## 3. `components/ClientMilestonesPanel.tsx`
+## 3. `components/commercial/ClientMilestonesPanel.tsx`
 
 New component, same `.evi.mywork`/`.evi-head`/`.evi-list` shell family as `ResourcingPanel.tsx`
 and `CommercialRegister.tsx`, but no `.evi-tabs` (one audience-appropriate cut, not four) and
@@ -84,7 +84,7 @@ on `ClientMilestoneLine` at all after step 1, so this can only be gotten wrong b
 type later, not by this step; named here so a future edit to add it back gets stopped by
 re-reading this line, not by rediscovering the reasoning.
 
-**Verified by:** `npx tsc --noEmit` and `npx eslint components/ClientMilestonesPanel.tsx`
+**Verified by:** `npx tsc --noEmit` and `npx eslint components/commercial/ClientMilestonesPanel.tsx`
 clean; `npm run validate:scenarios` re-run, byte-identical (no new pure logic beyond step 1's
 — this component contains presentation only).
 

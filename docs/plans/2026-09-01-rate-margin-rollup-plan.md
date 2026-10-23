@@ -117,7 +117,7 @@ picking a name, so it is actually unmatched rather than accidentally hitting a r
 
 ## Step 4 — `CommercialPanel.tsx`: wire both, cost gated on `rate.view`
 
-`positions` (`components/CommercialPanel.tsx:169-176`) already maps `sows` to `sowPosition(...)`
+`positions` (`components/commercial/CommercialPanel.tsx:169-176`) already maps `sows` to `sowPosition(...)`
 results using a per-SOW `ids` (issueIds) computed inline — `varianceHours`/`varianceIssueCount`
 arrive on `position` automatically once step 1 lands, no change needed to this `useMemo` itself.
 
