@@ -107,7 +107,7 @@ export function plainTextToHtml(text: string): string
 **Verify:** `npx tsx scripts/scenario-validation.ts` — `SIG1 PASS`, `SIG2 PASS`, scenario count
 +2, no regressions.
 
-**4. `lib/personalGraph.ts` — `sendNewMail` and `replyToMessage`.**
+**4. `lib/personal/personalGraph.ts` — `sendNewMail` and `replyToMessage`.**
 
 - `sendNewMail`: add a `contentType: 'Text' | 'HTML'` parameter (its only caller is about to be
   rewritten in step 5, so no default is needed the way `sendAsMailbox` needs one) — used as

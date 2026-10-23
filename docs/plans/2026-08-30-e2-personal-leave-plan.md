@@ -92,7 +92,7 @@ any UI exists.
 ## Step 4 — My calendar grows the leave loop
 
 **Files:** `components/MyCalendarPanel.tsx`, `components/IssueWorkspace.tsx`
-(`lib/myCalendar.ts` deliberately untouched — see details list).
+(`lib/personal/myCalendar.ts` deliberately untouched — see details list).
 
 - "Request leave" button beside "Add event" (~line 100). A `LeaveForm` modal modeled on the
   existing `EventForm`: start, end, hours/day defaulted from the person's stated pattern
@@ -204,7 +204,7 @@ hands of whoever records any absence — the most routine capacity write there i
 11. `mute` still writes the audit line, per the assignment mint's own pattern.
 12. `notifyDrain.mailboxFor` needs no change for non-issue `aboutId` — its `enabled[0]`
     fallback is the design's intended degradation; leave it alone.
-13. `lib/myCalendar.ts` stays untouched: the rail resolves status/note from
+13. `lib/personal/myCalendar.ts` stays untouched: the rail resolves status/note from
     `state.commitments[entry.id]` rather than widening `MyCalendarEntry` — the entry's id is
     already the commitment id.
 14. The scenario splice uses temp files + python, not Bash heredocs (E1 burned twice).

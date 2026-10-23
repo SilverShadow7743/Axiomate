@@ -61,7 +61,7 @@ samePerson(model, ref: { name: string; id?: string | null }, person: Person): bo
 // id match wins; a name match is accepted only when ref.id is null (pre-backfill rows)
 ```
 
-Consumers updated to use it: `lib/mywork.ts` (mine), `lib/notifications.ts`
+Consumers updated to use it: `lib/personal/mywork.ts` (mine), `lib/notifications.ts`
 (`inboxFor`/`unreadCount`), `lib/capacity/capacity.ts` (allocations/commitments for a person),
 `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts` (`weekStateFor`, approval self-check),
 `lib/planning/goals.ts` person measures. The id-wins rule is what makes a rename safe: after it, the

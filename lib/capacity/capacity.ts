@@ -1,6 +1,6 @@
 import { workingDaysBetween } from '../dates'
 import { availabilityFor, overlapWorkingDays } from './availability'
-import type { Meeting } from '../meetings'
+import type { Meeting } from '../personal/meetings'
 import { valueAt, type Version } from '../versioning'
 import type { TimeEntry } from '../time/time'
 

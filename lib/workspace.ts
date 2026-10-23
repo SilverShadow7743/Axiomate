@@ -131,8 +131,8 @@ import {
 import { checkEntry, type TimeActivity, type TimeEntry } from './time/time'
 import { overlapProblem, valueAt, stamp, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './capacity/staffing'
-import { eventProblem, type PersonalEvent } from './personalEvents'
-import { actionProblem, type PersonalAction } from './personalActions'
+import { eventProblem, type PersonalEvent } from './personal/personalEvents'
+import { actionProblem, type PersonalAction } from './personal/personalActions'
 import type { InboundMail } from './intake'
 import {
   allocationPolicyProblem,
@@ -191,7 +191,7 @@ import {
 } from './commercial/estimation'
 import { blankEngagement, type EngagementDetail } from './commercial/engagement'
 import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
-import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
+import { meetingProblem, type Meeting, type MeetingScopeKind } from './personal/meetings'
 import { commitmentCounts } from './capacity/availability'
 import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './planning/schedule'
 import type { Actor } from './actor'

@@ -6,7 +6,7 @@ either the intake pipeline or any UI depends on them; the intake pipeline's one 
 next since nothing downstream can be exercised without it; the UI — the filter chip, the triage
 actions, and the new "My to-dos" screen — comes last. This mirrors the leave-report plan's own
 ordering principle and, more directly, an already-shipped precedent inside this very codebase:
-`PersonalEvent` (`lib/personalEvents.ts`) is a near-exact structural match for the new
+`PersonalEvent` (`lib/personal/personalEvents.ts`) is a near-exact structural match for the new
 `PersonalAction` entity — private to its owner, no exception for anyone including `ADMIN` — so
 most of this plan is "copy that pattern, renamed and re-typed," not new design.
 
@@ -43,9 +43,9 @@ type (step 1) is written here too, because the mappers need it to compile.
 rises by one and the new mapper must stamp `tenantId` — the audit checks exactly that),
 `npx tsx scripts/scenario-validation.ts` (count unchanged), `npm run build`.
 
-**1. `lib/personalActions.ts` (new) — the entity, pure.**
+**1. `lib/personal/personalActions.ts` (new) — the entity, pure.**
 
-Structural copy of `lib/personalEvents.ts` in full: the interface, a validation function, and the
+Structural copy of `lib/personal/personalEvents.ts` in full: the interface, a validation function, and the
 redaction function — same shape, same absolute-privacy header comment (adjusted for the field
 names), same reasoning for why it is a separate pure function rather than inline in `boot.ts`.
 

@@ -11,7 +11,7 @@ import {
   myWork,
   todaysMeetings,
   type WorkReason,
-} from '@/lib/mywork'
+} from '@/lib/personal/mywork'
 import type { Actor } from '@/lib/actor'
 import type { ScheduleHealth } from '@/lib/types'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -23,7 +23,7 @@ import type { WorkspaceState } from '@/lib/workspace'
  * alongside the tree, not instead of it — somebody scans it, picks a row, and lands back in the
  * workspace on that record.
  *
- * **Ranked, and the rank is visible.** Reason, then severity, then age — see `lib/mywork.ts`,
+ * **Ranked, and the rank is visible.** Reason, then severity, then age — see `lib/personal/mywork.ts`,
  * which also records that this file once claimed to have no scoring function and was wrong about
  * it. The screen carries the reasoning rather than hiding it: each group states what it means and
  * each row shows the two components that placed it, so the order is arguable by whoever reads it.
@@ -180,7 +180,7 @@ export default function MyWorkPanel({
                       <div className="evi-item-name">{m.title}</div>
                     )}
                     <div className="evi-item-meta">
-                      {/* startAt is stored as entered, single-timezone firm (lib/meetings.ts) —
+                      {/* startAt is stored as entered, single-timezone firm (lib/personal/meetings.ts) —
                           sliced as a string, matching todaysMeetings' own date comparison,
                           never parsed through a Date. */}
                       <span className="mono">{m.startAt.slice(11, 16)}</span>

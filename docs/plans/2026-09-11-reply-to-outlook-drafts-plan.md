@@ -14,7 +14,7 @@ against a real message — the only step that can prove the draft actually lands
 
 ## Steps
 
-**1. `lib/personalGraph.ts` — split the reply sequence.** `replyToMessage` is three Graph calls
+**1. `lib/personal/personalGraph.ts` — split the reply sequence.** `replyToMessage` is three Graph calls
 (`createReply`/`createReplyAll` → `PATCH` body → `send`). Extract the first two as
 `draftReply(token, messageId, htmlContent, replyAll)` returning `GraphResult<{ id; webLink }>`
 — the `PATCH` response is the message resource, and `webLink` on it opens that draft in

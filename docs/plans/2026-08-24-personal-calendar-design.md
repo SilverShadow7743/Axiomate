@@ -18,10 +18,10 @@ calendar entirely, the same reasoning that kept them out of the project-membersh
 ## What this is
 
 A new record, `PersonalEvent` — title, start, end, an all-day flag, a note, attendees as free
-text, owned by exactly one person. A new pure aggregation (`lib/myCalendar.ts`) combining, for
+text, owned by exactly one person. A new pure aggregation (`lib/personal/myCalendar.ts`) combining, for
 one person: their `PersonalEvent`s, their `Commitment`s (Leave / Public holiday / Internal /
 Training), their live `Allocation`s, and their own due-date work (the same id-aware ownership
-join `lib/mywork.ts`'s `isMine` already uses). A new view-switcher entry, **"My calendar"**,
+join `lib/personal/mywork.ts`'s `isMine` already uses). A new view-switcher entry, **"My calendar"**,
 distinct in name and content from the existing **"Calendar"** (the work-item schedule everyone
 already sees, unchanged).
 
@@ -102,7 +102,7 @@ gets an empty map, correctly — there is no "whose" for an unrecognised sign-in
 
 ## The aggregation and the screen
 
-`lib/myCalendar.ts` is new rather than an extension of `lib/calendar.ts`'s `calendarMonth`, for
+`lib/personal/myCalendar.ts` is new rather than an extension of `lib/personal/calendar.ts`'s `calendarMonth`, for
 the same reason `projectView` is a separate function from `clientView`: the two answer different
 questions and happen to both produce a month grid, and a function that does both today is the
 kind of convenient collapse that breaks the day one of them needs to change alone.

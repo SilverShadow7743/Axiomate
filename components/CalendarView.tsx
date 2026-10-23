@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { calendarMonth, describeCalendar } from '@/lib/calendar'
+import { calendarMonth, describeCalendar } from '@/lib/personal/calendar'
 import type { ScheduleRow } from '@/lib/types'
 
 /**

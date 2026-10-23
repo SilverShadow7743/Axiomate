@@ -778,7 +778,7 @@ const SHAPES = {
   },
   updatePersonalEvent: { id: req(id), patch: req(plainObject), now },
   removePersonalEvent: { id: req(id), now },
-  /* ---- PERSONAL ACTIONS — see lib/personalActions.ts; the arms validate text and ownership ---- */
+  /* ---- PERSONAL ACTIONS — see lib/personal/personalActions.ts; the arms validate text and ownership ---- */
   addPersonalAction: {
     text: req(text),
     dueDate: opt(text),

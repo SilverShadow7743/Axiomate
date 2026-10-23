@@ -11,7 +11,7 @@ fault in a new costume."*
 
 ## Steps
 
-**1. Pure view models — `lib/board.ts` and `lib/calendar.ts` (new).**
+**1. Pure view models — `lib/board.ts` and `lib/personal/calendar.ts` (new).**
 `boardLanes(state, filters)` groups filtered issues into lanes ordered as `ISSUE_STATUSES`
 (lib/types.ts) with counts; `dropOutcome(policy, issue, toStatus)` wraps
 `checkTransition`/`allowedNext` from `lib/planning/statusPolicy.ts` and returns one of

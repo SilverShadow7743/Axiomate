@@ -25,14 +25,14 @@ Design constraints quoted: "Absent means zero — today's arithmetic byte-identi
 
 ## Step 1 — the engine's fourth term and the Meeting type, golden first
 
-**Files:** `lib/meetings.ts` (new), `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`,
+**Files:** `lib/personal/meetings.ts` (new), `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`,
 `lib/planning/forecast.ts`, `lib/capacity/assignment.ts`, `scripts/scenario-validation.ts`.
 
 1a. **Capture the golden BEFORE touching signatures**: run `availabilityFor` on E1A's exact
 fixture (and one `capacityFor`/`forecastFor` figure) and bake the outputs into scenario E4A's
 assertions — the E1 discipline.
 
-1b. `lib/meetings.ts`: the `Meeting` interface (id, title, startAt, endAt, organizer,
+1b. `lib/personal/meetings.ts`: the `Meeting` interface (id, title, startAt, endAt, organizer,
 organizerId, attendeeIds: string[], scopeKind?: 'issue' | 'project', scopeId?, note,
 createdAt, createdBy, deletedAt), `meetingProblem` (title; end after start; ≥1 attendee),
 `attends(m, personId)` = `!m.deletedAt && m.attendeeIds.includes(personId)` — ids only, no
@@ -135,7 +135,7 @@ Mappers `meetingToRow/FromRow` stamping tenantId. Persistence-proof scrub gains
 
 ## Step 5 — UI
 
-**Files:** `lib/myCalendar.ts`, `components/MyCalendarPanel.tsx`,
+**Files:** `lib/personal/myCalendar.ts`, `components/MyCalendarPanel.tsx`,
 `components/DetailPanel.tsx`, `components/IssueWorkspace.tsx`.
 
 - `myCalendarMonth` gains the fifth entry kind (`{ kind: 'meeting', id, title, date,

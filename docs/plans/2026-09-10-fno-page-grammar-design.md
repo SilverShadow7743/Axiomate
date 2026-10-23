@@ -100,7 +100,7 @@ The home page becomes an F&O **operational workspace**: a *Summary* section of c
 *tabbed list* section, and *related links*. The tiles are the counts strip made clickable — "8
 overdue", "6 blocked", "11 done", "75 unscheduled" — each opening the list filtered to exactly
 those records, which is what an F&O tile is (a count with a query behind it). No tile carries a
-number that is not already computed by a shipped pure function (`lib/mywork.ts`, `lib/planning/tree.ts`'s
+number that is not already computed by a shipped pure function (`lib/personal/mywork.ts`, `lib/planning/tree.ts`'s
 counts, `lib/planning/portfolio.ts`'s concerns).
 
 Portfolio becomes a workspace too: one tile per engagement carrying its **health score** — the

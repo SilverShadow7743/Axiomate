@@ -1,4 +1,4 @@
-import { attends, type Meeting } from '../meetings'
+import { attends, type Meeting } from '../personal/meetings'
 import { MAX_HOURS_PER_ENTRY, type TimeEntry } from './time'
 import { daysOfWeek, entriesInWeek } from './timesheet'
 
@@ -54,7 +54,7 @@ export function meetingSuggestions(
     if (m.deletedAt || m.scopeKind !== 'issue' || !m.scopeId) continue
     if (issueId && m.scopeId !== issueId) continue
     if (!attends(m, personId)) continue
-    // `startAt` is stored as entered, single-timezone firm (lib/meetings.ts) — a slice, not a
+    // `startAt` is stored as entered, single-timezone firm (lib/personal/meetings.ts) — a slice, not a
     // Date-object derivation, is the correct read here, matching TD1's own fixtures.
     const date = m.startAt.slice(0, 10)
     if (!days.has(date)) continue

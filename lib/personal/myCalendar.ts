@@ -1,4 +1,4 @@
-import type { WorkspaceState } from './workspace'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * One person's month, four kinds of things gathered onto it. Reuses only the SHAPE of
@@ -114,7 +114,7 @@ export function myCalendarMonth(
     }
   }
 
-  // The same id-aware, name-fallback join `lib/mywork.ts`'s `isMine` already uses: the id wins
+  // The same id-aware, name-fallback join `lib/personal/mywork.ts`'s `isMine` already uses: the id wins
   // the moment both sides have one, and the name fallback exists only for rows written before
   // the identity-id migration — it must not silently exclude everyone whose issues predate it.
   const myName = personId ? (state.model.people[personId]?.name.trim().toLowerCase() ?? null) : null

@@ -1,7 +1,7 @@
 import { addDays, workingDaysBetween } from '../dates'
 import { commitmentCounts, meetingHours } from '../capacity/availability'
 import type { Commitment, ResourceProfile } from '../capacity/capacity'
-import type { Meeting } from '../meetings'
+import type { Meeting } from '../personal/meetings'
 
 /**
  * Find-a-slot — E4's "intelligence", deliberately day-granular.

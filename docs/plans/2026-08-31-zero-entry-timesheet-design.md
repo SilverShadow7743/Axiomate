@@ -18,7 +18,7 @@ attestation — "I claim this week is complete and correct" — and a system tha
 nobody confirmed doing would be inventing the thing it exists to record honestly.
 
 There is exactly one real signal in this codebase that names a *specific issue* without
-guessing: a `Meeting` can carry `scopeKind: 'issue'` + `scopeId` (`lib/meetings.ts`) — a real,
+guessing: a `Meeting` can carry `scopeKind: 'issue'` + `scopeId` (`lib/personal/meetings.ts`) — a real,
 dated, attendee-scoped record of "this meeting was about that issue." Everything else
 (Allocation, Assignment) is project-or-issue-level *capacity or ownership*, not a record of a
 particular day's actual work, and turning either into a specific day's hours means guessing
@@ -47,7 +47,7 @@ explicitly deferred; there is no design yet for which issue an allocation-only d
 `meetingSuggestions(meetings, entries, person, personId, week, issueId?)` returns one candidate
 per (issue, day) where:
 
-- The person attended (`attends()`, id-first per `lib/meetings.ts`) a meeting with
+- The person attended (`attends()`, id-first per `lib/personal/meetings.ts`) a meeting with
   `scopeKind: 'issue'` on that day, in the given week.
 - No `TimeEntry` already exists for that issue on that day — an already-filled cell is never
   touched, matching `issueWeekCells`'s own "the grid never edits a day that already has hours on

@@ -4,7 +4,7 @@
  *
  * Composes three already-real sources rather than computing a fourth thing:
  *
- *   needsAction — `decisionItems` (`lib/mywork.ts`), the same five collections `myWork`'s own
+ *   needsAction — `decisionItems` (`lib/personal/mywork.ts`), the same five collections `myWork`'s own
  *                  `decide` group reads. Deliberately NOT deduplicated against My Work's list —
  *                  see the design's "known, accepted overlap."
  *   waiting     — this file's own `waitingItems`, the requester's-eye mirror of four of
@@ -16,7 +16,7 @@
 
 import { directoryPersonFor } from './access'
 import { inboxFor, type Notification } from './notifications'
-import { decisionItems, type WorkItem } from './mywork'
+import { decisionItems, type WorkItem } from './personal/mywork'
 import type { Actor } from './actor'
 import type { WorkspaceState } from './workspace'
 

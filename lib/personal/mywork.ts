@@ -78,13 +78,13 @@
  * rather than concluding they have no work.
  */
 
-import { can, directoryPersonFor, rolesFor } from './access'
-import { BLOCKED_STATUSES, isTerminal } from './planning/schedule'
-import { weekStarting } from './time/timesheet'
-import type { Actor } from './actor'
+import { can, directoryPersonFor, rolesFor } from '../access'
+import { BLOCKED_STATUSES, isTerminal } from '../planning/schedule'
+import { weekStarting } from '../time/timesheet'
+import type { Actor } from '../actor'
 import type { Meeting } from './meetings'
-import type { Severity } from './types'
-import type { WorkspaceState } from './workspace'
+import type { Severity } from '../types'
+import type { WorkspaceState } from '../workspace'
 
 export const REASON_ORDER = ['decide', 'overdue', 'blocked', 'attest', 'due', 'open'] as const
 export type WorkReason = (typeof REASON_ORDER)[number]
@@ -448,7 +448,7 @@ export function myWork(state: WorkspaceState, actor: Actor, today: string): Work
  *
  * Matches on `person.id` against `attendeeIds` — the OPPOSITE join to `myWork`'s own name-based
  * `isMine`, on purpose: `Meeting.attendeeIds` holds directory ids because a meeting is a real
- * invitation, not a record written before an id existed to join on (see `lib/meetings.ts`).
+ * invitation, not a record written before an id existed to join on (see `lib/personal/meetings.ts`).
  * An actor that doesn't resolve to a directory person gets an empty list, silently — the same
  * failure `myWork` already surfaces once, via `unrecognised`; a second banner here would be
  * redundant.

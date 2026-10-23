@@ -2,7 +2,7 @@
  * A person's own to-do — converted from mail that turned out not to be project work, or typed
  * in on the My to-dos screen. See `docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md`.
  *
- * Structurally `lib/personalEvents.ts` applied to a to-do, on purpose: private to its owner,
+ * Structurally `lib/personal/personalEvents.ts` applied to a to-do, on purpose: private to its owner,
  * unconditionally — see `lib/db/boot.ts`'s `redactForReader`. Not even `ADMIN` is exempt from
  * that filter, which is why `personId` is resolved from the actor at write time rather than
  * carried as a field: see `lib/workspace.ts`'s `addPersonalAction` arm. Never on the tree, never

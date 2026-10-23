@@ -32,7 +32,7 @@ when the patch moves person), `submitTimesheet` (workspace.ts:4305), `upsertAllo
 id-carrying records; keep a warning naming pre-backfill rows that would detach.
 *Verify:* `npx tsc --noEmit`; ID1.
 
-**3. Read-path joins — `lib/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
+**3. Read-path joins — `lib/personal/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
 `unreadCount`), `lib/capacity/capacity.ts`, `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts`
 (`weekStateFor`, self-approval check), `lib/planning/goals.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it rewrites the joins every personal surface

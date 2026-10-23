@@ -1,4 +1,4 @@
-import { isGroupRow, type ScheduleRow } from './types'
+import { isGroupRow, type ScheduleRow } from '../types'
 
 /**
  * The calendar: one month of planned work, with the unscheduled majority carried beside it.

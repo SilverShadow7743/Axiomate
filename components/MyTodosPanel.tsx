@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { PersonalAction } from '@/lib/personalActions'
+import type { PersonalAction } from '@/lib/personal/personalActions'
 import type { WorkspaceState } from '@/lib/workspace'
 
 export interface PersonalActionInput {

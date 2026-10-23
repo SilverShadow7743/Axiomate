@@ -87,7 +87,7 @@ export default function InboxPanel({ state }: { state: WorkspaceState }) {
     }
   }
 
-  /* ---------------- reply / reply-all — personal, see lib/personalGraph.ts ---------------- */
+  /* ---------------- reply / reply-all — personal, see lib/personal/personalGraph.ts ---------------- */
   const [replying, setReplying] = useState<{ message: InboxMessage; all: boolean } | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replyBusy, setReplyBusy] = useState(false)

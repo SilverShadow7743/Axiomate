@@ -219,7 +219,7 @@ markup and text, unlike Project Pulse, which had none) → `npm run build`.
   reintroducing exactly the bug the original reset effect exists to prevent.
 - **`m.startAt.slice(0, 10)`** is a string slice, not a timezone-aware date derivation — correct
   only because `Meeting.startAt` is documented as "stored as entered (single-timezone firm)"
-  (`lib/meetings.ts`'s own header comment) and `TD1`'s fixtures already rely on the same slicing
+  (`lib/personal/meetings.ts`'s own header comment) and `TD1`'s fixtures already rely on the same slicing
   working. Do not swap in a `Date`-object-based derivation, which would reintroduce a timezone
   the rest of this module deliberately has none of.
 - **Suggestions must never fire for a cell `issueWeekCells`/`entriesInWeek` would call filled** —

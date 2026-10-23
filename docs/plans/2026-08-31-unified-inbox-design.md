@@ -18,7 +18,7 @@ invent a fourth data model.
 
 ## What's already real, that this design builds on rather than invents
 
-- **My Work's `decide` group** (`lib/mywork.ts`) already computes "needs my decision" from five
+- **My Work's `decide` group** (`lib/personal/mywork.ts`) already computes "needs my decision" from five
   real collections: pending approvals (`state.approvals`), submitted timesheets awaiting
   `time.approve`, delivered-and-pending-acceptance milestones, submitted change requests, and
   unagreed scope items. Each source already excludes the requester via `isMe(requestedBy)` /
@@ -38,7 +38,7 @@ invent a fourth data model.
 ### `decisionItems()` — an extraction, not new logic
 
 The five-source loop inside `myWork()`'s "decide" section becomes a standalone exported
-function, `decisionItems(state, actor, today): WorkItem[]`, in `lib/mywork.ts`. `myWork()`
+function, `decisionItems(state, actor, today): WorkItem[]`, in `lib/personal/mywork.ts`. `myWork()`
 calls it and folds the result in exactly where the `decide` items went before — **no change to
 `myWork()`'s output, order, or scenario behavior.** This is purely a refactor for reuse,
 verified by a scenario asserting the extraction changed nothing (see Testing).

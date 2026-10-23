@@ -3,7 +3,7 @@ import { deriveEffort, type Estimate, type SizeBand } from '../commercial/estima
 import { hoursOn, type TimeEntry } from '../time/time'
 import { formatIso } from '../dates'
 import type { Allocation, Commitment, ResourceProfile } from '../capacity/capacity'
-import type { Meeting } from '../meetings'
+import type { Meeting } from '../personal/meetings'
 
 /**
  * Forecast v1 — can this land by the target date, given who is actually available?

@@ -9,7 +9,7 @@ import type {
   NotificationKind,
   NotificationMode,
 } from '@/lib/notifications'
-import type { WorkItem } from '@/lib/mywork'
+import type { WorkItem } from '@/lib/personal/mywork'
 import type { WorkspaceState } from '@/lib/workspace'
 import Inbox from './Inbox'
 

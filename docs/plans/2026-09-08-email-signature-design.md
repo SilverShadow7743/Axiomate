@@ -7,7 +7,7 @@ same organization wide."* Not yet built.
 ## The gap
 
 There is no signature feature anywhere in Axiomate's mail. `sendNewMail`/`replyToMessage`
-(`lib/personalGraph.ts`) send exactly the text typed into Compose or Reply and nothing else — the
+(`lib/personal/personalGraph.ts`) send exactly the text typed into Compose or Reply and nothing else — the
 reply box's own placeholder makes this explicit: *"Sent as plain text, exactly as written here."*
 Nothing in `Configuration` sets one, and nothing on `Person` or `OrganizationIdentity` is read for
 one today.
