@@ -50,7 +50,7 @@ import { sowCostOf, describeCost } from '@/lib/rates'
 import type { ScheduleRow } from '@/lib/types'
 import type { WorkspaceState, IssueRecord } from '@/lib/workspace'
 import type { IssueEstimate, SizeBand } from '@/lib/estimation'
-import type { TimeEntry } from '@/lib/time'
+import type { TimeEntry } from '@/lib/time/time'
 import { formatIso, workingDaysBetween } from '@/lib/dates'
 import { issuesUnder as issuesUnderEngagement } from '@/lib/engagement'
 

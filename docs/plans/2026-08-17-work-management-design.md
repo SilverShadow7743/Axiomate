@@ -192,7 +192,7 @@ pattern at that date, and the variance — is the same data grouped the other wa
 
     dailyCap(person, workDate) = valueAt(person.workingPattern, workDate)?.hoursPerDay ?? unenforced
 
-Pure, in `lib/timeWindow.ts`, no clock and no I/O — so it can be driven directly before anything
+Pure, in `lib/time/timeWindow.ts`, no clock and no I/O — so it can be driven directly before anything
 depends on it, and so a refusal can be shown on screen before the user tries to save.
 
 Not a stored `TimesheetEnabled` boolean, for the same reason nothing else derived is stored: a
@@ -208,7 +208,7 @@ entry carries `billable` already.
 
 ## Order
 
-1. `lib/timeWindow.ts` — pure, driven directly, no callers.
+1. `lib/time/timeWindow.ts` — pure, driven directly, no callers.
 2. Row menu on `TreeGrid` over existing actions — no new reducer arms, so it is provable against
    the suite as it stands.
 3. Inline editing, with the two tiers of §6.

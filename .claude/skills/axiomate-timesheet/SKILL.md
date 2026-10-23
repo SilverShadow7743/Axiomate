@@ -35,8 +35,8 @@ can differ without a schema change).
 
 ## The freeze rule — live, not planned
 
-`lib/timeWindow.ts`'s `checkEntry` is called from `addTime` (`lib/workspace.ts:3851`);
-`lib/timesheet.ts`'s `isFrozen`/`frozenMessage` refuse `addTime`/`updateTime`/`removeTime`
+`lib/time/timeWindow.ts`'s `checkEntry` is called from `addTime` (`lib/workspace.ts:3851`);
+`lib/time/timesheet.ts`'s `isFrozen`/`frozenMessage` refuse `addTime`/`updateTime`/`removeTime`
 against an already-submitted week. **Check before building anything here:** does the feature
 assume this needs implementing? It doesn't — verify the existing refusal path handles the new
 case before writing a second one.

@@ -19,9 +19,9 @@ Ground truth verified while writing (cite, don't re-derive):
   plus `scheduleHealth` (computeHealth) and `projectedCompletionDate = plannedEndDate` (tree.ts:182).
   Progress in the packs = `buildTree(clientView(...), asOf)` — after the boundary, by construction.
 - Timesheets: `Timesheet` rows (person/personId/weekStarting always-Monday/status) and
-  `TimeEntry` (`lib/time.ts:50`: issueId required, person/personId, date, hours, activity,
+  `TimeEntry` (`lib/time/time.ts:50`: issueId required, person/personId, date, hours, activity,
   billable, note) live in `state.timesheets` / `state.timeEntries`. `sheetFor(sheets, person,
-  week, personId?)` at `lib/timesheet.ts:175`; `weekStarting` at :51.
+  week, personId?)` at `lib/time/timesheet.ts:175`; `weekStarting` at :51.
 - Issue→scope: `scopeChainOf(state, id)` at `lib/workspace.ts:755`, `projectOf` at :776;
   external-party tiers via `externalPartyKinds(tiersOf(state.model))` as clientPack.ts:90 does.
 - Identity: `OrganizationIdentity {name, shortName, partyCode, description}` at

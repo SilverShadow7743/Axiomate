@@ -3,7 +3,7 @@
 **Status: approved 2026-08-30** (one AskUserQuestion decision; small enough that this doc
 carries its own plan). Closes TW1's last stop: the window's refusal has always promised that
 "hours genuinely spent on closed work can still be recorded, with a reason and an approval to
-reopen the window — that is what the extension is for" (lib/timeWindow.ts:232), and no UI or
+reopen the window — that is what the extension is for" (lib/time/timeWindow.ts:232), and no UI or
 reducer path delivered it. The 2026-08-22 grace design deferred it as "a separate mechanism,
 register-worthy on its own"; the user chose the smaller honest reading instead.
 

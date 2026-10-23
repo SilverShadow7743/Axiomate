@@ -103,7 +103,7 @@ Status vocabulary as requested. "Evidence" cites the actual implementation.
 | Stamping | Freeze a value | **Backend only / no consumer** | `Stamped<T>` `lib/versioning.ts:89` | Declared, proven in isolation | Nothing stamps anything | Wire when rates exist |
 | Allocation | Person→project % | **Implemented & working** | `Allocation`; 6 rows | %, period, overallocation refusal | Name-keyed | Key by person id |
 | Commitment | Leave/holiday | **Backend only / not used** | `Commitment`; **0 rows** | 4 kinds, comes off capacity | No calendar entity; a holiday is N rows | Add a holiday calendar |
-| Timesheets | Weekly attestation | **Implemented — needs validation** | `lib/timesheet.ts`, `Timesheet`; 0 rows | Mon-start week, submit, approve, return with reason, freeze | No outcome codes, no bucket hours, no lock rule, no My Timesheet view | Validate, then extend |
+| Timesheets | Weekly attestation | **Implemented — needs validation** | `lib/time/timesheet.ts`, `Timesheet`; 0 rows | Mon-start week, submit, approve, return with reason, freeze | No outcome codes, no bucket hours, no lock rule, no My Timesheet view | Validate, then extend |
 | Time entries | Hours | **Implemented & working** | `TimeEntry`; 3 rows | date, hours, activity, billable, note | No rate, so no cost | Depends on rates |
 | Capacity | Available vs allocated | **Implemented & working** | `capacityFor`, `CapacityPosition` | gross/committed/available/allocated/remaining + `basis` | Assumes Mon–Fri; no skills | Keep |
 
@@ -182,7 +182,7 @@ working-weeks timeline), `archiveSow`, `deletePerson`, and `upsertDiscipline` / 
   table as text**. It is dead on the next page load. The footer says so honestly, but the row is
   written either way. *(Note: `lib/db/map.ts` nulls a `blob:` URL on the way to Postgres, so the
   damage is contained — but the in-memory record and the mirror still carry it.)*
-- **`lib/timeWindow.ts` — 441 lines, imported by exactly one file: the validation script.** The
+- **`lib/time/timeWindow.ts` — 441 lines, imported by exactly one file: the validation script.** The
   overrun warning, the closed-issue window, the derived opening date and the daily cap are all
   built and none of it is consulted by `addTime`. This is Phase 5 of the plan and it is the
   largest single piece of finished-but-unwired code in the repo.
@@ -203,7 +203,7 @@ Recorded because a stale map is worse than no map, and this audit found four ins
    The unread field is `requireApproval`.
 3. Scenario `U2` said "no timesheet is stored yet" — **written by me this morning and left stale
    by my own commit that afternoon.** Corrected.
-4. `lib/time.ts` predicts a timesheet "will name exactly which entries it covered". The timesheet
+4. `lib/time/time.ts` predicts a timesheet "will name exactly which entries it covered". The timesheet
    that shipped deliberately does not, and argues why.
 
 **`data/validation.json` contains 59 findings, not 57** — two carry an alias (`ST4`/`AB`,

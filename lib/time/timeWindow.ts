@@ -1,11 +1,11 @@
-import { daysBetween, formatShort, startOfWeek } from './dates'
-import { isTerminal } from './schedule'
-import { valueAt, type Version } from './versioning'
+import { daysBetween, formatShort, startOfWeek } from '../dates'
+import { isTerminal } from '../schedule'
+import { valueAt, type Version } from '../versioning'
 import { frozenMessage, isFrozen, type Timesheet } from './timesheet'
-import { WORKING_PATTERN } from './capacity'
+import { WORKING_PATTERN } from '../capacity'
 import { checkEntry } from './time'
-import type { PermissionKey } from './access'
-import type { IssueStatus } from './types'
+import type { PermissionKey } from '../access'
+import type { IssueStatus } from '../types'
 
 /**
  * When time may be recorded against a piece of work, and against whose day.
@@ -258,7 +258,7 @@ export function timeEntryAllowed(
       ...base,
       kind: 'week-frozen',
       /*
-       * Delegated to `lib/timesheet.ts`, which owns the freeze and its wording.
+       * Delegated to `lib/time/timesheet.ts`, which owns the freeze and its wording.
        *
        * This carried its own two sentences, and they had already drifted: the submitted one
        * matched and the approved one did not. `addTime` would then have refused in different

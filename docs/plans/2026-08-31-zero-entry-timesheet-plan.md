@@ -20,7 +20,7 @@ a reuse.
 
 ## Steps
 
-### Step 1 — `lib/timesheetSuggestions.ts`, new file
+### Step 1 — `lib/time/timesheetSuggestions.ts`, new file
 
 ```ts
 import type { Meeting } from './meetings'
@@ -198,7 +198,7 @@ markup and text, unlike Project Pulse, which had none) → `npm run build`.
 
 ## Commit boundaries
 
-- **Commit 1** — Steps 1–2: `lib/timesheetSuggestions.ts` + `ZE1`. Self-contained and
+- **Commit 1** — Steps 1–2: `lib/time/timesheetSuggestions.ts` + `ZE1`. Self-contained and
   meaningful alone — a provably-correct function with no caller yet, exactly the shape the
   ordering principle asks for.
 - **Commit 2** — Step 3: `MyWeek.tsx` wiring alone. Low risk, easy to read as its own diff.

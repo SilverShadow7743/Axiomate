@@ -2,7 +2,7 @@ import { workingDaysBetween } from './dates'
 import { availabilityFor, overlapWorkingDays } from './availability'
 import type { Meeting } from './meetings'
 import { valueAt, type Version } from './versioning'
-import type { TimeEntry } from './time'
+import type { TimeEntry } from './time/time'
 
 /**
  * How much time a person actually has, and what is already committed against it.

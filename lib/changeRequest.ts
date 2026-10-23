@@ -115,7 +115,7 @@ export interface Decider {
  * Why this decision cannot be made, or null.
  *
  * The asker may never be the decider — the same rule as approvals and timesheets, restated here
- * rather than imported for the same reason `lib/timesheet.ts` restates it: `ApprovalRule` gates
+ * rather than imported for the same reason `lib/time/timesheet.ts` restates it: `ApprovalRule` gates
  * entry into an issue status for a work type, and a change request has neither.
  */
 export function decideChangeProblem(

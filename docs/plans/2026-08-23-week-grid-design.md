@@ -17,7 +17,7 @@ already refuse correctly. Two halves, one overlay panel.
 
 ### 1. The pure aggregation
 
-`weekGrid(entries, person, week, personId?)` in `lib/timesheet.ts`, beside its siblings:
+`weekGrid(entries, person, week, personId?)` in `lib/time/timesheet.ts`, beside its siblings:
 rows per issue carrying `byDay: number[7]` (Mon–Sun, rounded as `weekTotal` rounds) and a
 `total`; plus column totals and the week total. Aggregation only — `entriesInWeek` already
 owns the filtering and the id-first join.

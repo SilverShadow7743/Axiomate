@@ -67,7 +67,7 @@ pass's own clock — no second timezone), and `stamps.imsSentOn !== today`. `wee
 **prior** week's Monday (`weekStarting` of `today` minus 7) when `packsEnabled`, today is a
 Monday, and `stamps.weeklySentFor` differs. `monthlyFor` is the **prior** month `'YYYY-MM'`
 when today is the 1st and `stamps.monthlySentFor` differs. Reuse `weekStarting` from
-lib/timesheet.ts rather than re-deriving Mondays.
+lib/time/timesheet.ts rather than re-deriving Mondays.
 
 Verify: `npx tsc --noEmit` clean.
 

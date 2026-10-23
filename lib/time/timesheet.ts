@@ -1,7 +1,7 @@
-import { startOfWeek, addDays, formatShort } from './dates'
+import { startOfWeek, addDays, formatShort } from '../dates'
 import type { TimeEntry } from './time'
-import type { ApprovalDecision } from './approval'
-import type { Stamped } from './versioning'
+import type { ApprovalDecision } from '../approval'
+import type { Stamped } from '../versioning'
 
 /**
  * A week of somebody's hours, and whether it is still theirs to change.

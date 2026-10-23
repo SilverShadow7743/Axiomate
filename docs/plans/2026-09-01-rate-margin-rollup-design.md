@@ -16,7 +16,7 @@ makes the whole total `null`, never a smaller number). It has **zero callers** a
 `rate.view`/`rate.edit` gated) already exists too — `RT1`'s own `stops` text claiming "no screen
 records a rate" was itself stale, and is corrected as part of this round.
 
-`effortVariance()` (`lib/time.ts`) is genuinely per-issue only — `K`'s claim holds. No function
+`effortVariance()` (`lib/time/time.ts`) is genuinely per-issue only — `K`'s claim holds. No function
 anywhere sums it across a SOW's work.
 
 So the real, current gap is narrower than either scenario implies: the math for both halves

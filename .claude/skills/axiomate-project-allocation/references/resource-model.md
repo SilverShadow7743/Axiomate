@@ -1,7 +1,7 @@
 # The Real Resource Model
 
 Grounded in `prisma/schema.prisma`, `lib/workspace.ts`, `lib/availability.ts`,
-`lib/timeWindow.ts`, `lib/timesheet.ts` as of 2026-08-31.
+`lib/time/timeWindow.ts`, `lib/time/timesheet.ts` as of 2026-08-31.
 
 ## Allocation — project capacity
 
@@ -43,8 +43,8 @@ project is reached only by walking the issue's tier ancestry, never stored direc
 `status: Submitted | Approved | Rejected` (a String by design — "the vocabulary is the
 product's," not a fixed enum).
 
-**The freeze rule is live, not planned:** `lib/timeWindow.ts`'s `checkEntry` is called from
-`addTime` (`lib/workspace.ts:3851`); `isFrozen`/`frozenMessage` (`lib/timesheet.ts:202,213`)
+**The freeze rule is live, not planned:** `lib/time/timeWindow.ts`'s `checkEntry` is called from
+`addTime` (`lib/workspace.ts:3851`); `isFrozen`/`frozenMessage` (`lib/time/timesheet.ts:202,213`)
 refuse further entries against an already-submitted week.
 
 ## Capacity — the real formula

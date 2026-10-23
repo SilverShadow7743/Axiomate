@@ -20,7 +20,7 @@ Ground facts this plan is written against, verified in code:
 - `upsertCommitment` (`lib/workspace.ts:5950`) rebuilds the row **field-by-field** — a new
   field not added there is silently dropped on every edit, and a status a requester could
   rewrite by re-upserting is the design's second send-back clause made concrete.
-- `decideTimesheet` (`lib/workspace.ts:4971`) + `decideProblem` (`lib/timesheet.ts`) are the
+- `decideTimesheet` (`lib/workspace.ts:4971`) + `decideProblem` (`lib/time/timesheet.ts`) are the
   asker-cannot-decide pattern to mirror.
 - `redactForReader` (`lib/db/boot.ts:286`) already computes `mine` (the reader's directory id)
   and holds the rates precedent; `clientView` empties commitments wholesale (verified,

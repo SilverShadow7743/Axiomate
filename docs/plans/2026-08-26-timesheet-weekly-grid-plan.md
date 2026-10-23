@@ -5,7 +5,7 @@ Quotes below are that design's constraints, not restated from memory.
 
 ## What already exists and is reused, not rebuilt
 
-Reading `lib/timesheet.ts` and `components/TimesheetPanel.tsx` (the person-wide,
+Reading `lib/time/timesheet.ts` and `components/TimesheetPanel.tsx` (the person-wide,
 cross-issue, **read-only** week gatherer built for the 2026-08-23 week-grid design)
 surfaced precedent this plan follows rather than reinvents:
 
@@ -36,9 +36,9 @@ surfaced precedent this plan follows rather than reinvents:
 
 ## Step 1 — Pure helpers and their scenarios
 
-**Files:** `lib/timesheet.ts`, `scripts/scenario-validation.ts`.
+**Files:** `lib/time/timesheet.ts`, `scripts/scenario-validation.ts`.
 
-Add two functions to `lib/timesheet.ts`, beside `weekGrid`:
+Add two functions to `lib/time/timesheet.ts`, beside `weekGrid`:
 
 ```ts
 /** One issue's week, as 7 cells — existing hours (summed, read-only) or null (open to entry). */
@@ -58,7 +58,7 @@ export function gridSaveProblem(
 duplicate-day entries the same way `weekGrid` does — a cell with any existing entry
 reports its summed `hours` and is never `null`. `gridSaveProblem` reuses `isFrozen` /
 `frozenMessage` for the week-frozen case, then `checkEntry` per cell (imported from
-`lib/time.ts`, same as `TimeTab.tsx` already does) for each filled cell, and treats a
+`lib/time/time.ts`, same as `TimeTab.tsx` already does) for each filled cell, and treats a
 cell whose `backdated(date, today, allowanceDays).justificationRequired` is true but
 whose `justification` is blank as its own blocking reason — the same rule
 `TimeTab.tsx`'s single form already enforces, made checkable over a set of cells instead

@@ -34,7 +34,7 @@ Cover, for every requirement, not just the happy path:
   (`can(model, actor, key)`), don't invent a permission model.
 - **State-transition** — for anything touching the status graph
   (`lib/statusPolicy.ts`'s `allowedNext`) or the timesheet freeze
-  (`lib/timesheet.ts`'s `isFrozen`), write the criterion against the REAL transition law, not
+  (`lib/time/timesheet.ts`'s `isFrozen`), write the criterion against the REAL transition law, not
   an assumed one.
 
 ## Handoff

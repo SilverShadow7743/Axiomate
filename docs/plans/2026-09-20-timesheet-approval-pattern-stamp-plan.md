@@ -5,7 +5,7 @@ domain type first, because everything downstream is typed against it. The reduce
 storage, so a wrong stamp is caught by the scenario before it ever reaches Postgres. Storage
 last, proven against the real local database rather than assumed.
 
-## 1. `lib/timesheet.ts` — the domain type
+## 1. `lib/time/timesheet.ts` — the domain type
 
 Add one field to `Timesheet`:
 

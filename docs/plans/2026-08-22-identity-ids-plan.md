@@ -19,7 +19,7 @@ id equality only; `ref.id` null/undefined → name fallback (trim, case-insensit
 *Verify:* `npx tsc --noEmit`; driven by ID1 in step 4.
 
 **2. Types + write-path resolution — `lib/workspace.ts`, `lib/notifications.ts`,
-`lib/capacity.ts`, `lib/time.ts`, `lib/timesheet.ts` (types only where the interfaces
+`lib/capacity.ts`, `lib/time/time.ts`, `lib/time/timesheet.ts` (types only where the interfaces
 live).**
 Optional fields (`ownerId?`, `personId?`, `toId?`: `string | null`) on IssueRecord,
 TimeEntry, Timesheet, Allocation, Commitment, Notification — optional so every existing
@@ -33,7 +33,7 @@ id-carrying records; keep a warning naming pre-backfill rows that would detach.
 *Verify:* `npx tsc --noEmit`; ID1.
 
 **3. Read-path joins — `lib/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
-`unreadCount`), `lib/capacity.ts`, `lib/time.ts` (daily cap), `lib/timesheet.ts`
+`unreadCount`), `lib/capacity.ts`, `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts`
 (`weekStateFor`, self-approval check), `lib/goals.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it rewrites the joins every personal surface
 stands on, and the failure mode is exactly the one being fixed: a wrong join empties

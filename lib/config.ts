@@ -33,7 +33,7 @@ import type { Recurrence } from './recurrence'
 import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
-import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
+import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import { parseSavedView, type SavedView } from './savedViews'
@@ -1121,7 +1121,7 @@ export interface OperatingModel {
    * How long a time entry may lag the work before it must explain itself.
    *
    * Configuration rather than a constant for the same reason the service levels are: the
-   * allowance is a governance term, not a property of the software. `lib/timeWindow.ts`
+   * allowance is a governance term, not a property of the software. `lib/time/timeWindow.ts`
    * ships the default; this is where a firm changes it.
    */
   timePolicy: TimePolicy

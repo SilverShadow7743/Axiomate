@@ -1,5 +1,5 @@
-import type { IssueEstimate, SizeBand } from './estimation'
-import { deriveEffort } from './estimation'
+import type { IssueEstimate, SizeBand } from '../estimation'
+import { deriveEffort } from '../estimation'
 
 /**
  * Hours actually spent, recorded against the work they were spent on.

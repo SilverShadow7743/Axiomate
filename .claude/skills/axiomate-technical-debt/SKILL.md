@@ -30,7 +30,7 @@ component still uses the gate-the-declaration variant inconsistently.
 
 **Documentation drift** — the design-system extraction's OWN first pass got two things wrong
 (claimed no danger button existed when `.btn.danger-solid` already did; a stale session-memory
-claim about `lib/timeWindow.ts` being unwired when it was actually live) — both corrected in
+claim about `lib/time/timeWindow.ts` being unwired when it was actually live) — both corrected in
 place rather than left standing. The lesson generalizes: a document describing "what's missing"
 needs the same verification discipline as a document describing "what exists," or it becomes
 its own debt.

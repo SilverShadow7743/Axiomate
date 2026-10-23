@@ -7,9 +7,9 @@ import type { Actor } from '@/lib/actor'
 import { can, directoryPersonFor } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'
 import { addDays, formatShort } from '@/lib/dates'
-import { TIME_ACTIVITIES, checkEntry, type TimeActivity } from '@/lib/time'
-import { backdated } from '@/lib/timeWindow'
-import { meetingSuggestions } from '@/lib/timesheetSuggestions'
+import { TIME_ACTIVITIES, checkEntry, type TimeActivity } from '@/lib/time/time'
+import { backdated } from '@/lib/time/timeWindow'
+import { meetingSuggestions } from '@/lib/time/timesheetSuggestions'
 import {
   daysOfWeek,
   entriesInWeek,
@@ -18,7 +18,7 @@ import {
   weekLabel,
   weekStarting,
   weekTotal,
-} from '@/lib/timesheet'
+} from '@/lib/time/timesheet'
 
 /**
  * My Week — the attestation loop on a phone browser. See

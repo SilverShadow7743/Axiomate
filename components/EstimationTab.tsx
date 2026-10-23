@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { effortVariance } from '@/lib/time'
+import { effortVariance } from '@/lib/time/time'
 import type { Actor } from '@/lib/actor'
 import { canEditIssue } from '@/lib/permissions'
 import { formatIso } from '@/lib/dates'

@@ -1,7 +1,7 @@
 # Design: milestone-level effort attribution
 
 Closes the gap scenario `K` in the validation suite has named since it was written: effort
-variance is proven at the issue level (`effortVariance`, `lib/time.ts`) and at the SOW level
+variance is proven at the issue level (`effortVariance`, `lib/time/time.ts`) and at the SOW level
 (`sowPosition`, proven by `RT1`, shown in `CommercialPanel`), but nowhere in between. `Milestone`
 carries no relationship to an individual `Issue` today, so a partner asking "which milestone is
 actually at risk" inside a multi-milestone SOW has no answer more precise than the whole
@@ -12,7 +12,7 @@ calls for, not the migration itself. See `docs/strategy/2026-09-17-product-devel
 
 ## What already does the work
 
-- `effortVariance` (`lib/time.ts`) — per-issue, proven by `K` itself.
+- `effortVariance` (`lib/time/time.ts`) — per-issue, proven by `K` itself.
 - `sowPosition` (`lib/sow.ts`) — sums `varianceHours`/`varianceIssueCount` across every issue
   attributed to a SOW's projects, proven by `RT1`, rendered in `CommercialPanel`'s SOW summary.
 - `HierarchyNode.sowId` — the existing attribution path. A **project** names its SOW; every

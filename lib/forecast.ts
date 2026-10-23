@@ -1,6 +1,6 @@
 import { availabilityFor, type PendingLeave } from './availability'
 import { deriveEffort, type Estimate, type SizeBand } from './estimation'
-import { hoursOn, type TimeEntry } from './time'
+import { hoursOn, type TimeEntry } from './time/time'
 import { formatIso } from './dates'
 import type { Allocation, Commitment, ResourceProfile } from './capacity'
 import type { Meeting } from './meetings'

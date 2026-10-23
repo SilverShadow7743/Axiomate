@@ -57,10 +57,10 @@ instead of three.
 fade-gradient + scroll affordance for the overflowing tab bar rather than reducing the count.
 **Real**, and this design doc is where the reduction I24 didn't attempt gets scoped.
 
-**The "Time" KPI panel the critique wants is nearly free.** `lib/time.ts`'s `effortVariance()`
+**The "Time" KPI panel the critique wants is nearly free.** `lib/time/time.ts`'s `effortVariance()`
 already returns `{ estimated, actual, varianceHours, variancePct, againstBaseline }` — exactly
 estimate/logged/remaining/progress, correctly distinguishing "no estimate" from "zero" (a null,
-not a zero, when nothing has been estimated — `lib/time.ts:178-184`'s own comment is explicit
+not a zero, when nothing has been estimated — `lib/time/time.ts:178-184`'s own comment is explicit
 about why that distinction matters). It is already called from both `EstimationTab.tsx:114` and
 `TimeTab.tsx:110`, just never surfaced anywhere more prominent. **Building the KPI strip means
 reading a value that already exists, not computing a new one.**

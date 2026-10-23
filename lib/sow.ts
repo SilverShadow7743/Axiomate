@@ -1,7 +1,7 @@
 import type { IssueEstimate, SizeBand } from './estimation'
 import { deriveEffort } from './estimation'
-import type { TimeEntry } from './time'
-import { hoursOn, effortVariance } from './time'
+import type { TimeEntry } from './time/time'
+import { hoursOn, effortVariance } from './time/time'
 import { contractedPosition, type ChangeRequest } from './changeRequest'
 import type { Milestone } from './milestone'
 

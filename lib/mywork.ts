@@ -80,7 +80,7 @@
 
 import { can, directoryPersonFor, rolesFor } from './access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
-import { weekStarting } from './timesheet'
+import { weekStarting } from './time/timesheet'
 import type { Actor } from './actor'
 import type { Meeting } from './meetings'
 import type { Severity } from './types'

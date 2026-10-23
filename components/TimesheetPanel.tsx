@@ -20,7 +20,7 @@ import {
   weekStarting,
   weekTotal,
   type Timesheet,
-} from '@/lib/timesheet'
+} from '@/lib/time/timesheet'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**

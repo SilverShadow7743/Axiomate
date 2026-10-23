@@ -57,7 +57,7 @@ import {
   timePolicyProblem,
   type TimePolicy,
   type WeekState,
-} from './timeWindow'
+} from './time/timeWindow'
 import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './skills'
 import { checkCustomFieldDef, type CustomFieldDef, type CustomFieldType } from './customFields'
 import {
@@ -121,14 +121,14 @@ import {
   statusAfter,
   type Attester,
   type Timesheet,
-} from './timesheet'
+} from './time/timesheet'
 import { canEditNote } from './permissions'
 import {
   checkTransition,
   policyProblems,
   type StatusPolicy,
 } from './statusPolicy'
-import { checkEntry, type TimeActivity, type TimeEntry } from './time'
+import { checkEntry, type TimeActivity, type TimeEntry } from './time/time'
 import { overlapProblem, valueAt, stamp, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
@@ -412,7 +412,7 @@ export interface WorkspaceState {
   estimateRevisions: Record<string, EstimateRevision>
   /** Hours spent, against the work they were spent on. See `./time`. */
   timeEntries: Record<string, TimeEntry>
-  /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/timesheet.ts. */
+  /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/time/timesheet.ts. */
   timesheets: Record<string, Timesheet>
   /**
    * What people cost and are charged at.
@@ -1921,9 +1921,9 @@ function frozenProblem(state: WorkspaceState, person: string, date: string): str
 }
 
 /**
- * That person's week, as `lib/timeWindow.ts` names the states.
+ * That person's week, as `lib/time/timeWindow.ts` names the states.
  *
- * A translation and nothing more. `isFrozen` in `lib/timesheet.ts` remains the one place that
+ * A translation and nothing more. `isFrozen` in `lib/time/timesheet.ts` remains the one place that
  * decides whether a week is frozen — this only renames its answer for a module that describes
  * the same fact with a different vocabulary. Two modules deciding it would be two rules.
  */
@@ -1969,7 +1969,7 @@ function dayWarning(state: WorkspaceState, person: string, date: string, adding:
 /**
  * What the timesheet rules need to know about whoever is asking.
  *
- * The permissions are resolved here and passed in, so `lib/timesheet.ts` stays pure and can be
+ * The permissions are resolved here and passed in, so `lib/time/timesheet.ts` stays pure and can be
  * driven from a scenario without an operating model. `name` is the display name, because that is
  * what `TimeEntry.person` and `Timesheet.person` hold — the same name join the rest of the
  * product uses until people have keys.
@@ -4329,13 +4329,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
 
       /*
-       * The time entry window. `lib/timeWindow.ts` was built, proven and had no production
+       * The time entry window. `lib/time/timeWindow.ts` was built, proven and had no production
        * consumer at all; this is the step the work-management design names as carrying the most
        * regression risk, because it puts refusals in front of an arm that always succeeded and
        * lands on a consultant at the end of a week.
        *
        * It replaces the freeze check that used to sit here — the verdict carries it, phrased by
-       * `lib/timesheet.ts` either way, so `addTime`, `updateTime` and `removeTime` still refuse
+       * `lib/time/timesheet.ts` either way, so `addTime`, `updateTime` and `removeTime` still refuse
        * a frozen week in the same words. What it ADDS is two refusals that nothing enforced:
        * a closed issue, and a date before the work existed to be worked on.
        *
@@ -4592,7 +4592,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * Present a week for approval.
      *
      * The sheet carries no hours. It says a person claims their week is complete, and the freeze
-     * below is what stops the entries moving underneath that claim — see lib/timesheet.ts for why
+     * below is what stops the entries moving underneath that claim — see lib/time/timesheet.ts for why
      * copying the lines onto the sheet was turned down.
      *
      * Resubmission reuses the same row rather than minting a second: a week has one timesheet,

@@ -1,4 +1,4 @@
-import { weekStarting } from '../timesheet'
+import { weekStarting } from '../time/timesheet'
 import { addDays } from '../dates'
 
 /**

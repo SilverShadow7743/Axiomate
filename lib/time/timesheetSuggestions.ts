@@ -1,4 +1,4 @@
-import { attends, type Meeting } from './meetings'
+import { attends, type Meeting } from '../meetings'
 import { MAX_HOURS_PER_ENTRY, type TimeEntry } from './time'
 import { daysOfWeek, entriesInWeek } from './timesheet'
 

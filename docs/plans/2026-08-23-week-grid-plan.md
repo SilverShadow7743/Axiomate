@@ -8,7 +8,7 @@ the arms this panel dispatches all exist and are already proven.
 
 ## Steps
 
-**1. `weekGrid` + WG1 — `lib/timesheet.ts` (check endings first), `scripts/scenario-validation.ts` (CRLF).**
+**1. `weekGrid` + WG1 — `lib/time/timesheet.ts` (check endings first), `scripts/scenario-validation.ts` (CRLF).**
 `weekGrid(entries, person, week, personId?)` → `{ rows: { issueId, byDay: number[7],
 total }[], byDay: number[7], total }`, rounding as `weekTotal` rounds, delegating filtering
 to `entriesInWeek`. WG1: two issues with quarter-hour entries across days; an archived

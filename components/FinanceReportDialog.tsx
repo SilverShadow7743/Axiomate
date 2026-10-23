@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { WorkspaceState } from '@/lib/workspace'
 import { buildFinanceReport } from '@/lib/reports/finance'
-import { weekStarting, weekLabel } from '@/lib/timesheet'
+import { weekStarting, weekLabel } from '@/lib/time/timesheet'
 import FinanceReportView from './FinanceReportView'
 
 /**

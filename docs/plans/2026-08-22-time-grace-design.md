@@ -4,7 +4,7 @@
 
 ## The two gaps this closes
 
-`lib/timeWindow.ts` already enforces the time-entry window: before-window, closed-issue and
+`lib/time/timeWindow.ts` already enforces the time-entry window: before-window, closed-issue and
 frozen-week refusals; past-due-date and long-day warnings. What it does not do:
 
 1. **The grace period is a hardcoded constant.** `BACKDATING_ALLOWANCE_DAYS = 7` lives in

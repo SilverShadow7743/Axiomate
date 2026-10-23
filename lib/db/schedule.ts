@@ -17,7 +17,7 @@ import { resolveOperatorAddress } from '../reports/notifyBundle'
 import { externalPartyKinds, tiersOf } from '../config'
 import { sendAsMailbox } from '../mail'
 import { addDays } from '../dates'
-import { weekLabel } from '../timesheet'
+import { weekLabel } from '../time/timesheet'
 
 /**
  * One run of the scheduled pass, from reading the clock to writing what it decided.

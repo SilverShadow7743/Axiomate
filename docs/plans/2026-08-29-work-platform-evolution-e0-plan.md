@@ -27,7 +27,7 @@ Standing facts this plan is written against, verified in code before writing:
 - Node ids embed kind strings (`client:OAPIL`, `module:OAPIL:Inventory`) and configuration
   scope overrides are keyed on them (schema comment at `HierarchyNode.id`). **Ids are opaque
   and are never rewritten by anything in this plan.**
-- `TimeEntry` (`prisma/schema.prisma:887`, `lib/time.ts:50`) has required `issueId`, no
+- `TimeEntry` (`prisma/schema.prisma:887`, `lib/time/time.ts:50`) has required `issueId`, no
   activity reference.
 - Terminology is already configurable: `KIND_LABEL_KEY` + `resolveLabel` render configured tier
   names everywhere (`lib/workspace.ts:483`, `termFor`). The `RowType` union was already deleted
@@ -184,7 +184,7 @@ commit.
 
 ## Step 6 — Migration + model: Task-level time (stands alone)
 
-**Files:** `prisma/schema.prisma`, new migration, `lib/time.ts`, `lib/workspace.ts` (addTime
+**Files:** `prisma/schema.prisma`, new migration, `lib/time/time.ts`, `lib/workspace.ts` (addTime
 arm), `components/DetailPanel.tsx` Time tab.
 
 - Migration: `TimeEntry` gains nullable `activityId` + FK to `IssueActivity` + index. Additive,

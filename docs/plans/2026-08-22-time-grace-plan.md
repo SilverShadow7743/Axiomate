@@ -8,7 +8,7 @@ depends on it.
 
 ## Steps
 
-**1. The policy and the parameter — `lib/config.ts`, `lib/timeWindow.ts`.**
+**1. The policy and the parameter — `lib/config.ts`, `lib/time/timeWindow.ts`.**
 `TimePolicy { backdatingAllowanceDays: number }` interface; `timePolicy` on `OperatingModel`
 (`lib/config.ts:602` block), defaulted `{ backdatingAllowanceDays: 7 }` in the seed model
 factory (~line 1021, beside `statusPolicy`), and merged in `mergeModel` (~line 1274) the way
@@ -20,14 +20,14 @@ with python (utf-8) — 87 scenarios, 0 FAIL: the default parameter preserves th
 backdating scenario's boundary assertions unchanged.
 
 **2. The arms, the wire, the op, and TG1 — `lib/workspace.ts`, `lib/actionShape.ts`,
-`lib/time.ts`, `scripts/scenario-validation.ts`.
+`lib/time/time.ts`, `scripts/scenario-validation.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it puts a refusal in front of `addTime`,
 which succeeds today for every backdated entry, and the person it lands on is a consultant
 recording a genuinely late week. If the gate is wrong side of the boundary, honest hours
 are refused; if the wire half is missed, the screen's optimistic accept sticks at
 "Not saved" exactly as `updateIssue` did this morning (828f975).
 
-- `TimeEntry` (`lib/time.ts:50`) gains `justification?: string | null`.
+- `TimeEntry` (`lib/time/time.ts:50`) gains `justification?: string | null`.
 - `addTime` action arm gains `justification?: string`; the arm computes
   `backdated(a.date, a.now.slice(0, 10), state.model.timePolicy.backdatingAllowanceDays)`
   after the window verdict; when `justificationRequired` and `!a.justification?.trim()`,

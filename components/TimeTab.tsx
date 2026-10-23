@@ -13,7 +13,7 @@ import {
   summariseTime,
   type TimeActivity,
   type TimeEntry,
-} from '@/lib/time'
+} from '@/lib/time/time'
 import { addDays, formatIso, formatShort } from '@/lib/dates'
 import { isTerminal } from '@/lib/schedule'
 import {
@@ -25,9 +25,9 @@ import {
   sheetFor,
   submitProblem,
   decideProblem,
-} from '@/lib/timesheet'
-import { backdated, gridSaveProblem } from '@/lib/timeWindow'
-import { meetingSuggestions } from '@/lib/timesheetSuggestions'
+} from '@/lib/time/timesheet'
+import { backdated, gridSaveProblem } from '@/lib/time/timeWindow'
+import { meetingSuggestions } from '@/lib/time/timesheetSuggestions'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 

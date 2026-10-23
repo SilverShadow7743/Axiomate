@@ -88,7 +88,7 @@ import {
   BACKDATING_ALLOWANCE_DAYS,
   type WindowIssue,
   type WindowPerson,
-} from '../lib/timeWindow'
+} from '../lib/time/timeWindow'
 
 /**
  * The last recorded persistence run, or null.
@@ -155,7 +155,7 @@ import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/
 import type { DailyIms } from '../lib/reports/dailyIms'
 import type { OrganizationIdentity } from '../lib/config'
 import type { WeeklyClientPack, MonthlyGovernancePack } from '../lib/reports/clientPack'
-import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
+import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time/time'
 import {
   summarise,
   totalComplexity,
@@ -198,7 +198,7 @@ import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { waitingItems } from '../lib/inbox'
-import { meetingSuggestions } from '../lib/timesheetSuggestions'
+import { meetingSuggestions } from '../lib/time/timesheetSuggestions'
 import { replanningFor } from '../lib/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
@@ -239,7 +239,7 @@ import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
   issueWeekCells, daysOfWeek,
   type Timesheet, type Attester,
-} from '../lib/timesheet'
+} from '../lib/time/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
 import { reapplyable } from '../lib/reapplyPendingAction'
@@ -3373,7 +3373,7 @@ scenario(
   'The week is presented for approval, and approval freezes exactly what was approved.',
   () => {
     /*
-     * Driven against lib/timesheet.ts directly, before anything calls it. If the rules are wrong
+     * Driven against lib/time/timesheet.ts directly, before anything calls it. If the rules are wrong
      * this is where it costs nothing to find out — which is the reason the plan puts the
      * scenarios before the reducer arms rather than after them.
      */
@@ -4414,7 +4414,7 @@ scenario(
   'The overrun warns and never refuses; only a closed issue shuts the window, and a derived opening date says it was derived.',
   () => {
     /*
-     * Driven against lib/timeWindow.ts directly, before `addTime` consults it. That is
+     * Driven against lib/time/timeWindow.ts directly, before `addTime` consults it. That is
      * deliberate: this rule is the first thing that will ever refuse a time entry, and the
      * person it lands on is a consultant at the end of a week with hours to record. A refusal
      * that fires on the common case — every issue that runs past its due date — would turn the
@@ -7124,7 +7124,7 @@ scenario(
   'actualHoursByPerson counts what is logged in-window, and capacityFor sums allocations across projects',
   'an entry inside [from, to] counts, one before or after does not, one deleted does not; a person allocated to two different projects has capacityFor sum both, not just one -- the firm-wide claim this design rests on',
   () => {
-    const entry = (over: Partial<import('../lib/time').TimeEntry>): [string, import('../lib/time').TimeEntry] => {
+    const entry = (over: Partial<import('../lib/time/time').TimeEntry>): [string, import('../lib/time/time').TimeEntry] => {
       const e = {
         id: `rsc-${Math.random()}`, issueId: 'OAPIL-1', person: 'Priya', personId: 'PERSON_PRIYA',
         date: '2026-09-10', hours: 4, activity: 'Resolution' as const, billable: true, note: '',

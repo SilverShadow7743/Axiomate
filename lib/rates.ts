@@ -1,5 +1,5 @@
 import { overlapProblem, valueAt, timelineOf, type Version } from './versioning'
-import type { TimeEntry } from './time'
+import type { TimeEntry } from './time/time'
 
 /**
  * What a person costs and what they are charged out at, over a period.
