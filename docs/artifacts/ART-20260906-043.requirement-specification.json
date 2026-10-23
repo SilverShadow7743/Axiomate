@@ -65,7 +65,7 @@
       },
       {
         "id": "AC5",
-        "given": "the existing UI caller of this endpoint (components/InboxPanel.tsx)",
+        "given": "the existing UI caller of this endpoint (components/comms/InboxPanel.tsx)",
         "when": "any of the above responses is returned",
         "then": "the caller's existing behaviour is unchanged, because it reads the parsed JSON body's ok field and never inspects res.ok or the HTTP status"
       },

@@ -39,7 +39,7 @@ and the browser replay would mint the same ids or diverge from the server.
 MN1 PASS; NP1 and W/Z still PASS.
 
 **3. The render and the row — `components/NotesTab.tsx` (LF, Edit),
-`components/Inbox.tsx` (LF, Edit), `app/globals.css` (CRLF, python).**
+`components/comms/Inbox.tsx` (LF, Edit), `app/globals.css` (CRLF, python).**
 NotesTab renders `note-body` through `mentionSegments` with a `mention` span; the Inbox
 preferences block gains "When somebody mentions me" (kind `mention`, shown to everyone).
 *Verify:* `npx tsc --noEmit && npm run build`.

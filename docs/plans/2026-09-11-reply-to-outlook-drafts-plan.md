@@ -34,7 +34,7 @@ already leaves the sent copy in their own Sent Items.
 
 **Verify:** `npx tsc --noEmit`, `npm run build`.
 
-**3. `components/InboxPanel.tsx` — the control.** In the reply dialog, a second button beside
+**3. `components/comms/InboxPanel.tsx` — the control.** In the reply dialog, a second button beside
 Send: **"Save to Outlook Drafts"** as `.btn` — Send stays the one `.btn.primary` (F&O's
 one-primary rule, `docs/design/navigation-model.md`). It posts the same body with
 `mode: 'draft'`; on success the dialog closes and the row shows a `drafted` badge that links to
@@ -42,7 +42,7 @@ one-primary rule, `docs/design/navigation-model.md`). It posts the same body wit
 saying what the draft is for: finish it, or use Outlook's own *Schedule send* — the timing
 lives in Outlook, never in Axiomate.
 
-**Verify:** `npx tsc --noEmit`, `npx eslint components/InboxPanel.tsx`, `npm run audit:a11y`,
+**Verify:** `npx tsc --noEmit`, `npx eslint components/comms/InboxPanel.tsx`, `npm run audit:a11y`,
 `npm run build`.
 
 **4. Live (last).** Against production, from "Your inbox": open Reply on a real message, type a

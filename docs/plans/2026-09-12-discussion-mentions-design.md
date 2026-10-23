@@ -4,7 +4,7 @@ Approved by Nishant, 12 Sep 2026. Scoped down from the original ask ("increase
 person-to-person collaboration") after finding the Notes composer already has full
 @mention and #issue-reference autocomplete (`components/RichTextExtensions.tsx`, a real
 Tiptap node built on `@tiptap/suggestion` — dropdown, keyboard nav, live-resolved names).
-What Discussion (`components/DiscussionTab.tsx`) actually lacks, confirmed by reading the
+What Discussion (`components/comms/DiscussionTab.tsx`) actually lacks, confirmed by reading the
 component: its composer is a bare `<input>`, not Tiptap, so a person must blindly type an
 exact full name with the placeholder's only guidance being "@name to summon somebody" —
 no dropdown, no feedback on a typo. Two contained pieces close this gap.

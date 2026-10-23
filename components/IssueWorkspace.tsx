@@ -13,7 +13,7 @@ import MyWorkPanel from './personal/MyWorkPanel'
 import MyCalendarPanel from './personal/MyCalendarPanel'
 import MyTodosPanel from './personal/MyTodosPanel'
 import FactBoxBlade from './FactBoxBlade'
-import MailLog from './MailLog'
+import MailLog from './comms/MailLog'
 import PortfolioPanel from './planning/PortfolioPanel'
 import ResourcingPanel from './capacity/ResourcingPanel'
 import CommercialRegister from './commercial/CommercialRegister'
@@ -86,7 +86,7 @@ import { applyBlueprint } from '@/lib/commercial/blueprint'
 import type { RowActions } from './RowMenu'
 import GanttChart from './planning/GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
-import UnifiedInbox from './UnifiedInbox'
+import UnifiedInbox from './comms/UnifiedInbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
@@ -96,7 +96,7 @@ import FiltersHeader from './FiltersHeader'
 import { unreadCount } from '@/lib/comms/notifications'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
-import type { ApplyOutcome } from './ChatPanel'
+import type { ApplyOutcome } from './comms/ChatPanel'
 
 /*
  * Dynamically imported rather than bundled in with everything above.
@@ -110,7 +110,7 @@ import type { ApplyOutcome } from './ChatPanel'
  */
 const Dialogs = dynamic(() => import('./Dialogs'), { ssr: false })
 const EvidencePanel = dynamic(() => import('./EvidencePanel'), { ssr: false })
-const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
+const ChatPanel = dynamic(() => import('./comms/ChatPanel'), { ssr: false })
 const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
 const TimesheetPanel = dynamic(() => import('./time/TimesheetPanel'), { ssr: false })

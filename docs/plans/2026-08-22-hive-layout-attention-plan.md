@@ -135,7 +135,7 @@ for the citations. Everything below is a fresh, code-verified pass over the rest
 |---|---|---|
 | Notification drain via Graph Mail.Send | **Done** | `lib/db/notifyDrain.ts:46-101`, `drainEmailNotifications()` — sends via `sendAsMailbox`, stamps `delivered`/`failed`/`pending`. A separate system from the report-pack delivery (`lib/delivery.ts`); both run from `app/api/schedule/run`. |
 | Assignment notifications on owner change | **Done** | `lib/automation.ts:150-164`, `AUTO_OWNER_CHANGED`, `on: 'issue.owner'`, enabled by default. |
-| Inbox mark-all-read / "N older" / `onOpen`→tab | **Done** | `components/Inbox.tsx:76,94,110`; routed via `setRequestTab` in `components/IssueWorkspace.tsx:2185-2209`. |
+| Inbox mark-all-read / "N older" / `onOpen`→tab | **Done** | `components/comms/Inbox.tsx:76,94,110`; routed via `setRequestTab` in `components/IssueWorkspace.tsx:2185-2209`. |
 | "Requests" surface / default `issue.created` rule | **Partial** | `AUTO_HIGH_RAISED` (`lib/automation.ts:100-113`) is default-on but High-severity only — a Medium/Low intake arrival still notifies nobody by default. Unified Work Inbox (shipped this session) covers decisions/waiting, not "what just arrived." |
 
 **Week 4 — the record, consolidated**

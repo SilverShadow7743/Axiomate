@@ -115,7 +115,7 @@ regardless of who raised it (a `PASS` scenario documenting the honest exclusion,
 `decisionItems` not needing to change; nothing after this step depends on `waitingItems`'s
 internals beyond its return shape.
 
-### Step 3 — `components/UnifiedInbox.tsx`
+### Step 3 — `components/comms/UnifiedInbox.tsx`
 
 Three sections in one docked view:
 

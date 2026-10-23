@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useOverlay } from './useOverlay'
+import { useOverlay } from '../useOverlay'
 import type { Actor } from '@/lib/actor'
 import {
   inboxFor,

@@ -3166,7 +3166,7 @@ scenario(
      * way every other such verdict here is — by grepping the domain's own files, not assumed.
      */
     const gated = mentions(/proposal|applyProposal|cards\[/).length
-    const CHAT_DOMAIN = ['lib/comms/chat.ts', 'app/api/chat/route.ts', 'components/ChatPanel.tsx', 'lib/config.ts']
+    const CHAT_DOMAIN = ['lib/comms/chat.ts', 'app/api/chat/route.ts', 'components/comms/ChatPanel.tsx', 'lib/config.ts']
     const noConfidenceConcept = !SRC.some(
       (f) => CHAT_DOMAIN.includes(f) && /confidence/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')),
     )

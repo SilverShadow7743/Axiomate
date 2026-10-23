@@ -21,7 +21,7 @@ Ground truth verified while writing:
 - **`recordInboundMail` does NOT dedupe** — the arm appends (workspace.ts ~7015); the intake
   ENDPOINT dedupes via `alreadyReceived` (lib/comms/intake.ts). The file route must therefore
   check `state.inboundMail` for the messageId itself and refuse the second filing politely.
-- Mail UI: `components/MailLog.tsx` renders the 'mail' view — the inbox panel mounts there.
+- Mail UI: `components/comms/MailLog.tsx` renders the 'mail' view — the inbox panel mounts there.
 - App registration `9d46ddc0-52a6-4f91-8f90-235d2e3f137c`; Graph resource
   `00000003-0000-0000-c000-000000000000`; delegated scope ids Mail.Read
   `570282fd-fa5c-430d-a7fd-fc8dc98a9dca`, offline_access

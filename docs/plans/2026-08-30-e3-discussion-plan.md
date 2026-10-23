@@ -77,7 +77,7 @@ classifier blocks — the established pattern) then `npx prisma migrate status` 
 ## Step 3 — the server module, the notify-kind extension, and the proof — one commit
 
 **Files:** `lib/db/discussion.ts` (new), `lib/workspace.ts` (notify arm + Action union),
-`lib/comms/notifications.ts`, `components/Inbox.tsx` (prefs row), `scripts/discussion-proof.ts`
+`lib/comms/notifications.ts`, `components/comms/Inbox.tsx` (prefs row), `scripts/discussion-proof.ts`
 (new), `package.json` (`"audit:discussion"`).
 
 **3a — the notify arm learns a kind.** The `notify` action gains `kind?: NotificationKind`;
@@ -147,8 +147,8 @@ production after step 6's deploy: an unauthenticated `curl -s -X POST` → 401 w
 
 ## Step 5 — the UI
 
-**Files:** `components/DiscussionTab.tsx` (new), `components/DetailPanel.tsx`,
-`components/MailLog.tsx`, `components/IssueWorkspace.tsx`.
+**Files:** `components/comms/DiscussionTab.tsx` (new), `components/DetailPanel.tsx`,
+`components/comms/MailLog.tsx`, `components/IssueWorkspace.tsx`.
 
 - `DiscussionTab` (one component, both scopes): fetch on mount, 15s poll **only while
   mounted/visible**, merge by message id — **the poll must never reset the compose box or

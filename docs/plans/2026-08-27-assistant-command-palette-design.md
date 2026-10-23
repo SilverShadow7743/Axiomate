@@ -2,7 +2,7 @@
 
 ## Problem
 
-`components/ChatPanel.tsx` is one component behind two engines. `app/api/chat/route.ts` runs
+`components/comms/ChatPanel.tsx` is one component behind two engines. `app/api/chat/route.ts` runs
 Claude in a multi-turn tool loop when `ANTHROPIC_API_KEY` is set, and `lib/comms/chat.ts`'s
 `offlineReply` — a deterministic parser — when it is not. This deployment will not have a key
 (confirmed this session, see `boot().assistant.engine` and the header badge shipped as backlog
@@ -111,7 +111,7 @@ one piece of this design that is not purely presentational.
 
 ## Voice
 
-`VoiceInput` (`components/VoiceInput.tsx`) stays, wired to the single-line input in place of the
+`VoiceInput` (`components/comms/VoiceInput.tsx`) stays, wired to the single-line input in place of the
 textarea — dictating a search phrase or a new issue's subject is still useful hands-free. The
 "Read replies aloud" toggle and its `speechSynthesis` call (`ChatPanel.tsx`'s `send()`, the
 `speakReplies` branch) are removed for the offline presentation: reading a match list or a

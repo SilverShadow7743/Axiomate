@@ -32,7 +32,7 @@ scripts/discussion-proof.ts` still reports every existing check passing (it asse
 specific fields like `.following`/`.followerCount`, not a full-shape match, so the new
 field cannot break it — confirmed by reading the proof first, not assumed).
 
-## 2. `components/DiscussionTab.tsx` — the risky step
+## 2. `components/comms/DiscussionTab.tsx` — the risky step
 
 Two independent pieces, one commit (the second depends on the `View` type change the
 first needs anyway):
@@ -85,7 +85,7 @@ unrelated `@` the dropdown never resolved. Both are silent: neither throws, both
 produce the wrong one of "sent" or "not sent" depending on typing speed, which is
 exactly why this is the step to review carefully rather than trust on first read.
 
-**Verified by:** `npx tsc --noEmit` and `npx eslint components/DiscussionTab.tsx`
+**Verified by:** `npx tsc --noEmit` and `npx eslint components/comms/DiscussionTab.tsx`
 clean; then a manual pass — type `@` and a partial name, confirm the dropdown filters
 live and Enter picks rather than sends; confirm Escape closes it and the draft is
 untouched; confirm a message with no `@` in it still sends on Enter exactly as today;

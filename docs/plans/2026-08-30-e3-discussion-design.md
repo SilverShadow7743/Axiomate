@@ -88,7 +88,7 @@ gains `'chat'` with its prefs row in the Inbox (the hand-maintained list — E2'
   carries it.
 - **Mail conversation view**: the record's detail shows its mail exchange threaded by
   `conversationId` (inbound rows, and outbound replies where recorded), read-only;
-  `components/MailLog.tsx` groups by conversation with the flat list as the fallback for rows
+  `components/comms/MailLog.tsx` groups by conversation with the flat list as the fallback for rows
   with no conversationId.
 - Inbox routing: ruleId `discussion-message` routes to the record (issue scope) or project;
   rides the E2 routing branch.

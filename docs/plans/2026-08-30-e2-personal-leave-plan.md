@@ -115,7 +115,7 @@ any UI exists.
   `'timesheet-submitted'`, `'timesheet-decided'` → the Timesheets view. No `revealIssue` call
   for these. `lib/db/notifyDrain.ts`'s `mailboxFor` already falls back to `enabled[0]` when
   `aboutId` is not an issue — verified, no change, do not "fix" it.
-- `components/Inbox.tsx`: `PrefRows` is a **hand-maintained** list — add
+- `components/comms/Inbox.tsx`: `PrefRows` is a **hand-maintained** list — add
   `{ kind: 'approval', label: 'When leave or a timesheet needs or gets a decision', show: true }`.
   Without this row the kind mints but nobody can configure it.
 

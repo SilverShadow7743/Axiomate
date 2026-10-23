@@ -52,7 +52,7 @@ to, which the existing WG1 scenario already covers.
 
 ## Step 3 — `Inbox` gains `docked`
 
-**Touches:** `components/Inbox.tsx`.
+**Touches:** `components/comms/Inbox.tsx`.
 
 The same shape as step 2, with one real difference worth naming rather than glossing over:
 `Inbox` today is ONE component that is both the trigger (the bell button) and the content (the
