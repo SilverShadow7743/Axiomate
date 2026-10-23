@@ -63,7 +63,7 @@ scenarios and in production. What E1 did not build is anywhere for a person to *
 
 ### 2. The Timesheets view grows "Leave to decide"
 
-`components/TimesheetPanel.tsx` — already the precedent: "It GATHERS and it decides; it never
+`components/time/TimesheetPanel.tsx` — already the precedent: "It GATHERS and it decides; it never
 edits."
 
 - A section visible to `leave.approve` holders listing every **Requested** leave commitment

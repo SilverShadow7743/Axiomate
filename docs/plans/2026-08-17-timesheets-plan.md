@@ -123,7 +123,7 @@ Two checks in `scripts/persistence-proof.ts`:
 
 **Verified by:** `npm run audit:persistence` at 28 of 28.
 
-## 7. `components/TimeTab.tsx`
+## 7. `components/time/TimeTab.tsx`
 
 No new screen. The existing tab gains the week's total, its status, a Submit control, and — for
 somebody holding `time.approve` — Approve and Return. A returned week shows its reason.

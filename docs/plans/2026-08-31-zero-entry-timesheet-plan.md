@@ -145,7 +145,7 @@ per the design's own Testing section, the pure function is what's proven; this i
 an already-proven function, matching how `todaysMeetings()`'s panel wiring went unscenario'd
 earlier this session.
 
-### Step 4 — `components/TimeTab.tsx` wiring ⚠ riskiest step in this plan
+### Step 4 — `components/time/TimeTab.tsx` wiring ⚠ riskiest step in this plan
 
 Not the reorder-shaped risk Project Pulse had — this is the step that reads and writes existing
 `useState` (`drafts`) and sits beside an existing effect that already owns resetting it

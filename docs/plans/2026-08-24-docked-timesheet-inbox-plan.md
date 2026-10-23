@@ -27,7 +27,7 @@ buttons (they render; nothing in the main pane responds to them until step 4).
 
 ## Step 2 — `TimesheetPanel` gains `docked`
 
-**Touches:** `components/TimesheetPanel.tsx`.
+**Touches:** `components/time/TimesheetPanel.tsx`.
 
 Four changes, each mirroring the corresponding line in `MyWorkPanel.tsx`:
 

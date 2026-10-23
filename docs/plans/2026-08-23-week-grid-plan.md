@@ -19,7 +19,7 @@ individually in `decideProblem`'s words and still Submitted after.
 *Verify:* `npm run validate:scenarios` → 91 scenarios, 0 FAIL parsed from JSON (python,
 utf-8); WG1 PASS.
 
-**2. The panel — `components/TimesheetPanel.tsx` (new, LF).**
+**2. The panel — `components/time/TimesheetPanel.tsx` (new, LF).**
 Overlay with `useOverlay` + Escape like ArchivePanel. Props: `state`, `actor`, `today`,
 `onSubmitWeek`, `onDecideWeek` (both exist on DetailPanel's signature), `onDecideMany:
 (ids: string[]) => void` for the batch, `onOpen(issueId)`, `onClose`. My-week half: week

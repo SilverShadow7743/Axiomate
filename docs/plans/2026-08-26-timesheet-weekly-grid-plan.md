@@ -5,7 +5,7 @@ Quotes below are that design's constraints, not restated from memory.
 
 ## What already exists and is reused, not rebuilt
 
-Reading `lib/time/timesheet.ts` and `components/TimesheetPanel.tsx` (the person-wide,
+Reading `lib/time/timesheet.ts` and `components/time/TimesheetPanel.tsx` (the person-wide,
 cross-issue, **read-only** week gatherer built for the 2026-08-23 week-grid design)
 surfaced precedent this plan follows rather than reinvents:
 
@@ -91,7 +91,7 @@ before any component calls either function.
 
 ## Step 2 — Wire the grid into `TimeTab.tsx`
 
-**File:** `components/TimeTab.tsx`.
+**File:** `components/time/TimeTab.tsx`.
 
 - A `mode` state (`'quick' | 'week'`), defaulting to `'quick'`, rendered as two buttons
   above "Record time" — the existing form is untouched when `mode === 'quick'`.

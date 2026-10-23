@@ -71,7 +71,7 @@ import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyI
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './commercial/ClientPackView'
 import FinanceReportDialog from './commercial/FinanceReportDialog'
-import LeaveReportDialog from './LeaveReportDialog'
+import LeaveReportDialog from './time/LeaveReportDialog'
 import FirstRunCard from './FirstRunCard'
 import AdminFirstRunCard from './AdminFirstRunCard'
 import SearchResults from './SearchResults'
@@ -113,7 +113,7 @@ const EvidencePanel = dynamic(() => import('./EvidencePanel'), { ssr: false })
 const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
 const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
-const TimesheetPanel = dynamic(() => import('./TimesheetPanel'), { ssr: false })
+const TimesheetPanel = dynamic(() => import('./time/TimesheetPanel'), { ssr: false })
 const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
 const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
 const StuckChangesPanel = dynamic(() => import('./StuckChangesPanel'), { ssr: false })

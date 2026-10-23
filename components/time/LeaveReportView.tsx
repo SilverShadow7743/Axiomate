@@ -1,6 +1,6 @@
 import type { LeaveReport } from '@/lib/reports/leave'
 import type { OrganizationIdentity } from '@/lib/config'
-import ReportHeader from './reports/ReportHeader'
+import ReportHeader from '../reports/ReportHeader'
 
 /**
  * The print half of the leave report — the same `.pack-scrim`/`.pack-page` pattern as

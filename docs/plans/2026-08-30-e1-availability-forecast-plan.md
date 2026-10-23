@@ -34,7 +34,7 @@ Ground facts this plan is written against, verified in code:
   `parsed.commitments ?? {}` — plain passthrough, optional new fields round-trip.
 - Portfolio concerns are `{ kind, count, phrase }` pushes (`lib/planning/portfolio.ts:183–208`).
 - To locate during implementation, not assumed: the shared estimate-hours derivation that
-  `effortVariance` consumes (imported by `components/TimeTab.tsx` — find its module), and the
+  `effortVariance` consumes (imported by `components/time/TimeTab.tsx` — find its module), and the
   component behind DetailPanel's Schedule tab.
 
 ## Step 1 — Holidays in the date math, and the config field (pure)

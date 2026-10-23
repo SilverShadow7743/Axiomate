@@ -95,7 +95,7 @@ them in — shipping one without the other is not a usable state.
 
 ## Step 3 — Wire `TimesheetPanel.tsx`
 
-**File:** `components/TimesheetPanel.tsx`. Only the "my week" section changes.
+**File:** `components/time/TimesheetPanel.tsx`. Only the "my week" section changes.
 
 ```ts
 const allocations = useMemo(() => Object.values(state.allocations), [state.allocations])

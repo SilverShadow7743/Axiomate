@@ -124,7 +124,7 @@ any UI exists.
 
 ## Step 5 — the Timesheets view's "Leave to decide" queue
 
-**Files:** `components/TimesheetPanel.tsx`, `components/IssueWorkspace.tsx`.
+**Files:** `components/time/TimesheetPanel.tsx`, `components/IssueWorkspace.tsx`.
 
 - A section rendered when `can(state.model, actor, 'leave.approve').allowed`, listing every
   live commitment with `kind === 'Leave' && status === 'Requested'` from `state.commitments`

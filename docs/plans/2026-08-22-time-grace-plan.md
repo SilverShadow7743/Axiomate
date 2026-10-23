@@ -64,7 +64,7 @@ justification round-trips.
 *Verify:* `npx prisma migrate deploy` reports the migration applied;
 `npm run audit:persistence` — 50 passed, 0 failed; `npm run audit:tenancy` unchanged (26).
 
-**4. Screens — `components/TimeTab.tsx` (CRLF), `components/DetailPanel.tsx` (CRLF),
+**4. Screens — `components/time/TimeTab.tsx` (CRLF), `components/DetailPanel.tsx` (CRLF),
 `components/IssueWorkspace.tsx` (CRLF), `components/ConfigWorkspace.tsx` (CRLF),
 `app/globals.css` (CRLF).**
 - TimeTab add form: compute `backdated(date, today, allowance)` live as the date changes;

@@ -24,7 +24,7 @@ owns the filtering and the id-first join.
 
 ### 2. The panel
 
-`components/TimesheetPanel.tsx`, an overlay like ArchivePanel (same `useOverlay`/Escape
+`components/time/TimesheetPanel.tsx`, an overlay like ArchivePanel (same `useOverlay`/Escape
 contract), opened from a **Timesheets** button on the FilterBar beside Archive — with a
 count badge of submitted weeks awaiting decision, shown only to holders of `time.approve`.
 
