@@ -33,7 +33,7 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
-import { defaultProfile, profileConfidence } from '../lib/capacity'
+import { defaultProfile, profileConfidence } from '../lib/capacity/capacity'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'

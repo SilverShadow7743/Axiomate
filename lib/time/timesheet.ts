@@ -52,7 +52,7 @@ export interface Timesheet {
    * later correction to the pattern moves the timeline; this does not move.
    *
    * `Stamped<unknown>`, not a specific shape — a version's value is opaque here the same way
-   * `lib/capacity.ts`'s own `WorkingPattern` treats it, and this is a copy of exactly that
+   * `lib/capacity/capacity.ts`'s own `WorkingPattern` treats it, and this is a copy of exactly that
    * value, no more validated than the version it was taken from. A future reader casts and
    * checks at the point of use, the same discipline `profileAt`'s `usable()` already follows.
    */

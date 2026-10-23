@@ -1,6 +1,6 @@
 import { addDays, workingDaysBetween } from './dates'
-import { commitmentCounts, meetingHours } from './availability'
-import type { Commitment, ResourceProfile } from './capacity'
+import { commitmentCounts, meetingHours } from './capacity/availability'
+import type { Commitment, ResourceProfile } from './capacity/capacity'
 import type { Meeting } from './meetings'
 
 /**

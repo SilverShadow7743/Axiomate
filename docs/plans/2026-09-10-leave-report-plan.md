@@ -40,7 +40,7 @@ export function buildLeaveReport(state: WorkspaceState, endingMonth: string /* '
   `Commitment` carries soft-delete the way other records do; if it does, exclude deleted the same
   way `finance.ts`'s `inRange` filter does for `TimeEntry`). For each `kind === 'Leave'`:
   - `status === 'Requested'` (or `undefined` is never `'Requested'` — absent means `'Approved'`
-    per `Commitment`'s own doc comment, `lib/capacity.ts:217-220` — so only an EXPLICIT
+    per `Commitment`'s own doc comment, `lib/capacity/capacity.ts:217-220` — so only an EXPLICIT
     `'Requested'` lands in `pending`) → push `{person, startDate, endDate}` to `pending`, skip
     the grid entirely for this commitment.
   - `commitmentCounts(c)` true (i.e. `status` absent or `'Approved'`) → this one counts. For each

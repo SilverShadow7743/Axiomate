@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can, directoryIdByName, isUnresolvedOwnerName } from '@/lib/access'
-import { ownerLeaveCaveat } from '@/lib/availability'
+import { ownerLeaveCaveat } from '@/lib/capacity/availability'
 import { canEditIssue } from '@/lib/permissions'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueNote } from '@/lib/notes'

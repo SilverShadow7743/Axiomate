@@ -25,8 +25,8 @@ Design constraints quoted: "Absent means zero — today's arithmetic byte-identi
 
 ## Step 1 — the engine's fourth term and the Meeting type, golden first
 
-**Files:** `lib/meetings.ts` (new), `lib/availability.ts`, `lib/capacity.ts`,
-`lib/forecast.ts`, `lib/assignment.ts`, `scripts/scenario-validation.ts`.
+**Files:** `lib/meetings.ts` (new), `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`,
+`lib/forecast.ts`, `lib/capacity/assignment.ts`, `scripts/scenario-validation.ts`.
 
 1a. **Capture the golden BEFORE touching signatures**: run `availabilityFor` on E1A's exact
 fixture (and one `capacityFor`/`forecastFor` figure) and bake the outputs into scenario E4A's
@@ -38,7 +38,7 @@ createdAt, createdBy, deletedAt), `meetingProblem` (title; end after start; ≥1
 `attends(m, personId)` = `!m.deletedAt && m.attendeeIds.includes(personId)` — ids only, no
 name fallback, per the design's third send-back clause.
 
-1c. `lib/availability.ts`: `meetingHours(meetings, personId, from, to)` — for each attended
+1c. `lib/capacity/availability.ts`: `meetingHours(meetings, personId, from, to)` — for each attended
 live meeting, the hour overlap of `[startAt, endAt]` with `[fromT00:00:00, toT23:59:59.999]`
 (the stated clipping rule: a straddling meeting counts only its inside hours; a multi-day one
 clips the same way), summed and rounded 2dp. `availabilityFor` gains trailing
@@ -48,7 +48,7 @@ present, `availableHours = max(0, gross − committed − meetingHours)` and the
 so the E1 never-spread rule keeps golden JSON shapes stable: verify `capacityFor` still
 builds explicitly and add the field there deliberately or not at all — decide at the keyboard,
 the golden arbitrates). Thread trailing optional params through `capacityFor`, `planCheck`,
-`forecastFor`'s args object, and `lib/assignment.ts`'s `capacityFor` call (line ~183) —
+`forecastFor`'s args object, and `lib/capacity/assignment.ts`'s `capacityFor` call (line ~183) —
 trailing, so every existing call site compiles unchanged.
 
 1d. Scenario **E4A**: the absent-param golden byte-identical; a 90-minute attended meeting

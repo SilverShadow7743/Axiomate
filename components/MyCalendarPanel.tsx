@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
-import { profileAt, type Commitment } from '@/lib/capacity'
+import { profileAt, type Commitment } from '@/lib/capacity/capacity'
 import { holidaySetOf } from '@/lib/config'
 import { addDays } from '@/lib/dates'
 import { myCalendarMonth, type MyCalendarEntry } from '@/lib/myCalendar'

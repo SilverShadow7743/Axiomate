@@ -147,7 +147,7 @@
       "BR11. The reducer is the only writer of membership as a house rule (design Part 13); this correction does not create a second validation site for the duplicate rule. If the script writes without the reducer (Gate 2's fallback), its skip check is a copy of the reducer's predicate and is named as such."
     ],
     "domain_entities": [
-      "ProjectMember (lib/staffing.ts:14-31; prisma/schema.prisma:652-671): id, projectId, person, personId (required), projectRoleId, addedBy, addedAt, removedAt (soft-ended, not destroyed). @@id([tenantId, id]); indexes on (tenantId, projectId, personId) and (tenantId, personId); no unique on the pair.",
+      "ProjectMember (lib/capacity/staffing.ts:14-31; prisma/schema.prisma:652-671): id, projectId, person, personId (required), projectRoleId, addedBy, addedAt, removedAt (soft-ended, not destroyed). @@id([tenantId, id]); indexes on (tenantId, projectId, personId) and (tenantId, personId); no unique on the pair.",
       "WorkspaceState.projectMembers and state.seq (loaded by lib/db/repo.ts loadWorkspace under withTenant).",
       "Reducer arm addProjectMember (lib/workspace.ts:6991-7040): project check, project-role check, directoryIdByName, duplicate guard at :7010-7013, id `projmem-${seq}`, addedBy from the reducer's by, audit entry via log(); removeProjectMember (:7070-7085) sets removedAt only.",
       "Persistence: persistActions (lib/db/persist.ts:94) -> runBatch (:147; set_config('app.tenant_id') at :170); stops at the first refusal and keeps earlier writes (:85-92); projectMember write case (:493-505) upserts by reducer-minted id; projectMemberToRow / FromRow (lib/db/map.ts).",

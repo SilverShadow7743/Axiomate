@@ -1,4 +1,4 @@
-import type { Person } from './config'
+import type { Person } from '../config'
 
 /**
  * The one join rule for person references.

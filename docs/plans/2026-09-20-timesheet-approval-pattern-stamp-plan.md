@@ -30,7 +30,7 @@ One addition, gated on `a.decision === 'approved'` only — a rejection commits 
 Read at `weekStarting` (the Monday the week claims to cover), not at `a.now` (the moment of
 approval) — the pattern that governed the work, not the pattern true on whatever day somebody
 got round to approving it. `stamp()` and `valueAt` both already exist in `lib/versioning.ts`;
-import `WORKING_PATTERN` from wherever `lib/capacity.ts` already does, rather than redeclaring
+import `WORKING_PATTERN` from wherever `lib/capacity/capacity.ts` already does, rather than redeclaring
 the string literal a second place.
 
 A rejected or already-decided sheet keeps whatever stamp it already had (`sheet!.

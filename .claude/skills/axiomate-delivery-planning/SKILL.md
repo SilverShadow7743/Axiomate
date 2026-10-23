@@ -35,7 +35,7 @@ Sequence      — axiomate-scheduling's criticalResolutionPath(activities, depen
                 plannedEnd) → sufficient / chain / projectedResolutionDate /
                 scheduleVarianceDays / criticalBlockingDependency
        ↓
-Capacity      — axiomate-capacity-planning's real formula (lib/availability.ts) for every
+Capacity      — axiomate-capacity-planning's real formula (lib/capacity/availability.ts) for every
                 person the sequence's chain depends on — a sequence that's fine on paper but
                 has no capacity behind it is not an achievable plan
        ↓

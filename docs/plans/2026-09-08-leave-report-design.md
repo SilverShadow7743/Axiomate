@@ -5,9 +5,9 @@ request — *"I would be needing leave report month on month."* Not yet built.
 
 ## What exists today, and the gap
 
-`Commitment` (`lib/capacity.ts`) already records every leave request — person, dates, hours per
+`Commitment` (`lib/capacity/capacity.ts`) already records every leave request — person, dates, hours per
 day, status (`Requested`/`Approved`/`Returned`, absent meaning `Approved` per pre-E1 history),
-and a private reason. `lib/availability.ts`'s `commitmentCounts` already draws the line on what
+and a private reason. `lib/capacity/availability.ts`'s `commitmentCounts` already draws the line on what
 "taken" means (`Approved` only), and `redactLeaveReasons` already draws the line on who may see
 *why* (`mayReadReasons`; everyone else keeps dates, hours, status). Neither line is invented
 here — both are read from where they already live.
@@ -40,7 +40,7 @@ already threads everywhere else, not new date math.
 **Only `Approved` leave counts toward the grid**, via the existing `commitmentCounts` predicate —
 consistent with how every other capacity number in this codebase already treats leave.
 `Requested` (pending) leave is real information a manager needs but is not yet a fact about the
-calendar (`lib/availability.ts`'s own doctrine), so it surfaces separately, in `pending`, not
+calendar (`lib/capacity/availability.ts`'s own doctrine), so it surfaces separately, in `pending`, not
 blended into the taken-days grid. `Returned` (declined) leave appears nowhere in this report —
 it was declined, nothing to report.
 

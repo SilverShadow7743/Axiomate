@@ -12,7 +12,7 @@ import {
   WORKING_PATTERN,
   COMMITMENT_KINDS,
   type CommitmentKind,
-} from '@/lib/capacity'
+} from '@/lib/capacity/capacity'
 import { timelineOf } from '@/lib/versioning'
 import { summarise } from '@/lib/estimation'
 import type { ScheduleRow } from '@/lib/types'

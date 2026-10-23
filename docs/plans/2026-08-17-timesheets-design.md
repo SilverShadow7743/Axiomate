@@ -145,7 +145,7 @@ for pressing people to book more hours."*
 
 **The build order is the reverse of the user's order.** An agent flow reads Draft → Classify →
 Validate → Submit. Submission is the foundation and is what this design covers; the validation
-engines largely exist already and lack only a caller (`planCheck` in `lib/capacity.ts`,
+engines largely exist already and lack only a caller (`planCheck` in `lib/capacity/capacity.ts`,
 `effortVariance` in `lib/time/time.ts`, `sowPosition` and `describePosition` in `lib/sow.ts`);
 classification should reuse the `stated | guessed | default` vocabulary from `lib/intake.ts`
 rather than invent a confidence percentage; and drafting is last because it is the only part

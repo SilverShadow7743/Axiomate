@@ -1,5 +1,5 @@
 import { canParent, kindOf, type WorkspaceState } from './workspace'
-import type { Allocation } from './capacity'
+import type { Allocation } from './capacity/capacity'
 import { tiersOf } from './config'
 import { ISSUE_STATUSES } from './types'
 

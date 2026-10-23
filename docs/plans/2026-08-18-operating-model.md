@@ -73,7 +73,7 @@ The model draws two levels of allocation, and is right to:
 
 | Concept | Question | Built? |
 |---|---|---|
-| Capacity | How much can this person work? | **Yes** — `lib/capacity.ts`, effective-dated |
+| Capacity | How much can this person work? | **Yes** — `lib/capacity/capacity.ts`, effective-dated |
 | Availability | How much remains? | **Yes** |
 | Allocation | How much is reserved for a project? | **Yes** — `Allocation`: person → project → % → dates |
 | **Assignment** | **What work are they responsible for, for how many hours?** | **No** |

@@ -60,8 +60,8 @@ import type { TimeActivity, TimeEntry } from '../time/time'
 import type { Approval, ApprovalDecision } from '../approval'
 import type { Channel, Delivery, Notification } from '../notifications'
 import type { Sow, SowStatus } from '../sow'
-import type { Allocation, Commitment, CommitmentKind } from '../capacity'
-import type { ProjectMember } from '../staffing'
+import type { Allocation, Commitment, CommitmentKind } from '../capacity/capacity'
+import type { ProjectMember } from '../capacity/staffing'
 import type { PersonalEvent } from '../personalEvents'
 import type { PersonalAction } from '../personalActions'
 import type { InboundMail } from '../intake'
@@ -69,7 +69,7 @@ import type { Version } from '../versioning'
 import type { Timesheet, TimesheetStatus } from '../time/timesheet'
 import type { PersonRate, RateKind } from '../rates'
 import type { ChangeRequest, ChangeStatus } from '../changeRequest'
-import type { PersonSkill, Requirement, SkillLevel, SkillSource } from '../skills'
+import type { PersonSkill, Requirement, SkillLevel, SkillSource } from '../capacity/skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
 import type { ScopeItem, ScopeKind, ScopeSource } from '../scope'
@@ -1077,7 +1077,7 @@ export function commitmentToRow(tenantId: TenantId, c: Commitment): Prisma.Commi
     hoursPerDay: c.hoursPerDay,
     note: c.note,
     // Absent stays absent, both directions — NULL means Approved and only
-    // lib/availability.ts interprets that; the mapper must not resolve it early.
+    // lib/capacity/availability.ts interprets that; the mapper must not resolve it early.
     status: c.status ?? null,
     reason: c.reason ?? null,
     createdBy: c.createdBy,

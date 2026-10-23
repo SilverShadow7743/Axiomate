@@ -23,7 +23,7 @@ the weighing."* This feature names the concern (a deficit, and where the hours c
 and stops there.
 
 A second finding, load-bearing for scope: `DEFAULT_ALLOCATION_POLICY` is `{ cap: 'hard' }`
-(`lib/capacity.ts`) — under the shipped default, `upsertAllocation` refuses outright, no
+(`lib/capacity/capacity.ts`) — under the shipped default, `upsertAllocation` refuses outright, no
 override, the instant a write would push someone over capacity. So this feature is not
 guarding against a bypass; the state it reacts to arises legitimately, after the fact — a
 person's working pattern moves to fewer days, a new commitment or holiday shrinks their
@@ -54,7 +54,7 @@ same person's numbers. Composes:
 
 - `availabilityFor()` for the deficit (`-remainingHours`, only meaningful when `overallocated`).
 - A new small helper built on `overlapWorkingDays()` (already exported from
-  `lib/availability.ts`) to get each overlapping `Allocation`'s own hours contribution in the
+  `lib/capacity/availability.ts`) to get each overlapping `Allocation`'s own hours contribution in the
   window — the same per-allocation arithmetic `availabilityFor` already sums internally
   (`days * hoursPerDay * percentage/100`), exposed per-row instead of only as a total.
 

@@ -1,7 +1,7 @@
 import { workingDaysBetween } from './dates'
 import { computeHealth, isTerminal } from './schedule'
 import { summarise } from './estimation'
-import { planCheck, profilesAt } from './capacity'
+import { planCheck, profilesAt } from './capacity/capacity'
 import { sowPosition } from './sow'
 import { buildTree } from './tree'
 import { holidaySetOf } from './config'

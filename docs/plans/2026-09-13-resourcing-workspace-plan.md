@@ -8,7 +8,7 @@ elsewhere), so both need proving before anything renders. View wiring (sidebar e
 stale-view guard) is next since the panel depends on `view` existing as a valid state before
 it can render into it. The panel component is last — the only step a scenario cannot check.
 
-## 1. `lib/capacity.ts` — `actualHoursByPerson` and `resourcingRows`
+## 1. `lib/capacity/capacity.ts` — `actualHoursByPerson` and `resourcingRows`
 
 ```ts
 export function actualHoursByPerson(

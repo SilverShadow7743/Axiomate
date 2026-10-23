@@ -4,14 +4,14 @@ import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { liveSkills } from '@/lib/config'
-import { candidatesFor, levelLabel, SKILL_LEVELS, type Requirement, type SkillLevel } from '@/lib/skills'
+import { candidatesFor, levelLabel, SKILL_LEVELS, type Requirement, type SkillLevel } from '@/lib/capacity/skills'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**
  * What this piece of work needs, and who could do it.
  *
  * The requirement is typed here, once, by a person who knows the work — never inferred from
- * module or type. `candidatesFor` (`lib/skills.ts`) does the matching; this tab is the one place
+ * module or type. `candidatesFor` (`lib/capacity/skills.ts`) does the matching; this tab is the one place
  * that actually calls it, which until today nothing did. Candidates, never a recommendation —
  * see that module's own doctrine on why there is no ranking.
  */

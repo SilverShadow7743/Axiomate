@@ -2,7 +2,7 @@ import { daysBetween, formatShort, startOfWeek } from '../dates'
 import { isTerminal } from '../schedule'
 import { valueAt, type Version } from '../versioning'
 import { frozenMessage, isFrozen, type Timesheet } from './timesheet'
-import { WORKING_PATTERN } from '../capacity'
+import { WORKING_PATTERN } from '../capacity/capacity'
 import { checkEntry } from './time'
 import type { PermissionKey } from '../access'
 import type { IssueStatus } from '../types'
@@ -454,7 +454,7 @@ export function gridSaveProblem(
 
 /** The kind `valueAt` is asked about. Also the only subject kind `recordVersion` accepts today. */
 /**
- * Re-exported from `lib/capacity.ts` rather than declared again.
+ * Re-exported from `lib/capacity/capacity.ts` rather than declared again.
  *
  * It WAS declared again — the same string in two modules, which is the shape that let the
  * detail panel's tab list disagree with its own guard. Two constants that must be equal are two

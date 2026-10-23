@@ -183,8 +183,8 @@ named independently by more than one domain review.*
 
 **Why this one first:** it's the single most-repeated gap across the review — resourcing has
 no home above a single project, and the reconciliation gap (allocation vs. actual) has nowhere
-to live either. Everything it needs already exists as a pure function (`lib/availability.ts`,
-`lib/capacity.ts`); this is an aggregation view, not new computation — consistent with the
+to live either. Everything it needs already exists as a pure function (`lib/capacity/availability.ts`,
+`lib/capacity/capacity.ts`); this is an aggregation view, not new computation — consistent with the
 project's own "never invent information" discipline.
 
 **Structure:**

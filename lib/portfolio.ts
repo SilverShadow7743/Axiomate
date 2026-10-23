@@ -1,6 +1,6 @@
 import { forecastFor } from './forecast'
-import { availabilityFor } from './availability'
-import { profileAt } from './capacity'
+import { availabilityFor } from './capacity/availability'
+import { profileAt } from './capacity/capacity'
 import { addDays } from './dates'
 import { CONCERN_ORDER, holidaySetOf, type ConcernKind, type HealthScorePolicy } from './config'
 import { directoryIdByName } from './access'

@@ -15,7 +15,7 @@ step), then the screen.
 ## Step 1 — The data model and the pure aggregation
 
 **Touches:** `lib/personalEvents.ts` (new — `PersonalEvent` interface, `eventProblem` shape
-validator, modelled on `lib/staffing.ts`'s `memberProblem`), `lib/workspace.ts`
+validator, modelled on `lib/capacity/staffing.ts`'s `memberProblem`), `lib/workspace.ts`
 (`WorkspaceState.personalEvents` field — the same mechanical addition every new collection this
 program has needed: `initWorkspace`, `clientView`'s emptied-collections list in
 `lib/clientBoundary.ts`, `autosave.ts`'s mirror merge, `lib/db/repo.ts`'s `loadWorkspace`

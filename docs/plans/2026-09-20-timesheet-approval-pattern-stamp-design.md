@@ -5,7 +5,7 @@ the coverage-audit follow-on and the two validation-suite commits immediately be
 **This document is narrower than either scenario's name suggests.** Both were badly stale:
 working-pattern versioning (`lib/versioning.ts`) turned out to already be wired end to end —
 `recordVersion`/`correctVersion` have a real UI call site, real persistence (the Prisma
-`Version` model already exists), `lib/capacity.ts` already reads it for capacity figures, and
+`Version` model already exists), `lib/capacity/capacity.ts` already reads it for capacity figures, and
 `lib/workspace.ts`'s `dayWarning` already applies the daily cap live on every `addTime` call.
 The only piece with no application caller anywhere is `stamp()` — this document is the design
 step for that one piece, not for the versioning mechanism, which does not need designing: it

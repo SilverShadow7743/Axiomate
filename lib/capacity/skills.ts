@@ -6,7 +6,7 @@
  * ---------------------------------------------------------------------------
  * This closes one of three named gaps, not all of them
  *
- * `lib/capacity.ts` refuses to schedule anybody, and says why: *"an optimiser that reassigns
+ * `lib/capacity/capacity.ts` refuses to schedule anybody, and says why: *"an optimiser that reassigns
  * work on capacity grounds would be making delivery decisions from a model that cannot see
  * skill, client relationship, or who was on the call last week."*
  *

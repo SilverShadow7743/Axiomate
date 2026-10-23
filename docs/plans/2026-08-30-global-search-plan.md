@@ -19,7 +19,7 @@ Ground truth verified while writing:
   suite runs plain `tsx` and would crash importing it (the persistence proof needs
   `--conditions=react-server` for exactly this). GS1 therefore composes the SAME pure
   primitives boot composes — `clientView` (lib/clientBoundary.ts) + `redactLeaveReasons`
-  (lib/availability.ts) + a rates/skills strip — and states that boot's own composition stays
+  (lib/capacity/availability.ts) + a rates/skills strip — and states that boot's own composition stays
   pinned by inspection. Extracting a pure `redactForReader` for both callers is a worthwhile
   follow-up REFACTOR, deliberately not smuggled into a search phase.
 - Corpus shapes: `InboundMail {from, subject, body, receivedAt, issueId}` (lib/intake.ts:61);

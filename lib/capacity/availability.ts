@@ -1,6 +1,6 @@
-import { workingDaysBetween } from './dates'
+import { workingDaysBetween } from '../dates'
 import type { Allocation, Commitment, ResourceProfile } from './capacity'
-import { attends, type Meeting } from './meetings'
+import { attends, type Meeting } from '../meetings'
 
 /**
  * The availability engine — the ONE place "who has time, when" is computed.

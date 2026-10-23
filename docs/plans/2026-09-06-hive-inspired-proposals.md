@@ -36,7 +36,7 @@ decision, not an extension of it, unless someone brings a new argument for why t
 different — that argument doesn't exist yet.
 
 **Capacity/allocation percentages shown per project** ("Capacity 82%", "96%") need to go through
-the resource model in `CLAUDE.md`: capacity is computed (`lib/availability.ts`) from `Allocation`
+the resource model in `CLAUDE.md`: capacity is computed (`lib/capacity/availability.ts`) from `Allocation`
 plus working pattern, **never stored**, and `Allocation` is project-level while `Assignment` is
 work-level — a project card showing "82% utilised" has to sum real `Allocation` rows for people
 under that project, not invent a project-level capacity field. `2026-08-31-project-pulse-design.md`

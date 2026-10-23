@@ -53,7 +53,7 @@ import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/l
 import { ISSUE_STATUSES, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
 import { rateTimeline, type RateKind } from '@/lib/rates'
-import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/skills'
+import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/capacity/skills'
 import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@/lib/customFields'
 import { can, directoryPersonFor } from '@/lib/access'
 import { isTerminal } from '@/lib/schedule'

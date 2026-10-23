@@ -14,7 +14,7 @@ mechanism, and approval flow are all live, not aspirational.
 ```
 Allocation        — project-level capacity commitment (axiomate-project-allocation)
        ↓
-Available capacity — lib/availability.ts's formula (axiomate-capacity-planning)
+Available capacity — lib/capacity/availability.ts's formula (axiomate-capacity-planning)
        ↓
 Work assignment    — who's actually doing which issue (axiomate-work-assignment)
        ↓

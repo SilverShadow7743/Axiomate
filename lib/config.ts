@@ -34,7 +34,7 @@ import type { Blueprint } from './blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
 import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
-import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
+import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity/capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import { parseSavedView, type SavedView } from './savedViews'
 import type { NotificationPrefs } from './notifications'
@@ -43,10 +43,10 @@ import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy 
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
-import type { ResourceProfile } from './capacity'
-import type { Skill } from './skills'
+import type { ResourceProfile } from './capacity/capacity'
+import type { Skill } from './capacity/skills'
 import type { CustomFieldDef } from './customFields'
-import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './staffing'
+import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './capacity/staffing'
 
 /* ================================================================== *
  * Scope
@@ -1038,7 +1038,7 @@ export interface OperatingModel {
   /** Which discipline resolves it. Independent of `workTypes` — see `Discipline`. */
   disciplines: Record<string, Discipline>
   /**
-   * The firm's skill catalogue. See `lib/skills.ts`.
+   * The firm's skill catalogue. See `lib/capacity/skills.ts`.
    *
    * Ships **empty**, and is the only vocabulary here that does. Roles, work types and
    * disciplines have defensible defaults because every consultancy has roughly those; a skill
@@ -1129,7 +1129,7 @@ export interface OperatingModel {
    * Whether an over-capacity allocation is refused outright or accepted on a recorded
    * decision. Shipped hard — 100% enforcement is the product's stated rule — and the firm
    * that staffs through go-lives switches to advisory once, here, rather than every
-   * allocator deciding under deadline. See `lib/capacity.ts`.
+   * allocator deciding under deadline. See `lib/capacity/capacity.ts`.
    */
   allocationPolicy: AllocationPolicy
   /**

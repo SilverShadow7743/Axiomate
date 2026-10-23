@@ -6,7 +6,7 @@ import { directReportsOf, isExternalPartyKind, liveCareerOptions, liveRoles, liv
 import { can, directoryPersonFor } from '@/lib/access'
 import { formatIso } from '@/lib/dates'
 import { isTerminal } from '@/lib/schedule'
-import { isStale, levelLabel, sourceLabel } from '@/lib/skills'
+import { isStale, levelLabel, sourceLabel } from '@/lib/capacity/skills'
 import type { ConfigOp, WorkspaceState } from '@/lib/workspace'
 import type { Actor } from '@/lib/actor'
 

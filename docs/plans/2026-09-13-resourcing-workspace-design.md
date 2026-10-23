@@ -11,19 +11,19 @@ opening one project's Capacity tab, and nothing shows who is free across the pra
 already computes it firm-wide by accident of its own inputs: its `positions` (`:170-183`)
 calls `capacityFor(person, profile, Object.values(state.commitments), Object.values(state.allocations), from, to)`
 — the **unfiltered** `state.allocations`, every project, not just the one the panel is open
-on. `capacityFor` is a thin wrapper over `lib/availability.ts`'s `availabilityFor`, which
+on. `capacityFor` is a thin wrapper over `lib/capacity/availability.ts`'s `availabilityFor`, which
 filters by person internally (`isPerson`). So a person allocated to three projects already has
 their true firm-wide `allocatedHours`/`remainingHours`/`utilisationPct` computed today —
 it only ever gets shown next to the one project whose tab happened to be open. This page is a
 new caller of an existing computation, not a new one.
 
-`profilesAt(versions, profiles, on)` (`lib/capacity.ts:141`) resolves every person's working
+`profilesAt(versions, profiles, on)` (`lib/capacity/capacity.ts:141`) resolves every person's working
 pattern at once — the same call `CapacityPanel` already makes per-render.
 
 ## New pure logic — the one addition
 
 Nothing computes allocation-vs-**actual** hours (the number the review named as the real gap:
-"allocated but not billing" is currently invisible). New function, `lib/capacity.ts`:
+"allocated but not billing" is currently invisible). New function, `lib/capacity/capacity.ts`:
 
 ```ts
 /** Hours actually logged per person, in [from, to] -- every entry, not only approved ones,

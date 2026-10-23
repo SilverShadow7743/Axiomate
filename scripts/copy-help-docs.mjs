@@ -46,7 +46,7 @@ const CURATED = [
   {
     slug: 'skills-candidates',
     title: 'Why this never ranks a best person',
-    source: 'lib/skills.ts',
+    source: 'lib/capacity/skills.ts',
     kind: 'comment',
   },
   {
@@ -59,7 +59,7 @@ const CURATED = [
 
 function extractHeaderComment(source, file) {
   // The first block comment in the file, not necessarily the first line: imports come first
-  // (lib/goals.ts, lib/skills.ts, lib/portfolio.ts all import before their header comment).
+  // (lib/goals.ts, lib/capacity/skills.ts, lib/portfolio.ts all import before their header comment).
   const match = source.match(/\/\*\*([\s\S]*?)\*\//)
   if (!match) throw new Error(`${file}: no /** */ header comment found`)
   return match[1]

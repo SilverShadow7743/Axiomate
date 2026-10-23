@@ -58,7 +58,7 @@ import {
   type TimePolicy,
   type WeekState,
 } from './time/timeWindow'
-import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './skills'
+import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './capacity/skills'
 import { checkCustomFieldDef, type CustomFieldDef, type CustomFieldType } from './customFields'
 import {
   duplicateOf,
@@ -130,7 +130,7 @@ import {
 } from './statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time/time'
 import { overlapProblem, valueAt, stamp, type Version } from './versioning'
-import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
+import { memberProblem, type ProjectMember, type ProjectRole } from './capacity/staffing'
 import { eventProblem, type PersonalEvent } from './personalEvents'
 import { actionProblem, type PersonalAction } from './personalActions'
 import type { InboundMail } from './intake'
@@ -147,12 +147,12 @@ import {
   type Commitment,
   type CommitmentKind,
   type ResourceProfile,
-} from './capacity'
+} from './capacity/capacity'
 import {
   availabilityForAssignment,
   availabilityNote,
   refusesAssignment,
-} from './assignment'
+} from './capacity/assignment'
 import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
 import type { ClientMilestoneLine } from './clientBoundary'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
@@ -192,7 +192,7 @@ import {
 import { blankEngagement, type EngagementDetail } from './engagement'
 import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
 import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
-import { commitmentCounts } from './availability'
+import { commitmentCounts } from './capacity/availability'
 import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,

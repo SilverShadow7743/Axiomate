@@ -54,7 +54,7 @@ extends everywhere a null id is load-bearing.
 
 ## Read path: id first, name fallback
 
-One helper in a new `lib/person.ts`:
+One helper in a new `lib/capacity/person.ts`:
 
 ```ts
 samePerson(model, ref: { name: string; id?: string | null }, person: Person): boolean
@@ -62,7 +62,7 @@ samePerson(model, ref: { name: string; id?: string | null }, person: Person): bo
 ```
 
 Consumers updated to use it: `lib/mywork.ts` (mine), `lib/notifications.ts`
-(`inboxFor`/`unreadCount`), `lib/capacity.ts` (allocations/commitments for a person),
+(`inboxFor`/`unreadCount`), `lib/capacity/capacity.ts` (allocations/commitments for a person),
 `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts` (`weekStateFor`, approval self-check),
 `lib/goals.ts` person measures. The id-wins rule is what makes a rename safe: after it, the
 name on the record is stale display data, and the directory's current name renders instead

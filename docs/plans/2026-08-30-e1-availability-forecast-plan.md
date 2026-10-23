@@ -12,7 +12,7 @@ public:public` → `migrate status` → `az webapp deploy`) and live Chrome veri
 Ground facts this plan is written against, verified in code:
 
 - `workingDaysBetween`/`addWorkingDays` (`lib/dates.ts:31/:42`) know weekends only.
-- `capacityFor` (`lib/capacity.ts:288`) already computes gross − commitments − allocations
+- `capacityFor` (`lib/capacity/capacity.ts:288`) already computes gross − commitments − allocations
   with: `round()` to 2dp at every aggregate, `Math.max(0, gross − committed)` on available,
   the window-average `daysPerWeek / 5` approximation, and the `isPerson` id-or-name join.
   `overlapWorkingDays` (`:274`) clamps ranges then calls `workingDaysBetween`. `planCheck`
@@ -55,7 +55,7 @@ today's outputs. Then **[gates]**. Commits with Step 2.
 
 ## Step 2 — The engine extraction (pure) — THE highest-regression-risk step
 
-**Files:** new `lib/availability.ts`, `lib/capacity.ts`, `lib/workspace.ts` (only the
+**Files:** new `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`, `lib/workspace.ts` (only the
 `upsertCommitment` arm's `capacityFor` call threading holidays — no behavior change),
 plus every `capacityFor`/`planCheck` call site gaining the holiday argument (grep
 `capacityFor(|planCheck(` for the full list at implementation time).
@@ -70,7 +70,7 @@ BEFORE the refactor, not reconstructed after.
   and `planCheck`'s current outputs over a fixture matrix (profiles stated/default, 4-day week,
   overlapping commitments, allocations, empty windows). Run it against the UNCHANGED code and
   bake the outputs into the script as expected values.
-- `availabilityFor(person, window, deps)` in `lib/availability.ts`, extracted from
+- `availabilityFor(person, window, deps)` in `lib/capacity/availability.ts`, extracted from
   `capacityFor` with its conventions intact: same `round()`, same `Math.max(0, …)`, same
   `isPerson` join (do not "fix" the name-join — E0 Step 6's rule), same window-average.
   Gains: the holiday set (threaded into `overlapWorkingDays`/`workingDaysBetween`), and a
@@ -79,7 +79,7 @@ BEFORE the refactor, not reconstructed after.
   (pre-E1 history; see Step 3). The meetings term is a documented zero.
 - `capacityFor` becomes a thin consumer returning exactly its current shape; `planCheck`'s
   allocation arithmetic moves onto the same helpers.
-- The `Commitment` interface (`lib/capacity.ts:198`) gains
+- The `Commitment` interface (`lib/capacity/capacity.ts:198`) gains
   `status?: 'Requested' | 'Approved' | 'Returned'` and `reason?: string | null` — types only;
   no writer sets them until Step 4.
 

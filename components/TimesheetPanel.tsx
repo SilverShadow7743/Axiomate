@@ -6,7 +6,7 @@ import { useOverlay } from './useOverlay'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
 import { directoryPersonFor } from '@/lib/access'
-import type { Commitment } from '@/lib/capacity'
+import type { Commitment } from '@/lib/capacity/capacity'
 import { holidaySetOf } from '@/lib/config'
 import { addDays, formatIso, workingDaysBetween } from '@/lib/dates'
 import {

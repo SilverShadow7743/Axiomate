@@ -7,8 +7,8 @@ import { SNAPSHOT_PURPOSES } from './evidence'
 import { NOTE_TYPES } from './notes'
 import { NOTIFICATION_KINDS, NOTIFICATION_MODES } from './notifications'
 import { TIME_ACTIVITIES } from './time/time'
-import { COMMITMENT_KINDS } from './capacity'
-import { SKILL_ORDER, SKILL_SOURCES } from './skills'
+import { COMMITMENT_KINDS } from './capacity/capacity'
+import { SKILL_ORDER, SKILL_SOURCES } from './capacity/skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
 import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
 import { APPLICATION_STATUSES, INTEGRATION_STATUSES } from './application'
@@ -245,7 +245,7 @@ const textOrNull: Check = (v) => (v === null ? null : text(v))
  * much can carry `1e999`, which parses to `Infinity`. An infinite `hours` or `percentage`
  * propagates through every sum that touches it and turns a whole capacity report into `Infinity`
  * — a corruption with no single record to point at. Ranges are the reducer's business
- * (`lib/capacity.ts` decides what an over-allocation is); finiteness is a type property and
+ * (`lib/capacity/capacity.ts` decides what an over-allocation is); finiteness is a type property and
  * belongs here.
  */
 const num: Check = (v) =>

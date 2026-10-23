@@ -5,7 +5,7 @@
 ## What exists, and what this changes
 
 The capacity judgement is already honest and stays untouched: `capacityFor`
-(`lib/capacity.ts`) computes remaining **hours** from the person's working pattern across
+(`lib/capacity/capacity.ts`) computes remaining **hours** from the person's working pattern across
 overlapping allocations and commitments, so "overallocated" means genuinely more work than
 days. A single allocation is already capped at 100% by `checkAllocation`.
 

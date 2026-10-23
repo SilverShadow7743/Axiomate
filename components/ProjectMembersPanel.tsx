@@ -8,7 +8,7 @@ import type { WorkspaceState } from '@/lib/workspace'
 
 /**
  * Who may see and act on this project — the access fact, not a capacity one. See
- * `lib/staffing.ts` and the project-membership design.
+ * `lib/capacity/staffing.ts` and the project-membership design.
  *
  * The role shown here is a label, not an authority: it drives what a person's badge says and
  * nothing about what they may do — their global role decides that, unchanged, everywhere. That

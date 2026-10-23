@@ -1,6 +1,6 @@
 # The Real Resource Model
 
-Grounded in `prisma/schema.prisma`, `lib/workspace.ts`, `lib/availability.ts`,
+Grounded in `prisma/schema.prisma`, `lib/workspace.ts`, `lib/capacity/availability.ts`,
 `lib/time/timeWindow.ts`, `lib/time/timesheet.ts` as of 2026-08-31.
 
 ## Allocation — project capacity
@@ -49,7 +49,7 @@ refuse further entries against an already-submitted week.
 
 ## Capacity — the real formula
 
-`lib/availability.ts` is, per its own header comment, "the ONE place 'who has time, when' is
+`lib/capacity/availability.ts` is, per its own header comment, "the ONE place 'who has time, when' is
 computed":
 
 ```
@@ -57,14 +57,14 @@ available = pattern-derived gross − approved leave/commitments − holidays �
 remaining = available − allocations
 ```
 
-`lib/capacity.ts` holds `WORKING_PATTERN` defaults (`hoursPerDay: 7.5, daysPerWeek: 5,
+`lib/capacity/capacity.ts` holds `WORKING_PATTERN` defaults (`hoursPerDay: 7.5, daysPerWeek: 5,
 billableTargetPct: 80`). Working pattern itself is versioned through the generic `Version`
 model (`subjectKind`/`subjectId`/`validFrom`/`validTo`/`value` JSON), read via `valueAt` — a
 person's pattern can change over time and old records still resolve against what was true then.
 
 ## Utilisation — the data and formula exist; the analysis surface doesn't yet
 
-`lib/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
+`lib/capacity/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
 `TimeEntry.billable` is real. Two agents are DECLARED but not built in `lib/config.ts`:
 `AGENT_UTILIZATION` (billable/non-billable/internal/training/leave/available time and trend) and
 `AGENT_BILLING_READY` (billing readiness from approved time/billable work/milestones/change

@@ -1,6 +1,6 @@
 import { isMachineActor, type Actor } from './actor'
 import type { OperatingModel, Person } from './config'
-import type { ProjectMember } from './staffing'
+import type { ProjectMember } from './capacity/staffing'
 
 /**
  * What each role may do, and the check every mutation passes through.
@@ -127,7 +127,7 @@ export const PERMISSIONS = [
    * A skills directory that only a lead can fill in stays empty, so recording your own is part
    * of doing the work. Saying how good somebody ELSE is, or attaching the word "assessed" to a
    * level, is a judgement about a colleague and takes its own grant. Reading other people's
-   * levels is a third thing again — see the boundary note in `lib/skills.ts`.
+   * levels is a third thing again — see the boundary note in `lib/capacity/skills.ts`.
    */
   { key: 'skill.record', label: 'Record your own skills', what: 'Say what you can do and at what level. Your own only, and self-rated — see the next two.' },
   { key: 'skill.assess', label: "Assess somebody's skill", what: "Record a level against another person, or mark any level as assessed or certified rather than self-rated." },

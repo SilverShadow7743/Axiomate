@@ -1,8 +1,8 @@
-import { workingDaysBetween } from './dates'
+import { workingDaysBetween } from '../dates'
 import { availabilityFor, overlapWorkingDays } from './availability'
-import type { Meeting } from './meetings'
-import { valueAt, type Version } from './versioning'
-import type { TimeEntry } from './time/time'
+import type { Meeting } from '../meetings'
+import { valueAt, type Version } from '../versioning'
+import type { TimeEntry } from '../time/time'
 
 /**
  * How much time a person actually has, and what is already committed against it.
@@ -295,7 +295,7 @@ export interface CapacityPosition {
  */
 /**
  * A consumer of the availability engine since E1 — the arithmetic lives in
- * `lib/availability.ts`, verbatim, and this returns exactly the shape it always returned.
+ * `lib/capacity/availability.ts`, verbatim, and this returns exactly the shape it always returned.
  * Built field-by-field rather than spread so the engine's `pendingLeave` (a conflict for the
  * consumers that ask for it) never silently joins this position's JSON — the golden-value
  * equivalence the extraction was proven against depends on the shape holding still.

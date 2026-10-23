@@ -50,12 +50,12 @@ import {
 } from '../lib/config'
 import { describePosition, sowPosition, milestoneEffortPosition, type Sow } from '../lib/sow'
 import { issuesUnder } from '../lib/engagement'
-import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
+import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity/capacity'
 import { myCalendarMonth } from '../lib/myCalendar'
 import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
 import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, isStaffedOn, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
-import type { ProjectMember } from '../lib/staffing'
+import type { ProjectMember } from '../lib/capacity/staffing'
 import { ownerChoicesFor, ownerOptionValues } from '../lib/ownerChoices'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
@@ -66,11 +66,11 @@ import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
-import { availabilityForAssignment } from '../lib/assignment'
-import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/availability'
+import { availabilityForAssignment } from '../lib/capacity/assignment'
+import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/capacity/availability'
 import { forecastFor, describeForecast } from '../lib/forecast'
 import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
-import { meetingHours } from '../lib/availability'
+import { meetingHours } from '../lib/capacity/availability'
 import { suggestDays } from '../lib/scheduling'
 import type { Meeting } from '../lib/meetings'
 import { narrationFigures, suggestRequest } from '../lib/assist'
@@ -193,7 +193,7 @@ import {
   type Requirement,
   type Skill,
   type SkillLevel,
-} from '../lib/skills'
+} from '../lib/capacity/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
 import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
@@ -234,7 +234,7 @@ import {
   type ChangeStatus,
 } from '../lib/changeRequest'
 import { applicableApprovalRules, issueApprovalGate } from '../lib/approval'
-import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity'
+import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity/capacity'
 import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
   issueWeekCells, daysOfWeek,
@@ -4281,7 +4281,7 @@ scenario(
      * and nothing in the application stamps anything yet" — false about storage and reading.
      * `recordVersion`/`correctVersion` were already wired end to end (a real UI call site,
      * `onRecordPattern` in IssueWorkspace.tsx; full persistence via the Prisma `Version` model);
-     * `lib/capacity.ts` was already reading `valueAt` for real capacity figures. The one caller
+     * `lib/capacity/capacity.ts` was already reading `valueAt` for real capacity figures. The one caller
      * that genuinely did not exist — `stamp()`, called nowhere in the application — is built in
      * the same change that corrected this scenario: `decideTimesheet`'s approval arm now stamps
      * `Timesheet.workingPatternStamp`. See docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
@@ -5202,7 +5202,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `Asked for Intercompany at practitioner and X++ at working: ${m.qualified.length} person meets both (${names(m.qualified).join(', ')}) and ${m.partial.length} meet part of it (${names(m.partial).join(', ')}). Jaya holds Intercompany at Aware, below the floor, so she is not on the list; Priya's row is withdrawn and Tarun's skill has been retired from the catalogue, so neither produces a candidate. Dharmendra last used it in 2021 and nobody has said when Michael last used his — both are marked stale rather than dropped, because a firm may have nobody fresher and hiding them would answer a different question. Nothing is ranked and no best match is returned: the result carries the four things it cannot see — ${m.blind.slice(0, 2).join('; ')} — and describeMatch says so in the sentence. Read by somebody without skill.view, the same data yields ${blind.qualified.length} candidates and reports ${blind.unreadable} unreadable rows, so a shortlist shortened by a permission announces itself instead of looking like an empty firm; Amolak reading it still finds himself, because a person's own rows are never withheld from them.`,
-      stops: 'at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers "who could do this" only once somebody states what "this" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity.ts refuses to make.',
+      stops: 'at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers "who could do this" only once somebody states what "this" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity/capacity.ts refuses to make.',
       severity: '—',
       impact:
         'Capacity could say whether a plan was possible and never who should be on it. This closes one of the three gaps capacity.ts names — skill — and leaves the other two, client relationship and who was on the call last week, absent and stated as absent rather than quietly assumed away.',
@@ -7143,8 +7143,8 @@ scenario(
     const onlyInWindowCounts = hours['PERSON_PRIYA'] === 4
 
     const base = rowsOf(BASE).find((r) => r.kind === 'issue')!
-    const commitments: import('../lib/capacity').Commitment[] = []
-    const allocations: import('../lib/capacity').Allocation[] = [
+    const commitments: import('../lib/capacity/capacity').Commitment[] = []
+    const allocations: import('../lib/capacity/capacity').Allocation[] = [
       {
         id: 'rsc-alloc-1', person: 'Priya', personId: 'PERSON_PRIYA', projectId: base.parentId ?? base.id,
         startDate: '2026-09-01', endDate: '2026-09-30', percentage: 50, note: '',
@@ -13849,7 +13849,7 @@ scenario(
 scenario(
   'HOL4',
   "The Overview due date carries a visible caveat when the owner is on approved leave inside the window — the date itself is never touched",
-  "ownerLeaveCaveat (lib/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
+  "ownerLeaveCaveat (lib/capacity/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
   () => {
     const priya = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
     let s = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action)

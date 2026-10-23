@@ -1,6 +1,6 @@
 import type { WorkspaceState } from '../workspace'
-import type { Commitment } from '../capacity'
-import { commitmentCounts } from '../availability'
+import type { Commitment } from '../capacity/capacity'
+import { commitmentCounts } from '../capacity/availability'
 import { holidaySetOf } from '../config'
 import { workingDaysBetween, addMonths, startOfMonth, addDays } from '../dates'
 
@@ -71,7 +71,7 @@ export function buildLeaveReport(state: WorkspaceState, endingMonth: string /* '
   for (const c of Object.values(state.commitments)) {
     if (c.deletedAt || c.kind !== 'Leave') continue
 
-    // Absent means Approved (pre-E1 history, lib/capacity.ts's own doc comment) — only an
+    // Absent means Approved (pre-E1 history, lib/capacity/capacity.ts's own doc comment) — only an
     // explicit 'Requested' is pending. 'Returned' falls through to neither branch: declined,
     // nothing to report, matching the design's own line.
     if (c.status === 'Requested') {

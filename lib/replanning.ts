@@ -1,5 +1,5 @@
-import { availabilityFor, overlapWorkingDays } from './availability'
-import { profileAt } from './capacity'
+import { availabilityFor, overlapWorkingDays } from './capacity/availability'
+import { profileAt } from './capacity/capacity'
 import { holidaySetOf } from './config'
 import { addDays } from './dates'
 import type { WorkspaceState } from './workspace'

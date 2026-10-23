@@ -74,7 +74,7 @@ this product:
 - `lib/dates.ts:25-68` — `isWeekend` (Sat/Sun), and `workingDaysBetween`/`addWorkingDays` both
   already take an **optional** `holidays?: ReadonlySet<string>` — the exact shape this doc
   proposes threading further, not inventing.
-- Leave is a `Commitment` (kind `'Leave'`, approved/pending/returned) — `lib/availability.ts`.
+- Leave is a `Commitment` (kind `'Leave'`, approved/pending/returned) — `lib/capacity/availability.ts`.
   Approved leave zeroes a day outright; pending leave is surfaced as a named conflict rather
   than silently subtracted. Consumed by `capacityFor`/`availabilityFor`.
 - **Already threaded correctly**: `lib/portfolio.ts:222`, `lib/replanning.ts:50`,
@@ -129,7 +129,7 @@ mechanical pass.
 
 **Per-person leave in due-date math.** Once org holidays are threaded through, no scheduling
 call site above would yet read an individual assignee's own approved leave — only the org-wide
-`holidaySetOf`. Leave already exists (`lib/availability.ts`'s `Commitment`) and already affects
+`holidaySetOf`. Leave already exists (`lib/capacity/availability.ts`'s `Commitment`) and already affects
 *capacity* (how many hours someone has), but nothing computes "this issue's own due date should
 move because its owner is on leave next week." That is a materially different question — whose
 leave counts (the current owner only? every future assignee?), and whether a due date silently

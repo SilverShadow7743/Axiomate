@@ -1,9 +1,9 @@
-// Renamed from lib/availability.ts in E1: that name now belongs to the availability ENGINE
+// Renamed from lib/capacity/availability.ts in E1: that name now belongs to the availability ENGINE
 // (the extracted arithmetic this module consumes through capacityFor), and this module was
 // always about one question narrower than availability — whether an assignment makes sense.
 import { capacityFor, profileAt, describeCapacity, type Allocation, type Commitment, type CapacityPosition } from './capacity'
-import { directoryIdByName } from './access'
-import type { IssueRecord, WorkspaceState } from './workspace'
+import { directoryIdByName } from '../access'
+import type { IssueRecord, WorkspaceState } from '../workspace'
 
 /**
  * Whether the person being given work is there to do it.
