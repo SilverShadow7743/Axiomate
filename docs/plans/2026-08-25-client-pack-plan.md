@@ -10,11 +10,11 @@ this repository's own harness cannot perform.
 
 **Touches:** `lib/reports/clientPack.ts` (new).
 
-Checked before writing this plan, not assumed: `lib/tree.ts`'s existing `clientOf` (line 444) is
+Checked before writing this plan, not assumed: `lib/planning/tree.ts`'s existing `clientOf` (line 444) is
 a **local, unexported closure inside `visibleRows`**, walking a `ScheduleRow` *up* to its nearest
 client ancestor and returning that client's *name*. It cannot be imported, and it runs in the
 wrong direction for what this step needs — starting from `filters.client` (a name, confirmed at
-`lib/tree.ts:455` and `components/FilterBar.tsx:287`), the pack needs the client's own node *id*,
+`lib/planning/tree.ts:455` and `components/FilterBar.tsx:287`), the pack needs the client's own node *id*,
 which is what `clientView(state, clientScopeId)` actually takes. So this is new, not adapted:
 
 ```ts
@@ -103,7 +103,7 @@ also agrees with what production actually holds.
 ## Regression risk
 
 None in the usual sense. `lib/reports/clientPack.ts` is a new file; `clientView` is called, never
-modified; nothing existing in `IssueWorkspace.tsx` or `lib/tree.ts` is changed, only added to.
+modified; nothing existing in `IssueWorkspace.tsx` or `lib/planning/tree.ts` is changed, only added to.
 Step 2 is named above as the highest-*uncertainty* step instead, for the reason stated there: no
 existing print/preview pattern in this codebase to build on.
 

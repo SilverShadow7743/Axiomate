@@ -16,7 +16,7 @@ Standing facts this plan is written against, verified in code before writing:
 - `lib/clientBoundary.ts`'s `clientView` is **scope-id-driven, not kind-driven**: it takes a
   `clientScopeId` node id and walks ancestor chains. The literal `kind === 'client'` tests in
   production lib code are exactly seven: `lib/autosave.ts:439` (mirror reconciliation),
-  `lib/reports/clientPack.ts:89` (name→node lookup), `lib/tree.ts:448` (nearest-client-ancestor
+  `lib/reports/clientPack.ts:89` (name→node lookup), `lib/planning/tree.ts:448` (nearest-client-ancestor
   display name), `lib/workspace.ts:617` (seed init), `:1809` and `:2781` (client-name
   derivation), and `:6925` (validating `clientScopeId` names a client node). Scenario fixtures
   also select nodes by `kind === 'client'` (~30 sites in `scripts/scenario-validation.ts`) —
@@ -113,7 +113,7 @@ it (a support ticket). The design doc's send-back clause — "if any boundary ma
 structurally on *which* tier is the client tier" — is decided here.
 
 **Files:** `lib/access.ts` or `lib/config.ts` (new helpers), then `lib/autosave.ts`,
-`lib/reports/clientPack.ts`, `lib/tree.ts`, `lib/workspace.ts` (four sites), and per Step 1's
+`lib/reports/clientPack.ts`, `lib/planning/tree.ts`, `lib/workspace.ts` (four sites), and per Step 1's
 completed enumeration: `components/ConfigWorkspace.tsx:869` and `:2798` (scope pickers),
 `components/DetailPanel.tsx:568` (node-detail branch), `components/Dialogs.tsx:178` (the
 client form branch — its own comment already says "derived from the tier list rather than
@@ -124,7 +124,7 @@ Issue"), `components/ScopePanel.tsx:44/:229` (unassigned-under count), and
 banner belongs to the top two tier orders, whatever they are).
 
 - Two helpers, written first: `isExternalPartyTier(model, kind)` and
-  `nearestExternalPartyAncestor(state, rowId)` (the `lib/tree.ts:448` walk, generalized).
+  `nearestExternalPartyAncestor(state, rowId)` (the `lib/planning/tree.ts:448` walk, generalized).
 - Each site rewritten against them (or against tier *order* where the test was really "top of
   tree", per the two cosmetic sites above). `lib/workspace.ts:6925` (the `clientScopeId`
   validation) becomes "names a node whose tier is flagged externalParty".
@@ -167,7 +167,7 @@ Live check: tree renders, a node can be created and moved. Standalone commit.
 ## Step 5 — The Outcome tier
 
 **Files:** `lib/config.ts` (default tier set), `lib/workspace.ts` (create/move vocabulary,
-`KIND_LABEL_KEY` entry), `components/` create menus (`Dialogs.tsx`, row menu), `lib/tree.ts`
+`KIND_LABEL_KEY` entry), `components/` create menus (`Dialogs.tsx`, row menu), `lib/planning/tree.ts`
 (group-row rendering picks it up via `isGroupRow` automatically — verify, don't assume).
 
 `outcome` joins the default tier set between `project` and `module`, unflagged, with a new
@@ -179,7 +179,7 @@ create one. No migration — after Step 4, a new tier is configuration.
 outcome under project, work under outcome, refuse outcome under issue) — this changes
 `data/validation.json`, which is committed with this step. Live: create an Outcome in the real
 workspace, file a work item under it, confirm rollups aggregate through it (the
-`attachRollups` walk in `lib/tree.ts:273` is kind-agnostic — confirm with the real row). One
+`attachRollups` walk in `lib/planning/tree.ts:273` is kind-agnostic — confirm with the real row). One
 commit.
 
 ## Step 6 — Migration + model: Task-level time (stands alone)
@@ -226,7 +226,7 @@ grammar needs nothing: `ID_RE` matches displayIds, which do not change. One comm
 
 ## Step 8 — Classification extraction (two standalone migrations, last)
 
-**Files:** `prisma/schema.prisma` + migration (8a), `lib/workspace.ts`, `lib/tree.ts`,
+**Files:** `prisma/schema.prisma` + migration (8a), `lib/workspace.ts`, `lib/planning/tree.ts`,
 `components/FilterBar.tsx`; second migration + `scripts/intake-mailbox.ts` (8b).
 
 - **8a — the label exists.** `Issue` gains nullable `classification String?`. Backfill DML:

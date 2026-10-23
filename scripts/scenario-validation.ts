@@ -41,7 +41,7 @@ import { checkChecklistItem, checklistFor } from '../lib/checklist'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '../lib/analytics'
 import { inboxFor, undelivered } from '../lib/notifications'
 import { mentionsIn } from '../lib/mentions'
-import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
+import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/planning/raid'
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
@@ -68,10 +68,10 @@ import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
 import { availabilityForAssignment } from '../lib/capacity/assignment'
 import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/capacity/availability'
-import { forecastFor, describeForecast } from '../lib/forecast'
+import { forecastFor, describeForecast } from '../lib/planning/forecast'
 import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
 import { meetingHours } from '../lib/capacity/availability'
-import { suggestDays } from '../lib/scheduling'
+import { suggestDays } from '../lib/planning/scheduling'
 import type { Meeting } from '../lib/meetings'
 import { narrationFigures, suggestRequest } from '../lib/assist'
 import { validateCreate, type IssueIndexEntry } from '../lib/chat'
@@ -113,11 +113,11 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/tree'
+import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/planning/tree'
 import { boardLanes, dropOutcome, bulkDropOutcome, bulkStatusChoices } from '../lib/board'
-import type { StatusPolicy } from '../lib/statusPolicy'
+import type { StatusPolicy } from '../lib/planning/statusPolicy'
 import { calendarMonth, describeCalendar } from '../lib/calendar'
-import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
+import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/planning/recurrence'
 import { classifyForm } from '../lib/intake'
 import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/commercial/blueprint'
 import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
@@ -136,8 +136,8 @@ import {
   pausedCalendarDays,
   proposeTargetDate,
   validateChange,
-} from '../lib/schedule'
-import { planSlaDates } from '../lib/sla'
+} from '../lib/planning/schedule'
+import { planSlaDates } from '../lib/planning/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
@@ -199,12 +199,12 @@ import { htmlToText } from '../lib/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
 import { waitingItems } from '../lib/inbox'
 import { meetingSuggestions } from '../lib/time/timesheetSuggestions'
-import { replanningFor } from '../lib/replanning'
+import { replanningFor } from '../lib/planning/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
-import { CONCERN_ORDER, describePortfolio, healthScore, portfolio, type PortfolioLine } from '../lib/portfolio'
+import { CONCERN_ORDER, describePortfolio, healthScore, portfolio, type PortfolioLine } from '../lib/planning/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '../lib/capabilities'
-import { describeGoals, goalProgress } from '../lib/goals'
+import { describeGoals, goalProgress } from '../lib/planning/goals'
 import {
   checkScopeItem,
   effortProblem,
@@ -223,7 +223,7 @@ import {
   milestoneValue,
   scheduleProblem,
   type Milestone,
-} from '../lib/milestone'
+} from '../lib/planning/milestone'
 import {
   contractedPosition,
   decideChangeProblem,
@@ -1061,7 +1061,7 @@ scenario(
      * This scenario used to test something else entirely — an issue's own date rolling up to
      * its process area — while its `stops` text talked about milestones. That was accurate once
      * (Milestone had no plannedDate/sowId/billing at all), and stopped being accurate when
-     * lib/milestone.ts grew a full commercial model (checked directly while fixing this: sowId,
+     * lib/planning/milestone.ts grew a full commercial model (checked directly while fixing this: sowId,
      * plannedDate, delivery/acceptance states, billOn triggers). It was never revisited. This
      * now tests the thing its own title names.
      */
@@ -5862,7 +5862,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `Six lines of scope: four agreed, two recorded and not yet agreed. Only the agreed work counts toward the total — ${matched.approvedEffortHours}h, with the unagreed ${matched.totalEffortHours - matched.approvedEffortHours}h reported beside it rather than added in, because a line somebody typed while reading a draft is not scope and its hours must not reach a figure that gets compared with a contract. That comparison is made and never enforced: against a 1,000h contract it says "${(effortProblem(short) ?? '').slice(-42)}", and against 500h it says the agreed scope is more than was sold. Both are findings for a person, not refusals — a firm entering forty deliverables passes through every intermediate total on the way. An assumption cannot carry hours ("${effortOnStatement}"). Scope is one level deep: a criterion hangs off the deliverable it judges and reads directly beneath it, and hanging one off another criterion is refused, which is what stops a scope list quietly becoming a work breakdown.`,
-      stops: 'at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.',
+      stops: 'at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/planning/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.',
       severity: '—',
       impact:
         'What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from.',
@@ -7848,7 +7848,7 @@ scenario(
 scenario(
   'PF3',
   'healthScore sums count × configured weight per concern, bands at the thresholds (amber inclusive), prints every non-zero term, treats stale as presence not days, honours an exclusion list, and setHealthScore validates and merges',
-  "lib/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
+  "lib/planning/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
   () => {
     const line = (concerns: PortfolioLine['concerns']): PortfolioLine =>
       ({ nodeId: 'E', name: 'E', client: 'C', status: '', issues: 0, open: 0, projects: 0, high: 0, concerns, lastActivity: null })
@@ -11873,7 +11873,7 @@ scenario(
  * data — never a second stakeholder set, never a change to the read gate. CD4 pins BR9-BR12 of
  * ART-20260905-023 on a fixture the real reducer built, through clientFilterScopeFor (the one
  * constructor, delegating to memberProjectIdsFor and projectOf) and the three filter functions
- * in lib/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
+ * in lib/planning/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
  * projectView never called on the path.
  */
 
@@ -12001,7 +12001,7 @@ scenario(
     const good = fixtureHolds && seats && a && b && c && d && e && f && g
     return good
       ? { verdict: 'PASS', actual: `${liveCount} live issues: ${i1} under P1, ${i2} under P2 (both OAPIL), ${i3} under P3 (Rival Ltd), ${ungated} directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [${issueIds(allRows)}] with P2 and P3 absent; facets [${scopedClients}] vs unscoped [${unscopedClients}]; 'OAPIL' lists [${issueIds(chosen)}]. Null person: [${issueIds(noneRows)}], facets [${facetsOf(st, none).clients.join(',')}]. Sam (ROLE_ADMIN, exempt=${isExempt(st.model, sam)}, on P1) over the unredacted state: 'All' lists [${issueIds(samRows)}], 'OAPIL' lists [${issueIds(samChosen)}]. Dev (on nothing): [${issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope))}]. isExempt and can() over ${PERMISSION_KEYS.length} keys read the same before and after for both actors; projectView not called.`, stops: '', severity: 'P1', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
+      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/planning/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
   },
 )
 
@@ -12296,7 +12296,7 @@ scenario(
  * F1 of ART-20260906-026 (medium, confirmed): components/IssueWorkspace.tsx built the Client
  * filter's scope (clientFilterScopeFor) for every reader, internal or not. clientView zeroes
  * projectMembers for a client/guest seat (CD8's own 'withheld' above), so that seat's
- * stakeholder set — and its scope — was always empty, and withinScope in lib/tree.ts then
+ * stakeholder set — and its scope — was always empty, and withinScope in lib/planning/tree.ts then
  * silently dropped any client-visible issue sitting under a real project-tier node from that
  * client's own already-authorised view (BR8 forbids narrowing a client's own view this way).
  * The fix gates scope construction on internal.view, the same boundary redactForReader itself
@@ -12395,7 +12395,7 @@ scenario(
     const good = closesF1 && internalSeatUnaffected
     return good
       ? { verdict: 'PASS', actual: `clientView(oapilId) keeps both ${i1} and ${i2} (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=${isInternalCasey}; the unconditional scope this fix removes finds memberProjectIds.size=${regressedScope.memberProjectIds.size}, visibleRows lists [${regressedIds || '(none)'}] and facetsOf lists [${regressedClients || '(none)'}]; gated on internal.view, scope is undefined, visibleRows lists [${fixedIds}] and facetsOf lists [${fixedClients}]. Priya (Technical, on Harbour only): internal.view=${isInternalPriya}, scope built as before, visibleRows lists [${priyaIds}] — Quay's issue absent.`, stops: '', severity: 'P1', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
+      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/planning/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
   },
 )
 
@@ -12406,7 +12406,7 @@ scenario(
  * `components/FilterBar.tsx` — neither on the proof workstream's owns list, and neither
  * importable here anyway (React hooks, not pure functions) — so each reimplements the one
  * small, already-quoted contract it pins, verbatim from the source comment or line cited, and
- * drives it with the real reducer and the real `lib/tree.ts`/`lib/projectBoundary.ts`
+ * drives it with the real reducer and the real `lib/planning/tree.ts`/`lib/projectBoundary.ts`
  * derivations exactly as CD1-CD9 do. A change to the quoted contract without a matching change
  * here is exactly the drift `absent()` guards against for a NOT IMPLEMENTED verdict elsewhere in
  * this file — nothing enforces it for these three beyond the citation, so keep the mirrored

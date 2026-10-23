@@ -6,8 +6,8 @@ then approved to build once the two questions below were resolved.
 ## The answer, sourced from this codebase's own doctrine
 
 A due date is a commitment, not a derived fact, and this codebase already says so in its own
-words. `lib/sla.ts`'s header, on why an SLA proposal never auto-writes: *"A date already here
-is a commitment somebody made. Never overwritten."* `lib/scheduling.ts`'s leave posture, on why
+words. `lib/planning/sla.ts`'s header, on why an SLA proposal never auto-writes: *"A date already here
+is a commitment somebody made. Never overwritten."* `lib/planning/scheduling.ts`'s leave posture, on why
 approved leave never silently reschedules anything it touches: leave "blocks nothing... a named
 conflict" surfaces instead of a silent change.
 

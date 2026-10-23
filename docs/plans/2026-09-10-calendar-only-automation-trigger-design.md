@@ -47,7 +47,7 @@ second pass with its own target-selection design — not a widening of this one 
 export type RuleTrigger = EventType | { kind: 'calendar'; cadence: Cadence }
 ```
 
-reusing `lib/recurrence.ts`'s existing `Cadence` (`weekly`/`monthly`) and `dueOccurrence`
+reusing `lib/planning/recurrence.ts`'s existing `Cadence` (`weekly`/`monthly`) and `dueOccurrence`
 arithmetic rather than a second scheduler — the same reuse `Recurrence` itself already is for
 "raise an issue on a cadence." A calendar-triggered rule needs its own duplicate-guard, mirroring
 `Recurrence.lastRaisedOn`:

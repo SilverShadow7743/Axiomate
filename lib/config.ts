@@ -29,16 +29,16 @@
  */
 
 import { DEFAULT_SLA, type DefaultNodeKind, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
-import type { Recurrence } from './recurrence'
+import type { Recurrence } from './planning/recurrence'
 import type { Blueprint } from './commercial/blueprint'
 import { DEFAULT_SIZE_BANDS, type SizeBand } from './commercial/estimation'
-import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
+import { defaultStatusPolicy, type StatusPolicy } from './planning/statusPolicy'
 import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity/capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import { parseSavedView, type SavedView } from './savedViews'
 import type { NotificationPrefs } from './notifications'
-import type { Goal } from './goals'
+import type { Goal } from './planning/goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
@@ -241,7 +241,7 @@ export const DEFAULT_ORGANIZATION: OrganizationIdentity = {
  * ================================================================== */
 
 /**
- * The six concern kinds `lib/portfolio.ts` names on an engagement, worst first — the order is
+ * The six concern kinds `lib/planning/portfolio.ts` names on an engagement, worst first — the order is
  * the argument, and that argument lives beside `portfolio.ts`'s own re-export. Defined here
  * because the health score's weights are keyed by it and configuration must not import from a
  * report module.
@@ -252,7 +252,7 @@ export type ConcernKind = (typeof CONCERN_ORDER)[number]
 /**
  * The engagement health score's weights and RAG thresholds — configuration, not code, on
  * purpose: a score is a sentence about weights, and these are the weights, in the open, edited
- * in Configuration and printed beside every score. See `lib/portfolio.ts`'s header (the 10 Sep
+ * in Configuration and printed beside every score. See `lib/planning/portfolio.ts`'s header (the 10 Sep
  * reversal) and `docs/plans/2026-09-10-fno-page-grammar-design.md` §5.
  */
 export interface HealthScorePolicy {
@@ -1013,7 +1013,7 @@ export interface OperatingModel {
   /** Where uploaded documents are filed in the library. See `DocumentFiling`. */
   documentFiling: DocumentFiling
   /**
-   * Targets the firm has set for itself. Progress is never stored — see `lib/goals.ts`.
+   * Targets the firm has set for itself. Progress is never stored — see `lib/planning/goals.ts`.
    *
    * Here rather than in its own table for the same reason `approvalRules` and `sla` are: a goal
    * is a policy statement about intent, not a transaction. It is written rarely, read on every
@@ -1161,7 +1161,7 @@ export interface OperatingModel {
   intakeForms: IntakeForm[]
   /** Engagement shapes stored for reuse - offsets, never dates. See lib/commercial/blueprint.ts. */
   blueprints: Record<string, Blueprint>
-  /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
+  /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/planning/recurrence.ts. */
   recurrences: Recurrence[]
   /** Keyed by scope node id, plus `ROOT` for the organisation-wide defaults. */
   overrides: Record<string, ScopeOverride>
@@ -1511,7 +1511,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   /*
    * The two shipped inventions — every consultancy recognises a risk and a decision, the
    * same universality argument as the shipped roles. Skipped when the source log already
-   * discovered the label, so no workspace ever carries two WT_RISK entries. `lib/raid.ts`
+   * discovered the label, so no workspace ever carries two WT_RISK entries. `lib/planning/raid.ts`
    * keys their semantics on these stable ids, never on the renameable labels.
    */
   for (const [id, label, description] of [

@@ -35,7 +35,7 @@ and the design below deliberately mirrors them rather than inventing new pattern
   person has to know what to change or whether to stop." This is exactly the "must provide a
   basis" requirement the user described, already precedented, just not yet extended to SOW
   classification specifically.
-- **`lib/statusPolicy.ts`'s `checkTransition`** has a general `requireReason: IssueStatus[]`
+- **`lib/planning/statusPolicy.ts`'s `checkTransition`** has a general `requireReason: IssueStatus[]`
   gate — but it operates on `IssueStatus`, a different enum from `ChangeStatus` or a prospective
   SOW classification. The *pattern* (some values in an enum require a reason before landing on
   them) is reusable; the mechanism itself is not directly, since it's typed to the wrong enum.

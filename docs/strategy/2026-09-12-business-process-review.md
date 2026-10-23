@@ -21,11 +21,11 @@ scoped the way it is:
   always means "add a view key," not a route.
 - **The F&O page-grammar redesign is fully shipped**, not in-flight: list-page discipline
   (quick filter, first-column-as-link, plural titles), the details-drawer pattern (title,
-  status pinned top-right, single-open FastTabs, one primary action from `lib/statusPolicy.ts`),
+  status pinned top-right, single-open FastTabs, one primary action from `lib/planning/statusPolicy.ts`),
   and the FactBox blade (`components/FactBoxBlade.tsx`, collapsed by default, never computes,
   only surfaces existing pure-function output) all landed 10-11 Sep. The detail panel's own
   prior redesign (real title, glyph-paired severity, adaptive tab collapse) shipped 9 Sep.
-- **Portfolio's engagement health score already exists** (`lib/portfolio.ts`) under a strict,
+- **Portfolio's engagement health score already exists** (`lib/planning/portfolio.ts`) under a strict,
   deliberate discipline — six pre-existing named concerns only, weights configurable in
   Configuration, every rendering prints its working, client-facing version excludes anything
   unmeasurable under the client boundary and says so. It was rejected twice before being
@@ -57,7 +57,7 @@ gets a structurally reduced nav (`CLIENT_GROUPS`: Tree, Board, Calendar only) vi
 - The resource model's four-layer separation (Allocation / ProjectMember / Assignment /
   Timesheet) is real in the code, not just documented — each layer's write paths stay
   independent, as `CLAUDE.md` describes.
-- Status-transition discipline (`lib/statusPolicy.ts`) enforces reason and evidence
+- Status-transition discipline (`lib/planning/statusPolicy.ts`) enforces reason and evidence
   requirements per-transition, and the same funnel serves Tree, Board, and bulk-adjacent code.
 - Commercial governance's separation of duties (asker ≠ approver on changes, deliverer ≠
   accepter on milestones) is enforced server-side, not just hidden in the UI.
@@ -121,8 +121,8 @@ Implementation impact · Priority.*
 |---|---|---|---|---|---|---|---|---|---|
 | Delivery | `components/BoardView.tsx` card meta | Delivery consultant/PM | Kanban lanes by status | Cards never show `scheduleHealth` — an Overdue card looks identical to On-Track until opened | Board's value is scan-and-spot; the health signal exists and renders everywhere else | Show the existing health chip on each card; sort within lane by health then planned-end | Fewer overdue items missed on the one at-a-glance view | UI-only | P1 |
 | Delivery | `IssueWorkspace.tsx`/`TreeGrid.tsx`/`BoardView.tsx` selection | PM | One record selected/edited at a time | No multi-select anywhere — every status change, reassignment, or close is single-record | Highest throughput tax on delivery at real portfolio volume | Multi-select feeding a bulk variant of the existing commit path, reusing `checkTransition`/reason | Materially faster batch triage after intake or a workshop | Workflow | P1 |
-| Delivery | `lib/calendar.ts` (`calendarMonth`), `lib/tree.ts` (`blank()`) | PM / client-facing lead | Read-only month grid of planned dates | Rows with a null `status` are skipped — no lifecycle milestone ever appears on Calendar, though the same schedule renders on Gantt | Two views of one schedule disagreeing, silently | Admit milestone rows keyed on `milestoneDate`, styled distinctly | Removes an undocumented gap between two renderings of one schedule | UI-only + row-shape fix | P1 |
-| Delivery | `lib/statusPolicy.ts`, `components/ChecklistTab.tsx` | Issue owner / QA | Evidence/reason gates on closing transitions; checklist shows N-of-M | Checklist completion is never read by the transition gate — it's decorative | The gating pattern already exists for evidence/reason; checklist is the one precondition left unenforced | Optional `requireChecklistComplete` on `StatusPolicy`, configuration-driven, off by default | Prevents a documented QA step from being silently skippable | Workflow + `StatusPolicy` shape | P1 |
+| Delivery | `lib/calendar.ts` (`calendarMonth`), `lib/planning/tree.ts` (`blank()`) | PM / client-facing lead | Read-only month grid of planned dates | Rows with a null `status` are skipped — no lifecycle milestone ever appears on Calendar, though the same schedule renders on Gantt | Two views of one schedule disagreeing, silently | Admit milestone rows keyed on `milestoneDate`, styled distinctly | Removes an undocumented gap between two renderings of one schedule | UI-only + row-shape fix | P1 |
+| Delivery | `lib/planning/statusPolicy.ts`, `components/ChecklistTab.tsx` | Issue owner / QA | Evidence/reason gates on closing transitions; checklist shows N-of-M | Checklist completion is never read by the transition gate — it's decorative | The gating pattern already exists for evidence/reason; checklist is the one precondition left unenforced | Optional `requireChecklistComplete` on `StatusPolicy`, configuration-driven, off by default | Prevents a documented QA step from being silently skippable | Workflow + `StatusPolicy` shape | P1 |
 | Resourcing | *(absence)* — no firm-wide view | Resource manager | — | Every allocation action requires opening one project's detail drawer; nothing answers "who's free" across the practice | See §5, Design 1 | New workspace-level Resourcing view | Removes the need to open every project to plan staffing | UI-only (existing lib functions) | P1 |
 | Resourcing | *(absence)* — no reconciliation | Resource manager / delivery lead | — | Allocation-vs-actual (committed vs. billed) exists nowhere, though estimate-vs-allocation and estimate-vs-actual both do | Closes the loop between the model's own separated layers | Add actual-hours-in-window beside the existing per-person allocation row | Answers the burn question leadership actually asks live | UI-only | P1 |
 | Resourcing | `Allocation`/`Commitment` writes | Resource manager | Commit or adjust an allocation | Last-writer-wins (the `expected` optimistic-concurrency check only covers `updateIssue`, per the 12-Sep audit's M4) | Two managers editing the same allocation during a reactive reshuffle lose one edit silently | Extend `expected` to Allocation/Commitment writes (already tracked in the audit's own plan) | Prevents silent lost updates at exactly the highest-pressure moment | Data-model / workflow | P1 |
@@ -145,7 +145,7 @@ Implementation impact · Priority.*
 | Delivery | `AnalyticsView.tsx` | No table cell links back to a filtered Tree/Board | Reuse the pattern `MyWorkPanel`'s `onShowInTree` already has | UI-only | P2 |
 | Delivery | `FactBoxBlade.tsx` | Renders nothing useful for non-issue rows (Client/Engagement/Project), though `DetailPanel` opens these and Portfolio/Applications are organised around them | Engagement/Project blade variant using the already-computed `PortfolioLine` | UI-only | P2 |
 | Delivery | Calendar/Gantt vs. commercial `Milestone` | Neither schedule view plots a payment-gate milestone — a PM must leave the schedule entirely to see one | Read-only commercial-milestone marker on Calendar/Gantt, sourced from `Sow.milestones` | Data-model (row-shape) + UI | P2 |
-| Delivery | `GanttChart.tsx`, `lib/tree.ts` | No virtualization; ancestor chains re-walked per row — O(n²)-shaped, fine at 247 issues, a scale ceiling | Windowed rendering; memoize ancestor chains | UI + algorithm | P2 |
+| Delivery | `GanttChart.tsx`, `lib/planning/tree.ts` | No virtualization; ancestor chains re-walked per row — O(n²)-shaped, fine at 247 issues, a scale ceiling | Windowed rendering; memoize ancestor chains | UI + algorithm | P2 |
 | Resourcing | `CapacityPanel.tsx` `AllocateForm` | No in-place edit of an existing allocation — only delete-and-recreate or the narrower reactive drawer | Inline Edit action reusing the edit-by-id path already proven in `ReplanningDrawer` | UI-only | P2 |
 | Resourcing | `CapacityPanel.tsx` `CommitmentForm` | Leave/commitment entry gated to people already allocated to the open project — bench staff unrecordable | Person-first leave/commitment entry independent of project allocation | UI-only | P2 |
 | Resourcing | `PatternTimeline` (working pattern) | Only reachable for people already allocated — a new joiner's capacity stays on the shipped default until first staffed | Surface from a people-directory/profile screen | UI-only | P2 |

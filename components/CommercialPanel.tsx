@@ -27,7 +27,7 @@ import {
   scheduleProblem,
   type BillingTrigger,
   type Milestone,
-} from '@/lib/milestone'
+} from '@/lib/planning/milestone'
 import {
   checkInvoiceStatusChange,
   invoicePosition,
@@ -107,7 +107,7 @@ export default function CommercialPanel({
   /** Add or amend a line on the payment schedule. */
   onUpsertMilestone: (sowId: string, id: string | null, patch: Partial<Milestone>) => boolean
   onRemoveMilestone: (id: string) => void
-  /** Say the work landed. Separate from accepting it — see lib/milestone.ts. */
+  /** Say the work landed. Separate from accepting it — see lib/planning/milestone.ts. */
   onDeliverMilestone: (id: string) => boolean
   onDecideMilestone: (id: string, decision: 'Accepted' | 'Rejected', note?: string) => boolean
   /** Raise an invoice against one or more billable milestones, in one act. */

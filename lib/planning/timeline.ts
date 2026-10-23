@@ -1,5 +1,5 @@
-import type { ZoomLevel } from './types'
-import { DAY_PX } from './layout'
+import type { ZoomLevel } from '../types'
+import { DAY_PX } from '../layout'
 import {
   addDays,
   addMonths,
@@ -12,7 +12,7 @@ import {
   startOfWeek,
   startOfYear,
   toUtc,
-} from './dates'
+} from '../dates'
 
 const DAY_MS = 86_400_000
 

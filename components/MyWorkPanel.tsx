@@ -28,7 +28,7 @@ import type { WorkspaceState } from '@/lib/workspace'
  * it. The screen carries the reasoning rather than hiding it: each group states what it means and
  * each row shows the two components that placed it, so the order is arguable by whoever reads it.
  * A single blended number would not be — which is also the condition the engagement health
- * score was admitted on (10 Sep, `lib/portfolio.ts`): its terms print beside it, always.
+ * score was admitted on (10 Sep, `lib/planning/portfolio.ts`): its terms print beside it, always.
  */
 export default function MyWorkPanel({
   state,

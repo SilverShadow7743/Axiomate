@@ -8,13 +8,13 @@ import type {
   ScheduleRow,
   SlaPolicy,
 } from '@/lib/types'
-import type { CrpResult } from '@/lib/schedule'
-import { allowedNext, checkTransition, suggestedAction } from '@/lib/statusPolicy'
+import type { CrpResult } from '@/lib/planning/schedule'
+import { allowedNext, checkTransition, suggestedAction } from '@/lib/planning/statusPolicy'
 import { can } from '@/lib/access'
 import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
 import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
-import { proposeTargetDate, statusColorClass } from '@/lib/schedule'
+import { proposeTargetDate, statusColorClass } from '@/lib/planning/schedule'
 import { formatIso } from '@/lib/dates'
 import type { DocumentRecord } from '@/lib/documents'
 import { useLabels } from './labels'
@@ -35,7 +35,7 @@ import { effortVariance, type TimeActivity } from '@/lib/time/time'
 import type { ApprovalDecision } from '@/lib/approval'
 import type { Estimate } from '@/lib/commercial/estimation'
 import type { Actor } from '@/lib/actor'
-import type { Milestone } from '@/lib/milestone'
+import type { Milestone } from '@/lib/planning/milestone'
 import type { InvoiceStatus, RaiseInvoiceLine } from '@/lib/commercial/invoice'
 import type { ScopeItem } from '@/lib/scope'
 import type { IssueNote, NoteType } from '@/lib/notes'
@@ -44,10 +44,10 @@ import type { IssueRecord } from '@/lib/workspace'
 import ScopePanel from './ScopePanel'
 import type { EngagementDetail } from '@/lib/commercial/engagement'
 import { holidaySetOf, isExternalPartyKind, liveResponsibilities, resolveRequired, tiersOf } from '@/lib/config'
-import { describeForecast, forecastFor } from '@/lib/forecast'
+import { describeForecast, forecastFor } from '@/lib/planning/forecast'
 import { profileAt } from '@/lib/capacity/capacity'
 import { directoryIdByName } from '@/lib/access'
-import { severityGlyph } from '@/lib/severity'
+import { severityGlyph } from '@/lib/planning/severity'
 import { projectOf, readAssignment, scopeChainOf, type WorkspaceState } from '@/lib/workspace'
 import { ownerChoicesFor, UNASSIGNED } from '@/lib/ownerChoices'
 import {
@@ -450,7 +450,7 @@ export default function DetailPanel({
    * highlighted and unreachable.
    *
    * It reads `TABS` above rather than building its own list. It used to build one from
-   * `row.issue` — the row's OWN field, which an activity row never has (see `lib/tree.ts`) —
+   * `row.issue` — the row's OWN field, which an activity row never has (see `lib/planning/tree.ts`) —
    * while the bar was built from the RESOLVED issue, which walks an activity up to its parent.
    * So an activity showed eleven tabs and bounced off eight of them: click Time, and this
    * effect put you straight back on Overview.
@@ -580,7 +580,7 @@ export default function DetailPanel({
       {/* The visual anchor for the whole pane, above the tab bar so it survives `compact` too —
           a collapsed panel used to name nothing but its tabs. `row.name` (not `issue.subject`
           directly) because it already carries the right value for every row kind, not just
-          issues: `lib/tree.ts` sets an issue row's `name` from `issue.subject` at construction,
+          issues: `lib/planning/tree.ts` sets an issue row's `name` from `issue.subject` at construction,
           so this reads identically for an issue and correctly for a project/client/engagement,
           which have no `issue` at all. Replaces the old right-aligned `.idtag` below, which said
           the same thing in 11px muted text easy to miss entirely. */}
@@ -1554,7 +1554,7 @@ function FieldStrip({
             reason (or bounced to the evidence manager) hasn't happened yet, and coloring ahead
             of the commit would read as though it had. Composes `TERMINAL_STATUSES`/
             `BLOCKED_STATUSES` with the `--h-*` schedule-health tokens (`statusColorClass`,
-            `lib/schedule.ts`) rather than a new palette. */}
+            `lib/planning/schedule.ts`) rather than a new palette. */}
         <span className={`fs-status ${statusColorClass(issue.status)}`}>
           <select
             value={pendingStatus ?? issue.status}
@@ -1567,7 +1567,7 @@ function FieldStrip({
         </span>
       </label>
       {/* The one ordinary next move, read off the transition table's own ordering
-          (`suggestedAction`, `lib/statusPolicy.ts`) — calls the same `chooseStatus` the select
+          (`suggestedAction`, `lib/planning/statusPolicy.ts`) — calls the same `chooseStatus` the select
           above uses, so the reason prompt and the evidence redirect both apply here too, with
           no second implementation to keep in sync. Hidden while a reason is already pending, to
           avoid a redundant control next to the prompt it would open. */}
@@ -1653,7 +1653,7 @@ function FieldStrip({
       <label className="fs-fld">
         <span>{labels.FIELD_SEVERITY}</span>
         {/* The same colored-tag treatment Overview's own severity row already uses
-            (`sev-${severity}` + the color-blind-safe glyph, `lib/severity.ts`) — reused here
+            (`sev-${severity}` + the color-blind-safe glyph, `lib/planning/severity.ts`) — reused here
             rather than a second palette, so a select that looked like every other plain field
             control now reads as the flagged, at-a-glance value it actually is. */}
         <span className={`fs-sev sev-${issue.severity}`}>

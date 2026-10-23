@@ -3,7 +3,7 @@ import { deriveEffort } from './estimation'
 import type { TimeEntry } from '../time/time'
 import { hoursOn, effortVariance } from '../time/time'
 import { contractedPosition, type ChangeRequest } from './changeRequest'
-import type { Milestone } from '../milestone'
+import type { Milestone } from '../planning/milestone'
 
 /**
  * What has been contracted, and how much of it is left.
@@ -253,7 +253,7 @@ export function sowPosition(
  * docs/plans/2026-09-20-milestone-issue-attribution-design.md.
  *
  * Named `MilestoneEffortPosition`, not `MilestonePosition` — that name is already taken, by a
- * genuinely different thing: `lib/milestone.ts`'s `MilestonePosition` is a SOW-wide rollup of
+ * genuinely different thing: `lib/planning/milestone.ts`'s `MilestonePosition` is a SOW-wide rollup of
  * every milestone's delivery/acceptance/billing state (`delivered`, `accepted`, `billableValue`,
  * …), computed across the whole schedule. This is effort for exactly one milestone. A design
  * doc proposed the collision without checking; caught at the first `npx tsc --noEmit` this

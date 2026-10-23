@@ -1,14 +1,14 @@
 import { forecastFor } from './forecast'
-import { availabilityFor } from './capacity/availability'
-import { profileAt } from './capacity/capacity'
-import { addDays } from './dates'
-import { CONCERN_ORDER, holidaySetOf, type ConcernKind, type HealthScorePolicy } from './config'
-import { directoryIdByName } from './access'
+import { availabilityFor } from '../capacity/availability'
+import { profileAt } from '../capacity/capacity'
+import { addDays } from '../dates'
+import { CONCERN_ORDER, holidaySetOf, type ConcernKind, type HealthScorePolicy } from '../config'
+import { directoryIdByName } from '../access'
 import { BLOCKED_STATUSES, isTerminal } from './schedule'
-import { issuesUnder } from './commercial/engagement'
+import { issuesUnder } from '../commercial/engagement'
 
-import type { IssueRecord, WorkspaceState } from './workspace'
-import type { Severity } from './types'
+import type { IssueRecord, WorkspaceState } from '../workspace'
+import type { Severity } from '../types'
 
 /**
  * Every engagement at once, so "which of these is in trouble" is one screen rather than three.

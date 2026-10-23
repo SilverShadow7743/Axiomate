@@ -88,7 +88,7 @@ checks `selectedIds.size` first:
 ## Bulk status change
 
 The status picker's options are the **intersection** of `allowedNext(row.status)`
-(`lib/statusPolicy.ts`) across every selected row — not the union. A target that is illegal for
+(`lib/planning/statusPolicy.ts`) across every selected row — not the union. A target that is illegal for
 even one selected row is not offered at all, so the batch can never be partially valid. An
 empty intersection disables the control with one line: "No status is valid for all N
 selected."

@@ -21,7 +21,7 @@ here rather than silently skipped.
 **The "Unassigned" row, in both Client and Owner, does not map either — checked, not assumed.**
 `lib/analytics.ts`'s `byClient`/`byOwner` write `i.client || 'Unassigned'` / `i.owner || 'Unassigned'`
 for display, but that normalization is local to this file. The actual filterable data
-(`ScheduleRow.owner: string | null` in `lib/types.ts`; `clientOf(row)` in `lib/tree.ts`, which
+(`ScheduleRow.owner: string | null` in `lib/types.ts`; `clientOf(row)` in `lib/planning/tree.ts`, which
 walks the tree for the nearest client ancestor and returns `null` when there is none) carries
 `null`, never the string `"Unassigned"` — and `matchesFilters` compares `i.owner !== f.owner`
 directly, so a filter literally set to `"Unassigned"` would match nothing. `"Unassigned"` does not

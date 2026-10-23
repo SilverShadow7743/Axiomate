@@ -37,7 +37,7 @@
  *   2. **Has it been delivered?**       — a delivery state.
  *   3. **Has the client accepted it?**  — an acceptance state.
  *
- * Only the first is built here. Two and three are the two-axis model `lib/milestone.ts` already
+ * Only the first is built here. Two and three are the two-axis model `lib/planning/milestone.ts` already
  * implements, and adding a second copy of it before deciding how a delivered *deliverable*
  * relates to an accepted *milestone* would be duplicating the thing rather than reusing it. So
  * this carries the acceptance CRITERIA — the text a reviewer judges against — and not yet the

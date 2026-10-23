@@ -120,9 +120,9 @@ onto real Application records yet, and forcing that reconciliation as a migratio
 inventing structure the data doesn't currently support. `module` stays exactly as it is; a new
 issue can optionally also name a real Application.
 
-## Health — named concerns, not a score, matching `lib/portfolio.ts`'s own doctrine
+## Health — named concerns, not a score, matching `lib/planning/portfolio.ts`'s own doctrine
 
-`lib/portfolio.ts` states this precisely: *"There is no health score, and there will not be one...
+`lib/planning/portfolio.ts` states this precisely: *"There is no health score, and there will not be one...
 name the concerns, count them, and let the reader do the weighing."* The blueprint's APP-005
 proposes exactly the pattern that doctrine was written to reject (`Healthy → Watch → At Risk →
 Critical`). This design follows the codebase's own precedent instead:

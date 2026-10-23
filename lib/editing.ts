@@ -1,6 +1,6 @@
 import type { ScheduleRow } from './types'
 import { ISSUE_STATUSES, isGroupRow } from './types'
-import { allowedNext, type StatusPolicy } from './statusPolicy'
+import { allowedNext, type StatusPolicy } from './planning/statusPolicy'
 
 /**
  * Which grid cells can be edited in place, and with what control.

@@ -5,7 +5,7 @@ import type {
   ScheduleRow,
   Severity,
   SlaPolicy,
-} from './types'
+} from '../types'
 import {
   addDays,
   addWorkingDays,
@@ -15,7 +15,7 @@ import {
   shiftWorkingDays,
   toUtc,
   workingDaysBetween,
-} from './dates'
+} from '../dates'
 
 /**
  * Status -> % complete.

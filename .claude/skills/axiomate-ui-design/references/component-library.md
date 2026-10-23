@@ -39,7 +39,7 @@ names and file references).
    `FilterBar.tsx` for the exact spec: bar shape = record kind, color = health, glyph = extra
    emphasis on overdue/blocked/complete). This is the model — color is never the only signal.
 2. **Severity** — pairs `sev-High/-Medium/-Low` color with a shape glyph
-   (`lib/severity.ts`'s `severityGlyph()`: ▲/●/–), matching schedule health's discipline. Use
+   (`lib/planning/severity.ts`'s `severityGlyph()`: ▲/●/–), matching schedule health's discipline. Use
    this helper for any new severity render site rather than a bare colored label.
 3. **Save/sync state** (`.persist-tag`) — reuses the health palette; not a new family.
 

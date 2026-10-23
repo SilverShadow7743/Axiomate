@@ -1,5 +1,5 @@
-import { portfolio } from './portfolio'
-import { forecastFor, describeForecast } from './forecast'
+import { portfolio } from './planning/portfolio'
+import { forecastFor, describeForecast } from './planning/forecast'
 import { availabilityFor } from './capacity/availability'
 import { profileAt } from './capacity/capacity'
 import { directoryIdByName } from './access'

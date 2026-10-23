@@ -26,7 +26,7 @@ repo already committed to, not a new one.
 ## Where it re-opens a decision already made
 
 **The 🟢/🟡/🔴 per-project health score is the literal pitch `docs/plans/2026-08-31-project-pulse-design.md`
-considered and rejected**, on the record, for a stated reason: `lib/portfolio.ts`'s own header
+considered and rejected**, on the record, for a stated reason: `lib/planning/portfolio.ts`'s own header
 comment describes a prior incident where a hidden severity weighting inside a "no priority score"
 feature caused real confusion, and the lesson taken was "name the concerns, count them, and let
 the reader do the weighing" — not colour-code them. `concernsFor()` already ships six named,

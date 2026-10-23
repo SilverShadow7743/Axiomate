@@ -26,7 +26,7 @@ Design constraints quoted: "Absent means zero — today's arithmetic byte-identi
 ## Step 1 — the engine's fourth term and the Meeting type, golden first
 
 **Files:** `lib/meetings.ts` (new), `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`,
-`lib/forecast.ts`, `lib/capacity/assignment.ts`, `scripts/scenario-validation.ts`.
+`lib/planning/forecast.ts`, `lib/capacity/assignment.ts`, `scripts/scenario-validation.ts`.
 
 1a. **Capture the golden BEFORE touching signatures**: run `availabilityFor` on E1A's exact
 fixture (and one `capacityFor`/`forecastFor` figure) and bake the outputs into scenario E4A's
@@ -60,7 +60,7 @@ cancelled meeting subtracts nothing; E1A and E1D pass UNTOUCHED (the tripwires).
 
 ## Step 2 — find-a-slot
 
-**Files:** `lib/scheduling.ts` (new), `scripts/scenario-validation.ts`.
+**Files:** `lib/planning/scheduling.ts` (new), `scripts/scenario-validation.ts`.
 
 `suggestDays({ attendeeIds, durationHours, from, to, meetings, commitments, holidays,
 profiles })` → up to N candidate days, each `{ date, ok, blockers: string[] }`: an attendee's

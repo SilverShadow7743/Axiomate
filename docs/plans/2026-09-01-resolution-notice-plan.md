@@ -12,7 +12,7 @@ below it being correct and cannot itself be scenario-tested.
 Three corrections to the design doc, found while grounding this plan — noted here rather than
 silently applied, since the design doc's own self-review missed them:
 
-1. **`ResolutionNotice` has no `displayId` field.** `lib/tree.ts:122` shows `displayId: issue.id`
+1. **`ResolutionNotice` has no `displayId` field.** `lib/planning/tree.ts:122` shows `displayId: issue.id`
    for every ordinary issue row — `Issue.id` (minted by `nextIssueId`, `lib/workspace.ts:1495`,
    e.g. `OAPIL-180`) already IS the human-facing string. A separate `displayId` would just
    duplicate `issueId`. Dropped.

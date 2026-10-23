@@ -1,5 +1,5 @@
-import type { OperatingModel } from './config'
-import { liveWorkTypes } from './config'
+import type { OperatingModel } from '../config'
+import { liveWorkTypes } from '../config'
 
 /**
  * The minimal semantics that make a risk a risk and a decision a decision.

@@ -13,7 +13,7 @@ import type { FilterState } from '@/lib/types'
  * Not a trend over time — see `docs/plans/2026-09-07-analytics-design.md` for why: nothing in
  * this codebase captures a period snapshot on a schedule, so a chart of a metric over time would
  * be invented rather than read. Every count here is computed against the register as it stands
- * right now, the same discipline `lib/portfolio.ts` already applies to its own concern counts —
+ * right now, the same discipline `lib/planning/portfolio.ts` already applies to its own concern counts —
  * no score, no colour-coded traffic light, a number a reader can go and check.
  */
 /**

@@ -1,4 +1,4 @@
-import type { Severity } from './types'
+import type { Severity } from '../types'
 
 /**
  * A shape distinct from color, alongside the text label already shown everywhere severity

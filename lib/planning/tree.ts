@@ -1,11 +1,11 @@
-import type { FilterState, ScheduleRow } from './types'
-import { isGroupRow, NO_CLIENT_CHOSEN } from './types'
-import { disciplineLabel, holidaySetOf, kindLabel, resolveLabels } from './config'
+import type { FilterState, ScheduleRow } from '../types'
+import { isGroupRow, NO_CLIENT_CHOSEN } from '../types'
+import { disciplineLabel, holidaySetOf, kindLabel, resolveLabels } from '../config'
 import { raidKindOf } from './raid'
-import type { IssueRecord, WorkspaceState } from './workspace'
+import type { IssueRecord, WorkspaceState } from '../workspace'
 import { computeDurations, computeHealth, isTerminal, pausedCalendarDays, rollUp, STATUS_PROGRESS } from './schedule'
-import { maxIso, minIso } from './dates'
-import { richTextToPlainText } from './richText'
+import { maxIso, minIso } from '../dates'
+import { richTextToPlainText } from '../richText'
 
 /**
  * Build the row hierarchy from workspace state.

@@ -21,7 +21,7 @@
         "name": "ownership",
         "command": "git diff --stat master...feat/ART-20260905-016 compared with ART-20260905-017 v2 workstreams[].owns",
         "result": "fail",
-        "evidence": "Nine files changed on the branch and nine listed in the change set; the lists match, and the three commits 4cabc59, 0bd630b, 961c14e match. Eight files sit inside their workstream's owns list (lib/types.ts, lib/tree.ts: filter-logic; lib/projectBoundary.ts: stakeholder-logic; components/FilterBar.tsx, FiltersHeader.tsx, TreeGrid.tsx, IssueWorkspace.tsx: ui; scripts/scenario-validation.ts: proof). data/validation.json (+30 lines, the CD1-CD3 verdicts) is in no owns list of plan v2 and the change set itself marks it 'unowned'. Per the proof-orchestrator sequence a file outside its workstream's owns list is a fail before any gate runs; the gates below were run anyway so this result carries evidence rather than a bare refusal."
+        "evidence": "Nine files changed on the branch and nine listed in the change set; the lists match, and the three commits 4cabc59, 0bd630b, 961c14e match. Eight files sit inside their workstream's owns list (lib/types.ts, lib/planning/tree.ts: filter-logic; lib/projectBoundary.ts: stakeholder-logic; components/FilterBar.tsx, FiltersHeader.tsx, TreeGrid.tsx, IssueWorkspace.tsx: ui; scripts/scenario-validation.ts: proof). data/validation.json (+30 lines, the CD1-CD3 verdicts) is in no owns list of plan v2 and the change set itself marks it 'unowned'. Per the proof-orchestrator sequence a file outside its workstream's owns list is a fail before any gate runs; the gates below were run anyway so this result carries evidence rather than a bare refusal."
       },
       {
         "name": "tsc",

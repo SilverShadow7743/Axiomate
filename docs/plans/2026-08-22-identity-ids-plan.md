@@ -34,7 +34,7 @@ id-carrying records; keep a warning naming pre-backfill rows that would detach.
 
 **3. Read-path joins — `lib/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
 `unreadCount`), `lib/capacity/capacity.ts`, `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts`
-(`weekStateFor`, self-approval check), `lib/goals.ts`.
+(`weekStateFor`, self-approval check), `lib/planning/goals.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it rewrites the joins every personal surface
 stands on, and the failure mode is exactly the one being fixed: a wrong join empties
 My Work, silences the cap warning, or lets a submitter approve their own week. Each

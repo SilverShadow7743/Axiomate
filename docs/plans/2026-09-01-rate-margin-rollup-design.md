@@ -25,7 +25,7 @@ already exists and is proven. What's missing is wiring it to real data and showi
 ## What this is not
 
 Not a new money model — `costOf`, `PersonRate`, `effortVariance` and `SowPosition` all already
-exist and stay exactly as they are. Not a milestone-level rollup — `Milestone` (`lib/milestone.ts`)
+exist and stay exactly as they are. Not a milestone-level rollup — `Milestone` (`lib/planning/milestone.ts`)
 is a payment-schedule line item with no relationship to specific issues at all (no `issueIds`, no
 `attributeToMilestone` action), so attributing hours to one would mean inventing a new attribution
 concept with no domain precedent. That's a real, separate design question for later, not something
@@ -77,7 +77,7 @@ wearing the same blank space.
 
 `lib/commercial/sow.ts` gains no new import of `lib/commercial/rates.ts` — `sowCostOf` and `sowPosition` are called
 separately by whoever needs both, keeping the ordinary-data module free of the permission-
-sensitive one, the same boundary `lib/portfolio.ts`'s own exclusion of commercial figures already
+sensitive one, the same boundary `lib/planning/portfolio.ts`'s own exclusion of commercial figures already
 draws at the screen level.
 
 ## Wiring — `CommercialPanel.tsx`

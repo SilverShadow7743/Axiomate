@@ -1,5 +1,5 @@
 import { daysBetween, formatShort, startOfWeek } from '../dates'
-import { isTerminal } from '../schedule'
+import { isTerminal } from '../planning/schedule'
 import { valueAt, type Version } from '../versioning'
 import { frozenMessage, isFrozen, type Timesheet } from './timesheet'
 import { WORKING_PATTERN } from '../capacity/capacity'

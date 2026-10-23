@@ -41,7 +41,7 @@
     ],
     "business_rules": [
       "Derived values are never stored as fact: the rollup is computed in buildTree() and never written",
-      "TERMINAL_STATUSES and BLOCKED_STATUSES in lib/schedule.ts are the single source for the status families"
+      "TERMINAL_STATUSES and BLOCKED_STATUSES in lib/planning/schedule.ts are the single source for the status families"
     ],
     "domain_entities": ["Issue", "Issue.parentId", "IssueStatus", "ScheduleRow"],
     "open_questions": []

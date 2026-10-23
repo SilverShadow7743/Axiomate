@@ -14,7 +14,7 @@ import {
   scoreTerms,
   type Concern,
   type PortfolioLine,
-} from '@/lib/portfolio'
+} from '@/lib/planning/portfolio'
 import type { WorkspaceState } from '@/lib/workspace'
 import WhyThisWorks from './WhyThisWorks'
 
@@ -27,7 +27,7 @@ import WhyThisWorks from './WhyThisWorks'
  *
  * **Counted claims first, and a score only on the objection's own terms.** Each line states
  * what is wrong as counted claims — "13 blocked, 14 with no owner" — and every one of them is
- * checkable by opening the engagement. The reasoning lives in `lib/portfolio.ts`, including why
+ * checkable by opening the engagement. The reasoning lives in `lib/planning/portfolio.ts`, including why
  * a single blended number was refused and the terms on which one was admitted on 10 Sep: its
  * weights are configuration, and every rendering prints them beside the number.
  */
@@ -144,7 +144,7 @@ export default function PortfolioPanel({
 
           {/* F&O's workspace tiles (page grammar §5): one per engagement, the score as band AND
               value, with its terms printed beneath — never the number alone, which is the
-              condition the score was admitted on (lib/portfolio.ts, 10 Sep). The tile is a
+              condition the score was admitted on (lib/planning/portfolio.ts, 10 Sep). The tile is a
               summary of the concern lines below it, not a replacement; clicking opens the
               engagement in the tree, the same as its line. */}
           {scored.length > 0 && (

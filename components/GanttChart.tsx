@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { isGroupRow } from '@/lib/types'
 import type { IssueDependency, ScheduleRow, ZoomLevel } from '@/lib/types'
-import type { Scale } from '@/lib/timeline'
+import type { Scale } from '@/lib/planning/timeline'
 import { HEADER_H, ROW_H } from '@/lib/layout'
 import { addDays, daysBetween, formatIso } from '@/lib/dates'
 

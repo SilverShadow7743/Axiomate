@@ -8,7 +8,7 @@ different — and deliberately opposite — design philosophy.
 
 ## What changed the shape of this feature
 
-`lib/portfolio.ts` is not similar to Project Pulse; it is a direct, documented counter-argument
+`lib/planning/portfolio.ts` is not similar to Project Pulse; it is a direct, documented counter-argument
 to it. Its own header comment:
 
 > "This module was written a week after `myWork` shipped claiming to have 'no priority score'

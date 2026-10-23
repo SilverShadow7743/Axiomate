@@ -4,7 +4,7 @@ import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import { formatIso } from '@/lib/dates'
-import type { SlaPlan } from '@/lib/sla'
+import type { SlaPlan } from '@/lib/planning/sla'
 
 /**
  * What applying the SLA policy would do, before it does it.

@@ -119,7 +119,7 @@ per SOW — not tabs a person switches between. `PortfolioPanel` puts every enga
 concerns on one screen with no drill-in required to see what is wrong. The Engagement drawer
 observed directly in this session's own browser check showed Overview, linked Statements of Work,
 their milestones and now their invoices all in one panel. This is a deliberate trade this
-codebase's own doctrine states repeatedly (`lib/portfolio.ts`: *"name the concerns, count them,
+codebase's own doctrine states repeatedly (`lib/planning/portfolio.ts`: *"name the concerns, count them,
 and let the reader do the weighing"*) — density in service of not making a partner click through
 five screens to find what needs attention, at the cost of more visible surface on any single
 screen than Hive's own stated design goal admits.

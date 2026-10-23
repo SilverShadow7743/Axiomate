@@ -17,7 +17,7 @@ the same as `convert-modules-to-labels.ts`'s precedent, so the correction is 134
 attributable edits, not a silent rewrite.
 
 **Dependency check** (the "what would send this back" clause below) found no other report,
-export or analytics path comparing `issue.type` literally — and one genuine bonus fix: `lib/raid.ts`'s
+export or analytics path comparing `issue.type` literally — and one genuine bonus fix: `lib/planning/raid.ts`'s
 `raidKindOf` resolves a stored `type` to a `WorkType` by *label* match, then checks that entry's
 *id* against `RISK_TYPE_ID`/`DECISION_TYPE_ID`. Before this migration, the 3 raw-coded Risk and
 14 raw-coded Decision issues resolved to the *duplicate* entry (`label: "WT_RISK"`, id:

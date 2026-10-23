@@ -10,7 +10,7 @@ UI at all, and nothing should depend on visibility before the underlying computa
 ## Two findings from reading the real code that change what this plan needs to do
 
 1. **`concernsFor`'s final line is `out.sort((a, b) => CONCERN_ORDER.indexOf(a.kind) -
-   CONCERN_ORDER.indexOf(b.kind))`** (`lib/portfolio.ts:258`) — every concern is re-sorted by
+   CONCERN_ORDER.indexOf(b.kind))`** (`lib/planning/portfolio.ts:258`) — every concern is re-sorted by
    `CONCERN_ORDER` regardless of the order blocks push into `out`. The capacity block can be
    inserted anywhere in the function body; it does not need to sit textually between the
    `forecast` and `blocked` blocks for the design's ranking to hold.
@@ -21,7 +21,7 @@ UI at all, and nothing should depend on visibility before the underlying computa
 
 ## Steps
 
-### Step 1 — `projectIdsUnder(state, nodeId)`, `lib/portfolio.ts`
+### Step 1 — `projectIdsUnder(state, nodeId)`, `lib/planning/portfolio.ts`
 
 Add beside `projectsUnder` (line 158), mirroring its exact shape:
 
@@ -95,7 +95,7 @@ if (overCount && worstCapacity) {
 }
 ```
 
-New imports needed in `lib/portfolio.ts`: `availabilityFor` from `./availability`, `addDays`
+New imports needed in `lib/planning/portfolio.ts`: `availabilityFor` from `./availability`, `addDays`
 from `./dates`. `profileAt` is already imported (used by the forecast block).
 
 **The dedup key detail** (see "details most likely to be gotten wrong" below): `peopleHere` is
@@ -110,10 +110,10 @@ validate:scenarios`: count 195 → 196, nothing else changes verdict (the foreca
 blocked/unowned/stale blocks are untouched code, but re-run to be certain the signature change
 didn't silently break a call site).
 
-### Step 3 — `CONCERN_ORDER` reorder, `lib/portfolio.ts:58`
+### Step 3 — `CONCERN_ORDER` reorder, `lib/planning/portfolio.ts:58`
 
 Confirmed low-risk while writing this plan: grepped every use of `CONCERN_ORDER` in the
-repository (`lib/portfolio.ts` only, three call sites — the export itself, the final
+repository (`lib/planning/portfolio.ts` only, three call sites — the export itself, the final
 `out.sort()`, and `compareLines`' `indexOf`/`.length` calls) — all three are `.indexOf`/
 `.length`-relative, none assume a fixed array length or a specific adjacent pair. The reorder
 is a genuine one-line change with no other blast radius:

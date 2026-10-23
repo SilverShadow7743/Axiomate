@@ -1,6 +1,6 @@
 import type { ScheduleRow } from './types'
 import type { LabelKey } from './config'
-import { exposure } from './raid'
+import { exposure } from './planning/raid'
 
 export interface ColumnDef {
   key: string

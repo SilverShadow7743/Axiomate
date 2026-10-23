@@ -131,7 +131,7 @@ records survive and WHAT fields they carry; the component decides how to word th
 
 The Accepted row is deliberately not keyed to `delivery === 'Delivered'`: a signature-billed
 milestone (`billOn: 'signature'`, owed on signing) can be accepted before delivery even
-starts — `acceptProblem` in `lib/milestone.ts` only requires `delivery === 'Delivered'` when
+starts — `acceptProblem` in `lib/planning/milestone.ts` only requires `delivery === 'Delivered'` when
 `billOn !== 'signature'` — so `deliveredAt` is not guaranteed to exist on an accepted row and
 the label omits the "Delivered" clause when it does not.
 

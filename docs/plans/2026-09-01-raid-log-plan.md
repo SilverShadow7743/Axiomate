@@ -29,7 +29,7 @@ riskLikelihood: number | null
 riskImpact: number | null
 /** null on a non-Decision row, or an open Decision with no recorded outcome yet. */
 decisionOutcome: string | null
-/** Resolved once here via lib/raid.ts's raidKindOf, not re-derived per filter check —
+/** Resolved once here via lib/planning/raid.ts's raidKindOf, not re-derived per filter check —
  *  matchesFilters has no model reference to call it with. */
 raidKind: 'risk' | 'decision' | null
 ```
@@ -44,7 +44,7 @@ untouched by this addition.
 **Verify:** `npx tsc --noEmit` — will show every place a `ScheduleRow`/`FilterState` literal is
 constructed without the new fields, which is exactly the next two steps.
 
-### Step 2 — `buildTree()` and `blank()`, `lib/tree.ts`
+### Step 2 — `buildTree()` and `blank()`, `lib/planning/tree.ts`
 
 Add `import { raidKindOf } from './raid'`. In `walkIssue`'s main field-assignment block
 (alongside `row.severity = issue.severity` / `row.owner = issue.owner`, line ~139-141):
@@ -75,7 +75,7 @@ the one exception silently relying on a coincidence.
 
 **Verify:** `npx tsc --noEmit`.
 
-### Step 3 — `matchesFilters()`, `lib/tree.ts`
+### Step 3 — `matchesFilters()`, `lib/planning/tree.ts`
 
 One line, after the existing `health` check and before the `search` block (line ~391, matching
 the file's own stated "cheapest checks first" ordering — a boolean flag check is cheaper than

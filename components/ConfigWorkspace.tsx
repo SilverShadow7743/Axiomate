@@ -42,13 +42,13 @@ import {
   CONCERN_ORDER,
   DEFAULT_HEALTH_SCORE,
 } from '@/lib/config'
-import { CONCERN_LABEL } from '@/lib/portfolio'
+import { CONCERN_LABEL } from '@/lib/planning/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
-import { MEASURES, describeGoals, goalProgress } from '@/lib/goals'
+import { MEASURES, describeGoals, goalProgress } from '@/lib/planning/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type Action, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
 import { openDuplicateGroups } from '@/lib/intake'
 import { formatIso } from '@/lib/dates'
-import { describeRecurrence, type Cadence } from '@/lib/recurrence'
+import { describeRecurrence, type Cadence } from '@/lib/planning/recurrence'
 import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/lib/commercial/blueprint'
 import { ISSUE_STATUSES, type IssueStatus, type NodeKind } from '@/lib/types'
 import type { Actor } from '@/lib/actor'
@@ -56,7 +56,7 @@ import { rateTimeline, type RateKind } from '@/lib/commercial/rates'
 import { SKILL_LEVELS, isStale, levelLabel, sourceLabel, type SkillLevel, type SkillSource } from '@/lib/capacity/skills'
 import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@/lib/customFields'
 import { can, directoryPersonFor } from '@/lib/access'
-import { isTerminal } from '@/lib/schedule'
+import { isTerminal } from '@/lib/planning/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
 import { EVENT_TYPES, type EventType } from '@/lib/events'
@@ -3067,7 +3067,7 @@ function filingExample(filing: DocumentFiling): string {
  *
  * Both halves on one screen because they are one thought: a target nobody can see the number
  * for is a note, and a number with no target beside it is a statistic. There is no field to
- * enter progress into — see `lib/goals.ts` for why that is the point rather than an omission.
+ * enter progress into — see `lib/planning/goals.ts` for why that is the point rather than an omission.
  */
 function Goals({
   state,
@@ -3229,7 +3229,7 @@ const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 
 /**
  * The weekly/monthly cadence picker `Recurring`'s own "Add a rule" form already renders inline
- * — same two fields, same day-31-means-month-end convention (`lib/recurrence.ts`) — extracted
+ * — same two fields, same day-31-means-month-end convention (`lib/planning/recurrence.ts`) — extracted
  * so `Automation`'s calendar-triggered rules use the identical control rather than a second,
  * possibly-drifting copy of it. Controlled, unlike `Recurring`'s local kind/weekday/day state,
  * because a rule's cadence here is a field on already-live state (`rule.on.cadence`), edited

@@ -32,7 +32,7 @@ Ground facts this plan is written against, verified in code:
   mappers live in `lib/db/map.ts`; `app/api/workspace/route.ts`'s KINDS allowlist carries
   `upsertCommitment` and must gain any new kind. `lib/autosave.ts:202` parses commitments with
   `parsed.commitments ?? {}` — plain passthrough, optional new fields round-trip.
-- Portfolio concerns are `{ kind, count, phrase }` pushes (`lib/portfolio.ts:183–208`).
+- Portfolio concerns are `{ kind, count, phrase }` pushes (`lib/planning/portfolio.ts:183–208`).
 - To locate during implementation, not assumed: the shared estimate-hours derivation that
   `effortVariance` consumes (imported by `components/TimeTab.tsx` — find its module), and the
   component behind DetailPanel's Schedule tab.
@@ -141,7 +141,7 @@ or vice versa, is the design shipped in a misleading state.
 
 ## Step 5 — Forecast v1 (pure + scenarios)
 
-**Files:** new `lib/forecast.ts`, `scripts/scenario-validation.ts`.
+**Files:** new `lib/planning/forecast.ts`, `scripts/scenario-validation.ts`.
 
 - `forecastFor(issue, estimate, timeEntries, availabilityDeps, today)` returning a verdict
   union: `no-estimate`, `unscheduled`, `achievable { spareHours }`,
@@ -165,7 +165,7 @@ CONFIG_OPS list), the Capacity panel component (leave request keeps its existing
 the reason field and, for `leave.approve` holders, an "awaiting your decision" list mirroring
 the timesheet queue's shape), `components/MyCalendarPanel.tsx` (a Requested row renders with a
 pending marker — shown, never hidden; a Returned row says so), the Schedule tab component (the
-forecast sentence), `lib/portfolio.ts` (worst shortfall as a
+forecast sentence), `lib/planning/portfolio.ts` (worst shortfall as a
 `{ kind: 'forecast', phrase: 'shortest on X: short by Nh' }` concern), `app/globals.css`.
 
 **Verify:** **[gates]**, then the clean-room deploy, then live in Chrome:

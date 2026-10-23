@@ -47,7 +47,7 @@
  *
  * Every row shows the two components that placed it, so the ordering is legible on the screen and
  * not only in this comment. That is the actual difference from a score: not that no judgement is
- * made, but that the judgement is decomposed and visible. `scheduleHealth` in `lib/schedule.ts`
+ * made, but that the judgement is decomposed and visible. `scheduleHealth` in `lib/planning/schedule.ts`
  * already does exactly this — it blends dates, status and dependencies into one of six words,
  * recomputed and explained rather than stored — and it is the precedent this now follows.
  *
@@ -79,7 +79,7 @@
  */
 
 import { can, directoryPersonFor, rolesFor } from './access'
-import { BLOCKED_STATUSES, isTerminal } from './schedule'
+import { BLOCKED_STATUSES, isTerminal } from './planning/schedule'
 import { weekStarting } from './time/timesheet'
 import type { Actor } from './actor'
 import type { Meeting } from './meetings'

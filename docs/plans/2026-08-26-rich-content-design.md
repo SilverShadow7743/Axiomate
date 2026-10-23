@@ -97,7 +97,7 @@ issue id) rather than five separate, drifting hacks:
 1. **`lib/commercial/estimator.ts:242`** — `proposeEstimate` text-matches
    `` `${subject} ${description} ${module}`.toLowerCase() `` against its rule set. Needs
    the extractor in place of raw string interpolation.
-2. **`lib/tree.ts:380`** — the Tree view's own search/filter box concatenates
+2. **`lib/planning/tree.ts:380`** — the Tree view's own search/filter box concatenates
    `description` into its match string. Same fix.
 3. **`lib/outbound.ts:110`** — `outboundNoteBody` composes a note's body directly into an
    **outbound client email**, today as plain text. This design keeps outbound mail

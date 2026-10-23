@@ -1,8 +1,8 @@
-import { availabilityFor, overlapWorkingDays } from './capacity/availability'
-import { profileAt } from './capacity/capacity'
-import { holidaySetOf } from './config'
-import { addDays } from './dates'
-import type { WorkspaceState } from './workspace'
+import { availabilityFor, overlapWorkingDays } from '../capacity/availability'
+import { profileAt } from '../capacity/capacity'
+import { holidaySetOf } from '../config'
+import { addDays } from '../dates'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * Decision support for an over-committed person — never an invented fix.
@@ -35,7 +35,7 @@ export interface ReplanningView {
 
 /**
  * `null` when the person is not overallocated in this window — a deficit with nothing to show
- * is not a real case, matching the same window `lib/portfolio.ts`'s capacity concern reads:
+ * is not a real case, matching the same window `lib/planning/portfolio.ts`'s capacity concern reads:
  * `today -> today+28d`, the same `profileAt`/`holidaySetOf` resolution. Not a stylistic echo —
  * this is what makes `deficitHours` here provably equal to the capacity concern's own
  * `-remainingHours` for the identical person, rather than a second, possibly-disagreeing

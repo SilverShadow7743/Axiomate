@@ -28,7 +28,7 @@ point-in-time copy a person deliberately takes, that never changes again once ta
   a dates-only first cut.
 - **Node scope**: both projects and engagements. Unified by `issuesUnder(state, nodeId)`
   (`lib/commercial/engagement.ts:156`) — already exported, already documented as reusable ("Exported for
-  `lib/portfolio.ts`, which needs the same walk over every engagement at once. One
+  `lib/planning/portfolio.ts`, which needs the same walk over every engagement at once. One
   implementation rather than two"), already walks any node at any depth. A snapshot's root can
   be a project or an engagement; the capture logic does not need to know which.
 - **Retention**: unlimited. Every snapshot ever taken is kept, newest-first — matches Hive
@@ -93,7 +93,7 @@ export function takeSnapshot(
 Three already-proven primitives, composed, not reimplemented:
 
 1. `issuesUnder(state, nodeId)` — the issue set, for either a project or an engagement root,
-   the identical call `lib/watch.ts`'s SOW-over-consumption check and `lib/portfolio.ts` already
+   the identical call `lib/watch.ts`'s SOW-over-consumption check and `lib/planning/portfolio.ts` already
    make.
 2. Map each issue to a `SnapshotEntry` — `plannedStart`/`plannedEnd` read straight off
    `IssueRecord` (`lib/workspace.ts:301-302`), no new computation.

@@ -149,7 +149,7 @@ export function summariseScope(state: WorkspaceState, nodeId: string): ScopeSumm
 /**
  * Live issues anywhere beneath a node, at any depth.
  *
- * Exported for `lib/portfolio.ts`, which needs the same walk over every engagement at once.
+ * Exported for `lib/planning/portfolio.ts`, which needs the same walk over every engagement at once.
  * One implementation rather than two: a portfolio that counted a node's issues differently
  * from the panel showing that node would be a contradiction the reader has to resolve.
  */

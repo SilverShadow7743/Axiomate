@@ -8,7 +8,7 @@ import { holidaySetOf } from '@/lib/config'
 import { addDays } from '@/lib/dates'
 import { myCalendarMonth, type MyCalendarEntry } from '@/lib/myCalendar'
 import type { Meeting } from '@/lib/meetings'
-import { suggestDays } from '@/lib/scheduling'
+import { suggestDays } from '@/lib/planning/scheduling'
 import type { WorkspaceState } from '@/lib/workspace'
 
 export interface PersonalEventInput {

@@ -17,7 +17,7 @@ Zero-Entry Timesheet's suggestions worked because a real fact existed to derive 
 from — a meeting's actual duration. **No equivalent fact exists here.** Which of a person's
 allocations to reduce, and by how much, is a business judgment nobody has recorded anywhere.
 Proposing one "optimal" split (even something as neutral-sounding as "reduce every allocation
-proportionally") would mean inventing a business rule — the same refusal `lib/portfolio.ts`'s
+proportionally") would mean inventing a business rule — the same refusal `lib/planning/portfolio.ts`'s
 own header comment states about scores: *"name the concerns, count them, and let the reader do
 the weighing."* This feature names the concern (a deficit, and where the hours currently sit)
 and stops there.

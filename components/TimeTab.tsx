@@ -15,7 +15,7 @@ import {
   type TimeEntry,
 } from '@/lib/time/time'
 import { addDays, formatIso, formatShort } from '@/lib/dates'
-import { isTerminal } from '@/lib/schedule'
+import { isTerminal } from '@/lib/planning/schedule'
 import {
   weekStarting,
   weekLabel,

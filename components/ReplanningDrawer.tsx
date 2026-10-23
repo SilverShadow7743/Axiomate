@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { replanningFor } from '@/lib/replanning'
+import { replanningFor } from '@/lib/planning/replanning'
 import type { WorkspaceState } from '@/lib/workspace'
 
 /**

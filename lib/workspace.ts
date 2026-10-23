@@ -19,7 +19,7 @@
  */
 
 import type { Blueprint } from './commercial/blueprint'
-import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
+import { dueOccurrence, subjectFor, type Recurrence } from './planning/recurrence'
 import type { RichDoc } from './richText'
 import { isEmptyRichDoc, richDocsEqual, richTextToPlainText, wrapPlainText } from './richText'
 import type {
@@ -83,7 +83,7 @@ import {
   nextSequence,
   type AcceptanceState,
   type Milestone,
-} from './milestone'
+} from './planning/milestone'
 import { takeSnapshot, type Snapshot } from './snapshot'
 import {
   checkApplication,
@@ -127,7 +127,7 @@ import {
   checkTransition,
   policyProblems,
   type StatusPolicy,
-} from './statusPolicy'
+} from './planning/statusPolicy'
 import { checkEntry, type TimeActivity, type TimeEntry } from './time/time'
 import { overlapProblem, valueAt, stamp, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './capacity/staffing'
@@ -169,7 +169,7 @@ import {
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
 import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
 import { mentionsIn } from './mentions'
-import { raidProblem } from './raid'
+import { raidProblem } from './planning/raid'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
@@ -193,7 +193,7 @@ import { blankEngagement, type EngagementDetail } from './commercial/engagement'
 import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
 import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
 import { commitmentCounts } from './capacity/availability'
-import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
+import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './planning/schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,
   KIND_LABEL_KEY,
@@ -239,7 +239,7 @@ import { type IntakeForm,
   nextCareerOptionId,
   nextEmployeeId,
 } from './config'
-import { MEASURES, type Goal } from './goals'
+import { MEASURES, type Goal } from './planning/goals'
 
 /* ================================================================== *
  * Record shapes
@@ -331,7 +331,7 @@ export interface IssueRecord {
    */
   needsTriage?: boolean
   /** A risk's judged halves, 1–5 each; null = not yet judged, never a default. Exposure is
-   *  computed from these and NEVER stored — see `lib/raid.ts`. */
+   *  computed from these and NEVER stored — see `lib/planning/raid.ts`. */
   riskLikelihood?: number | null
   riskImpact?: number | null
   /** A decision's recorded outcome. Meaningful on Decision-typed records; plain text. */
@@ -1263,7 +1263,7 @@ export type Action =
       now: string
     }
   | { t: 'removeMilestone'; id: string; now: string }
-  /** Say the work has landed. Deliberately separate from accepting it — see `lib/milestone.ts`. */
+  /** Say the work has landed. Deliberately separate from accepting it — see `lib/planning/milestone.ts`. */
   | { t: 'deliverMilestone'; id: string; now: string }
   | {
       t: 'decideMilestone'
@@ -1633,7 +1633,7 @@ export type ConfigOp =
   /** Which projects a defined field is actually live on. Replaces the list wholesale. */
   | { k: 'setCustomFieldProjects'; id: string; projectIds: string[] }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
-  /** The engagement health score's weights and RAG thresholds — see `lib/portfolio.ts`'s
+  /** The engagement health score's weights and RAG thresholds — see `lib/planning/portfolio.ts`'s
    *  `healthScore` and the F&O page-grammar design. Configuration, not code, on purpose.
    *  Partial at both levels, which is what the reducer already merges: one weight field
    *  blurring in Configuration sends one weight, not the whole table. */
@@ -9254,7 +9254,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       * and a window that runs backwards matches nothing. All three would render as a goal sitting
       * at zero, which reads as "we are failing" rather than "this is misconfigured".
       *
-      * There is deliberately no `progress` field to write. See `lib/goals.ts`.
+      * There is deliberately no `progress` field to write. See `lib/planning/goals.ts`.
       */
      case 'upsertGoal': {
        const id = op.id ?? `GOAL_${m.seq}`

@@ -66,7 +66,7 @@ permission for it would be authority nobody asked for.
 
 `OverviewTab.tsx` (or a new small block beside it) — an ordered list under the issue's own
 detail, checkboxes toggling `toggleChecklistItem`, an inline add row, a remove control per item.
-No progress bar or percentage-complete figure: `lib/goals.ts`'s own rule applies unchanged here
+No progress bar or percentage-complete figure: `lib/planning/goals.ts`'s own rule applies unchanged here
 too — a count of "3 of 5 done" is fine because it recomputes from the items on every read, but a
 stored percentage is exactly the kind of drifting number this codebase has already refused twice.
 

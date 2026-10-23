@@ -87,7 +87,7 @@ import type {
   DeliveryState,
   Milestone,
   MilestoneBasis,
-} from '../milestone'
+} from '../planning/milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
 import type { DiscussionFollow, DiscussionMessage, DiscussionScopeKind, DiscussionThread } from '../discussion'
 import type { Meeting, MeetingScopeKind } from '../meetings'

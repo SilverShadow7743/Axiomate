@@ -18,7 +18,7 @@ between a parent issue and its children in either direction; the two records are
 
 The codebase already computes two other things this way — never stored, always derived, shown
 alongside the real fields: `Progress %` (rolled up from lifecycle activities) and
-`Schedule Health` (`lib/schedule.ts`'s `scheduleHealth()`, using `TERMINAL_STATUSES` and
+`Schedule Health` (`lib/planning/schedule.ts`'s `scheduleHealth()`, using `TERMINAL_STATUSES` and
 `BLOCKED_STATUSES` — the same status-family lists this feature reuses). Both render in
 `components/DetailPanel.tsx`'s Schedule tab and, for Schedule Health, as a colored chip in
 `TreeGrid.tsx`. This feature is the same shape of thing, one level up the tree: a live-computed
@@ -42,7 +42,7 @@ reading of "what do the children say," not a new fact anyone attests to.
 ## What's computed
 
 A new pure function, `leafRollupStatus(state, issueId): 'Blocked' | 'In Progress' | 'Closed' | null`,
-added to `lib/schedule.ts` beside `TERMINAL_STATUSES`/`BLOCKED_STATUSES`. It walks
+added to `lib/planning/schedule.ts` beside `TERMINAL_STATUSES`/`BLOCKED_STATUSES`. It walks
 `state.issues` recursively by `parentId`, collecting the real `status` of every non-deleted leaf
 descendant (an issue with no sub-issues of its own), skipping soft-deleted (`deletedAt`) issues
 the same way every other computed field in this app does. Returns `null` for a leaf issue itself
@@ -70,7 +70,7 @@ belongs to exactly one tier and the two orderings are provably equivalent; the o
 matches the convention of surfacing the most urgent condition first, the same way a dashboard
 leads with what needs attention.
 
-`buildTree()` (`lib/tree.ts`) gains one more field per row, computed once, not re-derived per
+`buildTree()` (`lib/planning/tree.ts`) gains one more field per row, computed once, not re-derived per
 render: `statusRollup: 'Blocked' | 'In Progress' | 'Closed' | null`, via
 `leafRollupStatus(state, row.id)` at both of `buildTree`'s existing row-construction sites — the
 same copy-through pattern `raidKind` and a dozen other fields already follow there.

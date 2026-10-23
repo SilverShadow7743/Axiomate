@@ -1,5 +1,5 @@
 import type { WorkspaceState } from './workspace'
-import type { AcceptanceState, DeliveryState } from './milestone'
+import type { AcceptanceState, DeliveryState } from './planning/milestone'
 
 /**
  * A statement of work's payment-schedule line, stripped to what a client may see of their own

@@ -213,7 +213,7 @@ export function dateConsistencyCheck(state: WorkspaceState): IntegrityCheckResul
 
 /**
  * Whether a status was ever legitimately REACHED is deliberately not asked — the status
- * transition graph's own comment (`lib/statusPolicy.ts`) says it "governs changes, not the
+ * transition graph's own comment (`lib/planning/statusPolicy.ts`) says it "governs changes, not the
  * past", and imported history sits in combinations the graph would never produce on purpose.
  * What IS checked: is the stored value one this application's type even recognises. `status` is
  * a plain `String` column, not a database enum, so nothing stops a string that isn't a real

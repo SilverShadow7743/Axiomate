@@ -167,7 +167,7 @@ send, with a compensating reset on failure.
 **H11. The whole workspace is loaded on every request and shipped to every browser.** 39 uncapped
 `findMany` per tenant (`lib/db/repo.ts:176-260`, only audit bounded at 5,000), repeated inside
 every write transaction; `docs/runtime-notes.md:275` measures 375 KB → 1.1 MB per interaction,
-two-thirds audit, paid twice. `buildTree` is O(n²) on every state change (`lib/tree.ts:42-55`,
+two-thirds audit, paid twice. `buildTree` is O(n²) on every state change (`lib/planning/tree.ts:42-55`,
 while `predecessorsOf` beside it is indexed). Fine at 131 issues; the break is months of audit
 rows, not years. *Fix:* drop audit from the boot payload; scope documents and notes to the
 viewed subject; index the three child lookups; add the refetch path the code already mentions.

@@ -220,7 +220,7 @@ two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
 **Verify:** `npx tsc --noEmit` clean across the whole tree (this is the step where every
 error Step 2 introduced gets resolved — the count going to zero here is real signal, not
 assumed), then `npm run validate:scenarios` — full suite `0 FAIL`, and specifically
-confirm by name that `TV1`-`TV6` (fed by `lib/tree.ts`'s search string, itself fed by
+confirm by name that `TV1`-`TV6` (fed by `lib/planning/tree.ts`'s search string, itself fed by
 `description`), any existing note/mention scenarios, and `EZ5` (estimator, which reads
 `description`) still pass rather than silently stop exercising what they did before.
 
@@ -252,11 +252,11 @@ intermediate state, not a smaller safe one.
 
 ## Step 4 — Downstream read consumers
 
-**Files:** `lib/commercial/estimator.ts:242`, `lib/tree.ts:380`.
+**Files:** `lib/commercial/estimator.ts:242`, `lib/planning/tree.ts:380`.
 
 - `lib/commercial/estimator.ts`: `` `${issue.subject} ${issue.description} ${issue.module}`.toLowerCase() ``
   → `` `${issue.subject} ${richTextToPlainText(issue.description)} ${issue.module}`.toLowerCase() ``.
-- `lib/tree.ts`: the same swap in the search-string builder (line 380).
+- `lib/planning/tree.ts`: the same swap in the search-string builder (line 380).
 
 Small and mechanical once Step 1's extractor exists — the only reason this is its own
 step rather than folded into Step 3 is that Step 3 is already large enough to be its own

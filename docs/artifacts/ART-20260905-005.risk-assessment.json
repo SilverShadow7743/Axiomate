@@ -30,7 +30,7 @@
       },
       {
         "id": "R3",
-        "description": "The word 'None' is reused as the value. The Discipline facet already uses 'None' to mean 'records with no discipline yet', a real filter that returns rows (lib/tree.ts:389-394). A shared token in adjacent controls of the same bar means one of them is wrong in matchesFilters, in parseSavedFilters, or in the Filters chip count.",
+        "description": "The word 'None' is reused as the value. The Discipline facet already uses 'None' to mean 'records with no discipline yet', a real filter that returns rows (lib/planning/tree.ts:389-394). A shared token in adjacent controls of the same bar means one of them is wrong in matchesFilters, in parseSavedFilters, or in the Filters chip count.",
         "likelihood": "medium",
         "impact": "medium",
         "mitigation": "BR7: a typed sentinel on FilterState with an instructing caption ('Client: choose...'); every consumer that compares to the literal 'All' is moved to compare to the resting value.",

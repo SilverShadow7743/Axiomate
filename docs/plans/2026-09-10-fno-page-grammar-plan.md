@@ -11,11 +11,11 @@ refreshed truthfully once the shell has changed.
 
 ## Steps
 
-**1. The health score — `lib/config.ts`, `lib/workspace.ts`, `lib/portfolio.ts`.**
+**1. The health score — `lib/config.ts`, `lib/workspace.ts`, `lib/planning/portfolio.ts`.**
 
 - `lib/config.ts`: a `HealthScorePolicy` interface — `weights: Record<ConcernKind, number>`
   (import `ConcernKind` from `./portfolio`, or move `CONCERN_ORDER` into config to avoid the
-  cycle; check which direction `lib/portfolio.ts` already imports from `./config` — it does, so
+  cycle; check which direction `lib/planning/portfolio.ts` already imports from `./config` — it does, so
   the constant moves to config and portfolio re-exports it) and `thresholds: { amber: number;
   red: number }`. `OperatingModel.healthScore: HealthScorePolicy` beside `sla` (`lib/config.ts:942`);
   `DEFAULT_HEALTH_SCORE` seeded where `DEFAULT_SLA` is (`:1422`). Default weights follow
@@ -29,7 +29,7 @@ refreshed truthfully once the shell has changed.
   live-verify found with `signatureTemplate`: read it as `state.model.healthScore ??
   DEFAULT_HEALTH_SCORE` at every consumer rather than assuming the seed reached a stored
   model.
-- `lib/portfolio.ts`: `healthScore(line: PortfolioLine, policy: HealthScorePolicy, exclude?:
+- `lib/planning/portfolio.ts`: `healthScore(line: PortfolioLine, policy: HealthScorePolicy, exclude?:
   ConcernKind[]): HealthScore` where `HealthScore = { value: number; band: 'green' | 'amber' |
   'red'; terms: { kind: ConcernKind; count: number; weight: number }[]; excluded: ConcernKind[] }`
   — `terms` is what every rendering prints ("Overdue 3 × 2 + …"), `excluded` is what the
@@ -38,7 +38,7 @@ refreshed truthfully once the shell has changed.
   fortnight of quiet outweigh three broken commitments — the reverse of `CONCERN_ORDER`'s own
   argument that quiet is the weakest evidence. `stale` therefore contributes as presence
   (1 × weight) with its days carried on the term for the label; `PF3` pins this.
-- **Rewrite the header comment** (`lib/portfolio.ts:13-46`): keep the refusal and its reason
+- **Rewrite the header comment** (`lib/planning/portfolio.ts:13-46`): keep the refusal and its reason
   verbatim, then record the 10 Sep reversal, why (client packs), and the four conditions the
   design sets. `PortfolioPanel.tsx:20-24` and `MyWorkPanel.tsx:25-29` restate the refusal —
   update both so no comment in the codebase still says "there will not be one."
@@ -85,7 +85,7 @@ and controls only, which is what "collapsed" means. 4b then turned out smaller t
 record action pane already exists structurally — `SelectionToolbar` renders the whole-record
 verbs (Edit, Move, Link, Mark complete, Archive…) in the drawer's `.context-bar` beside the
 record, and `FieldStrip` already carries the suggested status transition as a `.btn primary`
-("the one ordinary next move", `lib/statusPolicy.ts`). So 4b is the one-primary rule enforced
+("the one ordinary next move", `lib/planning/statusPolicy.ts`). So 4b is the one-primary rule enforced
 (Overview's own `Edit` demoted from primary to secondary) and a duplicate check, not a rebuild.*
 
 - **FastTabs.** `TABS` (`DetailPanel.tsx:375-379`) stays the single source of order — the two
@@ -105,7 +105,7 @@ record, and `FieldStrip` already carries the suggested status transition as a `.
   dispatched from inside the panels (status transition, assign/owner, escalate/severity, archive,
   convert-to-personal from the mail-triage plan when it lands). Grep each existing action's
   current button and move it, do not duplicate it — F&O's "no duplicate New/Delete" rule. One
-  `.btn.primary` (the most likely next status transition from `lib/statusPolicy.ts`); the rest
+  `.btn.primary` (the most likely next status transition from `lib/planning/statusPolicy.ts`); the rest
   `.btn`. Part-level actions (add note, upload evidence, add checklist item) stay in their
   FastTab as local toolbars.
 
@@ -235,4 +235,4 @@ sentence the design forbids.
   boundary is leaking into the score and that is a disclosure question for the design.
 - **If a second `.btn.primary` is needed on the record action pane for some row kind** —
   surfaces at step 4; means the status-transition model has two "most likely next" moves, which
-  is a `lib/statusPolicy.ts` question.
+  is a `lib/planning/statusPolicy.ts` question.

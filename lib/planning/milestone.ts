@@ -30,8 +30,8 @@
  * third. `milestonePosition` therefore distinguishes *no milestones* from *no progress*.
  */
 
-import type { ContractedPosition } from './commercial/changeRequest'
-import { workingDaysBetween } from './dates'
+import type { ContractedPosition } from '../commercial/changeRequest'
+import { workingDaysBetween } from '../dates'
 
 /** Where the work has got to. Says nothing about money. */
 export const DELIVERY_STATES = ['Planned', 'InProgress', 'Delivered'] as const
@@ -301,7 +301,7 @@ export type MilestoneRisk = 'overdue' | 'dueSoon'
  * Whether this milestone's date is a live concern, or null.
  *
  * Clears once `Delivered` — the date commitment is met at that point regardless of where
- * acceptance stands, which the row already reports separately. The same shape `lib/schedule.ts`'s
+ * acceptance stands, which the row already reports separately. The same shape `lib/planning/schedule.ts`'s
  * `computeHealth` and `lib/watch.ts` use for an issue's own due date: a plain string comparison
  * decides `overdue`, `workingDaysBetween` only sizes the warning window for `dueSoon` — never a
  * score, just a date compared against a date.

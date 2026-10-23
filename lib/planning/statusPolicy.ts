@@ -1,4 +1,4 @@
-import { ISSUE_STATUSES, type IssueStatus } from './types'
+import { ISSUE_STATUSES, type IssueStatus } from '../types'
 
 /**
  * Which status changes are allowed, and what a change has to carry.

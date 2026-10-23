@@ -7,7 +7,7 @@ for one calendar aggregating meetings, due dates, milestones, leave, holidays, a
 personal events. Two of those turned out not to be real data anywhere in this app — there is no
 meeting/event entity or calendar integration (`AGENT_MEETING_ACTIONS` is *declared*, `runtime:
 'declared'`, with no implementation — the same "declared, no runtime" honesty this codebase
-already applies elsewhere), and `Milestone` (`lib/milestone.ts:64`) carries no person field at
+already applies elsewhere), and `Milestone` (`lib/planning/milestone.ts:64`) carries no person field at
 all, only a `sowId` — "my milestones" is not a well-defined question the data can answer.
 
 Resolved, not glossed over: `PersonalEvent` is a new, minimal, manually-entered record (no sync,

@@ -15,7 +15,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'
-import { classificationsOf } from '@/lib/tree'
+import { classificationsOf } from '@/lib/planning/tree'
 import { isExternalPartyKind, isTierKind, kindLabel, liveDisciplines, liveWorkTypes, tiersOf } from '@/lib/config'
 import { useLabels } from './labels'
 import { ownerChoicesFor, UNASSIGNED } from '@/lib/ownerChoices'

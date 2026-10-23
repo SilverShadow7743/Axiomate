@@ -77,42 +77,42 @@ this product:
 - Leave is a `Commitment` (kind `'Leave'`, approved/pending/returned) — `lib/capacity/availability.ts`.
   Approved leave zeroes a day outright; pending leave is surfaced as a named conflict rather
   than silently subtracted. Consumed by `capacityFor`/`availabilityFor`.
-- **Already threaded correctly**: `lib/portfolio.ts:222`, `lib/replanning.ts:50`,
-  `lib/assist.ts:70`, `lib/forecast.ts:65`, and `lib/workspace.ts:7053` all call
+- **Already threaded correctly**: `lib/planning/portfolio.ts:222`, `lib/planning/replanning.ts:50`,
+  `lib/assist.ts:70`, `lib/planning/forecast.ts:65`, and `lib/workspace.ts:7053` all call
   `holidaySetOf(state.model)` and pass it into `availabilityFor`/`overlapWorkingDays`. The
   capacity/availability/forecast/replanning subsystem — "who has time, when" — already accounts
   for holidays and leave. This is not the gap.
 
 ## The actual gap — the scheduling and due-date engine never receives it
 
-`lib/schedule.ts`, `lib/watch.ts`, and `lib/milestone.ts` compute due dates, overdue/at-risk/
+`lib/planning/schedule.ts`, `lib/watch.ts`, and `lib/planning/milestone.ts` compute due dates, overdue/at-risk/
 due-soon status, and the dependency-chain project schedule using the *same*
 `workingDaysBetween`/`addWorkingDays` functions above — but every call site omits the
 `holidays` argument. A declared org holiday is silently treated as an ordinary working day for
 every one of these:
 
-- `lib/schedule.ts:165` `proposeTargetDate` — the SLA target date from an issue's raised date.
-  Called from `lib/sla.ts:97` (the plan-and-commit-dates flow), `components/DetailPanel.tsx:891`,
+- `lib/planning/schedule.ts:165` `proposeTargetDate` — the SLA target date from an issue's raised date.
+  Called from `lib/planning/sla.ts:97` (the plan-and-commit-dates flow), `components/DetailPanel.tsx:891`,
   and three sites in `components/IssueWorkspace.tsx`.
-- `lib/schedule.ts:174` `computeDurations`'s `workingDuration` — the working-day count shown on
-  planned rows (`lib/tree.ts:68,171,249`).
+- `lib/planning/schedule.ts:174` `computeDurations`'s `workingDuration` — the working-day count shown on
+  planned rows (`lib/planning/tree.ts:68,171,249`).
 - `lib/watch.ts:138,142,150` — the overdue/dueSoon/stale detection `observe()` runs on every
   scheduled pass.
-- `lib/milestone.ts:312` `milestoneRisk` — a milestone's own due-soon window.
+- `lib/planning/milestone.ts:312` `milestoneRisk` — a milestone's own due-soon window.
 - `lib/workspace.ts:2391, 3548-3549` — `addWorkingDays` calls while building a schedule from a
   template's phase weights.
 
 All of these already have `state`/`state.model` in scope at the call site (confirmed by
 reading each), so `holidaySetOf(state.model)` is a one-line addition at every one of them —
-mechanical, not a redesign, and the exact pattern `lib/portfolio.ts`/`lib/replanning.ts`/
-`lib/assist.ts`/`lib/forecast.ts` already proved safe. `milestoneRisk` alone needs a new
+mechanical, not a redesign, and the exact pattern `lib/planning/portfolio.ts`/`lib/planning/replanning.ts`/
+`lib/assist.ts`/`lib/planning/forecast.ts` already proved safe. `milestoneRisk` alone needs a new
 parameter threaded from its caller, since it currently receives no model at all.
 
 ## The harder case — `criticalResolutionPath` has no calendar awareness at all
 
-The actual dependency-chain project-schedule projection (`lib/schedule.ts:209-359`, spec §11)
+The actual dependency-chain project-schedule projection (`lib/planning/schedule.ts:209-359`, spec §11)
 does not use `workingDaysBetween`/`addWorkingDays` — it uses its own `shiftIso`
-(`lib/schedule.ts:361-363`), which is **pure calendar-day arithmetic**: not even the plain
+(`lib/planning/schedule.ts:361-363`), which is **pure calendar-day arithmetic**: not even the plain
 weekend skip the SLA math already has, let alone holidays. Every `lagDays`/span computed
 through the dependency graph currently assumes Saturdays and Sundays are ordinary working days.
 

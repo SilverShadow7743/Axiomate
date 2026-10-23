@@ -9,7 +9,7 @@ docs named in the "First curation pass" section, taken as the actual list rather
 candidates.
 
 **One addition beyond the draft.** Three of the six named sources — the Goals reasoning, the
-skills/`candidatesFor` module note, and `lib/portfolio.ts`'s "name the concerns, count them" —
+skills/`candidatesFor` module note, and `lib/planning/portfolio.ts`'s "name the concerns, count them" —
 are `lib/*.ts` header comments, not `docs/plans/*.md` files. Rather than fork a second, static
 copy of that reasoning into a new doc (which would drift from the comment the way
 `AccessPolicy.grants`/`DEFAULT_AUTOMATION_RULES` already showed a stored snapshot can),
@@ -100,7 +100,7 @@ Named as *candidates*, since the actual choice is Nishant's: `2026-08-31-first-r
 (the "not more UI" reasoning, attached to My work), `2026-09-08-admin-first-run-design.md`
 (attached to the same card's admin variant), the Goals design (attached to Configuration →
 Goals), the automation design (attached to Configuration → Automation), the skills/`candidatesFor`
-module note (attached to a Skills tab or the Skills config screen), `lib/portfolio.ts`'s "name
+module note (attached to a Skills tab or the Skills config screen), `lib/planning/portfolio.ts`'s "name
 the concerns, count them" reasoning (attached to Portfolio). Five or six to start, not eighty.
 
 ## What stays out

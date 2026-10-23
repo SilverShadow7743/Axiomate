@@ -64,7 +64,7 @@ export function todaysMeetings(state: WorkspaceState, actor: Actor, today: strin
 
 (`today` is already a `YYYY-MM-DD` string throughout this codebase — `startAt.slice(0, 10)`
 matches that convention rather than parsing a `Date`, consistent with how the rest of
-`lib/mywork.ts` and `lib/schedule.ts` compare dates as strings.) Import `Meeting` from
+`lib/mywork.ts` and `lib/planning/schedule.ts` compare dates as strings.) Import `Meeting` from
 `./meetings`.
 
 Add one new scenario to `scripts/scenario-validation.ts`, driving `todaysMeetings` directly
@@ -178,7 +178,7 @@ the code path works, not that real users have real meetings recorded):
 
 - **Date comparison** — `today` is a `YYYY-MM-DD` string; `Meeting.startAt` is a full ISO
   datetime. Compare via `startAt.slice(0, 10) === today`, not a `Date` parse/compare — matching
-  the string-comparison convention already used throughout `lib/mywork.ts`/`lib/schedule.ts`.
+  the string-comparison convention already used throughout `lib/mywork.ts`/`lib/planning/schedule.ts`.
   A `Date`-based comparison risks a timezone-shift bug this codebase has deliberately avoided
   elsewhere.
 - **`attendeeIds` holds directory ids, not names** — match against `person.id`

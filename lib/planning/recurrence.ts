@@ -1,4 +1,4 @@
-import type { Severity } from './types'
+import type { Severity } from '../types'
 
 /**
  * Recurring work: a configured rule that raises an issue on a cadence.

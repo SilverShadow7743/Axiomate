@@ -1,6 +1,6 @@
-import { issuesUnder } from './commercial/engagement'
+import { issuesUnder } from '../commercial/engagement'
 import { isTerminal } from './schedule'
-import type { WorkspaceState } from './workspace'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * Targets a firm sets for itself, measured from what the workspace already records.
@@ -43,7 +43,7 @@ import type { WorkspaceState } from './workspace'
  *
  * Milestones accepted, scope agreed and contracted value are all derivable and all absent. They
  * are commercial figures, and there is no read grant for those — see the same note in
- * `lib/portfolio.ts`. Adding them as a goal measure would reintroduce through the back door
+ * `lib/planning/portfolio.ts`. Adding them as a goal measure would reintroduce through the back door
  * exactly what was declined at the front.
  */
 

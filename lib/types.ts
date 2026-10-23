@@ -239,7 +239,7 @@ export interface ScheduleRow {
   accountable: AccountableParty | null
 
   /**
-   * RAID (`lib/raid.ts`) — `null` on a non-Risk row, or a Risk not yet judged. Never a
+   * RAID (`lib/planning/raid.ts`) — `null` on a non-Risk row, or a Risk not yet judged. Never a
    * default: a risk nobody has judged is a different fact from a low one.
    */
   riskLikelihood: number | null
@@ -382,7 +382,7 @@ export interface FilterState {
   owner: string
   accountable: string
   health: string
-  /** Show only Risk and Decision rows (`lib/raid.ts`'s RaidKind), together — the RAID log. */
+  /** Show only Risk and Decision rows (`lib/planning/raid.ts`'s RaidKind), together — the RAID log. */
   raidOnly: boolean
   /** Show only records intake auto-created from a brand-new thread that nobody has yet confirmed,
    *  reclassified or converted — the triage queue, as a chip rather than a screen. */
@@ -397,7 +397,7 @@ export interface FilterState {
  * every client — and after the scoped-All step it becomes the person-relative every-client.
  * 'None' on Discipline means "records that carry no discipline", a real query. This value
  * means neither: nothing has been chosen, and until something is the view lists nothing
- * (deny by default, BR2). `matchesFilters` and `visibleRows` in `lib/tree.ts` read it; every
+ * (deny by default, BR2). `matchesFilters` and `visibleRows` in `lib/planning/tree.ts` read it; every
  * consumer that compares `filters.client` to the literal 'All' has to compare to this as well
  * (BR7), which is why it is exported and typed rather than an inline string. The bracketed
  * form cannot collide with a client node's name and is never shown to a person as-is — the

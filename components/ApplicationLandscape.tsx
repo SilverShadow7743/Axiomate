@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import DetailDrawer from './DetailDrawer'
 import { useQuickFilterFocus } from './useQuickFilterFocus'
 import { can } from '@/lib/access'
-import { isTerminal } from '@/lib/schedule'
+import { isTerminal } from '@/lib/planning/schedule'
 import { externalPartyKinds, tiersOf } from '@/lib/config'
 import {
   applicationConcerns,

@@ -7,7 +7,7 @@
  * snapshot on a schedule, so a trend line would be invented, not read.
  */
 
-import { isTerminal } from './schedule'
+import { isTerminal } from './planning/schedule'
 import { workingDaysBetween } from './dates'
 import type { IssueRecord } from './workspace'
 import type { Severity, IssueStatus } from './types'

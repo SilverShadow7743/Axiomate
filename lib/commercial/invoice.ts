@@ -1,12 +1,12 @@
 /**
  * Turning a billable milestone into a record.
  *
- * Pure — no clock, no I/O, same discipline as `lib/milestone.ts`. See
+ * Pure — no clock, no I/O, same discipline as `lib/planning/milestone.ts`. See
  * `docs/plans/2026-09-07-invoicing-design.md` for why this exists and what it deliberately does
  * not do (no tax/VAT, no PDF, no payment processing, no accounting-system integration).
  */
 
-import { isBillable, type Milestone } from '../milestone'
+import { isBillable, type Milestone } from '../planning/milestone'
 
 export const INVOICE_STATUSES = ['Draft', 'Sent', 'Paid', 'Cancelled'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]

@@ -38,7 +38,7 @@ for (const sow of Object.values(state.sows).filter((s) => !s.deletedAt)) {
 - **Unpaid invoices tab**: `Invoice.status === 'Sent'` (raised, not yet paid) — `Invoice`'s own
   status enum already distinguishes this from `Draft`/`Paid`/`Cancelled`; no new status invented.
 - **At-risk margin tab**: `cost.marginPct` below a **configurable** threshold — reusing the
-  engagement health score's own disclosure discipline (`lib/portfolio.ts`): a printed,
+  engagement health score's own disclosure discipline (`lib/planning/portfolio.ts`): a printed,
   visible threshold in the UI, not a silent cutoff. For v1, the threshold is a plain number
   input on the tab itself (defaulting to 20%), not a new Configuration section — a
   Configuration-level setting is a real escalation if this needs to be a firm policy rather

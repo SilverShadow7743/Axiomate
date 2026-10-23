@@ -77,7 +77,7 @@ tenantId, scrub entries in both proofs; the migration stands alone (no DML).
 
 ## Find-a-slot
 
-`lib/scheduling.ts`, pure: `suggestDays(args: { attendeeIds, durationHours, from, to,
+`lib/planning/scheduling.ts`, pure: `suggestDays(args: { attendeeIds, durationHours, from, to,
 meetings, commitments, holidays, profiles })` → the earliest N working days where EVERY
 attendee's free hours (pattern day − that day's meeting hours − zeroed by leave/holiday)
 clear the duration, each candidate carrying its named blockers ("Fri 4 Sep: Sam on leave").

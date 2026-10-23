@@ -14,7 +14,7 @@ Ground truth verified while writing (cite, don't re-derive):
   `clientView()` first and count the withheld remainder for the disclosure line.
 - `clientView` (`lib/clientBoundary.ts:16`) returns a full redacted `WorkspaceState`; it strips
   estimates entirely (`estimates: {}` at line 102) and filters `activities` to surviving issues.
-- `buildTree(state, today)` (`lib/tree.ts:16`) is the canonical per-issue schedule row builder:
+- `buildTree(state, today)` (`lib/planning/tree.ts:16`) is the canonical per-issue schedule row builder:
   percent = `percentOverride` → `rollUp(activities)` → `STATUS_PROGRESS[status]` (tree.ts:170–179),
   plus `scheduleHealth` (computeHealth) and `projectedCompletionDate = plannedEndDate` (tree.ts:182).
   Progress in the packs = `buildTree(clientView(...), asOf)` — after the boundary, by construction.

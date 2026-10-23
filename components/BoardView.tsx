@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { boardLanes, describeBoard, dropOutcome } from '@/lib/board'
-import { allowedNext, type StatusPolicy } from '@/lib/statusPolicy'
+import { allowedNext, type StatusPolicy } from '@/lib/planning/statusPolicy'
 import type { IssueStatus, ScheduleRow } from '@/lib/types'
 import { useOverlay } from './useOverlay'
 

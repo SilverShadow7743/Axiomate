@@ -75,7 +75,7 @@ calculation.
 ## Scheduling — allocation dates and work-execution dates are genuinely separate
 
 `Allocation.startDate`/`endDate` (a project percentage window) share no field and no derivation
-with `Issue.plannedStartDate`/`plannedEndDate`/`actualEndDate` (`lib/schedule.ts`'s
+with `Issue.plannedStartDate`/`plannedEndDate`/`actualEndDate` (`lib/planning/schedule.ts`'s
 `ScheduleRow` type). The product owner's "allocation date vs. work execution date" distinction
 is real and already structurally enforced — a feature that tries to derive one from the other is
 inventing a relationship the schema doesn't have.

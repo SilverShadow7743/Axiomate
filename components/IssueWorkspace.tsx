@@ -55,7 +55,7 @@ import {
   type WorkspaceState,
 } from '@/lib/workspace'
 import type { IssueIndexEntry, Proposal } from '@/lib/chat'
-import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
+import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/planning/tree'
 import { clientFilterScopeFor } from '@/lib/projectBoundary'
 import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
 import { applySavedFilters } from '@/lib/savedViews'
@@ -63,10 +63,10 @@ import { sortTree } from '@/lib/sort'
 import { availabilityForAssignment, refusesAssignment } from '@/lib/capacity/assignment'
 import UserMenu from './UserMenu'
 import { addDays, maxIso, minIso } from '@/lib/dates'
-import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'
+import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/planning/schedule'
 import { DOMAIN_PAD_DAYS, ROW_H } from '@/lib/layout'
 import type { PanelState } from '@/lib/panel'
-import { buildScale } from '@/lib/timeline'
+import { buildScale } from '@/lib/planning/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
 import ClientPackView from './ClientPackView'
@@ -76,7 +76,7 @@ import FirstRunCard from './FirstRunCard'
 import AdminFirstRunCard from './AdminFirstRunCard'
 import SearchResults from './SearchResults'
 import { searchWorkspace, type SearchHit } from '@/lib/search'
-import { planSlaDates, slaReason } from '@/lib/sla'
+import { planSlaDates, slaReason } from '@/lib/planning/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
 import BoardView from './BoardView'
@@ -960,7 +960,7 @@ export default function IssueWorkspace({
    *  gets the same scope (BR12). Undefined for a client/guest seat (F1 of ART-20260906-026): a
    *  client's stakeholder set is always empty (`clientView` zeroes `projectMembers`), so building
    *  a scope for one silently dropped any client-visible issue nested under a real project-tier
-   *  node — `withinScope` in `lib/tree.ts` treats no scope as today's unchanged, content-only
+   *  node — `withinScope` in `lib/planning/tree.ts` treats no scope as today's unchanged, content-only
    *  visibility, which is what a client or guest seat must get. */
   const scope = useMemo(
     () => (isInternal ? clientFilterScopeFor(state, personId) : undefined),

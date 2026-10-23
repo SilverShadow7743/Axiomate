@@ -142,16 +142,16 @@ optional and has no paired field to be out of order with, unlike `PersonalEvent`
 **Verify:** `npx tsx scripts/scenario-validation.ts` — `PA2 PASS`, `PA3 PASS`, `TRG1 PASS`,
 scenario count +3, no regressions.
 
-**4. `lib/types.ts` / `lib/tree.ts` — the filter chip's plumbing.**
+**4. `lib/types.ts` / `lib/planning/tree.ts` — the filter chip's plumbing.**
 
 - `TreeRow`: add `needsTriage: boolean` beside `raidKind` (`lib/types.ts` ~251); default `false`
-  at row construction (`lib/tree.ts` ~319, beside `raidKind: null`).
+  at row construction (`lib/planning/tree.ts` ~319, beside `raidKind: null`).
 - Row population: `row.needsTriage = issue.needsTriage === true`, right beside
-  `row.raidKind = raidKindOf(...)` (`lib/tree.ts:147`).
+  `row.raidKind = raidKindOf(...)` (`lib/planning/tree.ts:147`).
 - `FilterState`: add `triageOnly: boolean`; `EMPTY_FILTERS.triageOnly = false` (`lib/types.ts`,
   the `raidOnly` neighborhood).
 - `matchesFilters`: `if (f.triageOnly && !row.needsTriage) return false`, right beside the
-  existing `raidOnly` line (`lib/tree.ts:442`).
+  existing `raidOnly` line (`lib/planning/tree.ts:442`).
 
 **Verify:** `npx tsc --noEmit`.
 

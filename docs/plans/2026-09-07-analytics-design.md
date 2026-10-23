@@ -12,7 +12,7 @@ it, before saying what is.*
 ## Why not a trend line
 
 A trend chart needs the same fact measured repeatedly over time. This codebase's own doctrine —
-stated first in `lib/portfolio.ts`, restated in `lib/goals.ts`, restated again in the Application
+stated first in `lib/planning/portfolio.ts`, restated in `lib/planning/goals.ts`, restated again in the Application
 Suite design — is that derived values are computed on every read and never stored as fact. Nothing
 in this codebase captures a daily or weekly point-in-time count of anything. `Snapshot`
 (`prisma/schema.prisma`) is the one thing that freezes a number, and it is a deliberate, manual
@@ -26,7 +26,7 @@ every change since the cap, an expensive and fragile thing to build for a chart 
 see specifically.
 
 **So this design does the honest thing available: a live cross-tab, computed from the register as
-it stands right now, refreshed every time the view is opened — same discipline `lib/portfolio.ts`
+it stands right now, refreshed every time the view is opened — same discipline `lib/planning/portfolio.ts`
 already applies to its own concern counts.** A trend view is a real, separate design, gated on
 this codebase actually capturing period snapshots on a schedule, which it does not do today.
 
@@ -34,12 +34,12 @@ this codebase actually capturing period snapshots on a schedule, which it does n
 
 Firm-wide, across every client and engagement at once — the one cross-cutting view `Portfolio`
 does not offer, because `Portfolio` is deliberately per-engagement. Four cross-tabs, each a table
-of counts, each answering a question `lib/portfolio.ts`'s own doctrine would recognise — a
+of counts, each answering a question `lib/planning/portfolio.ts`'s own doctrine would recognise — a
 named count, not a score:
 
 - **By severity × status** — how much High/Medium/Low work sits in each status, firm-wide.
 - **By client** — open count, and of that, how many are High severity — the two facts
-  `lib/portfolio.ts` already leads with per engagement, rolled up across all of them.
+  `lib/planning/portfolio.ts` already leads with per engagement, rolled up across all of them.
 - **By age bucket** — 0–7 / 8–30 / 31–90 / 90+ days since raised, open issues only. Bucketed
   rather than an average, because an average of ages hides exactly the long tail a firm needs to
   see (ten issues at 3 days and one at 400 days averages to a number that alarms nobody).
@@ -47,7 +47,7 @@ named count, not a score:
   allocation but not shown firm-wide in one table today.
 
 Every figure is `Object.values(state.issues).filter(...)`, computed in `lib/analytics.ts` as pure
-functions with no clock and no I/O — the same shape `lib/portfolio.ts`'s `summariseScope` already
+functions with no clock and no I/O — the same shape `lib/planning/portfolio.ts`'s `summariseScope` already
 takes. No new schema, no new reducer arm, no new permission: this is a read view over data every
 other screen already reads, gated on whatever already gates seeing the issue register (no
 narrower access than Tree or Board already grant).

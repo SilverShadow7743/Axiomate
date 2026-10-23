@@ -7,7 +7,7 @@ import { issuesUnder } from '@/lib/commercial/engagement'
 import { sowPosition } from '@/lib/commercial/sow'
 import { sowCostOf } from '@/lib/commercial/rates'
 import { formatIso } from '@/lib/dates'
-import type { Milestone } from '@/lib/milestone'
+import type { Milestone } from '@/lib/planning/milestone'
 import type { Invoice } from '@/lib/commercial/invoice'
 import type { WorkspaceState } from '@/lib/workspace'
 

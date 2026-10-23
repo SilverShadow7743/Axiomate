@@ -1,4 +1,4 @@
-import type { ScheduleRow, Severity, SlaPolicy } from './types'
+import type { ScheduleRow, Severity, SlaPolicy } from '../types'
 import { isTerminal, proposeTargetDate } from './schedule'
 
 /**

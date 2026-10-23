@@ -32,7 +32,7 @@ Not a general-purpose dynamic-schema engine, and not Hive's 8-type system. Two o
 types are structurally large on their own:
 
 - **Formula** — a computed field needs an expression language, a dependency graph, and a
-  recompute story. This codebase's own repeated position (`lib/portfolio.ts`, `lib/capacity/skills.ts`,
+  recompute story. This codebase's own repeated position (`lib/planning/portfolio.ts`, `lib/capacity/skills.ts`,
   `lib/capacity/capacity.ts`, and now `docs/plans/2026-09-08-admin-first-run-design.md`'s own
   reasoning) is that **derived values are computed at read time from a pure function, never
   stored as fact** — `bySeverityAndStatus`, `candidatesFor`, `profileAt` all work this way. A

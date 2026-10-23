@@ -21,7 +21,7 @@ Report only defects that would produce a WRONG RESULT for some concrete input. D
   {
     key: 'data-honesty',
     prompt: `The core constraint of this app: the source issue log has NO due dates, no activity breakdown, and no progress figures. The app must never present derived or invented values as recorded facts.
-Read ${ROOT}/scripts/transform-issues.mjs, ${ROOT}/lib/schedule.ts, ${ROOT}/lib/tree.ts, ${ROOT}/components/DetailPanel.tsx, ${ROOT}/components/GanttChart.tsx, ${ROOT}/components/IssueFocus.tsx, ${ROOT}/README.md.
+Read ${ROOT}/scripts/transform-issues.mjs, ${ROOT}/lib/planning/schedule.ts, ${ROOT}/lib/planning/tree.ts, ${ROOT}/components/DetailPanel.tsx, ${ROOT}/components/GanttChart.tsx, ${ROOT}/components/IssueFocus.tsx, ${ROOT}/README.md.
 Find any place where a derived, proposed, or defaulted value is displayed WITHOUT being labelled as such, or where the UI could mislead a user into thinking a date/percentage came from the source log. Also flag any claim in the README that the code does not actually support.
 Report only genuine provenance/labelling violations.`,
   },

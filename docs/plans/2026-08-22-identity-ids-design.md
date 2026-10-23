@@ -64,7 +64,7 @@ samePerson(model, ref: { name: string; id?: string | null }, person: Person): bo
 Consumers updated to use it: `lib/mywork.ts` (mine), `lib/notifications.ts`
 (`inboxFor`/`unreadCount`), `lib/capacity/capacity.ts` (allocations/commitments for a person),
 `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts` (`weekStateFor`, approval self-check),
-`lib/goals.ts` person measures. The id-wins rule is what makes a rename safe: after it, the
+`lib/planning/goals.ts` person measures. The id-wins rule is what makes a rename safe: after it, the
 name on the record is stale display data, and the directory's current name renders instead
 wherever the id resolves.
 

@@ -6,7 +6,7 @@ the raw idea directly, per the user's own request. Not built.
 
 ## What already exists, and what's actually missing
 
-The rollup itself is real and live: `rollUp()` (`lib/schedule.ts`) computes a weighted
+The rollup itself is real and live: `rollUp()` (`lib/planning/schedule.ts`) computes a weighted
 `percentComplete` from a row's children, shown on every parent row in the Tree. That is not the
 gap. The gap is narrower: **nobody is told when a parent's sub-work finishes** — the percentage
 quietly reaches 100% and a person has to notice it themselves and close the parent by hand.
@@ -35,7 +35,7 @@ leaf in the register.
 **No auto-close.** A rule reacting to `issue.allSubworkClosed` with `setStatus: 'Closed -
 confirmed'` would be refused by the exact same transition graph a person's own click goes
 through — `Closed - confirmed` is gated on client-agreement evidence
-(`lib/statusPolicy.ts`'s own comment: *"the status that claims the client agreed... something
+(`lib/planning/statusPolicy.ts`'s own comment: *"the status that claims the client agreed... something
 has to be producible later"*), and this condition proves nothing about that. The honest,
 buildable version is a **notification** — "OAPIL-120's sub-work is all closed" to the owner —
 using the exact same `notify` RuleActionKind every other watch condition already uses. Whether
@@ -55,5 +55,5 @@ already existed before I9).
 
 If a firm actually wants auto-close on this condition despite the evidence gate — that is a
 request to weaken `Closed - confirmed`'s own evidence requirement, a different and much bigger
-decision than this one, and should be raised against `lib/statusPolicy.ts` directly rather than
+decision than this one, and should be raised against `lib/planning/statusPolicy.ts` directly rather than
 smuggled in through a watch condition's default rule.
