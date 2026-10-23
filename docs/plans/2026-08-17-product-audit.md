@@ -493,7 +493,7 @@ This is adequate for one firm and **not** adequate for multi-tenant SaaS.
 ### Remove
 
 - `Engagement.sowReference` (superseded by `Sow`).
-- Duplicate `SEVERITIES` / `ACCOUNTABLES` declarations in `lib/chat.ts` and `lib/editing.ts`.
+- Duplicate `SEVERITIES` / `ACCOUNTABLES` declarations in `lib/comms/chat.ts` and `lib/editing.ts`.
 - Nothing else. There is very little dead code — the declared agents are honestly labelled and
   the registry is deliberate.
 

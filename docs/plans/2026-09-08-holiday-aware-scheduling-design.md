@@ -78,7 +78,7 @@ this product:
   Approved leave zeroes a day outright; pending leave is surfaced as a named conflict rather
   than silently subtracted. Consumed by `capacityFor`/`availabilityFor`.
 - **Already threaded correctly**: `lib/planning/portfolio.ts:222`, `lib/planning/replanning.ts:50`,
-  `lib/assist.ts:70`, `lib/planning/forecast.ts:65`, and `lib/workspace.ts:7053` all call
+  `lib/comms/assist.ts:70`, `lib/planning/forecast.ts:65`, and `lib/workspace.ts:7053` all call
   `holidaySetOf(state.model)` and pass it into `availabilityFor`/`overlapWorkingDays`. The
   capacity/availability/forecast/replanning subsystem — "who has time, when" — already accounts
   for holidays and leave. This is not the gap.
@@ -105,7 +105,7 @@ every one of these:
 All of these already have `state`/`state.model` in scope at the call site (confirmed by
 reading each), so `holidaySetOf(state.model)` is a one-line addition at every one of them —
 mechanical, not a redesign, and the exact pattern `lib/planning/portfolio.ts`/`lib/planning/replanning.ts`/
-`lib/assist.ts`/`lib/planning/forecast.ts` already proved safe. `milestoneRisk` alone needs a new
+`lib/comms/assist.ts`/`lib/planning/forecast.ts` already proved safe. `milestoneRisk` alone needs a new
 parameter threaded from its caller, since it currently receives no model at all.
 
 ## The harder case — `criticalResolutionPath` has no calendar awareness at all

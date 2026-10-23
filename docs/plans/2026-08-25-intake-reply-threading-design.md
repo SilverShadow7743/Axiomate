@@ -3,7 +3,7 @@
 ## What this answers
 
 A reply on an existing client email thread files as a brand-new issue, every time. Verified in
-code, not assumed: `InboundMessage` (`lib/intake.ts`) carries no thread identifier at all,
+code, not assumed: `InboundMessage` (`lib/comms/intake.ts`) carries no thread identifier at all,
 `classify()` only routes on subject/body keywords, and `alreadyReceived()` only catches the exact
 same message id arriving twice — a genuine reply, with its own new message id, is indistinguishable
 from an unrelated new message. This is already diagnosed in `docs/intake.md`, under *"A reply to an
@@ -54,7 +54,7 @@ Grouped on the issue's own fields, not joined through `InboundMail` — the firs
 against production (step 6) found the motivating case, `OAPIL-149`, has no `InboundMail` row at
 all, so an original mailbox-gated key could never reach it no matter how well its subject matched.
 Dropping the mailbox from the key was the fix; see the script's own header comment and
-`lib/intake.ts`'s `duplicateGroups` doc comment for why.
+`lib/comms/intake.ts`'s `duplicateGroups` doc comment for why.
 Nothing is deleted, merged, or moved: no note history, no time entries, no status change on any
 issue in a group — only a cross-reference a person can act on, and can undo by removing the link
 if it's wrong. The script reports every group it links before/while acting, in the same shape

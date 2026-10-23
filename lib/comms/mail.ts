@@ -1,5 +1,5 @@
 import 'server-only'
-import { entraConfig } from './auth/entra'
+import { entraConfig } from '../auth/entra'
 
 /**
  * The one Graph mail client, shared by the outward door and the notification drain.

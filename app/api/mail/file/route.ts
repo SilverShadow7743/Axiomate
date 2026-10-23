@@ -6,7 +6,7 @@ import { getPersonalGraphToken } from '@/lib/db/personalGraphTokens'
 import { loadWorkspace } from '@/lib/db/repo'
 import { persistActions } from '@/lib/db/persist'
 import { currentTenantId } from '@/lib/tenant'
-import { mapGraphMessage, type GraphMessageLike } from '@/lib/mailFile'
+import { mapGraphMessage, type GraphMessageLike } from '@/lib/comms/mailFile'
 import { projectOf, type Action } from '@/lib/workspace'
 import type { SubmittedAction } from '@/lib/idempotency'
 

@@ -3,12 +3,12 @@
 import { useMemo } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
-import { unifiedInbox } from '@/lib/inbox'
+import { unifiedInbox } from '@/lib/comms/inbox'
 import type {
   Notification,
   NotificationKind,
   NotificationMode,
-} from '@/lib/notifications'
+} from '@/lib/comms/notifications'
 import type { WorkItem } from '@/lib/personal/mywork'
 import type { WorkspaceState } from '@/lib/workspace'
 import Inbox from './Inbox'

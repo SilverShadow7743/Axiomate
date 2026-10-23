@@ -23,7 +23,7 @@ invent a fourth data model.
   `time.approve`, delivered-and-pending-acceptance milestones, submitted change requests, and
   unagreed scope items. Each source already excludes the requester via `isMe(requestedBy)` /
   `isMe(deliveredBy)` / `isMine(person, personId)`.
-- **`Inbox` / `lib/notifications.ts`** — the real notification stream (`inboxFor`,
+- **`Inbox` / `lib/comms/notifications.ts`** — the real notification stream (`inboxFor`,
   `unreadCount`), with routing already handled in `IssueWorkspace.tsx`'s `onOpen` (approval
   traffic → Timesheets, `meeting-*` → My calendar, `discussion-message` → Discussion tab, etc.).
   Confirmed single mount, docked, at the `inbox` view.
@@ -45,7 +45,7 @@ verified by a scenario asserting the extraction changed nothing (see Testing).
 
 ### `waitingItems()` — the requester's-eye mirror, genuinely new
 
-In a new `lib/inbox.ts`: the same four of the five collections, with the exclusion flipped to
+In a new `lib/comms/inbox.ts`: the same four of the five collections, with the exclusion flipped to
 an inclusion — "mine, still pending someone else":
 
 ```

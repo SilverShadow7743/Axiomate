@@ -218,7 +218,7 @@ More than might be expected. This is not a greenfield integration.
 | Auth-code + PKCE against Entra | **Built** — `lib/auth/entra.ts`. Today it requests `openid profile email` only, with a comment that "a scope asked for is a permission somebody has to justify" |
 | Sealing values into a cookie | **Built** — `lib/auth/seal.ts`, key as a parameter |
 | Secret reading with a length floor | **Built** — `lib/secrets.ts` |
-| HTML mail → readable text | **Built** — `htmlToText` in `lib/intake.ts` |
+| HTML mail → readable text | **Built** — `htmlToText` in `lib/comms/intake.ts` |
 | Where a meeting belongs | **Built** — `Commitment`, kinds Leave / Public holiday / Internal / Training |
 | Graph calls, token caching, error mapping | **Built for app-only** — `lib/storage/graph.ts`. Directly reusable for the engagement tier; the token half is not reusable for the personal one |
 | A mailbox that already knows its scope | **Built** — `IntakeMailbox.scopeId` already files into a scope in the tree, so "this mailbox belongs to this engagement" is a configuration that half exists |

@@ -54,7 +54,7 @@ decision, not a data one, left to the build pass.
 
 **Every outbound path, not just Compose.** `sendReply`'s current plain-text posture needs the
 same HTML-wrapping treatment `sendCompose` gets, so a reply carries the signature too. So does the
-automated firm-mailbox route (`sendAsMailbox`, `lib/mail.ts`, called from
+automated firm-mailbox route (`sendAsMailbox`, `lib/comms/mail.ts`, called from
 `app/api/mail/send/route.ts`) — per the decision above, filled with the *signed-in sender's* own
 name/title/phone (`directoryPersonFor(state.model, session.actor)`), not a generic firm line, so
 all three paths produce the identically-shaped signature.
@@ -78,11 +78,11 @@ some firms use, but not asked for here and easy to add later without disturbing 
    roster, same as title, and both are edited in the same place (Configuration → Roles & people,
    beside where `name`/`roleIds` are already edited).
 3. **Scope widens to every outbound-mail path, not just Compose/Reply.** The automated firm-
-   mailbox route (`POST /api/mail/send` → `sendAsMailbox`, `lib/mail.ts`) is now IN scope,
+   mailbox route (`POST /api/mail/send` → `sendAsMailbox`, `lib/comms/mail.ts`) is now IN scope,
    reversing this draft's original non-goal. That route sends from a shared engagement mailbox
    (e.g. `OAPILCatalyst@axiocloudsolutions.com`) but the send is already attributed to a real,
    permission-gated signed-in person via `session.actor` (`app/api/mail/send/route.ts`'s own
-   `mail.send` gate) — the same `directoryPersonFor(state.model, actor)` join `lib/inbox.ts`
+   `mail.send` gate) — the same `directoryPersonFor(state.model, actor)` join `lib/comms/inbox.ts`
    already uses to resolve an actor to their `Person` record. The signature there uses that
    person's own name/title/phone, exactly as Compose and Reply do — one consistent signature
    shape everywhere mail leaves the firm, matching the request's own "one format organization-

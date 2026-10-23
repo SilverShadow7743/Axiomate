@@ -20,7 +20,7 @@ it — exactly the failure mode the module comment names as the alternative it r
 
 ## What already exists, and settles the shape
 
-`lib/notifications.ts` already has this exact problem solved for a different transport: `Channel`
+`lib/comms/notifications.ts` already has this exact problem solved for a different transport: `Channel`
 is `'in-app' | 'email' | 'teams'`, and `email`/`teams` notifications are **written as `pending`**
 because "there was no transport" at rule-fire time — the module's own words. `lib/db/notifyDrain.ts`
 answers what happens next: a scheduled pass (`app/api/schedule/run/route.ts`), running *after*

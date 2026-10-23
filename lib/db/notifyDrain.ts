@@ -1,11 +1,11 @@
 import 'server-only'
 import { loadWorkspace } from './repo'
 import { persistActions } from './persist'
-import { sendAsMailbox } from '../mail'
+import { sendAsMailbox } from '../comms/mail'
 import { entraConfig } from '../auth/entra'
 import { scopeChainOf, type Action, type WorkspaceState } from '../workspace'
 import type { Actor } from '../actor'
-import type { Delivery } from '../notifications'
+import type { Delivery } from '../comms/notifications'
 import type { TenantId } from '../tenant'
 
 /**

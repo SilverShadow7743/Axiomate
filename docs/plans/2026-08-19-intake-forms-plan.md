@@ -11,8 +11,8 @@ pipeline rather than growing a second one"*.
 
 ## Steps
 
-**1. Refactor `lib/intake.ts` — extract the shareable half of `classify`.**
-`classify` (lib/intake.ts:228) is two halves: mailbox lookup (lines ~236–259) and everything
+**1. Refactor `lib/comms/intake.ts` — extract the shareable half of `classify`.**
+`classify` (lib/comms/intake.ts:228) is two halves: mailbox lookup (lines ~236–259) and everything
 after — rule application, severity/type guessing, draft assembly. Extract the second half as
 `draftFor(scopeId: string, message: InboundMessage, model: OperatingModel, stated?: { severity:
 Severity }): IntakeDraft`, and make `classify` call it, behaviour identical. Add

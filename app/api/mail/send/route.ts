@@ -6,8 +6,8 @@ import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { can } from '@/lib/access'
 import { logAuthRefusal } from '@/lib/authLog'
-import { alreadySent, isOutboundRefusal, outboundNoteBody, sendingMailboxFor } from '@/lib/outbound'
-import { sendAsMailbox } from '@/lib/mail'
+import { alreadySent, isOutboundRefusal, outboundNoteBody, sendingMailboxFor } from '@/lib/comms/outbound'
+import { sendAsMailbox } from '@/lib/comms/mail'
 import type { Action } from '@/lib/workspace'
 import type { IssueNote } from '@/lib/notes'
 import { richTextToPlainText, wrapPlainText } from '@/lib/richText'
@@ -28,9 +28,9 @@ import { DEFAULT_ORGANIZATION } from '@/lib/config'
  *    what this permission allows.
  *  - **Resolution before composition.** The recipient is the record's claimed sender, the
  *    From is the nearest intake mailbox on the record's own chain — both resolved by
- *    `lib/outbound.ts` and refused at the door when either is missing.
+ *    `lib/comms/outbound.ts` and refused at the door when either is missing.
  *  - **A retry cannot double-send.** If the exact message this request would send was already
- *    recorded on this issue, `lib/outbound.ts`'s `alreadySent` finds it before `sendAsMailbox`
+ *    recorded on this issue, `lib/comms/outbound.ts`'s `alreadySent` finds it before `sendAsMailbox`
  *    is ever called, and the response says so as `replayed: true`. This is what protects the
  *    realistic failure mode: the send succeeds, its response never reaches the browser, and
  *    the person — reasonably, seeing their text still in the box — tries again.

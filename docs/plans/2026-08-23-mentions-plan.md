@@ -9,14 +9,14 @@ telling.
 
 ## Steps
 
-**1. The parser — `lib/mentions.ts` (new, LF), MN1's parser half.**
+**1. The parser — `lib/comms/mentions.ts` (new, LF), MN1's parser half.**
 `mentionsIn(body, people: { id: string; name: string }[])` — at each `@`, the LONGEST
 directory name matching case-insensitively wins; returns distinct-by-id matches with
 offsets. `mentionSegments(body, people)` — alternating `{ kind: 'text' | 'mention' }`
 segments from the same matches, so highlight and mint cannot disagree.
 *Verify:* `npx tsc --noEmit`; the suite stays 92, 0 FAIL (no caller yet).
 
-**2. The kind, the mints, MN1 — `lib/notifications.ts` (LF), `lib/workspace.ts` (CRLF,
+**2. The kind, the mints, MN1 — `lib/comms/notifications.ts` (LF), `lib/workspace.ts` (CRLF,
 python), `scripts/scenario-validation.ts` (CRLF, python).
 THE STEP CARRYING THE MOST REGRESSION RISK** — it adds minting to `addNote`, the
 second-most-dispatched arm in the product; a wrong loop double-pings or pings the author,

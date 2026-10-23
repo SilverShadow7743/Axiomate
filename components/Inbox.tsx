@@ -12,7 +12,7 @@ import {
   type Notification,
   type NotificationKind,
   type NotificationMode,
-} from '@/lib/notifications'
+} from '@/lib/comms/notifications'
 import { can, directoryPersonFor } from '@/lib/access'
 import type { WorkspaceState } from '@/lib/workspace'
 import { formatIso } from '@/lib/dates'

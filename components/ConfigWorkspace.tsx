@@ -46,7 +46,7 @@ import { CONCERN_LABEL } from '@/lib/planning/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '@/lib/capabilities'
 import { MEASURES, describeGoals, goalProgress } from '@/lib/planning/goals'
 import { canParent, kindOf, nameOf, scopeChainOf, type Action, type ConfigOp, type WorkspaceState } from '@/lib/workspace'
-import { openDuplicateGroups } from '@/lib/intake'
+import { openDuplicateGroups } from '@/lib/comms/intake'
 import { formatIso } from '@/lib/dates'
 import { describeRecurrence, type Cadence } from '@/lib/planning/recurrence'
 import { describeBlueprint, extractBlueprint, type BlueprintProposal } from '@/lib/commercial/blueprint'
@@ -60,7 +60,7 @@ import { isTerminal } from '@/lib/planning/schedule'
 import { PERMISSIONS, type PermissionKey } from '@/lib/access'
 import { CONDITION_FIELDS, type ConditionField, type ConditionOp, type RuleActionKind } from '@/lib/automation'
 import { EVENT_TYPES, type EventType } from '@/lib/events'
-import { CHANNELS, type Channel } from '@/lib/notifications'
+import { CHANNELS, type Channel } from '@/lib/comms/notifications'
 import { WATCH_CONDITIONS, observe, type ConditionKey } from '@/lib/watch'
 import { bandForScore, bandProblems, isScored, normaliseScore, totalComplexity, type SizeBand } from '@/lib/commercial/estimation'
 import { useLabels } from './labels'
@@ -4112,7 +4112,7 @@ function Capabilities({
  * have something to confirm) and the same non-destructive `link`/`DUPLICATE_OF` action the
  * script sends, one group at a time, with nothing remembered between visits: a dismissed group
  * without a real link reappears next time, on purpose (see `openDuplicateGroups` in
- * lib/intake.ts). The CLI's `--skip=` mechanic stays CLI-only — a heavier "leave this alone for
+ * lib/comms/intake.ts). The CLI's `--skip=` mechanic stays CLI-only — a heavier "leave this alone for
  * good" workflow this screen deliberately doesn't offer.
  */
 function Duplicates({

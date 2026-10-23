@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { groupByConversation, type MailEntry } from '@/lib/discussion'
+import { groupByConversation, type MailEntry } from '@/lib/comms/discussion'
 import type { WorkspaceState } from '@/lib/workspace'
 import InboxPanel from './InboxPanel'
 
@@ -13,7 +13,7 @@ import InboxPanel from './InboxPanel'
  * E3 deepens the reading, not the machinery: rows sharing Exchange's conversationId group into
  * one exchange, newest exchange first; a row with no conversationId (the intake form writes
  * none) stays its own line rather than being threaded with strangers. `groupByConversation`
- * (lib/discussion.ts, scenario E3C) owns the rule.
+ * (lib/comms/discussion.ts, scenario E3C) owns the rule.
  */
 export default function MailLog({ state }: { state: WorkspaceState }) {
   const [query, setQuery] = useState('')

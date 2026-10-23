@@ -331,7 +331,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 The reducer does not runtime-check enums — until now every write came from a `<select>` that
 could only emit legal values, so `patch: Partial<IssueRecord>` was a compile-time guarantee
-that held. A model can emit `status: "Done"`. `lib/chat.ts` is the gate: it rejects (never
+that held. A model can emit `status: "Done"`. `lib/comms/chat.ts` is the gate: it rejects (never
 coerces) anything outside `ISSUE_STATUSES`, the severity and accountable vocabularies, and
 real `YYYY-MM-DD` dates. The route checks, and the **client checks again on the response**
 immediately before dispatch — the response body is model output, and the client-side check is
@@ -441,7 +441,7 @@ setting would be a switch that silently does nothing.
 Setting the Workspace Assistant below `propose` does not grey out a button — it changes what
 the model is given. `app/api/chat/route.ts` omits `propose_update` and `propose_new_issue`
 from the tool list entirely, so there is no instruction to ignore and no path by which a
-proposal card can be produced. `offlineReply` in `lib/chat.ts` applies the same rule to the
+proposal card can be produced. `offlineReply` in `lib/comms/chat.ts` applies the same rule to the
 deterministic engine and declines the mutation in words. A policy that only hides a button is
 not a policy.
 

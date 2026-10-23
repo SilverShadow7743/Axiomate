@@ -22,7 +22,7 @@ Ground truth verified while writing:
   (lib/capacity/availability.ts) + a rates/skills strip — and states that boot's own composition stays
   pinned by inspection. Extracting a pure `redactForReader` for both callers is a worthwhile
   follow-up REFACTOR, deliberately not smuggled into a search phase.
-- Corpus shapes: `InboundMail {from, subject, body, receivedAt, issueId}` (lib/intake.ts:61);
+- Corpus shapes: `InboundMail {from, subject, body, receivedAt, issueId}` (lib/comms/intake.ts:61);
   `DocumentRecord {name, subjectKind, subjectId}` (lib/documents.ts:53); `Meeting {title}`
   (lib/personal/meetings.ts:21); issues/notes/people as already catalogued.
 - `clientView` zeroes `inboundMail` WHOLESALE (clientBoundary.ts:129) and filters documents

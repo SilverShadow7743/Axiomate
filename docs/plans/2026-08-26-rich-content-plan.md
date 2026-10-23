@@ -5,14 +5,14 @@ below are that design's constraints, not restated from memory.
 
 ## A correction found while grounding this plan
 
-The design doc's downstream-consumer list names `lib/outbound.ts:110`
+The design doc's downstream-consumer list names `lib/comms/outbound.ts:110`
 (`outboundNoteBody`) as reading an existing rich note's body to compose a client email —
 that's wrong, checked directly rather than carried forward. `outboundNoteBody(resolved,
 text)`'s `text` parameter is fresh plain text typed into the separate "reply to client"
 box (`app/api/mail/send/route.ts:49`, `const text = (body.text ?? '').trim()`), never a
 stored `IssueNote.body`. What actually happens: the route composes a plain string
 (`noteBody`) and constructs an `addNote` **action** directly with `body: noteBody`
-(line 155) — bypassing the UI form entirely. `lib/outbound.ts` itself needs no change;
+(line 155) — bypassing the UI form entirely. `lib/comms/outbound.ts` itself needs no change;
 `app/api/mail/send/route.ts` does, because it writes a note with a plain string in a
 field that is about to stop being one. This is folded into Step 3 below, not treated as
 a downstream reader.
@@ -79,7 +79,7 @@ Functions, all pure:
   truncation and mail-send composition.
 - `mentionedPeopleIn(doc: RichDoc): string[]` — collects every `mention` node's
   `personId`, deduplicated. Replaces `mentionsIn(body, people)`'s role in `addNote`/
-  `updateNote` for notification-minting. `lib/mentions.ts`'s existing string-based
+  `updateNote` for notification-minting. `lib/comms/mentions.ts`'s existing string-based
   `mentionsIn`/`mentionSegments` are untouched — they may still serve other plain-string
   fields elsewhere in the app; this is a new, parallel function, not a replacement of
   the old one everywhere.
@@ -171,7 +171,7 @@ migration.
 **Files:** `lib/workspace.ts` (`addNote` at 3217, `updateNote` at 3344, `updateIssue` at
 2217), `components/OverviewTab.tsx` (`save()` ~154-176), `components/NotesTab.tsx` (the
 two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
-`app/api/intake/form/route.ts` (lines 56, 91, 112), `lib/chat.ts` (362-364),
+`app/api/intake/form/route.ts` (lines 56, 91, 112), `lib/comms/chat.ts` (362-364),
 `app/api/mail/send/route.ts` (line 155), `scripts/persistence-proof.ts`,
 `scripts/attribution-proof.ts`.
 
@@ -202,7 +202,7 @@ two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
   project's own patterns (see `outboundNoteBody`'s own doc comment: "one function...
   so the two can never drift into comparing against a string the record was never
   actually written with") argue against.
-- **`lib/chat.ts:362-364`**: the assistant's draft flow wraps whatever plain
+- **`lib/comms/chat.ts:362-364`**: the assistant's draft flow wraps whatever plain
   `description` it produces the same way, at the same two lines.
 - **`app/api/mail/send/route.ts:155`**: `body: noteBody` → `body: wrapPlainText(noteBody)`.
   `noteBody` itself (`outboundNoteBody`'s output, composed at line 113) stays a plain

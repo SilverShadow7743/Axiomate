@@ -78,7 +78,7 @@ edits."
 
 ### 3. One `'approval'` notification kind
 
-`lib/notifications.ts` (`NOTIFICATION_KINDS` gains `'approval'`) and four reducer arms in
+`lib/comms/notifications.ts` (`NOTIFICATION_KINDS` gains `'approval'`) and four reducer arms in
 `lib/workspace.ts`. Every mint respects `modeFor` per recipient — mute mints nothing (audit
 still writes), in-app mints one delivered record, in-app+email adds the pending email record the
 scheduled pass drains and stamps. This is the exact assignment/mention pattern; the prefs row,

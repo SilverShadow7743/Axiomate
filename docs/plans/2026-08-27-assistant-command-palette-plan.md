@@ -6,7 +6,7 @@ full command-palette reskin over a copy-only fix or a form-builder, overlay+`Ctr
 keeping the docked panel, keep-scrollback over single-result, keep voice/drop TTS, extend search
 to real facets).
 
-No test runner exists for `lib/chat.ts` today. `npm run validate:scenarios`
+No test runner exists for `lib/comms/chat.ts` today. `npm run validate:scenarios`
 (`scripts/scenario-validation.ts`) is a static source-inspection harness — it greps file text for
 patterns ("mentions"/"absent" checks), it does not call `offlineReply`/`searchIndex` with real
 input. Confirmed by grep: zero matches for `offlineReply`, `searchIndex`, or `chat` as a function
@@ -18,7 +18,7 @@ a gap in the codebase, not something in scope to fix here.
 
 ## Step 1 — Real facets in the search branch
 
-**Files:** `lib/chat.ts` only.
+**Files:** `lib/comms/chat.ts` only.
 
 Pure logic, no React, no callers yet — the design's own instruction to prove this before anything
 depends on it.
@@ -63,7 +63,7 @@ own.
 
 ## Step 2 — Extract a shared command classifier
 
-**Files:** `lib/chat.ts` only.
+**Files:** `lib/comms/chat.ts` only.
 
 Second piece of pure logic, needed before Step 4's hint line can reuse `offlineReply`'s own
 grammar rather than duplicating it — the design doc's other named risk.
@@ -191,7 +191,7 @@ nothing.
 Depends on Step 2's `classifyCommand` and Step 3's shell existing; adds to both without touching
 either's tested behavior.
 
-- The offline input's `onChange` calls `classifyCommand` (imported from `lib/chat.ts`) on every
+- The offline input's `onChange` calls `classifyCommand` (imported from `lib/comms/chat.ts`) on every
   keystroke and renders its result as a small hint line below the input: `'create'` → "New issue",
   `'update'` → "Change `<ID>`" (only once `ID_RE` actually matches — before that, the neutral
   "this reads as a search" state), `'search'` → the same neutral state. Before any typing, the

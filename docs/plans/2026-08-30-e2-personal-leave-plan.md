@@ -18,7 +18,7 @@ queue is "deliberately NOT allocation-filtered".
 
 ## Step 1 — the kind, and the grant-holder walk
 
-**Files:** `lib/notifications.ts`, `lib/workspace.ts`.
+**Files:** `lib/comms/notifications.ts`, `lib/workspace.ts`.
 
 - `NOTIFICATION_KINDS` gains `'approval'` (after `'mention'`). `modeFor`'s
   absent-anything → `'in-app'` default means no stored data changes meaning.

@@ -72,7 +72,7 @@ preview, not just read as HTML.
 Entry point: alongside `dailyIms`'s existing export action in `IssueWorkspace.tsx`, resolve
 `clientScopeIdFor(state, filters.client)` first — **if `filters.client === 'All'`, refuse before
 building anything**, with a message telling the consultant to pick one client first (mirroring
-`sendingMailboxFor`'s own refusal-with-guidance shape in `lib/outbound.ts`, not a silent no-op and
+`sendingMailboxFor`'s own refusal-with-guidance shape in `lib/comms/outbound.ts`, not a silent no-op and
 not an arbitrary pick).
 
 **Verified by:** `npx tsc --noEmit`; `npm run build`; opening each screen in a browser locally

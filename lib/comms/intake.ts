@@ -1,7 +1,7 @@
-import type { IntakeMailbox, OperatingModel, RoutingRule } from './config'
-import { liveWorkTypes } from './config'
-import type { IssueRelationship, Severity } from './types'
-import type { IssueRecord, WorkspaceState } from './workspace'
+import type { IntakeMailbox, OperatingModel, RoutingRule } from '../config'
+import { liveWorkTypes } from '../config'
+import type { IssueRelationship, Severity } from '../types'
+import type { IssueRecord, WorkspaceState } from '../workspace'
 
 /**
  * Turning an arriving message into a work item.
@@ -50,7 +50,7 @@ export interface InboundMessage {
 /**
  * A kept record of a message that arrived — the reader `classify()`'s discard never had.
  *
- * `lib/intake.ts`'s prior stance was that storing a second copy of every message was "a cost
+ * `lib/comms/intake.ts`'s prior stance was that storing a second copy of every message was "a cost
  * with no reader" — true when it was written, and answered rather than ignored now that a
  * reference log has one. `body` is already `htmlToText`-converted, the same plain form every
  * other consumer of a message sees, not a second HTML copy.

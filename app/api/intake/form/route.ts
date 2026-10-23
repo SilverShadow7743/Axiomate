@@ -4,12 +4,12 @@ import { databaseConfigured, describeDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
 import { loadWorkspace } from '@/lib/db/repo'
 import { currentTenantId } from '@/lib/tenant'
-import { classifyForm, provenanceNote, type InboundMessage } from '@/lib/intake'
+import { classifyForm, provenanceNote, type InboundMessage } from '@/lib/comms/intake'
 import type { Action } from '@/lib/workspace'
 import { INTAKE_ACTOR } from '@/lib/actor'
 import { wrapPlainText } from '@/lib/richText'
-import { sendingMailboxFor, isOutboundRefusal } from '@/lib/outbound'
-import { sendAsMailbox } from '@/lib/mail'
+import { sendingMailboxFor, isOutboundRefusal } from '@/lib/comms/outbound'
+import { sendAsMailbox } from '@/lib/comms/mail'
 
 /**
  * The form's half of intake — the second door that creates records from the internet.

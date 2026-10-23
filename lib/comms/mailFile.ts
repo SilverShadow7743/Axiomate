@@ -6,7 +6,7 @@
  * mapper's draft must be a draft the reducer ACCEPTS, not merely a plausible one. HTML is
  * stripped by a local stripper — the richText helpers parse RichDoc, not HTML.
  *
- * `type` and `severity` come from `draftFor` (`lib/intake.ts`) — the same rule-matching and
+ * `type` and `severity` come from `draftFor` (`lib/comms/intake.ts`) — the same rule-matching and
  * severity/type guessing a routed mailbox gets — rather than the invented `'Request'`/`'Medium'`
  * constants this used to hardcode (principle 2: never invent information). `draftFor` is called
  * directly, not `classify`, because `classify` resolves a mailbox from `message.to`, and a
@@ -14,7 +14,7 @@
  * intake mailbox — so it would refuse `no-mailbox` for nearly every message filed this way.
  */
 
-import type { OperatingModel } from './config'
+import type { OperatingModel } from '../config'
 import { draftFor } from './intake'
 
 export interface GraphMessageLike {

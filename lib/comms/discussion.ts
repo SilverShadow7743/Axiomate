@@ -124,7 +124,7 @@ export interface MailConversation {
 
 /**
  * Whether a note's plain text is a recorded outbound reply. Outbound mail has NO table of its
- * own — `outboundNoteBody` (lib/outbound.ts) records every send as an issue note whose body
+ * own — `outboundNoteBody` (lib/comms/outbound.ts) records every send as an issue note whose body
  * is fully determined: `Sent to <recipient> as <mailbox>\nSubject: …`. The prefix is the
  * discriminator, beside the note type, because a person can also FILE a Client Communication
  * note by hand and that one is commentary, not a send.

@@ -19,7 +19,7 @@ bindings.
 Content is stored as **Tiptap's JSON document format, not HTML**. This is close to a
 forced choice, not a preference: the codebase has zero HTML-sanitization precedent
 anywhere — no DOMPurify, no `sanitize-html`, no `dangerouslySetInnerHTML` — and its one
-existing posture toward untrusted HTML (`lib/intake.ts`'s `htmlToText`, which strips
+existing posture toward untrusted HTML (`lib/comms/intake.ts`'s `htmlToText`, which strips
 inbound mail HTML down to plain text rather than rendering it) is refusal, not
 sanitization. A JSON document constrained to a defined Tiptap schema (paragraph, table,
 image, a small set of text marks, and the custom reference node below) cannot carry a
@@ -52,7 +52,7 @@ Tiptap JSON document shape (a `JSON` column, matching the pattern `EstimateStep`
 
 A custom Tiptap inline node, `issueReference`, whose only stored attribute is
 `{issueId}` — never a cached subject or status, for the same reason `@mention`
-(`lib/mentions.ts`) never bakes in a resolved name: a stored copy of a fact that changes
+(`lib/comms/mentions.ts`) never bakes in a resolved name: a stored copy of a fact that changes
 is a copy that goes wrong.
 
 Typing `#` opens a suggestion popup (`@tiptap/suggestion`, the extension mechanism this
@@ -99,7 +99,7 @@ issue id) rather than five separate, drifting hacks:
    the extractor in place of raw string interpolation.
 2. **`lib/planning/tree.ts:380`** — the Tree view's own search/filter box concatenates
    `description` into its match string. Same fix.
-3. **`lib/outbound.ts:110`** — `outboundNoteBody` composes a note's body directly into an
+3. **`lib/comms/outbound.ts:110`** — `outboundNoteBody` composes a note's body directly into an
    **outbound client email**, today as plain text. This design keeps outbound mail
    plain text — the extractor renders the rich note down to text, rather than the app
    growing an HTML-email rendering path, which would be a second new rendering/security
@@ -109,7 +109,7 @@ issue id) rather than five separate, drifting hacks:
    form text. Both need to wrap that plain text into a trivial rich document on the way
    in — the mirror image of the migration, applied to every new record from here on
    rather than a one-time backfill.
-5. **`lib/chat.ts:362-364`** — the assistant's issue-creation draft flow reads/writes
+5. **`lib/comms/chat.ts:362-364`** — the assistant's issue-creation draft flow reads/writes
    `draft.description` as a plain string today. Needs the same wrap-on-the-way-in
    treatment as intake, since the assistant produces plain text, not a rich document.
 

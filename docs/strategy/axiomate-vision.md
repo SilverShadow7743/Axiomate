@@ -98,7 +98,7 @@ assume:
 
 1. An LLM that can act, not just narrate — the one `/api/assist` integration this codebase has
    is narration-only (`narrationFigures`, read-only prose over already-computed figures,
-   explicitly walled off from writing anything — `lib/assist.ts`'s payload construction is
+   explicitly walled off from writing anything — `lib/comms/assist.ts`'s payload construction is
    itself security-reviewed to carry no rates, no leave reasons).
 2. A governance layer for *agent* actions specifically — scoped permissions, explainability
    ("why did Axiomate make this recommendation"), audit entries distinguishing agent-initiated

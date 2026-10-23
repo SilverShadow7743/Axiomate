@@ -133,7 +133,7 @@ import { overlapProblem, valueAt, stamp, type Version } from './versioning'
 import { memberProblem, type ProjectMember, type ProjectRole } from './capacity/staffing'
 import { eventProblem, type PersonalEvent } from './personal/personalEvents'
 import { actionProblem, type PersonalAction } from './personal/personalActions'
-import type { InboundMail } from './intake'
+import type { InboundMail } from './comms/intake'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -167,8 +167,8 @@ import {
   type WatchDiff,
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
-import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
-import { mentionsIn } from './mentions'
+import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './comms/notifications'
+import { mentionsIn } from './comms/mentions'
 import { raidProblem } from './planning/raid'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {

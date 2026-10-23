@@ -11,7 +11,7 @@ import {
   transcriptText,
   type SpeechRecognitionLike,
   type Transcript,
-} from '@/lib/voice'
+} from '@/lib/comms/voice'
 
 /**
  * Talking to the assistant.

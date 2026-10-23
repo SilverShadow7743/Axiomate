@@ -10,7 +10,7 @@ the guard, and it runs before any pref is ever set."
 
 ## Steps
 
-**1. The vocabulary and the pure rule — `lib/notifications.ts` (LF, Edit tool).**
+**1. The vocabulary and the pure rule — `lib/comms/notifications.ts` (LF, Edit tool).**
 `NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation'] as const` +
 `NotificationKind`; `NOTIFICATION_MODES = ['mute', 'in-app', 'in-app+email'] as const` +
 `NotificationMode`; `NotificationPrefs = Record<string, Partial<Record<NotificationKind,

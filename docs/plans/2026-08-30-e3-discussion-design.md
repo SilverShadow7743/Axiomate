@@ -33,7 +33,7 @@ it does not bypass governance." E0–E2 are complete and live.
 
 ## The domain, named
 
-**Discussion**, not "chat": `lib/chat.ts` is the ASSISTANT (find/propose, never writes) and
+**Discussion**, not "chat": `lib/comms/chat.ts` is the ASSISTANT (find/propose, never writes) and
 stays untouched; its `ChatMessage` wire type must not be imported by anything here.
 
 - `DiscussionThread` — tenantId, id, scopeKind (`'issue' | 'project'`), scopeId, createdAt,

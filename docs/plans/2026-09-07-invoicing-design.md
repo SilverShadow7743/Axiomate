@@ -133,7 +133,7 @@ section listing what's been raised per SOW, reusing `milestonePosition`'s `billa
 
 Tax/VAT — no rate, no jurisdiction logic; `amount` is what's billed, full stop. No PDF generation,
 no email delivery, no external accounting-system integration (Xero, QuickBooks) — this records
-that an invoice was raised, in the same spirit `lib/mail.ts`'s outward door records that a mail
+that an invoice was raised, in the same spirit `lib/comms/mail.ts`'s outward door records that a mail
 was sent, not a replacement for the systems that actually run a firm's books. No payment
 processing. No multi-currency conversion — an invoice inherits its SOW's currency, unconverted,
 the same rule `milestonePosition` already applies.

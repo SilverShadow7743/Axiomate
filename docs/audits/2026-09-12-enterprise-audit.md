@@ -173,7 +173,7 @@ rows, not years. *Fix:* drop audit from the boot payload; scope documents and no
 viewed subject; index the three child lookups; add the refetch path the code already mentions.
 
 **H12. One Entra client secret is both the sign-in credential and a tenant-wide app-only Graph
-credential** (`lib/mail.ts:26-28`, `lib/storage/graph.ts:106-108`), and `docs/entra.md:135`
+credential** (`lib/comms/mail.ts:26-28`, `lib/storage/graph.ts:106-108`), and `docs/entra.md:135`
 says the registration has no application permissions — stale. *Fix:* a second registration with
 a certificate or workload-identity federation for app-only Graph; correct the doc; alert on
 secret expiry.

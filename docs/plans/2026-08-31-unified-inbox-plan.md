@@ -80,7 +80,7 @@ proof. Total scenario count: 193 → 194.
 **Commit 1** — this step alone, exactly per the ordering principle: provable correct in
 isolation before `waitingItems`, the component, or the mount depend on `decisionItems` existing.
 
-### Step 2 — `waitingItems()` and `unifiedInbox()`, new file `lib/inbox.ts`
+### Step 2 — `waitingItems()` and `unifiedInbox()`, new file `lib/comms/inbox.ts`
 
 ```ts
 export function waitingItems(state: WorkspaceState, actor: Actor): WorkItem[] {

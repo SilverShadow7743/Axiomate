@@ -12,7 +12,7 @@
  * Client mail arrives as HTML on purpose — `infra/intake.bicep` records rejecting the Content
  * Conversion connector because it discards hyperlinks and hard-wraps. That was right and it was
  * half a decision: nothing on this side converted anything, so every issue intake created carries
- * the raw document. `lib/intake.ts`'s `htmlToText` is the other half and fixes messages arriving
+ * the raw document. `lib/comms/intake.ts`'s `htmlToText` is the other half and fixes messages arriving
  * from now on. This fixes the ones already stored.
  *
  * ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
-import { htmlToText } from '../lib/intake'
+import { htmlToText } from '../lib/comms/intake'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'

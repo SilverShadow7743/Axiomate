@@ -39,8 +39,8 @@ import { applicationConcerns, checkApplication, checkIntegrationLink } from '../
 import { invoicePosition } from '../lib/commercial/invoice'
 import { checkChecklistItem, checklistFor } from '../lib/checklist'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '../lib/analytics'
-import { inboxFor, undelivered } from '../lib/notifications'
-import { mentionsIn } from '../lib/mentions'
+import { inboxFor, undelivered } from '../lib/comms/notifications'
+import { mentionsIn } from '../lib/comms/mentions'
 import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/planning/raid'
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
@@ -60,7 +60,7 @@ import { ownerChoicesFor, ownerOptionValues } from '../lib/ownerChoices'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { planCalendarActions } from '../lib/automation'
-import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/intake'
+import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/comms/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
@@ -69,13 +69,13 @@ import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '
 import { availabilityForAssignment } from '../lib/capacity/assignment'
 import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/capacity/availability'
 import { forecastFor, describeForecast } from '../lib/planning/forecast'
-import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
+import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/comms/discussion'
 import { meetingHours } from '../lib/capacity/availability'
 import { suggestDays } from '../lib/planning/scheduling'
 import type { Meeting } from '../lib/personal/meetings'
-import { narrationFigures, suggestRequest } from '../lib/assist'
-import { validateCreate, type IssueIndexEntry } from '../lib/chat'
-import type { DiscussionMessage } from '../lib/discussion'
+import { narrationFigures, suggestRequest } from '../lib/comms/assist'
+import { validateCreate, type IssueIndexEntry } from '../lib/comms/chat'
+import type { DiscussionMessage } from '../lib/comms/discussion'
 import {
   backdated,
   dailyCap,
@@ -118,9 +118,9 @@ import { boardLanes, dropOutcome, bulkDropOutcome, bulkStatusChoices } from '../
 import type { StatusPolicy } from '../lib/planning/statusPolicy'
 import { calendarMonth, describeCalendar } from '../lib/personal/calendar'
 import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/planning/recurrence'
-import { classifyForm } from '../lib/intake'
+import { classifyForm } from '../lib/comms/intake'
 import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/commercial/blueprint'
-import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
+import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/comms/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
@@ -148,7 +148,7 @@ import { decryptSecret, deriveTokenKey, encryptSecret } from '../lib/tokenCrypto
 import { resolveModelId } from '../lib/modelChoice'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
-import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
+import { mapGraphMessage, cleanSubject } from '../lib/comms/mailFile'
 import { claimDelivery, deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { resolutionNotices } from '../lib/reports/resolutionNotice'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
@@ -195,9 +195,9 @@ import {
   type SkillLevel,
 } from '../lib/capacity/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
-import { htmlToText } from '../lib/intake'
+import { htmlToText } from '../lib/comms/intake'
 import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/personal/mywork'
-import { waitingItems } from '../lib/inbox'
+import { waitingItems } from '../lib/comms/inbox'
 import { meetingSuggestions } from '../lib/time/timesheetSuggestions'
 import { replanningFor } from '../lib/planning/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
@@ -570,7 +570,7 @@ scenario(
      * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say "detection
      * is still manual: the duplicate-detection agent is a registry record with no runtime" —
      * true of that one agent record, but not a fair account of the capability: `duplicateGroups`
-     * (lib/intake.ts, proven independently by IT6/IT7/IT9) is a real, working detection function,
+     * (lib/comms/intake.ts, proven independently by IT6/IT7/IT9) is a real, working detection function,
      * surfaced live at Configuration → Duplicates for a person to review and confirm. This
      * scenario never actually called it, so it never earned the claim either way. It does now,
      * against a same-shape pair built locally (BASE itself is untouched, shared by every other
@@ -3158,7 +3158,7 @@ scenario(
   () => {
     /*
      * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say autonomy
-     * levels have "no runtime that reads them" — false: canPropose() (lib/chat.ts) and the
+     * levels have "no runtime that reads them" — false: canPropose() (lib/comms/chat.ts) and the
      * config route (app/api/chat/route.ts) both read and enforce the configured level live.
      * What is actually missing is narrower and different in kind: no field anywhere in the
      * chat/agent domain carries a confidence score, so "low confidence" has nothing to test
@@ -3166,7 +3166,7 @@ scenario(
      * way every other such verdict here is — by grepping the domain's own files, not assumed.
      */
     const gated = mentions(/proposal|applyProposal|cards\[/).length
-    const CHAT_DOMAIN = ['lib/chat.ts', 'app/api/chat/route.ts', 'components/ChatPanel.tsx', 'lib/config.ts']
+    const CHAT_DOMAIN = ['lib/comms/chat.ts', 'app/api/chat/route.ts', 'components/ChatPanel.tsx', 'lib/config.ts']
     const noConfidenceConcept = !SRC.some(
       (f) => CHAT_DOMAIN.includes(f) && /confidence/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')),
     )
@@ -4162,7 +4162,7 @@ scenario(
     const teamsOutbound = !absent(/graph\.microsoft\.com\/v1\.0\/(teams|chats)/)
     return {
       verdict: teamsOutbound ? 'PASS' : 'PARTIAL',
-      actual: `Two real outbound Graph integrations exist, in ${graphClients.length} files — client mail (send and read, lib/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail ${mailHandlesFailure ? 'stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — "retrying the same refusal every morning would only bury it" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed' : 'has no visible failure containment'}; the document route ${documentsUseIdempotency ? 'sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record' : 'has no visible idempotency guard'}. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.`,
+      actual: `Two real outbound Graph integrations exist, in ${graphClients.length} files — client mail (send and read, lib/comms/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail ${mailHandlesFailure ? 'stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — "retrying the same refusal every morning would only bury it" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed' : 'has no visible failure containment'}; the document route ${documentsUseIdempotency ? 'sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record' : 'has no visible idempotency guard'}. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.`,
       stops: teamsOutbound ? '' : 'at Teams — the one Graph-adjacent surface with no outbound call at all',
       severity: 'P2',
       impact: teamsOutbound

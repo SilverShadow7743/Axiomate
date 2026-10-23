@@ -1,12 +1,12 @@
-import { portfolio } from './planning/portfolio'
-import { forecastFor, describeForecast } from './planning/forecast'
-import { availabilityFor } from './capacity/availability'
-import { profileAt } from './capacity/capacity'
-import { directoryIdByName } from './access'
-import { holidaySetOf } from './config'
-import { addDays } from './dates'
+import { portfolio } from '../planning/portfolio'
+import { forecastFor, describeForecast } from '../planning/forecast'
+import { availabilityFor } from '../capacity/availability'
+import { profileAt } from '../capacity/capacity'
+import { directoryIdByName } from '../access'
+import { holidaySetOf } from '../config'
+import { addDays } from '../dates'
 import type { DiscussionMessage, DiscussionScopeKind } from './discussion'
-import type { WorkspaceState } from './workspace'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * What the model gets shown — E5 (`2026-08-30-e5-ai-design.md`), the pure half.

@@ -1,5 +1,5 @@
 import type { DomainEvent, EventType } from './events'
-import type { Channel } from './notifications'
+import type { Channel } from './comms/notifications'
 import type { Action, IssueRecord, WorkspaceState } from './workspace'
 import type { IssueStatus } from './types'
 import { wrapPlainText } from './richText'

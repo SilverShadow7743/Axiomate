@@ -44,7 +44,7 @@ import type { IssueStatus } from '../types'
  *
  * The opening date falls back from `plannedStart` to `raised`, and says so. A derived date is
  * free to fall back; it is not free to present the fallback as a recorded plan. The vocabulary
- * is the one `lib/intake.ts` already uses for exactly this — `stated | guessed | default`.
+ * is the one `lib/comms/intake.ts` already uses for exactly this — `stated | guessed | default`.
  *
  * The daily cap comes from the person's working pattern *on the work date*, through `valueAt`,
  * which answers null when nothing was recorded then. That null is reported as **unenforced**,

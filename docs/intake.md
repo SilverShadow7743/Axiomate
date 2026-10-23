@@ -4,7 +4,7 @@ This page is for whoever takes the call when a client says they emailed and noth
 
 Axiomate does not fetch mail. The application receives a message on `POST /api/intake`, matches
 it to a configured mailbox, applies the routing rules and files a work item — all of which is in
-`lib/intake.ts` and `app/api/intake/route.ts`, and none of which involves a mailbox. The thing
+`lib/comms/intake.ts` and `app/api/intake/route.ts`, and none of which involves a mailbox. The thing
 that watches the mailbox and does the POST is a Logic App, deployed by `infra/intake.bicep`, and
 it is the subject of this page.
 
@@ -200,7 +200,7 @@ against another client's issue. Until then, tell the firm to expect it and to me
 
 ### Nothing protects against a mail loop, because nothing can loop yet
 
-Axiomate sends no mail at all. `lib/notifications.ts` records every notification and delivers
+Axiomate sends no mail at all. `lib/comms/notifications.ts` records every notification and delivers
 only the in-app ones; email and Teams are written as `pending` and stay pending, because there is
 no transport. A loop needs the application to send, and it cannot.
 

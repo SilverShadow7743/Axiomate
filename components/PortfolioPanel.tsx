@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useOverlay } from './useOverlay'
 import DetailDrawer from './DetailDrawer'
 import ReplanningDrawer from './ReplanningDrawer'
-import { narrationFigures } from '@/lib/assist'
+import { narrationFigures } from '@/lib/comms/assist'
 import { DEFAULT_HEALTH_SCORE } from '@/lib/config'
 import {
   describePortfolio,

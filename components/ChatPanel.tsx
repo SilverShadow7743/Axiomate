@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ChatConfig, ChatMessage, ChatReply, IssueIndexEntry, Proposal } from '@/lib/chat'
-import { canPropose, validateCreate, validateUpdate } from '@/lib/chat'
-import { speakableReply } from '@/lib/voice'
+import type { ChatConfig, ChatMessage, ChatReply, IssueIndexEntry, Proposal } from '@/lib/comms/chat'
+import { canPropose, validateCreate, validateUpdate } from '@/lib/comms/chat'
+import { speakableReply } from '@/lib/comms/voice'
 import VoiceInput from './VoiceInput'
 
 /**

@@ -11,7 +11,7 @@ import type {
 import type { CrpResult } from '@/lib/planning/schedule'
 import { allowedNext, checkTransition, suggestedAction } from '@/lib/planning/statusPolicy'
 import { can } from '@/lib/access'
-import { isOutboundRefusal, sendingMailboxFor } from '@/lib/outbound'
+import { isOutboundRefusal, sendingMailboxFor } from '@/lib/comms/outbound'
 import type { IssueStatus } from '@/lib/types'
 import type { PanelState } from '@/lib/panel'
 import { proposeTargetDate, statusColorClass } from '@/lib/planning/schedule'

@@ -185,7 +185,7 @@ function daysBetween(from: string, to: string): number {
  */
 /**
  * Decisions somebody is waiting on — the same five sources `myWork` folds into its `decide`
- * group, extracted for reuse by the unified inbox (`lib/inbox.ts`). No `today` parameter:
+ * group, extracted for reuse by the unified inbox (`lib/comms/inbox.ts`). No `today` parameter:
  * every date here is `requestedAt`/`submittedAt`/`deliveredAt`, or `null` — none of the five
  * sources compares against "now."
  *

@@ -73,7 +73,7 @@ actually wants a warning on.
 Sensible, and it is the pattern the effective-dating design refused: substituting a default for
 an absence and presenting the result as though it were recorded.
 
-The vocabulary for this already exists — `lib/intake.ts` carries `stated | guessed | default`
+The vocabulary for this already exists — `lib/comms/intake.ts` carries `stated | guessed | default`
 for exactly this reason. The window is derived, so it is free to fall back; it is not free to be
 silent about it.
 

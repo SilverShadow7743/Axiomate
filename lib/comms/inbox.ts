@@ -10,15 +10,15 @@
  *   waiting     — this file's own `waitingItems`, the requester's-eye mirror of four of
  *                  `decisionItems`' five sources (approvals/timesheets/milestones/changes).
  *                  Scope items are excluded — see `waitingItems`'s own comment.
- *   fyi         — `inboxFor` (`lib/notifications.ts`), unchanged, the same list `Inbox.tsx`
+ *   fyi         — `inboxFor` (`lib/comms/notifications.ts`), unchanged, the same list `Inbox.tsx`
  *                  already renders.
  */
 
-import { directoryPersonFor } from './access'
+import { directoryPersonFor } from '../access'
 import { inboxFor, type Notification } from './notifications'
-import { decisionItems, type WorkItem } from './personal/mywork'
-import type { Actor } from './actor'
-import type { WorkspaceState } from './workspace'
+import { decisionItems, type WorkItem } from '../personal/mywork'
+import type { Actor } from '../actor'
+import type { WorkspaceState } from '../workspace'
 
 /**
  * The requester's-eye mirror of four of `decisionItems`' five sources: not "is this mine to

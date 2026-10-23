@@ -7,7 +7,7 @@ import 'server-only'
  * Every function here takes the CALLER's own delegated token (from
  * `lib/db/personalGraphTokens.ts`) and does nothing else: no workspace read, no persistence,
  * no attribution logic. That belongs in the route, which knows why the call was made; this
- * file only knows how to make it. Mirrors `lib/mail.ts`'s shape (one thin wrapper per Graph
+ * file only knows how to make it. Mirrors `lib/comms/mail.ts`'s shape (one thin wrapper per Graph
  * call, refusal returned rather than thrown) but is delegated throughout, never app-only —
  * see `AXIOMATE_DELEGATED_SCOPES`'s own comment on why `Calendars.ReadWrite` here does not
  * reopen `2026-08-30-e4-meetings-design.md`'s "Graph client stays mail-only" non-goal.

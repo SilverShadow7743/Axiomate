@@ -23,7 +23,7 @@ import { config as loadEnv } from 'dotenv'
 loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
-import { htmlToText } from '../lib/intake'
+import { htmlToText } from '../lib/comms/intake'
 import { richTextToPlainText } from '../lib/richText'
 import type { TenantId } from '../lib/tenant'
 

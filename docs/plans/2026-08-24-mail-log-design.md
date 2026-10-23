@@ -15,7 +15,7 @@ reprocessing — `classify()`'s decision stands exactly as it is made today.
 
 ## A prior decision this reopens, named rather than silently overridden
 
-`lib/intake.ts`'s own header comment states, about keeping a message's original form: "Storing a
+`lib/comms/intake.ts`'s own header comment states, about keeping a message's original form: "Storing a
 second copy of every client email as markup nobody reads is a cost with no reader." That was
 correct when it was written — there was no reader. This design's whole premise is that there now
 is one, so the objection is answered rather than ignored, and it is worth saying so plainly

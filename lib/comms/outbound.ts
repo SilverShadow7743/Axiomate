@@ -1,7 +1,7 @@
-import type { IntakeMailbox } from './config'
-import { scopeChainOf, type WorkspaceState } from './workspace'
-import type { IssueNote } from './notes'
-import { richTextToPlainText } from './richText'
+import type { IntakeMailbox } from '../config'
+import { scopeChainOf, type WorkspaceState } from '../workspace'
+import type { IssueNote } from '../notes'
+import { richTextToPlainText } from '../richText'
 
 /**
  * Outbound mail: the other half of intake's loop, resolved before anything is sent.

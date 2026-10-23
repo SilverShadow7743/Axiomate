@@ -92,7 +92,7 @@ Mappers `meetingToRow/FromRow` stamping tenantId. Persistence-proof scrub gains
 ## Step 4 — state, arms, mints, persist cases, proof checks — one commit
 
 **Files:** `lib/workspace.ts`, `lib/actionShape.ts`, `app/api/workspace/route.ts`,
-`lib/notifications.ts`, `components/Inbox.tsx`, `lib/db/persist.ts`, `lib/db/repo.ts`,
+`lib/comms/notifications.ts`, `components/Inbox.tsx`, `lib/db/persist.ts`, `lib/db/repo.ts`,
 `lib/autosave.ts`, `lib/clientBoundary.ts`, `scripts/persistence-proof.ts`,
 `scripts/scenario-validation.ts`.
 

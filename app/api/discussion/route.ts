@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server'
 import { databaseConfigured } from '@/lib/db/client'
 import { listThread, postMessage, removeOwn, setFollow } from '@/lib/db/discussion'
-import { DISCUSSION_SCOPES, type DiscussionScopeKind } from '@/lib/discussion'
+import { DISCUSSION_SCOPES, type DiscussionScopeKind } from '@/lib/comms/discussion'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 

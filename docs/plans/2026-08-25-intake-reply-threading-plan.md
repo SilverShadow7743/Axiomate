@@ -13,7 +13,7 @@ and what is slowest to diagnose if wrong.
 
 ## Step 1 — The matching rule, pure
 
-**New function** in `lib/intake.ts`, beside `alreadyReceived`:
+**New function** in `lib/comms/intake.ts`, beside `alreadyReceived`:
 
 ```ts
 export function matchingIssue(
@@ -46,7 +46,7 @@ and `npm run validate:scenarios` after writing these.
 
 ## Step 2 — The cleanup grouping rule, pure
 
-**New function**, likely in `lib/intake.ts` alongside step 1 (same file already owns subject
+**New function**, likely in `lib/comms/intake.ts` alongside step 1 (same file already owns subject
 handling — `firstLine`, the subject-trim in `classify()`):
 
 ```ts

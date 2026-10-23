@@ -147,6 +147,6 @@ for pressing people to book more hours."*
 Validate → Submit. Submission is the foundation and is what this design covers; the validation
 engines largely exist already and lack only a caller (`planCheck` in `lib/capacity/capacity.ts`,
 `effortVariance` in `lib/time/time.ts`, `sowPosition` and `describePosition` in `lib/commercial/sow.ts`);
-classification should reuse the `stated | guessed | default` vocabulary from `lib/intake.ts`
+classification should reuse the `stated | guessed | default` vocabulary from `lib/comms/intake.ts`
 rather than invent a confidence percentage; and drafting is last because it is the only part
 that needs capabilities this system does not have — natural language capture and a calendar.

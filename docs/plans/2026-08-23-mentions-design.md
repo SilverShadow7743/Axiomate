@@ -15,7 +15,7 @@ longest-name-first (so `@Nishant Sekhar` resolves to the person, not to a one-wo
 of somebody else). No new storage: the note body IS the record; the notification machinery
 built for #5 carries the telling.
 
-### 1. The pure parser — `lib/mentions.ts` (new)
+### 1. The pure parser — `lib/comms/mentions.ts` (new)
 
 `mentionsIn(body, people)` → distinct `{ id, name, start, length }` matches. Longest name
 wins at each `@`; a token matching nobody is plain text; punctuation directly after a name

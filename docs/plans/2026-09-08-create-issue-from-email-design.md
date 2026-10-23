@@ -12,14 +12,14 @@ kept as-is, no dialog added. Nothing further to build; this design is superseded
 This draft was written without checking whether mail-filing already existed. It already did —
 `2026-08-31-in-mail-design.md`'s "File-to-issue", built more than a week before this draft, is a
 "File as work item" action on `InboxPanel.tsx` (`POST /api/mail/file`, `mode: 'create'` →
-`lib/mailFile.ts`'s `mapGraphMessage`) that creates an issue directly from an opened message —
+`lib/comms/mailFile.ts`'s `mapGraphMessage`) that creates an issue directly from an opened message —
 the exact trigger this design proposes a *second* "Create issue…" button for. Building this
 design as written would have put two create-from-this-message buttons on the same panel.
 
 The real gap, found while reconciling: `mapGraphMessage` didn't classify at all — it hardcoded
 `type: 'Request'` and `severity: 'Medium'` on every filed mail, an invented default this repo's
 own operating principle 2 rules out. **That half is fixed** (9 Sept): `mapGraphMessage` now
-calls `draftFor` (`lib/intake.ts`) — the same rule-matching and severity/type guessing routed
+calls `draftFor` (`lib/comms/intake.ts`) — the same rule-matching and severity/type guessing routed
 mail already gets — instead of the two constants. Not `classify`: `classify` resolves a mailbox
 from `message.to`, and a personal inbox's `to` is the filer's own address, essentially never a
 configured shared intake mailbox, so it would refuse `no-mailbox` for nearly every message filed
@@ -38,7 +38,7 @@ it was never missing, just under a different name than this draft assumed.
 
 ## What exists today, and why this is the safer direction, not a repeat
 
-Automatic mailbox intake already exists (`lib/intake.ts`'s `classify`/`draftFor`, wired to a
+Automatic mailbox intake already exists (`lib/comms/intake.ts`'s `classify`/`draftFor`, wired to a
 Logic App reading a shared mailbox) — but I2d's own finding is a caution, not a precedent to
 extend blindly: `INBOX_62` produced 27 issues in one day from one address, most of them
 newsletters and out-of-office replies, before it was stopped. That failure mode is *too much*
@@ -59,7 +59,7 @@ Reuses the classification this codebase already has, rather than inventing a sec
 
 ```
 InboundMessage { to, from, subject, body: htmlToText(fullBody), messageId, receivedAt, conversationId }
-  → classify(...)   // lib/intake.ts, already used by automatic intake
+  → classify(...)   // lib/comms/intake.ts, already used by automatic intake
   → draftFor(...)   // → IntakeDraft: subject, severity, work type guess, process area guess
 ```
 
@@ -68,7 +68,7 @@ rather than creating anything directly — the person reviews and edits before a
 committed, the same review step every other manual issue-creation path already has. Nothing new
 is auto-created; classification only saves typing.
 
-`provenanceNote(message, draft)` (already exported from `lib/intake.ts`, already used by
+`provenanceNote(message, draft)` (already exported from `lib/comms/intake.ts`, already used by
 automatic intake to record where a record came from) attaches the same way here — the created
 issue's provenance says it came from this email, identically to one that arrived through the
 automatic pipeline. One provenance shape, not two.

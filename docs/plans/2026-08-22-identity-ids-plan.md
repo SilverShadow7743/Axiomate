@@ -18,7 +18,7 @@ migrated"*; *"the backfill … guesses nothing"*.
 id equality only; `ref.id` null/undefined → name fallback (trim, case-insensitive).
 *Verify:* `npx tsc --noEmit`; driven by ID1 in step 4.
 
-**2. Types + write-path resolution — `lib/workspace.ts`, `lib/notifications.ts`,
+**2. Types + write-path resolution — `lib/workspace.ts`, `lib/comms/notifications.ts`,
 `lib/capacity/capacity.ts`, `lib/time/time.ts`, `lib/time/timesheet.ts` (types only where the interfaces
 live).**
 Optional fields (`ownerId?`, `personId?`, `toId?`: `string | null`) on IssueRecord,
@@ -32,7 +32,7 @@ when the patch moves person), `submitTimesheet` (workspace.ts:4305), `upsertAllo
 id-carrying records; keep a warning naming pre-backfill rows that would detach.
 *Verify:* `npx tsc --noEmit`; ID1.
 
-**3. Read-path joins — `lib/personal/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
+**3. Read-path joins — `lib/personal/mywork.ts`, `lib/comms/notifications.ts` (`inboxFor`,
 `unreadCount`), `lib/capacity/capacity.ts`, `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts`
 (`weekStateFor`, self-approval check), `lib/planning/goals.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it rewrites the joins every personal surface

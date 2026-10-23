@@ -16,7 +16,7 @@
  * anything else. This module is that missing gate.
  */
 
-import { ISSUE_STATUSES, type IssueStatus } from './types'
+import { ISSUE_STATUSES, type IssueStatus } from '../types'
 
 /* ================================================================== *
  * Wire shapes

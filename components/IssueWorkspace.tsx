@@ -54,7 +54,7 @@ import {
   type SeedIssueInput,
   type WorkspaceState,
 } from '@/lib/workspace'
-import type { IssueIndexEntry, Proposal } from '@/lib/chat'
+import type { IssueIndexEntry, Proposal } from '@/lib/comms/chat'
 import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/planning/tree'
 import { clientFilterScopeFor } from '@/lib/projectBoundary'
 import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
@@ -93,7 +93,7 @@ import DetailDrawer from './DetailDrawer'
 import SnapshotDrawer from './SnapshotDrawer'
 import AppSidebar from './AppSidebar'
 import FiltersHeader from './FiltersHeader'
-import { unreadCount } from '@/lib/notifications'
+import { unreadCount } from '@/lib/comms/notifications'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
 import type { ApplyOutcome } from './ChatPanel'
@@ -1392,7 +1392,7 @@ export default function IssueWorkspace({
           // wrap description explicitly rather than casting the whole object, so a plain string
           // can never reach the RichDoc column silently. The `as` on the rest is unavoidable
           // (the assistant's patch is a loose string bag validated against IssueRecord's other
-          // fields upstream in lib/chat.ts, not re-derivable here), but description gets no cast.
+          // fields upstream in lib/comms/chat.ts, not re-derivable here), but description gets no cast.
           const { description, ...rest } = p.patch
           const patch: Partial<IssueRecord> = {
             ...(rest as Partial<IssueRecord>),

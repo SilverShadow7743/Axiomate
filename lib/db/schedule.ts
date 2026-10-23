@@ -15,7 +15,7 @@ import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../repo
 import { claimDelivery, deliveryDue, parseReportDelivery, type DeliveryStamps } from '../reports/delivery'
 import { resolveOperatorAddress } from '../reports/notifyBundle'
 import { externalPartyKinds, tiersOf } from '../config'
-import { sendAsMailbox } from '../mail'
+import { sendAsMailbox } from '../comms/mail'
 import { addDays } from '../dates'
 import { weekLabel } from '../time/timesheet'
 

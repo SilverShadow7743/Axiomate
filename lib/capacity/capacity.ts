@@ -59,7 +59,7 @@ export interface ResourceProfile {
    * working pattern behind it.
    *
    * So the numbers are always usable and their provenance travels with them, which is the rule
-   * this codebase already keeps twice over: `lib/intake.ts` marks a classified field
+   * this codebase already keeps twice over: `lib/comms/intake.ts` marks a classified field
    * `stated | guessed | default`, and `availabilityOf` answers `unknown` rather than `clear`
    * for somebody nobody has described.
    */

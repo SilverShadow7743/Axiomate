@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { directoryPersonFor } from '@/lib/access'
-import { suggestRequest } from '@/lib/assist'
-import { validateCreate, type ChatConfig, type CreateProposal, type IssueIndexEntry } from '@/lib/chat'
-import { issueMailTimeline, type DiscussionMessage, type DiscussionScopeKind } from '@/lib/discussion'
-import { mentionSegments } from '@/lib/mentions'
+import { suggestRequest } from '@/lib/comms/assist'
+import { validateCreate, type ChatConfig, type CreateProposal, type IssueIndexEntry } from '@/lib/comms/chat'
+import { issueMailTimeline, type DiscussionMessage, type DiscussionScopeKind } from '@/lib/comms/discussion'
+import { mentionSegments } from '@/lib/comms/mentions'
 import { richTextToPlainText } from '@/lib/richText'
 import { formatIso } from '@/lib/dates'
 import type { WorkspaceState } from '@/lib/workspace'
@@ -225,7 +225,7 @@ export default function DiscussionTab({
 
   /**
    * The "@" nearest the cursor with no whitespace between it and the cursor — the same shape
-   * `lib/mentions.ts`'s own scan uses (any "@" is a candidate start; what follows decides
+   * `lib/comms/mentions.ts`'s own scan uses (any "@" is a candidate start; what follows decides
    * whether it resolves), so what triggers this dropdown is what could actually parse as a
    * mention there, never a second, drifting definition of "mid-mention."
    */

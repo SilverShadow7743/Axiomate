@@ -37,7 +37,7 @@ import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
 import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity/capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import { parseSavedView, type SavedView } from './savedViews'
-import type { NotificationPrefs } from './notifications'
+import type { NotificationPrefs } from './comms/notifications'
 import type { Goal } from './planning/goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
@@ -376,7 +376,7 @@ export interface Person {
    * nothing has been recorded either way, which is different again — and is the honest answer
    * for the twenty people in this directory nobody has described.
    *
-   * The same vocabulary as `lib/intake.ts` and `ResourceProfile.source`, on purpose: a reader
+   * The same vocabulary as `lib/comms/intake.ts` and `ResourceProfile.source`, on purpose: a reader
    * who has learned it once should not have to learn it again per field.
    */
   source?: 'stated' | 'default'
@@ -1135,7 +1135,7 @@ export interface OperatingModel {
   /**
    * Each person's own say over what they are told and how, keyed by directory id. Absent
    * means in-app for every kind — the shipped behaviour. Self-served through
-   * `setNotificationPref`, whose arm is the gate. See `lib/notifications.ts`.
+   * `setNotificationPref`, whose arm is the gate. See `lib/comms/notifications.ts`.
    */
   notificationPrefs: NotificationPrefs
   /**
