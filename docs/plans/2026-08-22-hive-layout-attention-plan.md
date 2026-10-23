@@ -135,7 +135,7 @@ for the citations. Everything below is a fresh, code-verified pass over the rest
 |---|---|---|
 | Notification drain via Graph Mail.Send | **Done** | `lib/db/notifyDrain.ts:46-101`, `drainEmailNotifications()` — sends via `sendAsMailbox`, stamps `delivered`/`failed`/`pending`. A separate system from the report-pack delivery (`lib/delivery.ts`); both run from `app/api/schedule/run`. |
 | Assignment notifications on owner change | **Done** | `lib/automation.ts:150-164`, `AUTO_OWNER_CHANGED`, `on: 'issue.owner'`, enabled by default. |
-| Inbox mark-all-read / "N older" / `onOpen`→tab | **Done** | `components/Inbox.tsx:76,94,110`; routed via `setRequestTab` in `components/IssueWorkspace.tsx:2185-2209`. |
+| Inbox mark-all-read / "N older" / `onOpen`→tab | **Done** | `components/comms/Inbox.tsx:76,94,110`; routed via `setRequestTab` in `components/IssueWorkspace.tsx:2185-2209`. |
 | "Requests" surface / default `issue.created` rule | **Partial** | `AUTO_HIGH_RAISED` (`lib/automation.ts:100-113`) is default-on but High-severity only — a Medium/Low intake arrival still notifies nobody by default. Unified Work Inbox (shipped this session) covers decisions/waiting, not "what just arrived." |
 
 **Week 4 — the record, consolidated**
@@ -145,8 +145,8 @@ for the citations. Everything below is a fresh, code-verified pass over the rest
 | DetailPanel tabs 12 → ~8 | **Done — was already done, and now correctly reflected** (`fb2a1c7`) | Corrects the "Open" verdict two entries up in this doc's own history: the actual runtime merge happened before this session (`TABS` for an issue is `['Overview', 'Notes', 'Discussion', 'Estimation', 'Time', 'Schedule', 'Links', 'History']` — 8, not 15). What was genuinely open was the `Tab` type union still carrying 5 dead members nobody deleted — type-level debris, not an unfinished refactor. Verified zero references anywhere before removing them. |
 | "Write a reply" on Overview/Notes | **Done** | `components/OverviewTab.tsx`, `components/NotesTab.tsx`. |
 | Blueprints at the moment of need | **Done** (mechanism) | "Start from a blueprint"/"Save as blueprint" in `components/ConfigWorkspace.tsx`, `components/Dialogs.tsx`, `components/RowMenu.tsx`. 2-3 starter blueprints not verified as authored content. |
-| Board "Move to…" menu | **Done** | `components/BoardView.tsx:45,131-147`, reuses `dropOutcome`. |
-| — Escape/outside-click closes it | **Done, 2026-08-31** (`4d2a378`) | Extracted into `MoveMenu` (`components/BoardView.tsx`), matching `RowMenu.tsx`'s own shape: `useOverlay` for background inert + Tab wrap, the reused `.row-menu-scrim` for outside-click, Escape handled locally. Previously the menu had no dismiss path at all except picking an item. |
+| Board "Move to…" menu | **Done** | `components/planning/BoardView.tsx:45,131-147`, reuses `dropOutcome`. |
+| — Escape/outside-click closes it | **Done, 2026-08-31** (`4d2a378`) | Extracted into `MoveMenu` (`components/planning/BoardView.tsx`), matching `RowMenu.tsx`'s own shape: `useOverlay` for background inert + Tab wrap, the reused `.row-menu-scrim` for outside-click, Escape handled locally. Previously the menu had no dismiss path at all except picking an item. |
 | — Detail tab-strip overflow handling | **Done — was already done, mis-flagged twice** | `.tabs` (`app/globals.css:1520-1530`) already has `overflow-x: auto` with a hidden scrollbar; its own comment states the exact goal: "Narrow windows scroll the strip instead of silently clipping whole tabs off the edge." Both earlier checks searched for a specific class name instead of tracing `DetailPanel.tsx`'s actual `TABS.map()` rendering (`className="tabs"`, line ~482). No code change needed. |
 
 **Week 5 — the P1 debt the suite names**
@@ -159,7 +159,7 @@ Client-safe visibility boundary is **done** (scenario `RP2`: PASS — internal r
 
 **Operator agenda**
 
-Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
+Four of five still open: G7 (`ROLE_ENGAGEMENT_LEAD` still carries `change.approve`, `lib/access.ts:252` vs. `:259`), the OAPIL blueprint (no match in `lib/commercial/blueprint.ts`), the client-filter default (no "stakeholder" match in `components/`), and the two-person verification session (human action, presumed pending). E1/E2's design-reversal confirmation is outside what code can verify.
 
 **Net**: weeks 2, 4, and 5 are all closed. The two items Week 4 still carried "Open" — the tab
 consolidation and the tab-strip overflow handling — were both already done and both mis-checked

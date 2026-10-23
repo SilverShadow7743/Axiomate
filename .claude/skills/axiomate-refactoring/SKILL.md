@@ -15,7 +15,7 @@ real mistake this session or is generalized from one that happened and was caugh
    matching a pattern. The same discipline applies to code: a refactor names the exact
    functions/files it touches in its description, and the diff should match that list — a
    diff far larger than the stated scope is a signal to stop and check what actually changed.
-2. **Verify before and after, one unit at a time.** `lib/severity.ts`'s extraction (commit
+2. **Verify before and after, one unit at a time.** `lib/planning/severity.ts`'s extraction (commit
    `66d4051`) pulled one small, shared mapping out of two call sites (`TreeGrid.tsx`,
    `OverviewTab.tsx`) specifically so the mapping couldn't drift between them — a worked
    example of the right SIZE for a single refactor: one concept, wherever it was duplicated,
@@ -43,7 +43,7 @@ real mistake this session or is generalized from one that happened and was caugh
 
 1. Identify duplication/complexity/coupling with a specific citation (file:line, or the
    repeated pattern across named call sites) — not a general "this could be cleaner."
-2. Scope the refactor to ONE thing, sized like `lib/severity.ts`'s extraction — a single shared
+2. Scope the refactor to ONE thing, sized like `lib/planning/severity.ts`'s extraction — a single shared
    concept, wherever it's duplicated, not a sweep across unrelated code that happens to also
    look messy.
 3. Run the full gate before and after (`axiomate-code-review`'s standing checklist) — a

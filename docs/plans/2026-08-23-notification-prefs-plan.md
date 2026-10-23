@@ -10,7 +10,7 @@ the guard, and it runs before any pref is ever set."
 
 ## Steps
 
-**1. The vocabulary and the pure rule — `lib/notifications.ts` (LF, Edit tool).**
+**1. The vocabulary and the pure rule — `lib/comms/notifications.ts` (LF, Edit tool).**
 `NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation'] as const` +
 `NotificationKind`; `NOTIFICATION_MODES = ['mute', 'in-app', 'in-app+email'] as const` +
 `NotificationMode`; `NotificationPrefs = Record<string, Partial<Record<NotificationKind,
@@ -73,7 +73,7 @@ always mint, and a wrong-way check silently swallows notifications nobody knows 
 (the existing notification scenarios) still PASS — they are the default-path guard at
 suite level.
 
-**4. The Inbox block — `components/Inbox.tsx` (LF, Edit tool),
+**4. The Inbox block — `components/comms/Inbox.tsx` (LF, Edit tool),
 `components/IssueWorkspace.tsx` (CRLF, python; the dispatch plumbing).**
 A Preferences section at the top of the Inbox: three rows in the design's words ("When
 work is assigned to me…" / "When a new request arrives…" — this row only when the viewer

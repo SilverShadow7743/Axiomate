@@ -33,7 +33,7 @@ import { loadWorkspace } from '../lib/db/repo'
 import { projectOf } from '../lib/workspace'
 import { projectMemberToRow } from '../lib/db/map'
 import { currentTenantId } from '../lib/tenant'
-import type { ProjectMember } from '../lib/staffing'
+import type { ProjectMember } from '../lib/capacity/staffing'
 import { commitRefusal } from '../lib/backfillMembers'
 
 const URL = process.env.DATABASE_URL

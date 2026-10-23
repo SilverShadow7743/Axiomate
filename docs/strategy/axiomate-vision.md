@@ -5,6 +5,10 @@ real in this codebase today. Not a transcript — the source conversation had 36
 sections; this keeps the thesis, drops the repetition, and adds the one thing the original
 didn't have: which parts already exist in Axiomate TMS, which are genuinely blocked, and why.*
 
+*The root `README.md` describes the current build on its own narrower terms — a planning
+surface for two named clients — because that is what is actually shipped today. This document
+is the wider frame that build sits inside, not a replacement for it.*
+
 ---
 
 ## 1. The thesis
@@ -72,11 +76,11 @@ codebase — not what the pitch assumed:
 
 | Slice | What it needs | Real in Axiomate TMS today | Genuinely AI-blocked |
 |---|---|---|---|
-| **A. Connect** | Email, Teams/Slack, Calendar | Meetings are real (`lib/meetings.ts`, id-joined attendees, issue/project scope). Calendar exists (My Calendar). Mailbox intake is live in production (`app/api/intake`, a Logic App watcher proven end to end). Teams/Slack: not connected. | — |
+| **A. Connect** | Email, Teams/Slack, Calendar | Meetings are real (`lib/personal/meetings.ts`, id-joined attendees, issue/project scope). Calendar exists (My Calendar). Mailbox intake is live in production (`app/api/intake`, a Logic App watcher proven end to end). Teams/Slack: not connected. | — |
 | **B. Understand** | Detect tasks, commitments, decisions, requirements, risks *from unstructured signal* | Nothing — this is exactly what an LLM call does that this codebase has never had budget to run. | **Yes.** Every one of these five detections is generative understanding of free text. |
 | **C. Execute** | Create, assign, track work; follow up | This is most of what Axiomate TMS *is* — Assignment (`setAssignment`), the reducer's full transition graph, `lib/watch.ts`'s proactive daily follow-up pass, the Unified Inbox's "waiting on" tracking. | — |
-| **D. Intelligence** | "What's overdue / at risk / needs attention" | Almost entirely real: `lib/watch.ts`'s six conditions (`overdue`, `atRisk`, `dueSoon`, `stale`, `planImpossible`, `sowOverConsumed`), Project Pulse's capacity concern, `lib/mywork.ts`'s decision/waiting split. "What changed this week" and free-text company Q&A are not built. | Free-text natural-language queries ("why is Project Phoenix delayed") need an LLM to parse intent, even though the underlying data is already structured and queryable. |
-| **E. Founder/manager cockpit** | One executive view | Portfolio (`lib/portfolio.ts`) is close in spirit — every engagement at once, named concerns, no invented score — but it's delivery-health, not the full company-health rollup (commitments, customers, decisions-required) §20 describes. | — |
+| **D. Intelligence** | "What's overdue / at risk / needs attention" | Almost entirely real: `lib/watch.ts`'s six conditions (`overdue`, `atRisk`, `dueSoon`, `stale`, `planImpossible`, `sowOverConsumed`), Project Pulse's capacity concern, `lib/personal/mywork.ts`'s decision/waiting split. "What changed this week" and free-text company Q&A are not built. | Free-text natural-language queries ("why is Project Phoenix delayed") need an LLM to parse intent, even though the underlying data is already structured and queryable. |
+| **E. Founder/manager cockpit** | One executive view | Portfolio (`lib/planning/portfolio.ts`) is close in spirit — every engagement at once, named concerns, no invented score — but it's delivery-health, not the full company-health rollup (commitments, customers, decisions-required) §20 describes. | — |
 
 **The honest summary**: of the MVP's five slices, four (A, C, D, E) are substantially
 buildable — and largely already built — without AI. Only B, the *capture-and-understand* layer
@@ -94,7 +98,7 @@ assume:
 
 1. An LLM that can act, not just narrate — the one `/api/assist` integration this codebase has
    is narration-only (`narrationFigures`, read-only prose over already-computed figures,
-   explicitly walled off from writing anything — `lib/assist.ts`'s payload construction is
+   explicitly walled off from writing anything — `lib/comms/assist.ts`'s payload construction is
    itself security-reviewed to carry no rates, no leave reasons).
 2. A governance layer for *agent* actions specifically — scoped permissions, explainability
    ("why did Axiomate make this recommendation"), audit entries distinguishing agent-initiated

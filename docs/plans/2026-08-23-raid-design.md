@@ -26,7 +26,7 @@ STABLE ID (`WT_RISK`, `WT_DECISION`) resolved from the issue's type label throug
 registry — `raidKindOf(model, typeLabel)` — so renaming the label does not orphan the
 semantics.
 
-### 2. The pure module — `lib/raid.ts`
+### 2. The pure module — `lib/planning/raid.ts`
 
 Likelihood and impact each 1–5; **exposure is likelihood × impact and is NEVER stored** —
 a derived value stored as fact is the thing this codebase refuses. Bands:

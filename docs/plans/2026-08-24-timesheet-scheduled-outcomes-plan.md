@@ -4,13 +4,13 @@ Follows `docs/plans/2026-08-24-timesheet-scheduled-outcomes-design.md`, approved
 rounds of checking the design against real data (issue planned dates, allocation coverage, and
 per-project row counts) rather than assumption. Quotes below are from that document as it stands.
 
-**Ordering principle.** Two new pure functions in `lib/timesheet.ts` — the same "no clock, no
+**Ordering principle.** Two new pure functions in `lib/time/timesheet.ts` — the same "no clock, no
 database" module `weekGrid` already lives in — fully provable by scenario before either one is
 wired into `TimesheetPanel.tsx`. The UI step comes last because it is the one step this plan
 cannot fully verify without a browser, and because both pure functions are cheap to get right in
 isolation and expensive to debug through a rendered grid.
 
-## Step 1 — `scheduledOutcomes` in `lib/timesheet.ts`
+## Step 1 — `scheduledOutcomes` in `lib/time/timesheet.ts`
 
 **New function**, alongside `weekGrid`:
 
@@ -65,7 +65,7 @@ reducer, no database):
 `npx tsc --noEmit` and `npx tsx scripts/scenario-validation.ts` (or `npm run validate:scenarios`)
 after writing these.
 
-## Step 2 — `withScheduled` in `lib/timesheet.ts`
+## Step 2 — `withScheduled` in `lib/time/timesheet.ts`
 
 **New function**, taking `weekGrid`'s own row shape so the two compose without either one knowing
 about the other's internals:
@@ -95,7 +95,7 @@ them in — shipping one without the other is not a usable state.
 
 ## Step 3 — Wire `TimesheetPanel.tsx`
 
-**File:** `components/TimesheetPanel.tsx`. Only the "my week" section changes.
+**File:** `components/time/TimesheetPanel.tsx`. Only the "my week" section changes.
 
 ```ts
 const allocations = useMemo(() => Object.values(state.allocations), [state.allocations])

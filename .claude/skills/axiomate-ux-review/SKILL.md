@@ -25,7 +25,7 @@ check regressions on those specifically, not just new ones.
 
 ## Fixed gaps (check these are not regressed)
 
-- Severity color-not-only — `lib/severity.ts`'s `severityGlyph()` now pairs a shape with color
+- Severity color-not-only — `lib/planning/severity.ts`'s `severityGlyph()` now pairs a shape with color
   everywhere severity renders. If a NEW severity render site skips it, that's a regression.
 - `.cfg-fld` required-marker/inline-error — `.cfg-fld.required` + `.cfg-fld-error` exist; a new
   required config field that doesn't use them is a regression, not a fresh finding.

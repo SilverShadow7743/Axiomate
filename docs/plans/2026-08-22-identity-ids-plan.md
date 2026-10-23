@@ -11,15 +11,15 @@ migrated"*; *"the backfill … guesses nothing"*.
 
 ## Steps
 
-**1. Pure helpers — `lib/access.ts` (`directoryIdByName`), `lib/person.ts` (new,
+**1. Pure helpers — `lib/access.ts` (`directoryIdByName`), `lib/capacity/person.ts` (new,
 `samePerson`).**
 `directoryIdByName(model, name)`: trim, case-insensitive, unique match over
 `model.people`; two live matches → null. `samePerson(model, ref, person)`: `ref.id` set →
 id equality only; `ref.id` null/undefined → name fallback (trim, case-insensitive).
 *Verify:* `npx tsc --noEmit`; driven by ID1 in step 4.
 
-**2. Types + write-path resolution — `lib/workspace.ts`, `lib/notifications.ts`,
-`lib/capacity.ts`, `lib/time.ts`, `lib/timesheet.ts` (types only where the interfaces
+**2. Types + write-path resolution — `lib/workspace.ts`, `lib/comms/notifications.ts`,
+`lib/capacity/capacity.ts`, `lib/time/time.ts`, `lib/time/timesheet.ts` (types only where the interfaces
 live).**
 Optional fields (`ownerId?`, `personId?`, `toId?`: `string | null`) on IssueRecord,
 TimeEntry, Timesheet, Allocation, Commitment, Notification — optional so every existing
@@ -32,9 +32,9 @@ when the patch moves person), `submitTimesheet` (workspace.ts:4305), `upsertAllo
 id-carrying records; keep a warning naming pre-backfill rows that would detach.
 *Verify:* `npx tsc --noEmit`; ID1.
 
-**3. Read-path joins — `lib/mywork.ts`, `lib/notifications.ts` (`inboxFor`,
-`unreadCount`), `lib/capacity.ts`, `lib/time.ts` (daily cap), `lib/timesheet.ts`
-(`weekStateFor`, self-approval check), `lib/goals.ts`.
+**3. Read-path joins — `lib/personal/mywork.ts`, `lib/comms/notifications.ts` (`inboxFor`,
+`unreadCount`), `lib/capacity/capacity.ts`, `lib/time/time.ts` (daily cap), `lib/time/timesheet.ts`
+(`weekStateFor`, self-approval check), `lib/planning/goals.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK** — it rewrites the joins every personal surface
 stands on, and the failure mode is exactly the one being fixed: a wrong join empties
 My Work, silences the cap warning, or lets a submitter approve their own week. Each

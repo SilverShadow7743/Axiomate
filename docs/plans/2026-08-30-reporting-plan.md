@@ -14,14 +14,14 @@ Ground truth verified while writing (cite, don't re-derive):
   `clientView()` first and count the withheld remainder for the disclosure line.
 - `clientView` (`lib/clientBoundary.ts:16`) returns a full redacted `WorkspaceState`; it strips
   estimates entirely (`estimates: {}` at line 102) and filters `activities` to surviving issues.
-- `buildTree(state, today)` (`lib/tree.ts:16`) is the canonical per-issue schedule row builder:
+- `buildTree(state, today)` (`lib/planning/tree.ts:16`) is the canonical per-issue schedule row builder:
   percent = `percentOverride` → `rollUp(activities)` → `STATUS_PROGRESS[status]` (tree.ts:170–179),
   plus `scheduleHealth` (computeHealth) and `projectedCompletionDate = plannedEndDate` (tree.ts:182).
   Progress in the packs = `buildTree(clientView(...), asOf)` — after the boundary, by construction.
 - Timesheets: `Timesheet` rows (person/personId/weekStarting always-Monday/status) and
-  `TimeEntry` (`lib/time.ts:50`: issueId required, person/personId, date, hours, activity,
+  `TimeEntry` (`lib/time/time.ts:50`: issueId required, person/personId, date, hours, activity,
   billable, note) live in `state.timesheets` / `state.timeEntries`. `sheetFor(sheets, person,
-  week, personId?)` at `lib/timesheet.ts:175`; `weekStarting` at :51.
+  week, personId?)` at `lib/time/timesheet.ts:175`; `weekStarting` at :51.
 - Issue→scope: `scopeChainOf(state, id)` at `lib/workspace.ts:755`, `projectOf` at :776;
   external-party tiers via `externalPartyKinds(tiersOf(state.model))` as clientPack.ts:90 does.
 - Identity: `OrganizationIdentity {name, shortName, partyCode, description}` at
@@ -33,7 +33,7 @@ Ground truth verified while writing (cite, don't re-derive):
 - Export menu handlers in `components/IssueWorkspace.tsx`: `exportDailyIms` (:1751, text+CSV
   via `renderImsText`/`renderImsCsv` — there is NO daily-IMS view), `openClientPack` (:1768,
   refuses unless one client is picked), menu items at ~1976–2005. `ClientPackView`
-  (components/ClientPackView.tsx, 125 lines) is the print-ready overlay pattern.
+  (components/commercial/ClientPackView.tsx, 125 lines) is the print-ready overlay pattern.
 - RP2's hardcoded NOT IMPLEMENTED verdict: `scripts/scenario-validation.ts:1988–1999`.
   Scenario count 186 → **187** (RF1 new; RP2 stays one scenario, re-driven).
 
@@ -131,7 +131,7 @@ export interface PackProgress {
   fixture shows the two disagreeing for a reason other than the known audit cap, that is the
   design's third send-back clause — stop and put the delta definition to the user.
 
-`components/ClientPackView.tsx` gains a `Progress` section rendering both halves for both pack
+`components/commercial/ClientPackView.tsx` gains a `Progress` section rendering both halves for both pack
 kinds, with the deltas labeled "from record dates" so a reader beside the monthly Movement
 section understands why two raised-counts can differ.
 
@@ -190,7 +190,7 @@ unchanged; ReportHeader is view-only) and the four audits still at 33/71/3/11.
 - `npm i exceljs` (exact version pinned by the lockfile). Import ONLY via
   `await import('exceljs')` inside the download handler (detail 6 — a static import grows the
   main chunk for everyone).
-- `components/FinanceReportDialog.tsx`: period pickers (a week `<select>` built by stepping
+- `components/commercial/FinanceReportDialog.tsx`: period pickers (a week `<select>` built by stepping
   `weekStarting` back from today, a month picker, custom from/to), a preview table rendered
   from ONE `buildFinanceReport` call held in component state, the exceptions listed beneath,
   and the empty-period message when `report.empty`. Buttons:
@@ -199,7 +199,7 @@ unchanged; ReportHeader is view-only) and the four audits still at 33/71/3/11.
     (the exceptions sheet exists even when empty, carrying "every week in range is approved");
     header rows from the identity (styled firm name + period) and `workbook.addImage` when
     `logoDataUri` is present.
-  - **Print / save as PDF** — opens `components/FinanceReportView.tsx`, a print-ready overlay
+  - **Print / save as PDF** — opens `components/commercial/FinanceReportView.tsx`, a print-ready overlay
     in the ClientPackView pattern (`.pack-scrim`/`.pack-page`), ReportHeader on top.
 - Export menu (~IssueWorkspace:1976): new item `Finance timesheet…` opening the dialog. No
   client-scoping precondition — this report is internal-financial, not a client pack.

@@ -25,7 +25,7 @@ export interface ChecklistItem {
 }
 
 /** Next position, counting removed items too — same reasoning as `nextSequence` in
- *  `lib/milestone.ts`: reusing a removed item's position would put a new one where an old one
+ *  `lib/planning/milestone.ts`: reusing a removed item's position would put a new one where an old one
  *  sits in an audit trail somebody may be reading beside it. */
 export function nextChecklistSequence(items: Record<string, ChecklistItem>, issueId: string): number {
   const mine = Object.values(items).filter((i) => i.issueId === issueId)

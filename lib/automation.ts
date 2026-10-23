@@ -1,9 +1,9 @@
 import type { DomainEvent, EventType } from './events'
-import type { Channel } from './notifications'
+import type { Channel } from './comms/notifications'
 import type { Action, IssueRecord, WorkspaceState } from './workspace'
 import type { IssueStatus } from './types'
 import { wrapPlainText } from './richText'
-import { dueOccurrence, type Cadence } from './recurrence'
+import { dueOccurrence, type Cadence } from './planning/recurrence'
 
 /**
  * Event → condition → action, and the one design decision that makes it safe.
@@ -117,7 +117,7 @@ export interface AutomationRule {
   enabled: boolean
   /**
    * Set only for a calendar-triggered rule — the occurrence last fired for. Mirrors
-   * `Recurrence.lastRaisedOn` (`lib/recurrence.ts`) exactly, and for the same reason: a pass
+   * `Recurrence.lastRaisedOn` (`lib/planning/recurrence.ts`) exactly, and for the same reason: a pass
    * re-running the same morning must not notify twice, and a pass down for three days fires the
    * missed occurrence once, not once per missed day.
    */
@@ -184,7 +184,7 @@ export const DEFAULT_AUTOMATION_RULES: AutomationRule[] = [
   },
   {
     /*
-     * The rollup (`rollUp`, lib/schedule.ts) already computes this and shows it on every parent
+     * The rollup (`rollUp`, lib/planning/schedule.ts) already computes this and shows it on every parent
      * row — this is the same fact, noticed rather than merely displayed. Deliberately a notice,
      * not a close: `Closed - confirmed` needs client-agreement evidence this condition proves
      * nothing about, so the decision to close stays a person's, exactly as it already is for a

@@ -25,7 +25,7 @@ guessed at:
    the full draft `Message`, `body.content` already holding the correctly quoted, threaded original
    in HTML), then `PATCH` that draft's `body` with the signed HTML prepended, then
    `POST .../send`. Slower (three calls instead of one) but unambiguous about content type.
-2. **`sendAsMailbox` (`lib/mail.ts`) has five callers, not one.** Grep confirms:
+2. **`sendAsMailbox` (`lib/comms/mail.ts`) has five callers, not one.** Grep confirms:
    `app/api/mail/send/route.ts` (the one this design touches), `app/api/workspace/route.ts`
    (a notification), and `lib/db/notifyDrain.ts`/`lib/db/schedule.ts` ×2 (Daily IMS, governance
    pack delivery). The signature must not reach the last three — a report-delivery email is not
@@ -107,7 +107,7 @@ export function plainTextToHtml(text: string): string
 **Verify:** `npx tsx scripts/scenario-validation.ts` — `SIG1 PASS`, `SIG2 PASS`, scenario count
 +2, no regressions.
 
-**4. `lib/personalGraph.ts` — `sendNewMail` and `replyToMessage`.**
+**4. `lib/personal/personalGraph.ts` — `sendNewMail` and `replyToMessage`.**
 
 - `sendNewMail`: add a `contentType: 'Text' | 'HTML'` parameter (its only caller is about to be
   rewritten in step 5, so no default is needed the way `sendAsMailbox` needs one) — used as
@@ -151,7 +151,7 @@ need `state.model.organization` (name, logo, template) and the sender's own `Per
 
 **Verify:** `npx tsc --noEmit`, `npm run build`.
 
-**6. `lib/mail.ts` (`sendAsMailbox`) and `app/api/mail/send/route.ts` — the firm-mailbox route.**
+**6. `lib/comms/mail.ts` (`sendAsMailbox`) and `app/api/mail/send/route.ts` — the firm-mailbox route.**
 
 - `sendAsMailbox`: add the trailing `contentType: 'Text' | 'HTML' = 'Text'` parameter named in
   the finding above. The body's `body.contentType` uses it; every other line is unchanged.
@@ -159,7 +159,7 @@ need `state.model.organization` (name, logo, template) and the sender's own `Per
   `mail.send`/`note.add` permission checks). After `sendingMailboxFor` resolves, additionally
   resolve `directoryPersonFor(state.model, session.actor)` and build the signed HTML the same way
   step 5 does.
-- **The trap this step exists to name**: `outboundNoteBody`/`alreadySent` (`lib/outbound.ts`) and
+- **The trap this step exists to name**: `outboundNoteBody`/`alreadySent` (`lib/comms/outbound.ts`) and
   the `addNote` action further down this same route currently read the PLAIN `text` the person
   typed — that is what becomes the client-visible note on the issue record, and what the retry-
   dedupe check compares against. **Both must keep reading the plain, unsigned `text` — never the
@@ -216,7 +216,7 @@ the whole plan** — not because the new code is complex, but because `sendAsMai
 delivery running unattended on a schedule (`lib/db/schedule.ts`'s Daily IMS and governance pack
 sends). A wrong default, or a change to `sendAsMailbox`'s existing parameters instead of a purely
 additive trailing one, would silently corrupt or break report delivery for every client — the
-kind of failure nobody sees until a report simply stops arriving. Diffing `lib/mail.ts` against
+kind of failure nobody sees until a report simply stops arriving. Diffing `lib/comms/mail.ts` against
 its pre-change version before this commit, specifically confirming the four untouched call sites
 compile with no changes required, is the concrete check against this.
 

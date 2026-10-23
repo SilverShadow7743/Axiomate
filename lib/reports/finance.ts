@@ -1,7 +1,7 @@
 import type { HierarchyNode, WorkspaceState } from '../workspace'
-import { sheetFor, weekStarting, weekLabel } from '../timesheet'
+import { sheetFor, weekStarting, weekLabel } from '../time/timesheet'
 import { externalPartyKinds, tiersOf } from '../config'
-import type { TimeEntry } from '../time'
+import type { TimeEntry } from '../time/time'
 
 /**
  * The finance timesheet report — approved hours over a chosen period, gathered for the user to

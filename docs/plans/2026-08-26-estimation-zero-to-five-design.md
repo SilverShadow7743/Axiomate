@@ -4,9 +4,9 @@
 
 The request was "Estimation should start from numbering 0 to 5 score instead of 1 to
 5." That reads simply, but the current 1–5 scale is load-bearing in three places at
-once: `lib/estimation.ts`'s `emptyScores()` already returns `0` per dimension as the
+once: `lib/commercial/estimation.ts`'s `emptyScores()` already returns `0` per dimension as the
 "nothing entered yet" sentinel, and `isScored()` checks `>= 1` specifically so a `0`
-reads as unscored — the doc comment says "a scored 0 is not a score." `lib/estimator.ts`
+reads as unscored — the doc comment says "a scored 0 is not a score." `lib/commercial/estimator.ts`
 independently depends on `0` meaning "no rule has touched this parameter yet," and
 floors every touched parameter to a minimum of 1 before returning. Widening the scale to
 include a real `0` breaks both without a design, not just a wider `<input>`.
@@ -69,7 +69,7 @@ never mix a 25-point raw score with 15-point thresholds." Every worked example i
 deck shows both numbers side by side (e.g. "Raw Total: 12" then "12/25×15=7.2→7", result
 M) — the raw total explains *why*, the normalized score decides the size.
 
-`lib/estimation.ts` gains:
+`lib/commercial/estimation.ts` gains:
 
 ```ts
 export const NORMALISED_MAX = 15 // the deck's fixed 0–15 band, not derived from COMPLEXITY_PARAMETERS.length
@@ -114,7 +114,7 @@ this change — `effortHours`/`storyPoints` are already firm-editable configurat
 exactly why they are editable"). Only `minScore`/`maxScore` change, because normalization
 makes the old raw-total ranges wrong regardless of what this request asked for.
 
-## The auto-estimator (`lib/estimator.ts`)
+## The auto-estimator (`lib/commercial/estimator.ts`)
 
 Its internal working scores also start `null`-based (reusing `emptyScores()`). Rule-weight
 assignment (`if (value > scores[key]) scores[key] = value`) treats `null` as lower than
@@ -129,7 +129,7 @@ auto-proposed total will generally read lower than today's for issues that don't
 speak to every dimension; that is the intended, more honest behavior, not a regression to
 guard against.
 
-## UI (`components/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`)
+## UI (`components/commercial/EstimationTab.tsx`, `components/ConfigWorkspace.tsx`)
 
 Both already iterate `COMPLEXITY_LEVELS` and the configured size bands data-driven — the
 new `0` dot and the widened XS range need no separate UI code once the data model above
@@ -138,7 +138,7 @@ right thing once `null`, not `0`, is the unscored sentinel — today's bug (an u
 dimension rendering as if "0" were already chosen) disappears as a side effect of fixing
 the sentinel, not from a separate UI fix.
 
-The existing derivation chain at `components/EstimationTab.tsx`'s "A · Complexity and
+The existing derivation chain at `components/commercial/EstimationTab.tsx`'s "A · Complexity and
 effort" section (`{effort.scored ? effort.score : '—'} / {MAX_COMPLEXITY} → size → points
 → hours`) gains one more step for the normalized score, matching the deck's own
 presentation of raw → normalized → size: `raw / 25 → normalized / 15 → size → points →

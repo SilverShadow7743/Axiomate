@@ -29,24 +29,24 @@
  */
 
 import { DEFAULT_SLA, type DefaultNodeKind, type NodeKind, type RowKind, type ScheduleHealth, type SlaPolicy } from './types'
-import type { Recurrence } from './recurrence'
-import type { Blueprint } from './blueprint'
-import { DEFAULT_SIZE_BANDS, type SizeBand } from './estimation'
-import { defaultStatusPolicy, type StatusPolicy } from './statusPolicy'
-import { DEFAULT_TIME_POLICY, type TimePolicy } from './timeWindow'
-import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity'
+import type { Recurrence } from './planning/recurrence'
+import type { Blueprint } from './commercial/blueprint'
+import { DEFAULT_SIZE_BANDS, type SizeBand } from './commercial/estimation'
+import { defaultStatusPolicy, type StatusPolicy } from './planning/statusPolicy'
+import { DEFAULT_TIME_POLICY, type TimePolicy } from './time/timeWindow'
+import { DEFAULT_ALLOCATION_POLICY, type AllocationPolicy } from './capacity/capacity'
 import { DEFAULT_REPORT_DELIVERY, parseReportDelivery, type ReportDeliveryConfig } from './reports/delivery'
 import { parseSavedView, type SavedView } from './savedViews'
-import type { NotificationPrefs } from './notifications'
-import type { Goal } from './goals'
+import type { NotificationPrefs } from './comms/notifications'
+import type { Goal } from './planning/goals'
 import { ADMIN_ROLE_ID, MACHINE_ROLE_ID, defaultAccessPolicy, type AccessPolicy } from './access'
 import { defaultWatchPolicy, type WatchPolicy } from './watch'
 import { defaultApprovalRules, type ApprovalRule } from './approval'
 import { defaultAutomationRules, type AutomationRule } from './automation'
-import type { ResourceProfile } from './capacity'
-import type { Skill } from './skills'
+import type { ResourceProfile } from './capacity/capacity'
+import type { Skill } from './capacity/skills'
 import type { CustomFieldDef } from './customFields'
-import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './staffing'
+import { DEFAULT_PROJECT_ROLES, type ProjectRole } from './capacity/staffing'
 
 /* ================================================================== *
  * Scope
@@ -241,7 +241,7 @@ export const DEFAULT_ORGANIZATION: OrganizationIdentity = {
  * ================================================================== */
 
 /**
- * The six concern kinds `lib/portfolio.ts` names on an engagement, worst first — the order is
+ * The six concern kinds `lib/planning/portfolio.ts` names on an engagement, worst first — the order is
  * the argument, and that argument lives beside `portfolio.ts`'s own re-export. Defined here
  * because the health score's weights are keyed by it and configuration must not import from a
  * report module.
@@ -252,7 +252,7 @@ export type ConcernKind = (typeof CONCERN_ORDER)[number]
 /**
  * The engagement health score's weights and RAG thresholds — configuration, not code, on
  * purpose: a score is a sentence about weights, and these are the weights, in the open, edited
- * in Configuration and printed beside every score. See `lib/portfolio.ts`'s header (the 10 Sep
+ * in Configuration and printed beside every score. See `lib/planning/portfolio.ts`'s header (the 10 Sep
  * reversal) and `docs/plans/2026-09-10-fno-page-grammar-design.md` §5.
  */
 export interface HealthScorePolicy {
@@ -376,7 +376,7 @@ export interface Person {
    * nothing has been recorded either way, which is different again — and is the honest answer
    * for the twenty people in this directory nobody has described.
    *
-   * The same vocabulary as `lib/intake.ts` and `ResourceProfile.source`, on purpose: a reader
+   * The same vocabulary as `lib/comms/intake.ts` and `ResourceProfile.source`, on purpose: a reader
    * who has learned it once should not have to learn it again per field.
    */
   source?: 'stated' | 'default'
@@ -762,8 +762,14 @@ export interface WorkflowRecord {
 }
 
 /**
- * A bundle a project can adopt: which agents it turns on, and whether a human signs off.
+ * A bundle a project can adopt: which agents it turns on, whether a human signs off, and —
+ * optionally — the structural shape (`Blueprint`) to build under the scope it's adopted at.
  * This is the object that makes agents composable per project instead of global.
+ *
+ * One template names at most one blueprint (CF3, 20 Sep 2026 review). A template offering a
+ * menu of several was considered and set aside: it would add a selection step and branching
+ * logic to `adoptTemplate` for a distinction better carried by having more templates, each with
+ * its own single blueprint, rather than one template that means several different things.
  */
 export interface ProjectTemplate {
   id: string
@@ -773,6 +779,9 @@ export interface ProjectTemplate {
   workflowIds: string[]
   /** Applied to every agent the template enables, overriding the agent's own default. */
   requireApproval: boolean
+  /** The structural shape to build when this template is adopted, or null for a template that
+   *  is agent/workflow defaults only — most templates, until CF3's design doc, all of them. */
+  blueprintId: string | null
 }
 
 /**
@@ -1004,7 +1013,7 @@ export interface OperatingModel {
   /** Where uploaded documents are filed in the library. See `DocumentFiling`. */
   documentFiling: DocumentFiling
   /**
-   * Targets the firm has set for itself. Progress is never stored — see `lib/goals.ts`.
+   * Targets the firm has set for itself. Progress is never stored — see `lib/planning/goals.ts`.
    *
    * Here rather than in its own table for the same reason `approvalRules` and `sla` are: a goal
    * is a policy statement about intent, not a transaction. It is written rarely, read on every
@@ -1029,7 +1038,7 @@ export interface OperatingModel {
   /** Which discipline resolves it. Independent of `workTypes` — see `Discipline`. */
   disciplines: Record<string, Discipline>
   /**
-   * The firm's skill catalogue. See `lib/skills.ts`.
+   * The firm's skill catalogue. See `lib/capacity/skills.ts`.
    *
    * Ships **empty**, and is the only vocabulary here that does. Roles, work types and
    * disciplines have defensible defaults because every consultancy has roughly those; a skill
@@ -1112,7 +1121,7 @@ export interface OperatingModel {
    * How long a time entry may lag the work before it must explain itself.
    *
    * Configuration rather than a constant for the same reason the service levels are: the
-   * allowance is a governance term, not a property of the software. `lib/timeWindow.ts`
+   * allowance is a governance term, not a property of the software. `lib/time/timeWindow.ts`
    * ships the default; this is where a firm changes it.
    */
   timePolicy: TimePolicy
@@ -1120,13 +1129,13 @@ export interface OperatingModel {
    * Whether an over-capacity allocation is refused outright or accepted on a recorded
    * decision. Shipped hard — 100% enforcement is the product's stated rule — and the firm
    * that staffs through go-lives switches to advisory once, here, rather than every
-   * allocator deciding under deadline. See `lib/capacity.ts`.
+   * allocator deciding under deadline. See `lib/capacity/capacity.ts`.
    */
   allocationPolicy: AllocationPolicy
   /**
    * Each person's own say over what they are told and how, keyed by directory id. Absent
    * means in-app for every kind — the shipped behaviour. Self-served through
-   * `setNotificationPref`, whose arm is the gate. See `lib/notifications.ts`.
+   * `setNotificationPref`, whose arm is the gate. See `lib/comms/notifications.ts`.
    */
   notificationPrefs: NotificationPrefs
   /**
@@ -1150,9 +1159,9 @@ export interface OperatingModel {
   intake: IntakeMailbox[]
   /** Public structured-capture forms feeding the same pipeline. */
   intakeForms: IntakeForm[]
-  /** Engagement shapes stored for reuse - offsets, never dates. See lib/blueprint.ts. */
+  /** Engagement shapes stored for reuse - offsets, never dates. See lib/commercial/blueprint.ts. */
   blueprints: Record<string, Blueprint>
-  /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/recurrence.ts. */
+  /** Rules that raise an issue on a cadence, fired by the daily pass. See lib/planning/recurrence.ts. */
   recurrences: Recurrence[]
   /** Keyed by scope node id, plus `ROOT` for the organisation-wide defaults. */
   overrides: Record<string, ScopeOverride>
@@ -1313,7 +1322,7 @@ const SEED_AGENTS: SeedAgent[] = [
    *
    * `maxAutonomy: 'propose'` is a ceiling, not a preference. It scores complexity by reading
    * words, and words are a proxy for the work; the estimate it writes is never baselined, so
-   * nothing downstream can mistake it for one a person agreed. See lib/estimator.ts.
+   * nothing downstream can mistake it for one a person agreed. See lib/commercial/estimator.ts.
    */
   { id: 'AGENT_ESTIMATION', name: 'Estimation', family: 'Issue & Delivery', description: 'Proposes complexity scores for an issue by reading it against known delivery patterns for the product. Sizes and hours are derived from those scores by the firm\'s own calibration, exactly as they are for a person\'s estimate. Never agreed, never baselined — a starting point for a conversation.', priority: 'P1', runtime: 'live', maxAutonomy: 'propose' },
 
@@ -1412,6 +1421,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     ],
     workflowIds: ['WF_INBOUND_ISSUE', 'WF_SLA_WATCH'],
     requireApproval: true,
+    blueprintId: null,
   },
   {
     id: 'TPL_HYPERCARE',
@@ -1431,6 +1441,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     ],
     workflowIds: ['WF_INBOUND_ISSUE', 'WF_SLA_WATCH'],
     requireApproval: true,
+    blueprintId: null,
   },
   {
     id: 'TPL_LIGHT_TOUCH',
@@ -1440,6 +1451,7 @@ const SEED_TEMPLATES: ProjectTemplate[] = [
     agentIds: ['AGENT_WORKSPACE_ASSISTANT'],
     workflowIds: [],
     requireApproval: true,
+    blueprintId: null,
   },
 ]
 
@@ -1499,7 +1511,7 @@ export function initModel(sourceOwners: string[], sourceTypes: string[] = []): O
   /*
    * The two shipped inventions — every consultancy recognises a risk and a decision, the
    * same universality argument as the shipped roles. Skipped when the source log already
-   * discovered the label, so no workspace ever carries two WT_RISK entries. `lib/raid.ts`
+   * discovered the label, so no workspace ever carries two WT_RISK entries. `lib/planning/raid.ts`
    * keys their semantics on these stable ids, never on the renameable labels.
    */
   for (const [id, label, description] of [

@@ -21,7 +21,7 @@ Ground truth verified while writing:
   `run.observation` even on a quiet pass. Returns `ScheduledRun {ok, summary, raised,
   recurrences, diff, misses, refusals}` (:28).
 - `Observation {watching, subjects}` (lib/watch.ts:84, `EMPTY_OBSERVATION` :99).
-- `sendAsMailbox(mailbox, to, subject, text)` (lib/mail.ts:49): plain-text Graph `sendMail`,
+- `sendAsMailbox(mailbox, to, subject, text)` (lib/comms/mail.ts:49): plain-text Graph `sendMail`,
   returns `{ok:true} | {ok:false, status, detail}`; 401/403 drops the token cache.
 - Builders: `buildDailyIms(state, rows, asAt, scope)` (lib/reports/dailyIms.ts:107; rows are
   `ScheduleRow[]` — server side that is `buildTree(state, today)` filtered to `kind==='issue'`);
@@ -67,7 +67,7 @@ pass's own clock — no second timezone), and `stamps.imsSentOn !== today`. `wee
 **prior** week's Monday (`weekStarting` of `today` minus 7) when `packsEnabled`, today is a
 Monday, and `stamps.weeklySentFor` differs. `monthlyFor` is the **prior** month `'YYYY-MM'`
 when today is the 1st and `stamps.monthlySentFor` differs. Reuse `weekStarting` from
-lib/timesheet.ts rather than re-deriving Mondays.
+lib/time/timesheet.ts rather than re-deriving Mondays.
 
 Verify: `npx tsc --noEmit` clean.
 
@@ -155,7 +155,7 @@ nobody's presence. The specific trap found while writing this plan: the upsert w
 `run.observation`, which `runWatch` builds FRESH — stamps spread onto the stored JSON vanish
 unless carried explicitly.**
 
-- `lib/mail.ts`: `sendAsMailbox` gains optional TRAILING
+- `lib/comms/mail.ts`: `sendAsMailbox` gains optional TRAILING
   `attachments?: {name: string; contentType: string; contentBytes: string}[]`; the Graph body
   gains `attachments: [...]` with `"@odata.type": "#microsoft.graph.fileAttachment"` **only
   when the parameter is present** — every existing call and its wire body stay byte-identical.

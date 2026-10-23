@@ -26,7 +26,7 @@ repo already committed to, not a new one.
 ## Where it re-opens a decision already made
 
 **The 🟢/🟡/🔴 per-project health score is the literal pitch `docs/plans/2026-08-31-project-pulse-design.md`
-considered and rejected**, on the record, for a stated reason: `lib/portfolio.ts`'s own header
+considered and rejected**, on the record, for a stated reason: `lib/planning/portfolio.ts`'s own header
 comment describes a prior incident where a hidden severity weighting inside a "no priority score"
 feature caused real confusion, and the lesson taken was "name the concerns, count them, and let
 the reader do the weighing" — not colour-code them. `concernsFor()` already ships six named,
@@ -36,7 +36,7 @@ decision, not an extension of it, unless someone brings a new argument for why t
 different — that argument doesn't exist yet.
 
 **Capacity/allocation percentages shown per project** ("Capacity 82%", "96%") need to go through
-the resource model in `CLAUDE.md`: capacity is computed (`lib/availability.ts`) from `Allocation`
+the resource model in `CLAUDE.md`: capacity is computed (`lib/capacity/availability.ts`) from `Allocation`
 plus working pattern, **never stored**, and `Allocation` is project-level while `Assignment` is
 work-level — a project card showing "82% utilised" has to sum real `Allocation` rows for people
 under that project, not invent a project-level capacity field. `2026-08-31-project-pulse-design.md`

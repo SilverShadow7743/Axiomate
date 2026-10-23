@@ -32,7 +32,7 @@ scripts/discussion-proof.ts` still reports every existing check passing (it asse
 specific fields like `.following`/`.followerCount`, not a full-shape match, so the new
 field cannot break it — confirmed by reading the proof first, not assumed).
 
-## 2. `components/DiscussionTab.tsx` — the risky step
+## 2. `components/comms/DiscussionTab.tsx` — the risky step
 
 Two independent pieces, one commit (the second depends on the `View` type change the
 first needs anyway):
@@ -53,12 +53,12 @@ const [mentionSel, setMentionSel] = useState(0)
 On the input's `onChange`, after `setDraft`, recompute `mentionQuery` from the new value
 and the cursor position (`e.target.selectionStart`): scan backward from the cursor for
 an `@` with no whitespace between it and the cursor, and not itself preceded by a
-word character (same shape `lib/mentions.ts`'s own match guard uses, so what triggers
+word character (same shape `lib/comms/mentions.ts`'s own match guard uses, so what triggers
 the dropdown here is what would actually parse as one there — not a second, drifting
 definition). `null` when no such `@` is found.
 
 Candidates: `people.filter(p => p.name.toLowerCase().includes(mentionQuery.text.toLowerCase())).slice(0, 8)`
-— substring, not `lib/mentions.ts`'s stricter prefix-exact match, because the dropdown
+— substring, not `lib/comms/mentions.ts`'s stricter prefix-exact match, because the dropdown
 is a finder and always inserts the full correct name regardless of how loose the filter
 was; the actual parse at send time is untouched and stays strict.
 
@@ -85,7 +85,7 @@ unrelated `@` the dropdown never resolved. Both are silent: neither throws, both
 produce the wrong one of "sent" or "not sent" depending on typing speed, which is
 exactly why this is the step to review carefully rather than trust on first read.
 
-**Verified by:** `npx tsc --noEmit` and `npx eslint components/DiscussionTab.tsx`
+**Verified by:** `npx tsc --noEmit` and `npx eslint components/comms/DiscussionTab.tsx`
 clean; then a manual pass — type `@` and a partial name, confirm the dropdown filters
 live and Enter picks rather than sends; confirm Escape closes it and the draft is
 untouched; confirm a message with no `@` in it still sends on Enter exactly as today;

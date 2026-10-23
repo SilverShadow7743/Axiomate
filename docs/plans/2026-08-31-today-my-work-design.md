@@ -18,20 +18,20 @@ new AI capability or new calendar integration.
 ## What's already real, that this design builds on rather than invents
 
 - `MyWorkPanel` — the existing docked view, reason-grouped (`decide → overdue → blocked →
-  attest → due → open`, per `REASON_ORDER` in `lib/mywork.ts`), ranked and self-explaining.
-- `Meeting` (`lib/meetings.ts`) — a real, live reducer-backed domain concept from the E4
+  attest → due → open`, per `REASON_ORDER` in `lib/personal/mywork.ts`), ranked and self-explaining.
+- `Meeting` (`lib/personal/meetings.ts`) — a real, live reducer-backed domain concept from the E4
   meetings phase: `startAt`/`endAt` (ISO datetimes), `attendeeIds` (directory ids — real
   invitations, each lands on that person's My calendar), optional `scopeKind`/`scopeId` linking
   a meeting to the work it's about, soft-deleted via `deletedAt`.
 - `directoryPersonFor(state.model, actor)` — the one function every person-resolution in this
-  app already uses (`lib/mywork.ts`, `Inbox.tsx`, notification routing in `IssueWorkspace.tsx`).
+  app already uses (`lib/personal/mywork.ts`, `Inbox.tsx`, notification routing in `IssueWorkspace.tsx`).
 
 ## The addition
 
 A new "Today" section renders above the existing reason-grouped list, inside the same docked
 `MyWorkPanel` — no new view, no new route, no new sidebar entry.
 
-**Data:** a new pure function (`lib/mywork.ts`, alongside `myWork()`) —
+**Data:** a new pure function (`lib/personal/mywork.ts`, alongside `myWork()`) —
 `todaysMeetings(state, actor, today)` — filters `state.meetings` to rows where `deletedAt` is
 null, `attendeeIds` includes the resolved person's id, and `startAt` falls on `today`; sorted by
 `startAt` ascending. No new props into `MyWorkPanel` — it already receives `state`/`actor`/

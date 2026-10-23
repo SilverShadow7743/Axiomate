@@ -9,7 +9,7 @@ throughout; only the gate over it changes.
 
 ## Steps
 
-**1. The policy, plumbed — `lib/capacity.ts`, `lib/config.ts`.**
+**1. The policy, plumbed — `lib/capacity/capacity.ts`, `lib/config.ts`.**
 In `capacity.ts`, beside the rule it parameterises: `AllocationPolicy { cap: 'hard' |
 'advisory' }`, `DEFAULT_ALLOCATION_POLICY = { cap: 'hard' }`, and
 `allocationPolicyProblem(patch)` — refuse any value outside the two-member union, in words.
@@ -57,7 +57,7 @@ register item undelivered.
   one.
 *Verify:* `npm run validate:scenarios` → 89 scenarios, 0 FAIL parsed from JSON; AC1 PASS.
 
-**3. The screens — `components/CapacityPanel.tsx`, `components/ConfigWorkspace.tsx`
+**3. The screens — `components/capacity/CapacityPanel.tsx`, `components/ConfigWorkspace.tsx`
 (both CRLF; python).**
 - `AllocateForm` (CapacityPanel:362) gains a `capMode: 'hard' | 'advisory'` prop, passed at
   the one call site (line ~319) from `state.model.allocationPolicy.cap`. The `refused`

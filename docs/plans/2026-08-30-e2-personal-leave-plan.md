@@ -18,7 +18,7 @@ queue is "deliberately NOT allocation-filtered".
 
 ## Step 1 — the kind, and the grant-holder walk
 
-**Files:** `lib/notifications.ts`, `lib/workspace.ts`.
+**Files:** `lib/comms/notifications.ts`, `lib/workspace.ts`.
 
 - `NOTIFICATION_KINDS` gains `'approval'` (after `'mention'`). `modeFor`'s
   absent-anything → `'in-app'` default means no stored data changes meaning.
@@ -91,8 +91,8 @@ any UI exists.
 
 ## Step 4 — My calendar grows the leave loop
 
-**Files:** `components/MyCalendarPanel.tsx`, `components/IssueWorkspace.tsx`
-(`lib/myCalendar.ts` deliberately untouched — see details list).
+**Files:** `components/personal/MyCalendarPanel.tsx`, `components/IssueWorkspace.tsx`
+(`lib/personal/myCalendar.ts` deliberately untouched — see details list).
 
 - "Request leave" button beside "Add event" (~line 100). A `LeaveForm` modal modeled on the
   existing `EventForm`: start, end, hours/day defaulted from the person's stated pattern
@@ -115,7 +115,7 @@ any UI exists.
   `'timesheet-submitted'`, `'timesheet-decided'` → the Timesheets view. No `revealIssue` call
   for these. `lib/db/notifyDrain.ts`'s `mailboxFor` already falls back to `enabled[0]` when
   `aboutId` is not an issue — verified, no change, do not "fix" it.
-- `components/Inbox.tsx`: `PrefRows` is a **hand-maintained** list — add
+- `components/comms/Inbox.tsx`: `PrefRows` is a **hand-maintained** list — add
   `{ kind: 'approval', label: 'When leave or a timesheet needs or gets a decision', show: true }`.
   Without this row the kind mints but nobody can configure it.
 
@@ -124,7 +124,7 @@ any UI exists.
 
 ## Step 5 — the Timesheets view's "Leave to decide" queue
 
-**Files:** `components/TimesheetPanel.tsx`, `components/IssueWorkspace.tsx`.
+**Files:** `components/time/TimesheetPanel.tsx`, `components/IssueWorkspace.tsx`.
 
 - A section rendered when `can(state.model, actor, 'leave.approve').allowed`, listing every
   live commitment with `kind === 'Leave' && status === 'Requested'` from `state.commitments`
@@ -204,7 +204,7 @@ hands of whoever records any absence — the most routine capacity write there i
 11. `mute` still writes the audit line, per the assignment mint's own pattern.
 12. `notifyDrain.mailboxFor` needs no change for non-issue `aboutId` — its `enabled[0]`
     fallback is the design's intended degradation; leave it alone.
-13. `lib/myCalendar.ts` stays untouched: the rail resolves status/note from
+13. `lib/personal/myCalendar.ts` stays untouched: the rail resolves status/note from
     `state.commitments[entry.id]` rather than widening `MyCalendarEntry` — the entry's id is
     already the commitment id.
 14. The scenario splice uses temp files + python, not Bash heredocs (E1 burned twice).

@@ -81,7 +81,7 @@ it can have it later.
 
 | Piece | File | Note |
 |---|---|---|
-| Period arithmetic, submittability, the freeze test | `lib/timesheet.ts` | Pure. No clock, no I/O — so scenarios U and V drive it directly rather than asserting a regex matched some source. |
+| Period arithmetic, submittability, the freeze test | `lib/time/timesheet.ts` | Pure. No clock, no I/O — so scenarios U and V drive it directly rather than asserting a regex matched some source. |
 | `submitTimesheet`, `decideTimesheet` | `lib/workspace.ts` | Ordinary actions, so attribution and audit come free and automation cannot do what a person could not. |
 | The freeze guard | `lib/workspace.ts` time arms | Calls the pure function. Three arms, one call each. |
 | `Timesheet` model | `prisma/schema.prisma` | Composite key `(tenantId, id)` like every other table, unique on `(tenantId, person, weekStarting)`. |
@@ -145,8 +145,8 @@ for pressing people to book more hours."*
 
 **The build order is the reverse of the user's order.** An agent flow reads Draft → Classify →
 Validate → Submit. Submission is the foundation and is what this design covers; the validation
-engines largely exist already and lack only a caller (`planCheck` in `lib/capacity.ts`,
-`effortVariance` in `lib/time.ts`, `sowPosition` and `describePosition` in `lib/sow.ts`);
-classification should reuse the `stated | guessed | default` vocabulary from `lib/intake.ts`
+engines largely exist already and lack only a caller (`planCheck` in `lib/capacity/capacity.ts`,
+`effortVariance` in `lib/time/time.ts`, `sowPosition` and `describePosition` in `lib/commercial/sow.ts`);
+classification should reuse the `stated | guessed | default` vocabulary from `lib/comms/intake.ts`
 rather than invent a confidence percentage; and drafting is last because it is the only part
 that needs capabilities this system does not have — natural language capture and a calendar.

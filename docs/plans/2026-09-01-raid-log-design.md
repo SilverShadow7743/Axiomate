@@ -8,7 +8,7 @@ as the strongest remaining non-AI-blocked candidates, with real unbuilt structur
 
 ## What's real today, and the actual gap
 
-`lib/raid.ts` already classifies an issue as `'risk'` or `'decision'` via `raidKindOf()`,
+`lib/planning/raid.ts` already classifies an issue as `'risk'` or `'decision'` via `raidKindOf()`,
 resolved through the live work-type registry by stable id (`WT_RISK`/`WT_DECISION`), not by
 label — a renamed type keeps its semantics. A Risk carries `riskLikelihood`/`riskImpact`
 (1–5, nullable — "not yet judged" is a real, distinct state, never defaulted).
@@ -22,7 +22,7 @@ never searches `decisionOutcome`, never surfaces `riskLikelihood`/`riskImpact`/e
 and has no RaidKind awareness at all — it can find a risk or decision by keyword if you already
 know roughly what you're looking for, but there's no way to browse "every open Critical risk"
 or "every decision made this month" without opening records one at a time. Portfolio
-(`lib/portfolio.ts`) has no RAID-aware concern either.
+(`lib/planning/portfolio.ts`) has no RAID-aware concern either.
 
 ## The three decisions
 
@@ -32,7 +32,7 @@ or "every decision made this month" without opening records one at a time. Portf
    narrower lens and two more fields," which is exactly what Tree's grid already does for every
    other lens.
 2. **A new, separate filter facet — not multi-select on the existing `type` filter.**
-   `matchesFilters`'s `type` check (`lib/tree.ts:379`) is exact-match, single-value, and shared
+   `matchesFilters`'s `type` check (`lib/planning/tree.ts:379`) is exact-match, single-value, and shared
    by every other view that filters on type. Converting it to multi-select for this one
    feature's need would be a bigger, riskier change to a widely-used facet than the feature
    itself asks for. A new `raidOnly: boolean` is additive and touches nothing else.
@@ -42,7 +42,7 @@ or "every decision made this month" without opening records one at a time. Portf
 
 ## What's computed
 
-`buildTree()` (`lib/tree.ts`) gains one more field per row, computed once per row, not
+`buildTree()` (`lib/planning/tree.ts`) gains one more field per row, computed once per row, not
 re-derived per filter check: `raidKind: 'risk' | 'decision' | null`, via the already-real
 `raidKindOf(state.model, issue.type)`. `ScheduleRow` (`lib/types.ts`) gains three more nullable
 fields — `riskLikelihood`, `riskImpact`, `decisionOutcome` — copied straight from the issue at
@@ -83,7 +83,7 @@ exposure, and outcome read correctly; the ordinary issue's three new fields are 
 ## What stays untouched
 
 No schema change beyond the read-through (the three fields already exist on `Issue`, nothing
-new is stored). No change to `lib/search.ts`, `lib/portfolio.ts`, or the existing `type` filter.
+new is stored). No change to `lib/search.ts`, `lib/planning/portfolio.ts`, or the existing `type` filter.
 No AI, no natural-language question-answering — that half of the strategy doc's Organizational
 Memory framing ("why did we make this decision") stays exactly as blocked as it was; this
 builds only the structured, human-browsable half.

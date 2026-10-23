@@ -60,7 +60,7 @@ grouping.
   `e.shiftKey` calls `onToggleSelect(r.id, lastClickedId)`. `onGridKeyDown`'s existing
   roving-tabindex arrow handling grows a `Shift+ArrowUp/Down` case that extends the range from
   the current tab stop, reusing the same `rows` order the mouse path uses.
-- **Board** (`components/BoardView.tsx`) — identical Ctrl/Shift-click semantics on cards.
+- **Board** (`components/planning/BoardView.tsx`) — identical Ctrl/Shift-click semantics on cards.
   Shift+Arrow is not wired here (arrow keys are not currently a Board navigation model at all);
   Shift-click range-select is bounded to cards within the same lane, where "the cards between
   these two" has an unambiguous meaning.
@@ -88,7 +88,7 @@ checks `selectedIds.size` first:
 ## Bulk status change
 
 The status picker's options are the **intersection** of `allowedNext(row.status)`
-(`lib/statusPolicy.ts`) across every selected row — not the union. A target that is illegal for
+(`lib/planning/statusPolicy.ts`) across every selected row — not the union. A target that is illegal for
 even one selected row is not offered at all, so the batch can never be partially valid. An
 empty intersection disables the control with one line: "No status is valid for all N
 selected."

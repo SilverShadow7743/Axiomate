@@ -9,7 +9,7 @@ reducer either way.
 
 - `app/my-week/page.tsx`: mirrors the root page — `boot()`, the same structural
   redirect-when-unsigned, then a phone-first client component. No new server surface.
-- `components/MyWeek.tsx`: this week and last week (a two-entry picker — month-end catch-up
+- `components/personal/MyWeek.tsx`: this week and last week (a two-entry picker — month-end catch-up
   without a calendar); day cards from `weekGrid`; an add-hours form (my open owned issues,
   hours, billable, note) whose reason box appears exactly when the reducer will demand one
   (grace-gate lateness by date, closed-work by the issue's terminal status); the week total

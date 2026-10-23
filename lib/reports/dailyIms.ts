@@ -1,6 +1,6 @@
 import type { ScheduleRow } from '../types'
 import type { WorkspaceState } from '../workspace'
-import { isTerminal } from '../schedule'
+import { isTerminal } from '../planning/schedule'
 import { formatIso } from '../dates'
 
 /**

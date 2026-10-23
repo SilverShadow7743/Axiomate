@@ -1,6 +1,6 @@
 ---
 name: axiomate-utilisation-analysis
-description: This skill should be used when building or reasoning about utilisation, billable-hours, or profitability reporting in Axiomate TMS. The formula and underlying data already exist (lib/availability.ts, TimeEntry.billable) — this skill is for building the missing analysis SURFACE against real data, not inventing a new calculation. Load after axiomate-timesheet and axiomate-capacity-planning.
+description: This skill should be used when building or reasoning about utilisation, billable-hours, or profitability reporting in Axiomate TMS. The formula and underlying data already exist (lib/capacity/availability.ts, TimeEntry.billable) — this skill is for building the missing analysis SURFACE against real data, not inventing a new calculation. Load after axiomate-timesheet and axiomate-capacity-planning.
 ---
 
 # Axiomate Utilisation Analysis
@@ -10,7 +10,7 @@ description: This skill should be used when building or reasoning about utilisat
 
 ## What's real today
 
-`lib/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
+`lib/capacity/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
 `TimeEntry.billable: Boolean` is a real field, already written on every time entry
 (`lib/actionShape.ts:593`, `lib/db/map.ts:706`). A "Rates" Configuration section exists
 (per `axiomate-domain-analysis`'s Configuration inventory).

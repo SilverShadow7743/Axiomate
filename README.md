@@ -4,6 +4,9 @@ A Microsoft Project-style planning surface for the OAPIL and SLG issue log: a hi
 issue tree on the left, a synchronised Gantt timeline on the right, lifecycle activities,
 dependencies, milestones and schedule health.
 
+This describes the build as it stands — the shipped shell, not the product's full ambition.
+`docs/strategy/axiomate-vision.md` records the wider strategy this fits inside.
+
 ```
 npm install
 npm run dev          # http://localhost:3000
@@ -149,7 +152,7 @@ edits. See *Multi-tenancy* under Persistence.
 
 An engagement is the commercial and delivery envelope around a body of work: code, type,
 status, start and end dates, engagement leader, project manager, client sponsor, SOW reference.
-None of that is in the issue log — the log records issues, not contracts — so `lib/engagement.ts`
+None of that is in the issue log — the log records issues, not contracts — so `lib/commercial/engagement.ts`
 keeps recorded fields and derived ones apart, and all nine recorded fields ship **blank**. They
 render as `Not recorded` rather than as a guess, and `recordedCount` reports how much of the
 record actually exists, because a plausible invented code or sponsor would make the screen look
@@ -328,7 +331,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 The reducer does not runtime-check enums — until now every write came from a `<select>` that
 could only emit legal values, so `patch: Partial<IssueRecord>` was a compile-time guarantee
-that held. A model can emit `status: "Done"`. `lib/chat.ts` is the gate: it rejects (never
+that held. A model can emit `status: "Done"`. `lib/comms/chat.ts` is the gate: it rejects (never
 coerces) anything outside `ISSUE_STATUSES`, the severity and accountable vocabularies, and
 real `YYYY-MM-DD` dates. The route checks, and the **client checks again on the response**
 immediately before dispatch — the response body is model output, and the client-side check is
@@ -438,7 +441,7 @@ setting would be a switch that silently does nothing.
 Setting the Workspace Assistant below `propose` does not grey out a button — it changes what
 the model is given. `app/api/chat/route.ts` omits `propose_update` and `propose_new_issue`
 from the tool list entirely, so there is no instruction to ignore and no path by which a
-proposal card can be produced. `offlineReply` in `lib/chat.ts` applies the same rule to the
+proposal card can be produced. `offlineReply` in `lib/comms/chat.ts` applies the same rule to the
 deterministic engine and declines the mutation in words. A policy that only hides a button is
 not a policy.
 

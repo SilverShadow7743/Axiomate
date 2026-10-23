@@ -1,11 +1,11 @@
 ---
 name: axiomate-risk-management
-description: This skill should be used when identifying, scoring, or reporting on risks in Axiomate TMS. A real risk model already exists (lib/raid.ts — risks are work-type-tagged issues with a 0-5 exposure score mapped to Low/Medium/High/Critical bands), so this skill extends it rather than inventing a parallel risk-tracking concept. Load alongside axiomate-domain-analysis for how a risk sits in the work-item hierarchy.
+description: This skill should be used when identifying, scoring, or reporting on risks in Axiomate TMS. A real risk model already exists (lib/planning/raid.ts — risks are work-type-tagged issues with a 0-5 exposure score mapped to Low/Medium/High/Critical bands), so this skill extends it rather than inventing a parallel risk-tracking concept. Load alongside axiomate-domain-analysis for how a risk sits in the work-item hierarchy.
 ---
 
 # Axiomate Risk Management
 
-**A real RAID model already exists — extend it, don't parallel it.** `lib/raid.ts`: risks are
+**A real RAID model already exists — extend it, don't parallel it.** `lib/planning/raid.ts`: risks are
 regular `Issue` rows carrying a specific work-type tag, not a separate database model.
 
 ## The real model

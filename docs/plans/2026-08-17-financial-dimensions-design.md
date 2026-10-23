@@ -53,7 +53,7 @@ More of the context layer is built than the proposal assumes.
 - **The hierarchy is the context tree.** `Company ▸ Client ▸ Engagement ▸ Project ▸ Process Area
   ▸ Issue`, with `ALLOWED_PARENTS` in `lib/workspace.ts` enforcing the shape. Client and
   Engagement are not fields on a transaction; they are ancestors of it.
-- **The contract exists.** `lib/sow.ts` models a statement of work with a contracted baseline in
+- **The contract exists.** `lib/commercial/sow.ts` models a statement of work with a contracted baseline in
   **both effort and value**, statuses `Draft → Signed → Active → Varied → Closed`, and
   `sowPosition` / `describePosition` reporting consumption against it.
 - **Attribution to a contract exists.** The `attributeToSow` action links a project node to a

@@ -40,7 +40,7 @@ export function buildLeaveReport(state: WorkspaceState, endingMonth: string /* '
   `Commitment` carries soft-delete the way other records do; if it does, exclude deleted the same
   way `finance.ts`'s `inRange` filter does for `TimeEntry`). For each `kind === 'Leave'`:
   - `status === 'Requested'` (or `undefined` is never `'Requested'` — absent means `'Approved'`
-    per `Commitment`'s own doc comment, `lib/capacity.ts:217-220` — so only an EXPLICIT
+    per `Commitment`'s own doc comment, `lib/capacity/capacity.ts:217-220` — so only an EXPLICIT
     `'Requested'` lands in `pending`) → push `{person, startDate, endDate}` to `pending`, skip
     the grid entirely for this commitment.
   - `commitmentCounts(c)` true (i.e. `status` absent or `'Approved'`) → this one counts. For each
@@ -82,7 +82,7 @@ source.
 **Verify:** `npx tsx scripts/scenario-validation.ts` — `LV1 PASS`, scenario count 261 → 262, no
 regressions.
 
-**3. `components/LeaveReportView.tsx` (new) — the print half.**
+**3. `components/time/LeaveReportView.tsx` (new) — the print half.**
 
 Structural copy of `FinanceReportView.tsx`: `.pack-scrim`/`.pack-toolbar`/`.pack-page`,
 `ReportHeader` for the branded title/period/generated-on block, `window.print()` for the
@@ -91,7 +91,7 @@ Print/Save-as-PDF button. Body is a person × month grid (`report.months` as col
 real structural difference from the precedent, everything else (empty-state handling, the toolbar,
 the scrim) copied as-is rather than re-decided.
 
-**4. `components/LeaveReportDialog.tsx` (new) — the picker + preview + download half.**
+**4. `components/time/LeaveReportDialog.tsx` (new) — the picker + preview + download half.**
 
 Structural copy of `FinanceReportDialog.tsx`, with the period picker replaced by nothing at all —
 the design's own resolution is a fixed trailing-6-months window, so there is no mode/week/month/
@@ -104,7 +104,7 @@ chunk for every visitor, the same reason finance's own comment gives) — one wo
 second implementation of "how does a logo get into an xlsx file."
 
 **Verify (steps 3-4 together):** `npx tsc --noEmit`, `npm run build`,
-`npx eslint components/LeaveReportView.tsx components/LeaveReportDialog.tsx`. No new scenario —
+`npx eslint components/time/LeaveReportView.tsx components/time/LeaveReportDialog.tsx`. No new scenario —
 display/export wiring over `buildLeaveReport`, already proven pure in step 2, the same posture
 `FinanceReportDialog`/`FinanceReportView` themselves have (no scenario references either file).
 

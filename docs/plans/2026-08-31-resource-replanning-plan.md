@@ -10,7 +10,7 @@ being correct.
 ## One finding from reading the real code that this plan resolves
 
 **`Concern` carries no identity for who a concern is about** — `{ kind, count, phrase }`
-(`lib/portfolio.ts:63-69`), and the capacity concern's phrase names only the worst person as a
+(`lib/planning/portfolio.ts:63-69`), and the capacity concern's phrase names only the worst person as a
 string inside a sentence (`"${overCount} over-committed (worst ${worstCapacity.name}, by
 ${worstCapacity.by}h)"`). The design says the drill-down opens from the capacity concern's
 phrase, but there is nothing structured to open it FOR. Re-deriving "who is worst" a second time
@@ -25,7 +25,7 @@ Timesheet used for `WeekDayCell`'s `sourceTitles?` prop.
 
 ## Steps
 
-### Step 1 — `lib/replanning.ts`, new file
+### Step 1 — `lib/planning/replanning.ts`, new file
 
 ```ts
 import { availabilityFor, overlapWorkingDays } from './availability'
@@ -109,7 +109,7 @@ export function replanningFor(
 }
 ```
 
-**The `hoursPerDay` and window MUST match `lib/portfolio.ts`'s capacity block exactly**:
+**The `hoursPerDay` and window MUST match `lib/planning/portfolio.ts`'s capacity block exactly**:
 `profileAt(versions, resourceProfiles, personId, today)` with the SAME `today`, `windowTo =
 addDays(today, 28)` with the SAME `today`, `holidaySetOf(state.model)` over the SAME model. This
 is not a stylistic echo — it is what makes `deficitHours` here provably equal to `-remainingHours`
@@ -166,7 +166,7 @@ id, so lowering `next.percentage` only ever lowers the total). Assert:
 **Verify:** `npx tsc --noEmit` → `npm run validate:scenarios`: `RR2` `PASS`, count 198 → 199,
 0 FAIL.
 
-### Step 4 — `lib/portfolio.ts`: `Concern`'s two new fields
+### Step 4 — `lib/planning/portfolio.ts`: `Concern`'s two new fields
 
 Add `subjectPerson?: string` and `subjectPersonId?: string | null` to the `Concern` interface
 (line ~63-69). In the capacity block (line ~274-280), set both from the already-computed
@@ -217,13 +217,13 @@ session) → `npm run build`.
 
 ## Commit boundaries
 
-- **Commit 1** — Step 1 + Step 2: `lib/replanning.ts` + `RR1`. Meaningless in isolation from
+- **Commit 1** — Step 1 + Step 2: `lib/planning/replanning.ts` + `RR1`. Meaningless in isolation from
   each other (an unpinned pure function is not provably correct); meaningful together.
 - **Commit 2** — Step 3 (`RR2`) standalone. The riskiest step in this plan, kept isolated
   specifically so a problem found in the reducer's edit-by-id path — the only genuinely new
   reducer behavior this plan exercises for the first time — has a one-commit revert target that
   does not also take back the UI or the read-side module.
-- **Commit 3** — Step 4: `lib/portfolio.ts`'s `Concern` fields + `PP1`'s strengthened assertion.
+- **Commit 3** — Step 4: `lib/planning/portfolio.ts`'s `Concern` fields + `PP1`'s strengthened assertion.
   Isolated because it touches an already-shipped, previously-stable module (Project Pulse,
   deployed this session) — a regression here should be revertible without touching anything new
   this plan adds.
@@ -234,7 +234,7 @@ session) → `npm run build`.
 ## Details most likely to be gotten wrong
 
 - **`replanningFor`'s `hoursPerDay`, window, and holiday set must be derived identically to
-  `lib/portfolio.ts`'s capacity block** — same `profileAt` call, same `addDays(today, 28)`, same
+  `lib/planning/portfolio.ts`'s capacity block** — same `profileAt` call, same `addDays(today, 28)`, same
   `holidaySetOf(state.model)`. A version that approximates any of these (a different default
   `hoursPerDay`, a different window length) produces a `deficitHours` that silently disagrees
   with the count that sent the person here. `RR1` cross-checks this directly rather than trusting

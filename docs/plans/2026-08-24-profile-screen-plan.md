@@ -99,7 +99,7 @@ screen in step 3 dispatches it.
 
 ## Step 3 — The screen
 
-**Touches:** a new `components/ProfilePanel.tsx`, dynamically imported in `IssueWorkspace.tsx`
+**Touches:** a new `components/personal/ProfilePanel.tsx`, dynamically imported in `IssueWorkspace.tsx`
 beside `ArchivePanel`/`SlaPlanPanel` (`components/IssueWorkspace.tsx:94-96`); new state
 `openProfileId: string | null` beside `archiveOpen`/`slaOpen` (`:182-185`); a conditional render
 block beside the existing `{archiveOpen && <ArchivePanel .../>}` / `{configOpen && <ConfigWorkspace

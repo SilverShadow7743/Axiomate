@@ -14,7 +14,7 @@ only as a modal and a dropdown, never as a navigable pane the way My Work is.
 
 `WORKSPACE_VIEWS` (`lib/viewChoice.ts:11`) gains two entries: `'timesheet'` and `'inbox'`, joining
 `mywork | tree | board | calendar | portfolio`. `TimesheetPanel` and `Inbox` each gain a `docked`
-prop, following the shape `MyWorkPanel` already established (`components/MyWorkPanel.tsx:36`,
+prop, following the shape `MyWorkPanel` already established (`components/personal/MyWorkPanel.tsx:36`,
 confirmed as the sole live call site — `docked` has no other caller today, so this is extending a
 proven pattern to its second and third use, not inventing one): no scrim, no focus trap, no Close
 button. The view switcher is how you leave, same as My Work.

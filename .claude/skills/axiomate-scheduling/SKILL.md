@@ -1,6 +1,6 @@
 ---
 name: axiomate-scheduling
-description: This skill should be used when a feature deals with WHEN work happens in Axiomate TMS — start/due dates, dependencies, critical path, or SLA-driven target dates. It supplies the real scheduling functions (lib/schedule.ts) and confirms that work-execution dates and allocation dates are genuinely separate fields with no derivation between them. Load alongside axiomate-project-allocation for anything that might conflate the two.
+description: This skill should be used when a feature deals with WHEN work happens in Axiomate TMS — start/due dates, dependencies, critical path, or SLA-driven target dates. It supplies the real scheduling functions (lib/planning/schedule.ts) and confirms that work-execution dates and allocation dates are genuinely separate fields with no derivation between them. Load alongside axiomate-project-allocation for anything that might conflate the two.
 ---
 
 # Axiomate Scheduling
@@ -12,7 +12,7 @@ derivation between them today.** `Allocation.startDate`/`endDate` (a project cap
 is inventing a relationship the schema doesn't have — if that relationship is genuinely needed,
 it's a domain-model change, not a scheduling calculation.
 
-## The real functions — `lib/schedule.ts`
+## The real functions — `lib/planning/schedule.ts`
 
 - **`proposeTargetDate(raised, severity, policy)`** — `addWorkingDays(raised, policy[severity])`.
   Driven by `SlaPolicy` (`lib/types.ts:331`), default `{ High: 5, Medium: 10, Low: 20 }` working

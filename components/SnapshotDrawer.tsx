@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react'
 import type { Actor } from '@/lib/actor'
 import { can } from '@/lib/access'
-import { issuesUnder } from '@/lib/engagement'
-import { describeCost, sowCostOf } from '@/lib/rates'
+import { issuesUnder } from '@/lib/commercial/engagement'
+import { describeCost, sowCostOf } from '@/lib/commercial/rates'
 import { formatIso } from '@/lib/dates'
 import type { WorkspaceState } from '@/lib/workspace'
 

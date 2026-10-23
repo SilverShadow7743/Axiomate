@@ -19,12 +19,12 @@ Ground truth verified while writing:
   suite runs plain `tsx` and would crash importing it (the persistence proof needs
   `--conditions=react-server` for exactly this). GS1 therefore composes the SAME pure
   primitives boot composes — `clientView` (lib/clientBoundary.ts) + `redactLeaveReasons`
-  (lib/availability.ts) + a rates/skills strip — and states that boot's own composition stays
+  (lib/capacity/availability.ts) + a rates/skills strip — and states that boot's own composition stays
   pinned by inspection. Extracting a pure `redactForReader` for both callers is a worthwhile
   follow-up REFACTOR, deliberately not smuggled into a search phase.
-- Corpus shapes: `InboundMail {from, subject, body, receivedAt, issueId}` (lib/intake.ts:61);
+- Corpus shapes: `InboundMail {from, subject, body, receivedAt, issueId}` (lib/comms/intake.ts:61);
   `DocumentRecord {name, subjectKind, subjectId}` (lib/documents.ts:53); `Meeting {title}`
-  (lib/meetings.ts:21); issues/notes/people as already catalogued.
+  (lib/personal/meetings.ts:21); issues/notes/people as already catalogued.
 - `clientView` zeroes `inboundMail` WHOLESALE (clientBoundary.ts:129) and filters documents
   to visible ones — so for a client-seated reader, mail hits are impossible structurally and
   the GS1 mail check asserts exactly that.

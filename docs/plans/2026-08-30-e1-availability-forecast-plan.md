@@ -12,7 +12,7 @@ public:public` → `migrate status` → `az webapp deploy`) and live Chrome veri
 Ground facts this plan is written against, verified in code:
 
 - `workingDaysBetween`/`addWorkingDays` (`lib/dates.ts:31/:42`) know weekends only.
-- `capacityFor` (`lib/capacity.ts:288`) already computes gross − commitments − allocations
+- `capacityFor` (`lib/capacity/capacity.ts:288`) already computes gross − commitments − allocations
   with: `round()` to 2dp at every aggregate, `Math.max(0, gross − committed)` on available,
   the window-average `daysPerWeek / 5` approximation, and the `isPerson` id-or-name join.
   `overlapWorkingDays` (`:274`) clamps ranges then calls `workingDaysBetween`. `planCheck`
@@ -20,7 +20,7 @@ Ground facts this plan is written against, verified in code:
 - `upsertCommitment` (`lib/workspace.ts:5950`) rebuilds the row **field-by-field** — a new
   field not added there is silently dropped on every edit, and a status a requester could
   rewrite by re-upserting is the design's second send-back clause made concrete.
-- `decideTimesheet` (`lib/workspace.ts:4971`) + `decideProblem` (`lib/timesheet.ts`) are the
+- `decideTimesheet` (`lib/workspace.ts:4971`) + `decideProblem` (`lib/time/timesheet.ts`) are the
   asker-cannot-decide pattern to mirror.
 - `redactForReader` (`lib/db/boot.ts:286`) already computes `mine` (the reader's directory id)
   and holds the rates precedent; `clientView` empties commitments wholesale (verified,
@@ -32,9 +32,9 @@ Ground facts this plan is written against, verified in code:
   mappers live in `lib/db/map.ts`; `app/api/workspace/route.ts`'s KINDS allowlist carries
   `upsertCommitment` and must gain any new kind. `lib/autosave.ts:202` parses commitments with
   `parsed.commitments ?? {}` — plain passthrough, optional new fields round-trip.
-- Portfolio concerns are `{ kind, count, phrase }` pushes (`lib/portfolio.ts:183–208`).
+- Portfolio concerns are `{ kind, count, phrase }` pushes (`lib/planning/portfolio.ts:183–208`).
 - To locate during implementation, not assumed: the shared estimate-hours derivation that
-  `effortVariance` consumes (imported by `components/TimeTab.tsx` — find its module), and the
+  `effortVariance` consumes (imported by `components/time/TimeTab.tsx` — find its module), and the
   component behind DetailPanel's Schedule tab.
 
 ## Step 1 — Holidays in the date math, and the config field (pure)
@@ -55,7 +55,7 @@ today's outputs. Then **[gates]**. Commits with Step 2.
 
 ## Step 2 — The engine extraction (pure) — THE highest-regression-risk step
 
-**Files:** new `lib/availability.ts`, `lib/capacity.ts`, `lib/workspace.ts` (only the
+**Files:** new `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`, `lib/workspace.ts` (only the
 `upsertCommitment` arm's `capacityFor` call threading holidays — no behavior change),
 plus every `capacityFor`/`planCheck` call site gaining the holiday argument (grep
 `capacityFor(|planCheck(` for the full list at implementation time).
@@ -70,7 +70,7 @@ BEFORE the refactor, not reconstructed after.
   and `planCheck`'s current outputs over a fixture matrix (profiles stated/default, 4-day week,
   overlapping commitments, allocations, empty windows). Run it against the UNCHANGED code and
   bake the outputs into the script as expected values.
-- `availabilityFor(person, window, deps)` in `lib/availability.ts`, extracted from
+- `availabilityFor(person, window, deps)` in `lib/capacity/availability.ts`, extracted from
   `capacityFor` with its conventions intact: same `round()`, same `Math.max(0, …)`, same
   `isPerson` join (do not "fix" the name-join — E0 Step 6's rule), same window-average.
   Gains: the holiday set (threaded into `overlapWorkingDays`/`workingDaysBetween`), and a
@@ -79,7 +79,7 @@ BEFORE the refactor, not reconstructed after.
   (pre-E1 history; see Step 3). The meetings term is a documented zero.
 - `capacityFor` becomes a thin consumer returning exactly its current shape; `planCheck`'s
   allocation arithmetic moves onto the same helpers.
-- The `Commitment` interface (`lib/capacity.ts:198`) gains
+- The `Commitment` interface (`lib/capacity/capacity.ts:198`) gains
   `status?: 'Requested' | 'Approved' | 'Returned'` and `reason?: string | null` — types only;
   no writer sets them until Step 4.
 
@@ -141,7 +141,7 @@ or vice versa, is the design shipped in a misleading state.
 
 ## Step 5 — Forecast v1 (pure + scenarios)
 
-**Files:** new `lib/forecast.ts`, `scripts/scenario-validation.ts`.
+**Files:** new `lib/planning/forecast.ts`, `scripts/scenario-validation.ts`.
 
 - `forecastFor(issue, estimate, timeEntries, availabilityDeps, today)` returning a verdict
   union: `no-estimate`, `unscheduled`, `achievable { spareHours }`,
@@ -163,9 +163,9 @@ commit. Nothing user-visible yet — deliberately provable before any screen sho
 `lib/config.ts`'s ConfigOp union, `lib/workspace.ts`'s config arm, and `actionShape.ts`'s
 CONFIG_OPS list), the Capacity panel component (leave request keeps its existing form; gains
 the reason field and, for `leave.approve` holders, an "awaiting your decision" list mirroring
-the timesheet queue's shape), `components/MyCalendarPanel.tsx` (a Requested row renders with a
+the timesheet queue's shape), `components/personal/MyCalendarPanel.tsx` (a Requested row renders with a
 pending marker — shown, never hidden; a Returned row says so), the Schedule tab component (the
-forecast sentence), `lib/portfolio.ts` (worst shortfall as a
+forecast sentence), `lib/planning/portfolio.ts` (worst shortfall as a
 `{ kind: 'forecast', phrase: 'shortest on X: short by Nh' }` concern), `app/globals.css`.
 
 **Verify:** **[gates]**, then the clean-room deploy, then live in Chrome:

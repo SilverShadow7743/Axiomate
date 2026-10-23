@@ -1,6 +1,6 @@
 # The Real Domain Model
 
-Grounded in `prisma/schema.prisma`, `lib/types.ts`, `lib/workspace.ts`, `lib/statusPolicy.ts`,
+Grounded in `prisma/schema.prisma`, `lib/types.ts`, `lib/workspace.ts`, `lib/planning/statusPolicy.ts`,
 `lib/access.ts` as of 2026-08-31. Cited, not inferred.
 
 ## Tier chain — configurable, not fixed
@@ -32,7 +32,7 @@ placement from first principles.
 
 ## Status/lifecycle — a configurable transition graph, not free text
 
-`lib/statusPolicy.ts:67`, `DEFAULT_STATUS_POLICY`: real statuses include `Open → {In Progress,
+`lib/planning/statusPolicy.ts:67`, `DEFAULT_STATUS_POLICY`: real statuses include `Open → {In Progress,
 Needs clarification, Closed - no defect, Superseded}` and further transitions from each.
 `allowedNext(policy, from)` (line 113) enforces the graph unless `policy.enforced` is false
 (config-driven escape hatch, not a code branch). This is exactly what Configuration's "Status

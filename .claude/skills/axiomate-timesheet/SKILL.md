@@ -14,7 +14,7 @@ mechanism, and approval flow are all live, not aspirational.
 ```
 Allocation        — project-level capacity commitment (axiomate-project-allocation)
        ↓
-Available capacity — lib/availability.ts's formula (axiomate-capacity-planning)
+Available capacity — lib/capacity/availability.ts's formula (axiomate-capacity-planning)
        ↓
 Work assignment    — who's actually doing which issue (axiomate-work-assignment)
        ↓
@@ -35,8 +35,8 @@ can differ without a schema change).
 
 ## The freeze rule — live, not planned
 
-`lib/timeWindow.ts`'s `checkEntry` is called from `addTime` (`lib/workspace.ts:3851`);
-`lib/timesheet.ts`'s `isFrozen`/`frozenMessage` refuse `addTime`/`updateTime`/`removeTime`
+`lib/time/timeWindow.ts`'s `checkEntry` is called from `addTime` (`lib/workspace.ts:3851`);
+`lib/time/timesheet.ts`'s `isFrozen`/`frozenMessage` refuse `addTime`/`updateTime`/`removeTime`
 against an already-submitted week. **Check before building anything here:** does the feature
 assume this needs implementing? It doesn't — verify the existing refusal path handles the new
 case before writing a second one.

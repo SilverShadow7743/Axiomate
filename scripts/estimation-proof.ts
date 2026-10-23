@@ -18,7 +18,7 @@ import {
   emptyEstimate,
   type Estimate,
   type EstimateStep,
-} from '../lib/estimation'
+} from '../lib/commercial/estimation'
 import { apply, initWorkspace, type Action, type SeedIssueInput } from '../lib/workspace'
 import type { Actor } from '../lib/actor'
 

@@ -167,13 +167,13 @@ send, with a compensating reset on failure.
 **H11. The whole workspace is loaded on every request and shipped to every browser.** 39 uncapped
 `findMany` per tenant (`lib/db/repo.ts:176-260`, only audit bounded at 5,000), repeated inside
 every write transaction; `docs/runtime-notes.md:275` measures 375 KB → 1.1 MB per interaction,
-two-thirds audit, paid twice. `buildTree` is O(n²) on every state change (`lib/tree.ts:42-55`,
+two-thirds audit, paid twice. `buildTree` is O(n²) on every state change (`lib/planning/tree.ts:42-55`,
 while `predecessorsOf` beside it is indexed). Fine at 131 issues; the break is months of audit
 rows, not years. *Fix:* drop audit from the boot payload; scope documents and notes to the
 viewed subject; index the three child lookups; add the refetch path the code already mentions.
 
 **H12. One Entra client secret is both the sign-in credential and a tenant-wide app-only Graph
-credential** (`lib/mail.ts:26-28`, `lib/storage/graph.ts:106-108`), and `docs/entra.md:135`
+credential** (`lib/comms/mail.ts:26-28`, `lib/storage/graph.ts:106-108`), and `docs/entra.md:135`
 says the registration has no application permissions — stale. *Fix:* a second registration with
 a certificate or workload-identity federation for app-only Graph; correct the doc; alert on
 secret expiry.

@@ -13,7 +13,7 @@ then the live endpoint rewiring (named as this plan's highest risk), then the sc
 
 ## Step 1 — Types, `WorkspaceState` wiring, and the pure duplicate check
 
-**Touches:** `lib/intake.ts` (`InboundMail` interface, `alreadyReceived(state, messageId): boolean`
+**Touches:** `lib/comms/intake.ts` (`InboundMail` interface, `alreadyReceived(state, messageId): boolean`
 — extracted rather than left as the inline substring search `POST /api/intake` uses today),
 `lib/workspace.ts` (`WorkspaceState.inboundMail` field — the same five-point mechanical addition
 every new collection in this program has needed: `initWorkspace`, `autosave.ts`'s mirror merge,

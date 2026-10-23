@@ -62,7 +62,7 @@
     ],
     "affects": [
       "lib/types.ts",
-      "lib/tree.ts",
+      "lib/planning/tree.ts",
       "lib/projectBoundary.ts",
       "lib/savedViews.ts",
       "lib/workspace.ts",

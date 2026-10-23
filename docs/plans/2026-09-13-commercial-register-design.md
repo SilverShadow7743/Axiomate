@@ -9,7 +9,7 @@ computation, `rate.view`-gated exactly as the cost figures already are inside `C
 ## What already does the work, and the one new resolution step
 
 `CommercialPanel` scopes `sows`/`projects` to one `row` (an engagement) before computing
-positions. The register needs every SOW firm-wide instead. `lib/engagement.ts` already
+positions. The register needs every SOW firm-wide instead. `lib/commercial/engagement.ts` already
 exports a general-purpose `issuesUnder(state, nodeId)` — works for any node, not only an
 engagement — so per SOW: find its projects (`state.nodes` where `kind === 'project' &&
 sowId === sow.id`), union `issuesUnder(state, project.id)` across them, exactly the same
@@ -38,7 +38,7 @@ for (const sow of Object.values(state.sows).filter((s) => !s.deletedAt)) {
 - **Unpaid invoices tab**: `Invoice.status === 'Sent'` (raised, not yet paid) — `Invoice`'s own
   status enum already distinguishes this from `Draft`/`Paid`/`Cancelled`; no new status invented.
 - **At-risk margin tab**: `cost.marginPct` below a **configurable** threshold — reusing the
-  engagement health score's own disclosure discipline (`lib/portfolio.ts`): a printed,
+  engagement health score's own disclosure discipline (`lib/planning/portfolio.ts`): a printed,
   visible threshold in the UI, not a silent cutoff. For v1, the threshold is a plain number
   input on the tab itself (defaulting to 20%), not a new Configuration section — a
   Configuration-level setting is a real escalation if this needs to be a firm policy rather

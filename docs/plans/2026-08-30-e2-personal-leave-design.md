@@ -44,7 +44,7 @@ scenarios and in production. What E1 did not build is anywhere for a person to *
 
 ### 1. My calendar grows the leave loop
 
-`components/MyCalendarPanel.tsx`, `lib/myCalendar.ts`.
+`components/personal/MyCalendarPanel.tsx`, `lib/personal/myCalendar.ts`.
 
 - A **"Request leave"** button beside "Add event" opens a modal: start date, end date, hours per
   day (defaulted from the person's working pattern, falling back to 7.5), an optional **private
@@ -63,7 +63,7 @@ scenarios and in production. What E1 did not build is anywhere for a person to *
 
 ### 2. The Timesheets view grows "Leave to decide"
 
-`components/TimesheetPanel.tsx` — already the precedent: "It GATHERS and it decides; it never
+`components/time/TimesheetPanel.tsx` — already the precedent: "It GATHERS and it decides; it never
 edits."
 
 - A section visible to `leave.approve` holders listing every **Requested** leave commitment
@@ -78,7 +78,7 @@ edits."
 
 ### 3. One `'approval'` notification kind
 
-`lib/notifications.ts` (`NOTIFICATION_KINDS` gains `'approval'`) and four reducer arms in
+`lib/comms/notifications.ts` (`NOTIFICATION_KINDS` gains `'approval'`) and four reducer arms in
 `lib/workspace.ts`. Every mint respects `modeFor` per recipient — mute mints nothing (audit
 still writes), in-app mints one delivered record, in-app+email adds the pending email record the
 scheduled pass drains and stamps. This is the exact assignment/mention pattern; the prefs row,

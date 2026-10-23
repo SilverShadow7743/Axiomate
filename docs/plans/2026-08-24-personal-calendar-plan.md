@@ -14,22 +14,22 @@ step), then the screen.
 
 ## Step 1 — The data model and the pure aggregation
 
-**Touches:** `lib/personalEvents.ts` (new — `PersonalEvent` interface, `eventProblem` shape
-validator, modelled on `lib/staffing.ts`'s `memberProblem`), `lib/workspace.ts`
+**Touches:** `lib/personal/personalEvents.ts` (new — `PersonalEvent` interface, `eventProblem` shape
+validator, modelled on `lib/capacity/staffing.ts`'s `memberProblem`), `lib/workspace.ts`
 (`WorkspaceState.personalEvents` field — the same mechanical addition every new collection this
 program has needed: `initWorkspace`, `clientView`'s emptied-collections list in
 `lib/clientBoundary.ts`, `autosave.ts`'s mirror merge, `lib/db/repo.ts`'s `loadWorkspace`
-placeholder), `lib/myCalendar.ts` (new — `MyCalendarEntry`, `myCalendarMonth`).
+placeholder), `lib/personal/myCalendar.ts` (new — `MyCalendarEntry`, `myCalendarMonth`).
 
 `myCalendarMonth(state, personId, monthIso)` combines four sources into one grid, reusing only
 the *shape* of `calendarMonth`'s padding algorithm (Monday-first weeks, padded to whole weeks —
-`lib/calendar.ts:70`–`89`), not its `ScheduleRow`-typed signature:
+`lib/personal/calendar.ts:70`–`89`), not its `ScheduleRow`-typed signature:
 
 - Every `PersonalEvent` where `personId` matches, one entry per day for a multi-day span (the
-  same per-day expansion `calendarMonth` already does for a planned span, `lib/calendar.ts:61`–`67`).
+  same per-day expansion `calendarMonth` already does for a planned span, `lib/personal/calendar.ts:61`–`67`).
 - Every live `Commitment` (`!deletedAt`) where `personId` matches, same per-day expansion.
 - Every live `Allocation` where `personId` matches, same per-day expansion.
-- The person's own due-date work — the id-aware join `lib/mywork.ts`'s `isMine` already uses
+- The person's own due-date work — the id-aware join `lib/personal/mywork.ts`'s `isMine` already uses
   (`whoId ? person?.id === whoId : isMe(who)`), applied to `ScheduleRow.owner`/`ownerId`. A row
   with no planned end is not dropped — it is a first-class "unscheduled" entry, the same honesty
   `calendarMonth`'s own `undated` list already established, returned alongside the grid rather
@@ -157,7 +157,7 @@ contains zero rows belonging to any other `personId`.
 **Touches:** `lib/viewChoice.ts` (`WORKSPACE_VIEWS` gains `'mycalendar'`),
 `components/FilterBar.tsx` (`VIEW_ORDER`/`VIEW_LABEL`/`VIEW_TITLE` — label **"My calendar"**,
 deliberately distinct from the existing **"Calendar"** entry, per the design's naming decision),
-a new `components/MyCalendarPanel.tsx` (docked the same way `TimesheetPanel`/`Inbox` already are
+a new `components/personal/MyCalendarPanel.tsx` (docked the same way `TimesheetPanel`/`Inbox` already are
 — no scrim, no focus trap, the switcher is how you leave), `components/IssueWorkspace.tsx` (one
 more branch in the main-pane view switch, and the `addPersonalEvent`/`update`/`remove` dispatch
 wiring — a small add/edit form for one's own events, an unscheduled-work rail the same shape

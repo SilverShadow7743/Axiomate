@@ -8,7 +8,7 @@ with before, after and actor. No message is sent to the client."* `stops`: *"at 
 client."*
 
 Everything around the gap already exists — the transition, the audit trail, the mail-send
-primitive (`sendAsMailbox`, `lib/mail.ts`). What's missing is the one call that connects a
+primitive (`sendAsMailbox`, `lib/comms/mail.ts`). What's missing is the one call that connects a
 status change to an outbound notice.
 
 ## What this is not

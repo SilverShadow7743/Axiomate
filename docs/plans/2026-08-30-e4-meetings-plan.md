@@ -25,20 +25,20 @@ Design constraints quoted: "Absent means zero — today's arithmetic byte-identi
 
 ## Step 1 — the engine's fourth term and the Meeting type, golden first
 
-**Files:** `lib/meetings.ts` (new), `lib/availability.ts`, `lib/capacity.ts`,
-`lib/forecast.ts`, `lib/assignment.ts`, `scripts/scenario-validation.ts`.
+**Files:** `lib/personal/meetings.ts` (new), `lib/capacity/availability.ts`, `lib/capacity/capacity.ts`,
+`lib/planning/forecast.ts`, `lib/capacity/assignment.ts`, `scripts/scenario-validation.ts`.
 
 1a. **Capture the golden BEFORE touching signatures**: run `availabilityFor` on E1A's exact
 fixture (and one `capacityFor`/`forecastFor` figure) and bake the outputs into scenario E4A's
 assertions — the E1 discipline.
 
-1b. `lib/meetings.ts`: the `Meeting` interface (id, title, startAt, endAt, organizer,
+1b. `lib/personal/meetings.ts`: the `Meeting` interface (id, title, startAt, endAt, organizer,
 organizerId, attendeeIds: string[], scopeKind?: 'issue' | 'project', scopeId?, note,
 createdAt, createdBy, deletedAt), `meetingProblem` (title; end after start; ≥1 attendee),
 `attends(m, personId)` = `!m.deletedAt && m.attendeeIds.includes(personId)` — ids only, no
 name fallback, per the design's third send-back clause.
 
-1c. `lib/availability.ts`: `meetingHours(meetings, personId, from, to)` — for each attended
+1c. `lib/capacity/availability.ts`: `meetingHours(meetings, personId, from, to)` — for each attended
 live meeting, the hour overlap of `[startAt, endAt]` with `[fromT00:00:00, toT23:59:59.999]`
 (the stated clipping rule: a straddling meeting counts only its inside hours; a multi-day one
 clips the same way), summed and rounded 2dp. `availabilityFor` gains trailing
@@ -48,7 +48,7 @@ present, `availableHours = max(0, gross − committed − meetingHours)` and the
 so the E1 never-spread rule keeps golden JSON shapes stable: verify `capacityFor` still
 builds explicitly and add the field there deliberately or not at all — decide at the keyboard,
 the golden arbitrates). Thread trailing optional params through `capacityFor`, `planCheck`,
-`forecastFor`'s args object, and `lib/assignment.ts`'s `capacityFor` call (line ~183) —
+`forecastFor`'s args object, and `lib/capacity/assignment.ts`'s `capacityFor` call (line ~183) —
 trailing, so every existing call site compiles unchanged.
 
 1d. Scenario **E4A**: the absent-param golden byte-identical; a 90-minute attended meeting
@@ -60,7 +60,7 @@ cancelled meeting subtracts nothing; E1A and E1D pass UNTOUCHED (the tripwires).
 
 ## Step 2 — find-a-slot
 
-**Files:** `lib/scheduling.ts` (new), `scripts/scenario-validation.ts`.
+**Files:** `lib/planning/scheduling.ts` (new), `scripts/scenario-validation.ts`.
 
 `suggestDays({ attendeeIds, durationHours, from, to, meetings, commitments, holidays,
 profiles })` → up to N candidate days, each `{ date, ok, blockers: string[] }`: an attendee's
@@ -92,7 +92,7 @@ Mappers `meetingToRow/FromRow` stamping tenantId. Persistence-proof scrub gains
 ## Step 4 — state, arms, mints, persist cases, proof checks — one commit
 
 **Files:** `lib/workspace.ts`, `lib/actionShape.ts`, `app/api/workspace/route.ts`,
-`lib/notifications.ts`, `components/Inbox.tsx`, `lib/db/persist.ts`, `lib/db/repo.ts`,
+`lib/comms/notifications.ts`, `components/comms/Inbox.tsx`, `lib/db/persist.ts`, `lib/db/repo.ts`,
 `lib/autosave.ts`, `lib/clientBoundary.ts`, `scripts/persistence-proof.ts`,
 `scripts/scenario-validation.ts`.
 
@@ -135,7 +135,7 @@ Mappers `meetingToRow/FromRow` stamping tenantId. Persistence-proof scrub gains
 
 ## Step 5 — UI
 
-**Files:** `lib/myCalendar.ts`, `components/MyCalendarPanel.tsx`,
+**Files:** `lib/personal/myCalendar.ts`, `components/personal/MyCalendarPanel.tsx`,
 `components/DetailPanel.tsx`, `components/IssueWorkspace.tsx`.
 
 - `myCalendarMonth` gains the fifth entry kind (`{ kind: 'meeting', id, title, date,

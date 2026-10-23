@@ -20,12 +20,22 @@ import 'server-only'
  * unique only *within* one, and every query and write in `lib/db` names one. That is the part
  * that is expensive to retrofit, so it is done before the first migration is applied.
  *
- * It is **not** enforced isolation. There is no identity in this application — no user, no
- * session, no role binding (see the Governance & Security row of the capability matrix) — so
- * nothing establishes *which* tenant a request belongs to. `currentTenantId` resolves one
- * configured tenant and is the single seam where real resolution plugs in. Until it does,
- * isolation is a discipline the code follows, not a guarantee the database enforces; the
- * guarantee is row-level security, and it arrives with identity, not before it.
+ * It is **not** enforced isolation, and identity existing elsewhere in the application does not
+ * change that here. `lib/principal.ts` can now say *who* is asking — a real Entra session, where
+ * one is configured — but `currentTenantId`, below, does not read it: it resolves one
+ * configured environment value, unconditionally, the same as before identity existed. Nothing
+ * establishes *which* tenant a request belongs to from who is making it. `currentTenantId`
+ * is the single seam where that resolution would plug in, and it is still open.
+ *
+ * **Decided, not merely deferred (20 Sep 2026 review): single-tenant-per-deployment is this
+ * product's permanent model, not a stepping stone to multi-tenant.** Row-level security is the
+ * guarantee that would close this gap for real, and it is deliberately not being built — the
+ * scenario it protects against (two firms sharing one deployment) is not one this product plans
+ * to support. What this means in practice: isolation stays a discipline the code follows (every
+ * query and write in `lib/db` naming its tenant explicitly), not a guarantee the database
+ * enforces, and that is an accepted risk for a single-firm-per-instance deployment, not an
+ * unclosed TODO. If the single-tenant model ever changes, RLS has to be built before it does —
+ * identity being available elsewhere in the app would still not make this function use it.
  */
 
 /**
@@ -54,10 +64,11 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 /**
  * The tenant for this request.
  *
- * Today it reads one configured value, because there is no identity to derive it from. When
- * there is, this is the function that changes — resolving from the session, a subdomain or a
- * header — and nothing downstream moves, because everything downstream already takes the
- * result as a parameter.
+ * Today it reads one configured value unconditionally — not because there is no identity to
+ * derive it from any more (see `lib/principal.ts`), but because nothing here has been wired
+ * to it yet. When it is, this is the function that changes — resolving from the session, a
+ * subdomain or a header — and nothing downstream moves, because everything downstream already
+ * takes the result as a parameter.
  *
  * A malformed value throws rather than falling back. Quietly serving the default tenant to a
  * request that asked for another one is precisely the failure this whole boundary exists to

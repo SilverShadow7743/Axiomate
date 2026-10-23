@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { directoryIdByName, directoryPersonFor } from '@/lib/access'
-import { ownerLeaveCaveat } from '@/lib/availability'
+import { ownerLeaveCaveat } from '@/lib/capacity/availability'
 import { formatIso } from '@/lib/dates'
 import { richTextToPlainText } from '@/lib/richText'
 import type { ScheduleRow } from '@/lib/types'

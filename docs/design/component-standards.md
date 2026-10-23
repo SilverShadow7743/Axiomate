@@ -182,7 +182,7 @@ information.
 
 ## Priority fix list (from this extraction)
 
-1. ~~**Severity color-not-only**~~ — fixed 2026-08-31: `lib/severity.ts`'s `severityGlyph()`
+1. ~~**Severity color-not-only**~~ — fixed 2026-08-31: `lib/planning/severity.ts`'s `severityGlyph()`
    adds a shape (▲/●/–) alongside color everywhere severity renders (`TreeGrid.tsx`,
    `OverviewTab.tsx`), matching schedule-health's discipline.
 2. ~~**`.cfg-fld` required-marker + inline-error convention**~~ — fixed 2026-08-31:

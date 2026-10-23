@@ -16,7 +16,7 @@ Standing facts this plan is written against, verified in code before writing:
 - `lib/clientBoundary.ts`'s `clientView` is **scope-id-driven, not kind-driven**: it takes a
   `clientScopeId` node id and walks ancestor chains. The literal `kind === 'client'` tests in
   production lib code are exactly seven: `lib/autosave.ts:439` (mirror reconciliation),
-  `lib/reports/clientPack.ts:89` (name→node lookup), `lib/tree.ts:448` (nearest-client-ancestor
+  `lib/reports/clientPack.ts:89` (name→node lookup), `lib/planning/tree.ts:448` (nearest-client-ancestor
   display name), `lib/workspace.ts:617` (seed init), `:1809` and `:2781` (client-name
   derivation), and `:6925` (validating `clientScopeId` names a client node). Scenario fixtures
   also select nodes by `kind === 'client'` (~30 sites in `scripts/scenario-validation.ts`) —
@@ -27,7 +27,7 @@ Standing facts this plan is written against, verified in code before writing:
 - Node ids embed kind strings (`client:OAPIL`, `module:OAPIL:Inventory`) and configuration
   scope overrides are keyed on them (schema comment at `HierarchyNode.id`). **Ids are opaque
   and are never rewritten by anything in this plan.**
-- `TimeEntry` (`prisma/schema.prisma:887`, `lib/time.ts:50`) has required `issueId`, no
+- `TimeEntry` (`prisma/schema.prisma:887`, `lib/time/time.ts:50`) has required `issueId`, no
   activity reference.
 - Terminology is already configurable: `KIND_LABEL_KEY` + `resolveLabel` render configured tier
   names everywhere (`lib/workspace.ts:483`, `termFor`). The `RowType` union was already deleted
@@ -69,14 +69,14 @@ to generalize to the same two helpers (flag test, ancestor walk); Step 3's list 
 below. Two scoping findings, neither a send-back:
 
 - **Engagement is a well-known tier, not a generic one.** SOW filing (`lib/workspace.ts:5457`,
-  `:5988`), blueprints (`lib/blueprint.ts:105`, `components/RowMenu.tsx:220`), the
+  `:5988`), blueprints (`lib/commercial/blueprint.ts:105`, `components/RowMenu.tsx:220`), the
   `Engagement` Prisma relation ("present only on engagement nodes"), and the
-  default-engagement lookup (`lib/engagement.ts:183`) all key on the literal `'engagement'`
+  default-engagement lookup (`lib/commercial/engagement.ts:183`) all key on the literal `'engagement'`
   kind. E0 does **not** generalize these: default tier kinds are *well-known strings* that
   optional machinery may key on, and an org that omits the engagement tier simply has no SOW
   filing targets. Only the client boundary moves to the `externalParty` flag. This refines the
   design's tier-definition section without reopening it.
-- **Module literal tests** (`lib/autosave.ts:446`, `lib/blueprint.ts:105`,
+- **Module literal tests** (`lib/autosave.ts:446`, `lib/commercial/blueprint.ts:105`,
   `lib/workspace.ts:640/1808/2780`, `scripts/intake-mailbox.ts:97`) are Step 8's business,
   untouched by Step 3.
 
@@ -113,18 +113,18 @@ it (a support ticket). The design doc's send-back clause — "if any boundary ma
 structurally on *which* tier is the client tier" — is decided here.
 
 **Files:** `lib/access.ts` or `lib/config.ts` (new helpers), then `lib/autosave.ts`,
-`lib/reports/clientPack.ts`, `lib/tree.ts`, `lib/workspace.ts` (four sites), and per Step 1's
+`lib/reports/clientPack.ts`, `lib/planning/tree.ts`, `lib/workspace.ts` (four sites), and per Step 1's
 completed enumeration: `components/ConfigWorkspace.tsx:869` and `:2798` (scope pickers),
 `components/DetailPanel.tsx:568` (node-detail branch), `components/Dialogs.tsx:178` (the
 client form branch — its own comment already says "derived from the tier list rather than
-named"; the flag completes that intent), `components/GanttChart.tsx:387` (bar color, may key
+named"; the flag completes that intent), `components/planning/GanttChart.tsx:387` (bar color, may key
 on tier order instead), `components/IssueWorkspace.tsx:1562` (default parent for "+ New
-Issue"), `components/ScopePanel.tsx:44/:229` (unassigned-under count), and
+Issue"), `components/planning/ScopePanel.tsx:44/:229` (unassigned-under count), and
 `components/TreeGrid.tsx:782` (top-of-tree banner styling — order-based, not flag-based: the
 banner belongs to the top two tier orders, whatever they are).
 
 - Two helpers, written first: `isExternalPartyTier(model, kind)` and
-  `nearestExternalPartyAncestor(state, rowId)` (the `lib/tree.ts:448` walk, generalized).
+  `nearestExternalPartyAncestor(state, rowId)` (the `lib/planning/tree.ts:448` walk, generalized).
 - Each site rewritten against them (or against tier *order* where the test was really "top of
   tree", per the two cosmetic sites above). `lib/workspace.ts:6925` (the `clientScopeId`
   validation) becomes "names a node whose tier is flagged externalParty".
@@ -167,7 +167,7 @@ Live check: tree renders, a node can be created and moved. Standalone commit.
 ## Step 5 — The Outcome tier
 
 **Files:** `lib/config.ts` (default tier set), `lib/workspace.ts` (create/move vocabulary,
-`KIND_LABEL_KEY` entry), `components/` create menus (`Dialogs.tsx`, row menu), `lib/tree.ts`
+`KIND_LABEL_KEY` entry), `components/` create menus (`Dialogs.tsx`, row menu), `lib/planning/tree.ts`
 (group-row rendering picks it up via `isGroupRow` automatically — verify, don't assume).
 
 `outcome` joins the default tier set between `project` and `module`, unflagged, with a new
@@ -179,12 +179,12 @@ create one. No migration — after Step 4, a new tier is configuration.
 outcome under project, work under outcome, refuse outcome under issue) — this changes
 `data/validation.json`, which is committed with this step. Live: create an Outcome in the real
 workspace, file a work item under it, confirm rollups aggregate through it (the
-`attachRollups` walk in `lib/tree.ts:273` is kind-agnostic — confirm with the real row). One
+`attachRollups` walk in `lib/planning/tree.ts:273` is kind-agnostic — confirm with the real row). One
 commit.
 
 ## Step 6 — Migration + model: Task-level time (stands alone)
 
-**Files:** `prisma/schema.prisma`, new migration, `lib/time.ts`, `lib/workspace.ts` (addTime
+**Files:** `prisma/schema.prisma`, new migration, `lib/time/time.ts`, `lib/workspace.ts` (addTime
 arm), `components/DetailPanel.tsx` Time tab.
 
 - Migration: `TimeEntry` gains nullable `activityId` + FK to `IssueActivity` + index. Additive,
@@ -226,7 +226,7 @@ grammar needs nothing: `ID_RE` matches displayIds, which do not change. One comm
 
 ## Step 8 — Classification extraction (two standalone migrations, last)
 
-**Files:** `prisma/schema.prisma` + migration (8a), `lib/workspace.ts`, `lib/tree.ts`,
+**Files:** `prisma/schema.prisma` + migration (8a), `lib/workspace.ts`, `lib/planning/tree.ts`,
 `components/FilterBar.tsx`; second migration + `scripts/intake-mailbox.ts` (8b).
 
 - **8a — the label exists.** `Issue` gains nullable `classification String?`. Backfill DML:

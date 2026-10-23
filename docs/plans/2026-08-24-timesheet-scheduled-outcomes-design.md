@@ -2,7 +2,7 @@
 
 ## What this answers
 
-`components/TimesheetPanel.tsx`'s weekly grid (`lib/timesheet.ts`'s `weekGrid`) is built entirely
+`components/time/TimesheetPanel.tsx`'s weekly grid (`lib/time/timesheet.ts`'s `weekGrid`) is built entirely
 from `TimeEntry` rows that already exist — it answers "what have I logged," never "what was I
 staffed to work on." A consultant opening their week sees only what they already typed in; there
 is nothing on screen prompting them toward real, open work they have not logged yet. The user's

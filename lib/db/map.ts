@@ -52,24 +52,24 @@ import type { ActivityRec, HierarchyNode, IssueRecord, NodeKind } from '../works
 import type { DocumentReview, DocumentReviewAnswer } from '../proofing'
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from '../evidence'
 import type { Snapshot, SnapshotEntry } from '../snapshot'
-import type { CostOfWork } from '../rates'
+import type { CostOfWork } from '../commercial/rates'
 import type { IssueNote, NoteType } from '../notes'
-import type { EngagementDetail } from '../engagement'
-import type { EstimateRevision, IssueEstimate } from '../estimation'
-import type { TimeActivity, TimeEntry } from '../time'
+import type { EngagementDetail } from '../commercial/engagement'
+import type { EstimateRevision, IssueEstimate } from '../commercial/estimation'
+import type { TimeActivity, TimeEntry } from '../time/time'
 import type { Approval, ApprovalDecision } from '../approval'
-import type { Channel, Delivery, Notification } from '../notifications'
-import type { Sow, SowStatus } from '../sow'
-import type { Allocation, Commitment, CommitmentKind } from '../capacity'
-import type { ProjectMember } from '../staffing'
-import type { PersonalEvent } from '../personalEvents'
-import type { PersonalAction } from '../personalActions'
-import type { InboundMail } from '../intake'
+import type { Channel, Delivery, Notification } from '../comms/notifications'
+import type { Sow, SowStatus } from '../commercial/sow'
+import type { Allocation, Commitment, CommitmentKind } from '../capacity/capacity'
+import type { ProjectMember } from '../capacity/staffing'
+import type { PersonalEvent } from '../personal/personalEvents'
+import type { PersonalAction } from '../personal/personalActions'
+import type { InboundMail } from '../comms/intake'
 import type { Version } from '../versioning'
-import type { Timesheet, TimesheetStatus } from '../timesheet'
-import type { PersonRate, RateKind } from '../rates'
-import type { ChangeRequest, ChangeStatus } from '../changeRequest'
-import type { PersonSkill, Requirement, SkillLevel, SkillSource } from '../skills'
+import type { Timesheet, TimesheetStatus } from '../time/timesheet'
+import type { PersonRate, RateKind } from '../commercial/rates'
+import type { ChangeRequest, ChangeStatus } from '../commercial/changeRequest'
+import type { PersonSkill, Requirement, SkillLevel, SkillSource } from '../capacity/skills'
 import type { DocumentRecord, DocumentSubject } from '../documents'
 import type { StoreKind } from '../documents'
 import type { ScopeItem, ScopeKind, ScopeSource } from '../scope'
@@ -79,7 +79,7 @@ import type {
   IntegrationLink,
   IntegrationStatus,
 } from '../application'
-import type { Invoice, InvoiceLineItem, InvoiceStatus } from '../invoice'
+import type { Invoice, InvoiceLineItem, InvoiceStatus } from '../commercial/invoice'
 import type { ChecklistItem } from '../checklist'
 import type {
   AcceptanceState,
@@ -87,10 +87,10 @@ import type {
   DeliveryState,
   Milestone,
   MilestoneBasis,
-} from '../milestone'
+} from '../planning/milestone'
 import type { AuditEntry, IssueDependency, IssueRelationship } from '../types'
-import type { DiscussionFollow, DiscussionMessage, DiscussionScopeKind, DiscussionThread } from '../discussion'
-import type { Meeting, MeetingScopeKind } from '../meetings'
+import type { DiscussionFollow, DiscussionMessage, DiscussionScopeKind, DiscussionThread } from '../comms/discussion'
+import type { Meeting, MeetingScopeKind } from '../personal/meetings'
 import type { TenantId } from '../tenant'
 
 /**
@@ -238,6 +238,7 @@ export function issueToRow(
     sourceType: i.sourceType,
     discipline: i.discipline,
     applicationId: i.applicationId ?? null,
+    milestoneId: i.milestoneId ?? null,
     severity: SEVERITY_TO_DB[i.severity],
     status: i.status,
     owner: i.owner,
@@ -288,6 +289,7 @@ export function issueFromRow(r: IssueRow): IssueRecord {
     sourceType: r.sourceType,
     discipline: r.discipline,
     applicationId: r.applicationId ?? null,
+    milestoneId: r.milestoneId ?? null,
     severity: SEVERITY_FROM_DB[r.severity],
     status: r.status as IssueStatus,
     owner: r.owner,
@@ -1075,7 +1077,7 @@ export function commitmentToRow(tenantId: TenantId, c: Commitment): Prisma.Commi
     hoursPerDay: c.hoursPerDay,
     note: c.note,
     // Absent stays absent, both directions — NULL means Approved and only
-    // lib/availability.ts interprets that; the mapper must not resolve it early.
+    // lib/capacity/availability.ts interprets that; the mapper must not resolve it early.
     status: c.status ?? null,
     reason: c.reason ?? null,
     createdBy: c.createdBy,
@@ -1809,6 +1811,11 @@ export function timesheetToRow(tenantId: TenantId, t: Timesheet): Prisma.Timeshe
     decidedAt: t.decidedAt ? new Date(t.decidedAt) : null,
     decidedBy: t.decidedBy,
     reason: t.reason,
+    // DbNull, not JsonNull — see the note on the Version mapper above: this column being empty
+    // means no stamp was taken, not that a JSON null was deliberately recorded.
+    workingPatternStamp: t.workingPatternStamp
+      ? (t.workingPatternStamp as unknown as Prisma.InputJsonValue)
+      : Prisma.DbNull,
   }
 }
 
@@ -1821,6 +1828,11 @@ export function timesheetFromRow(r: TimesheetRow): Timesheet {
     status: r.status as TimesheetStatus,
     submittedAt: r.submittedAt.toISOString(),
     submittedBy: r.submittedBy,
+    // Cast, not validated: this only ever arrives here having been written by `stamp()` on the
+    // way in, the same trust boundary every other Json column in this mapper already keeps.
+    workingPatternStamp: r.workingPatternStamp
+      ? (r.workingPatternStamp as unknown as Timesheet['workingPatternStamp'])
+      : null,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
     decidedBy: r.decidedBy,
     reason: r.reason,

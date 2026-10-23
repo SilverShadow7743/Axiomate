@@ -8,7 +8,7 @@
  * three resolve what they display live, at render time, from `RichEditorDataContext` — never
  * from an attribute baked in at save time. A stored mention or reference is only ever a bare id
  * (`personId`, `issueId`); the name and the live status shown for it can change after the note
- * was written, and the design's own reasoning for `@mention` (lib/mentions.ts) is the reasoning
+ * was written, and the design's own reasoning for `@mention` (lib/comms/mentions.ts) is the reasoning
  * here too: a cached copy of a fact that changes is a copy that goes wrong.
  *
  * `image` deliberately does not use `@tiptap/extension-image`'s node shape (`src`/`title`/

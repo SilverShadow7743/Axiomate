@@ -57,10 +57,10 @@ instead of three.
 fade-gradient + scroll affordance for the overflowing tab bar rather than reducing the count.
 **Real**, and this design doc is where the reduction I24 didn't attempt gets scoped.
 
-**The "Time" KPI panel the critique wants is nearly free.** `lib/time.ts`'s `effortVariance()`
+**The "Time" KPI panel the critique wants is nearly free.** `lib/time/time.ts`'s `effortVariance()`
 already returns `{ estimated, actual, varianceHours, variancePct, againstBaseline }` — exactly
 estimate/logged/remaining/progress, correctly distinguishing "no estimate" from "zero" (a null,
-not a zero, when nothing has been estimated — `lib/time.ts:178-184`'s own comment is explicit
+not a zero, when nothing has been estimated — `lib/time/time.ts:178-184`'s own comment is explicit
 about why that distinction matters). It is already called from both `EstimationTab.tsx:114` and
 `TimeTab.tsx:110`, just never surfaced anywhere more prominent. **Building the KPI strip means
 reading a value that already exists, not computing a new one.**
@@ -133,12 +133,12 @@ and `app/globals.css`. No reducer, action-shape or `lib/workspace.ts` change —
 1. **Title**: a `.detail-title` block (`<h2 className="dt-name">{row.name}</h2>` +
    `.dt-idtag` subline) added above `.detail-head`, outside the `panelState !== 'compact'` gate
    so it survives collapse. `row.name`, not `issue.subject` directly — confirmed identical for
-   an issue row (`lib/tree.ts:124` sets `name: issue.subject` at construction) and correct for
+   an issue row (`lib/planning/tree.ts:124` sets `name: issue.subject` at construction) and correct for
    non-issue rows, which have no `issue` at all. The old right-aligned `.idtag` span in
    `.detail-head` removed (its class stays — still used by `TreeGrid.tsx:780`, unrelated).
 2. **Severity tag**: `FieldStrip`'s severity `<select>` wrapped in a `.fs-sev` span carrying
    `sev-${issue.severity}` and the same color-blind-safe glyph (`severityGlyph`,
-   `lib/severity.ts`) Overview's own severity row already used — one palette, not two.
+   `lib/planning/severity.ts`) Overview's own severity row already used — one palette, not two.
 3. **I24's duplication resolved**: `Subject`, `Severity`, `Status` and `Owner` rows removed
    from Overview's `<dl>`. Checked precisely, not assumed identical to `FieldStrip`'s four
    fields: `Start Date / Due Date` stays (carries Start Date, which the strip doesn't) and
@@ -248,7 +248,7 @@ And status is not the four-state open/in-progress/blocked/done model the pasted 
 assumed — `ISSUE_STATUSES` (`lib/types.ts:112-120`) is seven real values.
 
 The grouping this needs already exists, twice over, and does not need inventing:
-`lib/schedule.ts` already exports `TERMINAL_STATUSES` (`Closed - confirmed`, `Closed - no
+`lib/planning/schedule.ts` already exports `TERMINAL_STATUSES` (`Closed - confirmed`, `Closed - no
 defect`, `Superseded`) and `BLOCKED_STATUSES` (`Awaiting client confirmation`, `Needs
 clarification` — cited to "Spec §10" in the source), the exact same three-way split a status
 palette needs. And the color TOKENS this needs already exist too — `--h-ontrack`/`--h-atrisk`/
@@ -268,7 +268,7 @@ two, nothing invented:
 
 Same pill treatment as Tier 1's severity tag (`.fs-sev`-shaped, reusing the pattern, not a new
 one) — `FieldStrip`'s status `<select>` gets a `.fs-status` wrapper colored by this table via
-`lib/schedule.ts`'s own `isTerminal`/`BLOCKED_STATUSES`, not a fourth copy of the grouping
+`lib/planning/schedule.ts`'s own `isTerminal`/`BLOCKED_STATUSES`, not a fourth copy of the grouping
 logic. **One thing to confirm, not decide from scratch**: Open vs. In Progress both read as
 "nothing wrong" — `--h-unsched`/`--h-ontrack` gives them a visible difference (grey vs. green)
 rather than collapsing to one active color; flag if a plainer 3-color version (Open folded into
@@ -362,11 +362,11 @@ terse in practice, which is a call to make after seeing it built, not before.
 
 **10. Context-sensitive primary action — the suggestion already exists in the transition table.**
 
-`DEFAULT_STATUS_POLICY.transitions` (`lib/statusPolicy.ts:69-85`) is not an unordered set —
+`DEFAULT_STATUS_POLICY.transitions` (`lib/planning/statusPolicy.ts:69-85`) is not an unordered set —
 its own comment says so directly: *"Read it as the route work actually takes: something
 arrives Open, someone picks it up, it may bounce to the client and back, and it ends in one of
 three places."* Each status's transition array already lists the ordinary next step FIRST.
-`allowedNext(policy, from)` returns `[from, ...next]` (`lib/statusPolicy.ts:112-119`), so
+`allowedNext(policy, from)` returns `[from, ...next]` (`lib/planning/statusPolicy.ts:112-119`), so
 `allowedNext(policy, status)[1]` is already, by construction, "the one ordinary next move" —
 no new rule to invent, no mapping to design from scratch, just a label per status reading that
 existing first element:
@@ -381,7 +381,7 @@ existing first element:
 
 The button calls the exact same `chooseStatus`/`onCommitCell` path `FieldStrip`'s own status
 `<select>` already uses (`DetailPanel.tsx`). **Checked, and this is not uniform across rows** —
-`checkTransition` (`lib/statusPolicy.ts:130-153`) returns two different problem kinds, and
+`checkTransition` (`lib/planning/statusPolicy.ts:130-153`) returns two different problem kinds, and
 `dropOutcome` (`lib/board.ts:53-67`) routes them differently: `kind: 'reason'` becomes
 `{kind: 'ask', ...}`, which `chooseStatus` (`DetailPanel.tsx:1335-1348`) turns into the inline
 `fs-ask` text prompt — a real path forward. But `kind: 'evidence'` (the one that fires for
@@ -410,7 +410,7 @@ already contains**, and calls `chooseStatus(suggested)` directly — the exact s
 not a parallel one, so the reason prompt keeps working for all four `'reason'` rows with no new
 code. The only genuinely new plumbing is threading `onManageEvidence` as a new prop into
 `FieldStrip` (currently `DetailPanel.tsx:582` passes only `row`/`issue`/`state`/`onCommitCell`)
-and one small change inside `chooseStatus`: call `checkTransition` (`lib/statusPolicy.ts:130`,
+and one small change inside `chooseStatus`: call `checkTransition` (`lib/planning/statusPolicy.ts:130`,
 not currently imported into `DetailPanel.tsx` — only `dropOutcome` is) directly when `dropOutcome`
 returns `'refused'`, so the `'evidence'` kind can be told apart from the (here, unreachable in
 practice, since the table only ever proposes an already-allowed route) `'route'` kind and routed

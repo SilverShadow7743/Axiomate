@@ -42,7 +42,7 @@ alongside the existing 121.
 
 ## Step 2 — `classifyChat()`
 
-**Touches:** `lib/intake.ts`, adding `classifyChat()` alongside `classify()` (line 373) and
+**Touches:** `lib/comms/intake.ts`, adding `classifyChat()` alongside `classify()` (line 373) and
 `classifyForm()` (line 485) — same file, same shared `draftFor()` call underneath.
 
 Signature mirrors `classifyForm()`: resolves an `IntakeChat` by `chatId` (the equivalent of
@@ -55,7 +55,7 @@ vocabulary invented; a fourth intake path reusing the same three reasons is the 
 Two things to check by hand while writing this step, both about the design's own text, not new
 design decisions:
 
-- `firstLine()` (`lib/intake.ts:518`) already returns `'Message with no subject'` when `body` has
+- `firstLine()` (`lib/comms/intake.ts:518`) already returns `'Message with no subject'` when `body` has
   no usable first line. Before trusting this for Teams, run it against a real, short chat message
   with the mention already stripped (e.g. `"the invoice totals are off again"`) and confirm the
   resulting issue title is something a consultant would recognize, not just that the fallback

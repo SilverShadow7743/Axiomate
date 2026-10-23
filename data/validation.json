@@ -1,5 +1,5 @@
 {
-  "asAt": "2026-08-15",
+  "asAt": "2026-09-20",
   "findings": [
     {
       "id": "A",
@@ -55,11 +55,11 @@
       "id": "E",
       "title": "The same defect is reported twice",
       "expected": "The duplicate is detected, linked to the original, and does not become a second stream of work.",
-      "verdict": "PARTIAL",
-      "actual": "The link and the Superseded status both work, closing sets actualEnd to 2026-08-15, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.",
-      "stops": "at detection — a person must notice",
-      "severity": "P2",
-      "impact": "Duplicates are found late, after two people have worked the same fault."
+      "verdict": "PASS",
+      "actual": "Detected: duplicateGroups groups the pair (client + parent + reply-stripped subject) and names OAPIL-2 canonical as the more recently active — the exact candidate a reviewer would confirm. The link and the Superseded status both work, closing sets actualEnd to 2026-08-15, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. What is still manual, correctly: a person reviews Configuration → Duplicates and confirms the link — the function surfaces a candidate, it does not merge records on its own, which is the right division of labour for a data-correcting action. The narrower real gap is that this is a pull screen, not a push: nothing notifies anyone when a new group appears: a duplicate sits undetected until someone opens Configuration → Duplicates.",
+      "stops": "",
+      "severity": "P3",
+      "impact": "Detection is real and proven; the residual gap is that reviewing it is not prompted, only available."
     },
     {
       "id": "F",
@@ -187,9 +187,29 @@
       "expected": "The variance is visible on the issue, and it is honest about what it is measured against.",
       "verdict": "PARTIAL",
       "actual": "12h spent against 8h agreed — +4h, 50%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.",
-      "stops": "here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW's baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.",
+      "stops": "here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW's baselined issues, shown in CommercialPanel. Milestone-level attribution is no longer open either — see `K2`, which proves `setIssueMilestone` and `milestonePosition` directly, the finer read this scenario used to say would be its own design.",
       "severity": "P2",
-      "impact": "A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap."
+      "impact": "A consultant can see the overrun on the record, and — proven at SOW level elsewhere and now at milestone level too (`K2`) — so can a partner on the engagement."
+    },
+    {
+      "id": "K2",
+      "title": "An issue is attributed to a milestone, one level finer than the SOW it already belongs to",
+      "expected": "Attributing works only within the issue's own SOW, refuses across SOWs, and clears cleanly — through the reducer, not assumed from the model alone.",
+      "verdict": "PASS",
+      "actual": "Attributing OAPIL-1 to Phase 1 lands (milestoneId=\"ms-5\") and is audited. Attributing it to a milestone on a different SOW is refused — \"That milestone belongs to a different statement of work than this issue is attributed to.\" — because the issue's own project names SOW-K2, not SOW-K2-RIVAL. Clearing the attribution back to null succeeds. Attributing an issue whose project carries no SOW at all (OAPIL-3) is refused the same way — \"That milestone belongs to a different statement of work than this issue is attributed to.\" — there is no SOW for the milestone to belong to in common with.",
+      "stops": "",
+      "severity": "P2",
+      "impact": "Milestone-level attribution is real, refuses the cases that would make a variance figure count effort against the wrong contract, and cannot silently orphan an issue against a milestone its own SOW never priced."
+    },
+    {
+      "id": "K3",
+      "title": "milestoneEffortPosition sums only its own milestone's issues, and does not disagree with the SOW-level figure it is a slice of",
+      "expected": "Two milestones under one SOW, one issue each — each milestone counts only its own, and the two together equal the SOW total for the same issues.",
+      "verdict": "PASS",
+      "actual": "Milestone A (OAPIL-1 only) plans 8h, 4h spent; Milestone B (OAPIL-2 only) plans 4h, 2h spent. Summed: 12h planned, 6h actual — matching sowPosition's own 12h / 6h for the identical two issues exactly. Neither milestone's figure leaks the other's issue.",
+      "stops": "",
+      "severity": "P3",
+      "impact": "A milestone-level variance figure can be trusted precisely because it never disagrees with the coarser SOW-level figure it is a slice of."
     },
     {
       "id": "N",
@@ -547,11 +567,11 @@
       "alias": "X",
       "title": "The assistant proposes a change with low confidence",
       "expected": "It recommends rather than acts, and a person decides.",
-      "verdict": "NOT TESTABLE",
-      "actual": "One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (19 files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.",
-      "stops": "at the autonomy fields — declared, unread",
-      "severity": "P1",
-      "impact": "37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy."
+      "verdict": "NOT IMPLEMENTED",
+      "actual": "Autonomy level (off/suggest/propose/act) is read and enforced live — canPropose() gates whether the one live agent may render a proposal card at all (19 files participate) — and 'act' behaves identically to 'propose' in the code today: every proposal still needs a human click on Apply regardless of the configured level, so recommend-rather-than-act already holds unconditionally. No confidence field exists on ChatConfig, AgentRecord, or the chat route — there is nothing to threshold \"low confidence\" against, because nobody has specified what it would mean here.",
+      "stops": "at the premise — no confidence signal exists anywhere in the assistant/agent-registry domain to test",
+      "severity": "P3",
+      "impact": "The recommend-not-act guarantee this scenario names already holds unconditionally, by construction, at every autonomy level. A confidence-gated downgrade on top of it would be new scope — resolved 20 Sep 2026 as not-yet-specified rather than left open indefinitely as an unwired field."
     },
     {
       "id": "FL1",
@@ -687,11 +707,11 @@
       "id": "AA",
       "title": "An integration fails",
       "expected": "The failure is contained, retried where safe, surfaced, and never leaves records half-written.",
-      "verdict": "NOT IMPLEMENTED",
-      "actual": "No outbound integration exists. The only network call the product makes is to the model behind the chat route; an integration client exists.",
-      "stops": "at the integration",
+      "verdict": "PARTIAL",
+      "actual": "Two real outbound Graph integrations exist, in 6 files — client mail (send and read, lib/comms/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — \"retrying the same refusal every morning would only bury it\" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed; the document route sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.",
+      "stops": "at Teams — the one Graph-adjacent surface with no outbound call at all",
       "severity": "P2",
-      "impact": "Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4."
+      "impact": "Mail and documents are production-grade on failure handling. Teams is the one integration this finding can still honestly call missing, not merely untested."
     },
     {
       "id": "FL4",
@@ -707,11 +727,11 @@
       "id": "HV1",
       "title": "A working pattern changes, and last quarter still has to add up",
       "expected": "What was true is preserved with its period, and a later correction cannot move a figure already computed.",
-      "verdict": "PARTIAL",
-      "actual": "A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. `validTo` is exclusive: 30 June answers 7.5h and 1 July answers 6h, so two periods can abut without overlapping. An overlap is refused — \"That period overlaps one already recorded: 2026-01-01 to 2026-07-01. T…\" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the 1 record computed from that version and moves none of it: the stamp still holds 7.5h from ver-1. What is not proven is the round trip — no version has been stored, and nothing in the application stamps anything yet, because the first thing that will is an approved timesheet.",
-      "stops": "at storage, and at a stamp made by the application rather than by this scenario",
+      "verdict": "PASS",
+      "actual": "A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. `validTo` is exclusive: 30 June answers 7.5h and 1 July answers 6h, so two periods can abut without overlapping. An overlap is refused — \"That period overlaps one already recorded: 2026-01-01 to 2026-07-01. T…\" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the 1 record computed from that version and moves none of it. That last property is now proven through the reducer, not only through `stamp()` in isolation: recording a pattern, logging time, submitting and approving the week stamps the timesheet with 7.5h from the version just recorded; correcting that same pattern to 6h afterwards leaves the approved week reading 7.5h — unmoved, exactly as designed. Approving a week for somebody with no recorded pattern (Sam) stamps null, not a default.",
+      "stops": "",
       "severity": "P2",
-      "impact": "The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys."
+      "impact": "The rules hold, are wired to capacity, and a correction cannot move an already-approved week’s figure — proven through the reducer, the whole way from recording a pattern to an approval that outlives a later correction to it."
     },
     {
       "id": "TW1",
@@ -727,11 +747,11 @@
       "id": "TW2",
       "title": "A daily cap is checked against a working pattern nobody recorded",
       "expected": "The cap is reported unenforced rather than defaulted to eight, and a late entry has to explain itself only past the allowance.",
-      "verdict": "PARTIAL",
-      "actual": "A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is 7.5h from ver-7 and 1 July is 6h from ver-8, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a 7.5h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly 7 days: 7 days late needs nothing, 8 days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.",
+      "verdict": "PASS",
+      "actual": "A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is 7.5h from ver-7 and 1 July is 6h from ver-8, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a 7.5h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly 7 days: 7 days late needs nothing, 8 days late needs a justification and an approval. This is not just proven arithmetic: `addTime` calls exactly this pair, live, on every entry — a real cap, applied by the real application, not merely available in a library.",
       "stops": "at the action's own entry point, not at storage. `TimeEntry` has carried `personId` since the identity-ids migration (2026-08-22) — every entry it counts, and the `Version` it reads the cap from, are both id-first. What still resolves by name is the one thing that has no id yet: the incoming `addTime` action itself, which — like every write action in this codebase — arrives with only a free-text `person` field, never a `personId`. So the entry point looks the person up by name before anything id-first can begin, and a name that does not currently resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.",
-      "severity": "P2",
-      "impact": "The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered."
+      "severity": "P3",
+      "impact": "The cap is proven correct and applied live on every recorded entry. The one accepted, deliberate residual: a name that cannot be resolved to a directory id gets no cap rather than a wrong one — a missing remark, never a wrong refusal, and not something this finding treats as open work."
     },
     {
       "id": "AU3",
@@ -789,7 +809,7 @@
       "expected": "Recorded skill produces candidates rather than a recommendation, a stale skill is marked rather than dropped, and a level nobody may read shortens the list visibly rather than silently.",
       "verdict": "PASS",
       "actual": "Asked for Intercompany at practitioner and X++ at working: 1 person meets both (AMOLAK) and 2 meet part of it (DHARMENDRA, MICHAEL). Jaya holds Intercompany at Aware, below the floor, so she is not on the list; Priya's row is withdrawn and Tarun's skill has been retired from the catalogue, so neither produces a candidate. Dharmendra last used it in 2021 and nobody has said when Michael last used his — both are marked stale rather than dropped, because a firm may have nobody fresher and hiding them would answer a different question. Nothing is ranked and no best match is returned: the result carries the four things it cannot see — who the client already knows and trusts; who was on the call last week — and describeMatch says so in the sentence. Read by somebody without skill.view, the same data yields 0 candidates and reports 5 unreadable rows, so a shortlist shortened by a permission announces itself instead of looking like an empty firm; Amolak reading it still finds himself, because a person's own rows are never withheld from them.",
-      "stops": "at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers \"who could do this\" only once somebody states what \"this\" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity.ts refuses to make.",
+      "stops": "at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers \"who could do this\" only once somebody states what \"this\" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity/capacity.ts refuses to make.",
       "severity": "—",
       "impact": "Capacity could say whether a plan was possible and never who should be on it. This closes one of the three gaps capacity.ts names — skill — and leaves the other two, client relationship and who was on the call last week, absent and stated as absent rather than quietly assumed away."
     },
@@ -889,7 +909,7 @@
       "expected": "Scope is recorded before it is agreed, only agreed lines count toward the total, and the total is compared with the contract rather than enforced against it.",
       "verdict": "PASS",
       "actual": "Six lines of scope: four agreed, two recorded and not yet agreed. Only the agreed work counts toward the total — 740h, with the unagreed 900h reported beside it rather than added in, because a line somebody typed while reading a draft is not scope and its hours must not reach a figure that gets compared with a contract. That comparison is made and never enforced: against a 1,000h contract it says \"contract carries more than the scope does.\", and against 500h it says the agreed scope is more than was sold. Both are findings for a person, not refusals — a firm entering forty deliverables passes through every intermediate total on the way. An assumption cannot carry hours (\"A assumption is a statement about the agreement, not work somebody does, so it carries no hours.\"). Scope is one level deep: a criterion hangs off the deliverable it judges and reads directly beneath it, and hanging one off another criterion is refused, which is what stops a scope list quietly becoming a work breakdown.",
-      "stops": "at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.",
+      "stops": "at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/planning/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.",
       "severity": "—",
       "impact": "What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from."
     },
@@ -1216,7 +1236,7 @@
     {
       "id": "PF3",
       "title": "healthScore sums count × configured weight per concern, bands at the thresholds (amber inclusive), prints every non-zero term, treats stale as presence not days, honours an exclusion list, and setHealthScore validates and merges",
-      "expected": "lib/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
+      "expected": "lib/planning/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
       "verdict": "PASS",
       "actual": "3 overdue×3 + 1 blocked×2 + stale(14d)×1 = 12 red; empty = 0 green; 2 blocked = 4 amber (inclusive); 2 unowned = 2 green; capacity excluded leaves 3 with excluded=[capacity]; setHealthScore merges a partial patch, refuses a negative weight and red ≤ amber, and reports a no-op",
       "stops": "",
@@ -2736,7 +2756,7 @@
     {
       "id": "HOL4",
       "title": "The Overview due date carries a visible caveat when the owner is on approved leave inside the window — the date itself is never touched",
-      "expected": "ownerLeaveCaveat (lib/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
+      "expected": "ownerLeaveCaveat (lib/capacity/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
       "verdict": "PASS",
       "actual": "overlap found 2026-08-18–2026-08-19; no owner and too-early-due-date both null; a self-requested leave changed nothing (still 2026-08-18); the due date itself stayed 2026-08-20",
       "stops": "",

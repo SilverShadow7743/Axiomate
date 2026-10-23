@@ -1,5 +1,5 @@
 import { ISSUE_STATUSES, type IssueStatus, type ScheduleRow } from './types'
-import { checkTransition, type StatusPolicy } from './statusPolicy'
+import { checkTransition, type StatusPolicy } from './planning/statusPolicy'
 
 /**
  * The board: the register grouped by status, and the rule for what a drag may do.

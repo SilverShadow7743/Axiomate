@@ -26,13 +26,13 @@ hunts for the E2-style Configuration → Permissions fix.
 
 ## Step 1 — the pure module, scenario-proven before any I/O exists
 
-**Files:** `lib/discussion.ts` (new), `scripts/scenario-validation.ts`, `data/validation.json`.
+**Files:** `lib/comms/discussion.ts` (new), `scripts/scenario-validation.ts`, `data/validation.json`.
 
 - Types `DiscussionThread`, `DiscussionMessage`, `DiscussionFollow` (plain interfaces — the
-  Prisma models come later and the mappers translate). **No import from `lib/chat.ts`** — that
+  Prisma models come later and the mappers translate). **No import from `lib/comms/chat.ts`** — that
   is the assistant, and its `ChatMessage` type must not appear here.
 - `recipientsFor(followers, authorId, authorName, mentions)` — the notification split for one
-  post: mention recipients (via `mentionsIn` from `lib/mentions.ts` — verified export) get the
+  post: mention recipients (via `mentionsIn` from `lib/comms/mentions.ts` — verified export) get the
   `mention` kind; followers minus the author minus anyone already mentioned get the `chat`
   kind. **Mention wins: one record per person per message.**
 - `autoFollowsAt(thread birth, author, issueOwner?)` — author always; the issue owner (resolved
@@ -40,7 +40,7 @@ hunts for the E2-style Configuration → Permissions fix.
 - `mailConversations(inbound rows, outbound notes, issueId)` — the record's exchange: inbound
   `InboundMail` grouped by `conversationId` (null conversationId rows listed flat, never
   dropped — intake-form rows have none), interleaved in time with **outbound replies, which
-  live as notes** (`outboundNoteBody` — verified: `lib/outbound.ts` records sends as issue
+  live as notes** (`outboundNoteBody` — verified: `lib/comms/outbound.ts` records sends as issue
   notes, there is no outbound mail table; the view marks them "sent to client").
 - Scenarios: **E3A** (recipient split: mention beats follow, author never notified, follower
   set derives), **E3B** (auto-follow rules at birth and on post), **E3C** (mail grouping:
@@ -77,7 +77,7 @@ classifier blocks — the established pattern) then `npx prisma migrate status` 
 ## Step 3 — the server module, the notify-kind extension, and the proof — one commit
 
 **Files:** `lib/db/discussion.ts` (new), `lib/workspace.ts` (notify arm + Action union),
-`lib/notifications.ts`, `components/Inbox.tsx` (prefs row), `scripts/discussion-proof.ts`
+`lib/comms/notifications.ts`, `components/comms/Inbox.tsx` (prefs row), `scripts/discussion-proof.ts`
 (new), `package.json` (`"audit:discussion"`).
 
 **3a — the notify arm learns a kind.** The `notify` action gains `kind?: NotificationKind`;
@@ -147,8 +147,8 @@ production after step 6's deploy: an unauthenticated `curl -s -X POST` → 401 w
 
 ## Step 5 — the UI
 
-**Files:** `components/DiscussionTab.tsx` (new), `components/DetailPanel.tsx`,
-`components/MailLog.tsx`, `components/IssueWorkspace.tsx`.
+**Files:** `components/comms/DiscussionTab.tsx` (new), `components/DetailPanel.tsx`,
+`components/comms/MailLog.tsx`, `components/IssueWorkspace.tsx`.
 
 - `DiscussionTab` (one component, both scopes): fetch on mount, 15s poll **only while
   mounted/visible**, merge by message id — **the poll must never reset the compose box or
@@ -223,7 +223,7 @@ has tuned an automation preference, and scenario NP1 is the tripwire: it must pa
    fallback, at thread birth only.
 6. Mention wins over follow: one record per person per message — `recipientsFor` owns this and
    E3A pins it.
-7. `lib/discussion.ts` and `lib/db/discussion.ts` import nothing from `lib/chat.ts`.
+7. `lib/comms/discussion.ts` and `lib/db/discussion.ts` import nothing from `lib/comms/chat.ts`.
 8. MailLog keeps the flat list for null `conversationId` rows (the intake form writes none).
 9. Every `lib/db/discussion.ts` query runs under `withTenant` AND writes `tenantId` at the
    call site — the tenancy audit is a text scan and must see it.
@@ -236,7 +236,7 @@ has tuned an automation preference, and scenario NP1 is the tripwire: it must pa
 
 ## Commit boundaries
 
-1. Pure `lib/discussion.ts` + E3A–E3C + `data/validation.json`.
+1. Pure `lib/comms/discussion.ts` + E3A–E3C + `data/validation.json`.
 2. Schema + migration + RLS + mappers + scrub entries — stands alone (carries the migration).
 3. Server module + notify-kind + `'chat'` kind/prefs row + discussion proof — one commit; the
    proof lands WITH the write path it nets.

@@ -7,13 +7,13 @@ verdict per reviewer — real, but a single question, not a form. Neither genera
 
 ## The conflict, precisely
 
-`lib/goals.ts`'s own rule, stated for a different feature but binding here too:
+`lib/planning/goals.ts`'s own rule, stated for a different feature but binding here too:
 
 > *"Nobody types the progress... A goal at 80% that has been 80% for a month is the normal state
 > of such a screen... a measure may only exist if its source can be named."*
 
 A generic form builder that lets somebody add a "% complete" or "progress" question type
-reintroduces exactly the thing `lib/goals.ts` refused — a number a person types, that drifts from
+reintroduces exactly the thing `lib/planning/goals.ts` refused — a number a person types, that drifts from
 reality in one direction, with no record behind it. The same objection `discipline`
 (`IssueRecord.discipline`) already settled for classification applies to progress: a field the
 UI cannot tell from a person's honest judgement is not safe to build.
@@ -33,7 +33,7 @@ them can encode "how much of this is done," because a form is never the record o
 thing's completion — it is the record of a point-in-time capture, closer to a note with structure
 than to a status. **Refused explicitly, not by omission:** a template question whose label matches
 `/progress|%\s*complete|completion/i` is rejected at save time with a message naming
-`lib/goals.ts`'s own reasoning, so the refusal teaches the person asking rather than just blocking
+`lib/planning/goals.ts`'s own reasoning, so the refusal teaches the person asking rather than just blocking
 them.
 
 ## Schema
@@ -103,7 +103,7 @@ time fact; correcting it is a new response, the same "withdraw and re-raise" pat
 No conditional logic (question N shown only if question 2 was "yes") — every question in a
 template is asked every time; branching is a v2 problem this gap survey did not ask for. No
 scoring or pass/fail computed from answers — that is exactly the "a number nobody can argue with
-because the weights are hidden" objection `lib/portfolio.ts` already raised about a blended
+because the weights are hidden" objection `lib/planning/portfolio.ts` already raised about a blended
 score, applied to forms instead of engagements. No public-facing form builder for clients — the
 intake page stays the one external capture surface; a form template is internal, gated the same
 as everything else `config.manage` reaches.

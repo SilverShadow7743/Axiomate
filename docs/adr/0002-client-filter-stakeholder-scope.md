@@ -20,7 +20,7 @@ it is not answered here. The candidates in the data, read on 2026-09-05:
 | Live `Allocation` | `projectId`, `startDate`/`endDate`, `percentage`, `deletedAt` (`prisma/schema.prisma:622`) | `personId` optional, name fallback | project | A capacity fact read as an attention fact, against the sibling separation in `CLAUDE.md`; "live" needs a date rule the code does not define for this purpose |
 | Named on the `Engagement` | `engagementLeader`, `projectManager`, `clientSponsor` are `String @default("")` (`schema.prisma:543-546`) | none, free-text names | engagement | A name-only join, or a migration to ids; then a walk down to every project under the engagement |
 | Role scoped to the project | No such permission concept; `OrgRole` grants are global, `ScopeOverride` carries no roles or people | n/a | n/a | Collapses into `ProjectMember.projectRoleId`, which is documented as descriptive only |
-| `ProjectMember` | `projectId`, `personId` required, `projectRoleId`, `removedAt` (`schema.prisma:652`; `lib/staffing.ts`) | required | project | None new: it is what the read gate already enforces (`redactForReader`, `projectView`, `memberProjectIdsFor`) |
+| `ProjectMember` | `projectId`, `personId` required, `projectRoleId`, `removedAt` (`schema.prisma:652`; `lib/capacity/staffing.ts`) | required | project | None new: it is what the read gate already enforces (`redactForReader`, `projectView`, `memberProjectIdsFor`) |
 | Named on the SOW (A4) | `Sow` has no person reference | none | n/a | Not computable today |
 
 The requester's counter-example, "a client sponsor has no allocation", does not separate these:

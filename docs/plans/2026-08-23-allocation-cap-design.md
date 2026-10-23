@@ -5,7 +5,7 @@
 ## What exists, and what this changes
 
 The capacity judgement is already honest and stays untouched: `capacityFor`
-(`lib/capacity.ts`) computes remaining **hours** from the person's working pattern across
+(`lib/capacity/capacity.ts`) computes remaining **hours** from the person's working pattern across
 overlapping allocations and commitments, so "overallocated" means genuinely more work than
 days. A single allocation is already capped at 100% by `checkAllocation`.
 
@@ -54,7 +54,7 @@ the hard mode's refusal of it is the server half of both-halves; the UI half is 
 
 ### 3. The screens
 
-- **The allocate form** (`components/CapacityPanel.tsx`, the one surface — DetailPanel
+- **The allocate form** (`components/capacity/CapacityPanel.tsx`, the one surface — DetailPanel
   composes it): "Commit anyway" renders only under advisory. Under hard, the refusal
   stands alone and the form keeps its values so the person can lower the share or shorten
   the window in place.

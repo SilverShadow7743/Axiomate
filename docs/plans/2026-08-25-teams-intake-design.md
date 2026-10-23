@@ -58,7 +58,7 @@ Reuses the existing `InboundMail` table as-is rather than a new one: `mailbox` a
 address.
 
 **5. No reply-threading.** In email, `conversationId` identifies one thread among many in a
-mailbox — the signal `matchingIssue()` (`lib/intake.ts`) already matches replies on. In a Teams
+mailbox — the signal `matchingIssue()` (`lib/comms/intake.ts`) already matches replies on. In a Teams
 group chat there is usually only one conversation, start to finish; reusing `conversationId` as-is
 would attach every single @mention in the chat to whichever issue the first one ever created. So
 this path never calls `matchingIssue()` at all — every accepted @mention goes straight from

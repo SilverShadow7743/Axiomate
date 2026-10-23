@@ -1,10 +1,10 @@
 import { can, directoryPersonFor, isExempt } from '../access'
 import { clientView } from '../clientBoundary'
-import { redactLeaveReasons } from '../availability'
+import { redactLeaveReasons } from '../capacity/availability'
 import { memberProjectIdsFor, projectView } from '../projectBoundary'
-import { personalEventsFor } from '../personalEvents'
-import { personalActionsFor } from '../personalActions'
-import { redactPersonSkill } from '../skills'
+import { personalEventsFor } from '../personal/personalEvents'
+import { personalActionsFor } from '../personal/personalActions'
+import { redactPersonSkill } from '../capacity/skills'
 import 'server-only'
 import { initWorkspace, type WorkspaceState } from '../workspace'
 import { loadSeed, type SeedFile } from '../data'
@@ -355,7 +355,7 @@ function redactForReader(state: WorkspaceState, actor: Actor): WorkspaceState {
    */
   const personalEvents = personalEventsFor(state.personalEvents, mine)
   // The same absolute rule, the same placement, for a person's own to-dos — see
-  // lib/personalActions.ts. Every row that is not the reader's own is withheld here, before
+  // lib/personal/personalActions.ts. Every row that is not the reader's own is withheld here, before
   // any branch below could be reached for out of habit.
   const personalActions = personalActionsFor(state.personalActions, mine)
 

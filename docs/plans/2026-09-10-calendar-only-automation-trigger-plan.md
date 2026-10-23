@@ -32,7 +32,7 @@ added, `planCalendarActions` written.**
   For each rule in `state.model.automationRules` whose `on.kind === 'calendar'`: compute
   `dueOccurrence({ ...rule, lastRaisedOn: rule.lastFiredOn ?? null } as unknown as Recurrence,
   today)` — `dueOccurrence` takes a `Recurrence`-shaped object but only reads `.enabled`,
-  `.cadence` and `.lastRaisedOn` (`lib/recurrence.ts:96-102`), so a minimal object satisfying
+  `.cadence` and `.lastRaisedOn` (`lib/planning/recurrence.ts:96-102`), so a minimal object satisfying
   those three fields is enough; do not construct a fake full `Recurrence` with invented `id`/
   `name`/`scopeId`. If an occurrence is due, resolve audience via the existing
   `resolveAudience(step.audience ?? '', state, undefined)` (issue is `undefined`, which already

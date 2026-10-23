@@ -30,12 +30,12 @@ Settled with the user during this design's own conversation, each through an exp
 
 ## The engine: generalisation, not invention
 
-`lib/capacity.ts`'s `capacityFor` already computes `gross − commitments − allocations` over a
+`lib/capacity/capacity.ts`'s `capacityFor` already computes `gross − commitments − allocations` over a
 window — the availability formula minus holidays and minus the meetings term. E1 does not build
 a second engine beside it (two answers to "who has time" is the drift the parent design
 forbids); it extracts the one engine out of it:
 
-- `lib/availability.ts` exports `availabilityFor(person, window, deps)`, grown from
+- `lib/capacity/availability.ts` exports `availabilityFor(person, window, deps)`, grown from
   `capacityFor`'s arithmetic. `capacityFor` becomes its first consumer; `planCheck`, the
   assignment-availability warning, the day-warning on time entry, and the new forecast all
   consult the same function.

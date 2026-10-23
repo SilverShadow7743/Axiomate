@@ -29,7 +29,7 @@
         "name": "filter-logic",
         "owns": [
           "lib/types.ts",
-          "lib/tree.ts",
+          "lib/planning/tree.ts",
           "lib/savedViews.ts"
         ]
       },
@@ -69,7 +69,7 @@
     "steps": [
       {
         "n": 1,
-        "title": "NO_CLIENT_CHOSEN sentinel on FilterState.client (lib/types.ts, beside EMPTY_FILTERS at :381): an exported typed constant that is neither 'All' nor the Discipline facet's 'None' (BR7); EMPTY_FILTERS.client rests on it; matchesFilters (lib/tree.ts:387) returns false for every issue row at the sentinel and visibleRows (lib/tree.ts:489) keeps no structural row either (BR2 deny-by-default); the discipline 'None' branch at lib/tree.ts:394 and every 'All' branch are left meaning what they mean today until step 5 is unblocked. OQ2 changes how often this state is seen, not what it is, so it does not block this step. Highest regression risk: every consumer that compares to the literal 'All' and parseSavedFilters' spread of EMPTY_FILTERS pick the sentinel up silently, which is why steps 1, 2 and 9 ship in one commit.",
+        "title": "NO_CLIENT_CHOSEN sentinel on FilterState.client (lib/types.ts, beside EMPTY_FILTERS at :381): an exported typed constant that is neither 'All' nor the Discipline facet's 'None' (BR7); EMPTY_FILTERS.client rests on it; matchesFilters (lib/planning/tree.ts:387) returns false for every issue row at the sentinel and visibleRows (lib/planning/tree.ts:489) keeps no structural row either (BR2 deny-by-default); the discipline 'None' branch at lib/planning/tree.ts:394 and every 'All' branch are left meaning what they mean today until step 5 is unblocked. OQ2 changes how often this state is seen, not what it is, so it does not block this step. Highest regression risk: every consumer that compares to the literal 'All' and parseSavedFilters' spread of EMPTY_FILTERS pick the sentinel up silently, which is why steps 1, 2 and 9 ship in one commit.",
         "workstream": "filter-logic",
         "verify_command": "npx tsc --noEmit && npx tsx -e \"import('./lib/types.ts').then(m=>{const s=m.NO_CLIENT_CHOSEN;if(typeof s!=='string'||s==='All'||s==='None'||m.EMPTY_FILTERS.client!==s)process.exit(1);console.log('sentinel',JSON.stringify(s))})\"",
         "risk": "high",
@@ -101,7 +101,7 @@
       },
       {
         "n": 5,
-        "title": "BLOCKED ON OQ3: the callers - facetsOf (lib/tree.ts:351), matchesFilters and visibleRows take the stakeholder project set from memberProjectIdsFor (step 3, OQ1 now answered) so that 'All' means scoped-All (AC2, AC3, AC4, AC5), with project ancestry through projectOf/tiersOf and never a literal kind. For a non-exempt seat the payload is already scoped by the read gate, so what this step actually changes is decided by the questions still open: OQ3 (does scoped-All narrow the dropdown options, the rows, or both), OQ4 (is an explicit client selection scoped), OQ10 (unresolved actors: empty-with-reason or today's view) and OQ11 (exempt seats; records with no project-tier ancestor). Without those, the only definite content is what CD3 already proves.",
+        "title": "BLOCKED ON OQ3: the callers - facetsOf (lib/planning/tree.ts:351), matchesFilters and visibleRows take the stakeholder project set from memberProjectIdsFor (step 3, OQ1 now answered) so that 'All' means scoped-All (AC2, AC3, AC4, AC5), with project ancestry through projectOf/tiersOf and never a literal kind. For a non-exempt seat the payload is already scoped by the read gate, so what this step actually changes is decided by the questions still open: OQ3 (does scoped-All narrow the dropdown options, the rows, or both), OQ4 (is an explicit client selection scoped), OQ10 (unresolved actors: empty-with-reason or today's view) and OQ11 (exempt seats; records with no project-tier ancestor). Without those, the only definite content is what CD3 already proves.",
         "workstream": "filter-logic",
         "verify_command": "echo blocked on OQ3",
         "risk": "high",

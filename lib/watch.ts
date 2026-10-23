@@ -1,9 +1,9 @@
 import { workingDaysBetween } from './dates'
-import { computeHealth, isTerminal } from './schedule'
-import { summarise } from './estimation'
-import { planCheck, profilesAt } from './capacity'
-import { sowPosition } from './sow'
-import { buildTree } from './tree'
+import { computeHealth, isTerminal } from './planning/schedule'
+import { summarise } from './commercial/estimation'
+import { planCheck, profilesAt } from './capacity/capacity'
+import { sowPosition } from './commercial/sow'
+import { buildTree } from './planning/tree'
 import { holidaySetOf } from './config'
 import type { WorkspaceState } from './workspace'
 
@@ -156,7 +156,7 @@ export function observe(
 
     /*
      * Every piece of sub-work closed, and nobody told. `row.percentComplete` already rolls
-     * this up for the screen (`rollUp`, lib/schedule.ts) — this is the same fact, but noticed
+     * this up for the screen (`rollUp`, lib/planning/schedule.ts) — this is the same fact, but noticed
      * rather than merely displayed. Direct children only: an issue parented on another issue
      * is exactly how Sub-Work sits under Work (lib/workspace.ts's `create` arm). Zero children
      * raises nothing — a leaf has no sub-work to be "all closed", and treating an empty set as

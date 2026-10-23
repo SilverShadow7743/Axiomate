@@ -7,7 +7,7 @@ aside: *"this app has no 'My Profile' screen yet... where else [`managerId`] sur
 question."* Checked before designing anything: `Person` (`lib/config.ts:220`) now carries name,
 email, roleIds, clientScopeId, grade, track, developingToward, source and managerId — nine facts
 about somebody, all enterable through the People config card, none of them viewable anywhere
-except that one admin-gated table row. `Skill`/`PersonSkill` (`lib/skills.ts`) are recorded per
+except that one admin-gated table row. `Skill`/`PersonSkill` (`lib/capacity/skills.ts`) are recorded per
 person and already redacted per reader at the boundary, but the only screen that shows them is
 the Skills config tab, one flat table across everyone.
 

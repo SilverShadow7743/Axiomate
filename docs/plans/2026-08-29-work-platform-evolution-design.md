@@ -64,7 +64,7 @@ entered status; no estimate, per the vision's derived-data table.
 Adopted exactly as the vision's section 15 states it — estimates entered at Work, actuals
 summed upward, progress rolled up, status/forecast/risk derived — with **one transitional
 amendment**: every existing `TimeEntry` attaches at Work level (`TimeEntry.issueId`,
-`lib/time.ts:53`) and is attested history that is never rewritten. New entries attach to Tasks.
+`lib/time/time.ts:53`) and is attested history that is never rewritten. New entries attach to Tasks.
 During transition:
 
     Work.actual = Σ(task-level time) + Σ(legacy work-level time)

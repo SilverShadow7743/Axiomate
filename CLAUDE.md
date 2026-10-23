@@ -17,11 +17,11 @@ Four distinct layers, easy to collapse into each other by accident. Don't.
    it. Allocation ≠ assignment; a change to one never implies a change to the other.
 4. **Timesheet** (`TimeEntry`, always `issueId`-scoped, optional `activityId` for task detail;
    `Timesheet` is the weekly `Submitted/Approved/Rejected` wrapper) — **actual** effort, checked
-   against capacity via `lib/timeWindow.ts` (wired live into `addTime`) and the freeze rule
-   (`lib/timesheet.ts`'s `isFrozen`), not a projection of allocation or assignment.
+   against capacity via `lib/time/timeWindow.ts` (wired live into `addTime`) and the freeze rule
+   (`lib/time/timesheet.ts`'s `isFrozen`), not a projection of allocation or assignment.
 
 **Allocation is project-level. Assignment is work-level. Timesheet is actual-level.** Capacity
-(`lib/availability.ts`) is computed from allocations plus the versioned working pattern minus
+(`lib/capacity/availability.ts`) is computed from allocations plus the versioned working pattern minus
 leave/holidays/meetings — never from assignments or timesheets directly. `Allocation`,
 `Commitment`, `TimeEntry` and `Timesheet` all carry a `person: String` field alongside an
 optional `personId` — this is deliberate, not a gap: `person` is the display name (and, for

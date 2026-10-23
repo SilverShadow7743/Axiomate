@@ -3,7 +3,7 @@
 Follows `docs/plans/2026-08-24-docked-timesheet-inbox-design.md`, approved. The design's own
 words: "Extends `MyWorkPanel`'s docked prop... to `TimesheetPanel` and `Inbox` rather than
 inventing a new pattern" — every step below is checked against that existing, already-shipped
-implementation (`components/MyWorkPanel.tsx`) rather than invented fresh.
+implementation (`components/personal/MyWorkPanel.tsx`) rather than invented fresh.
 
 No pure-logic-first ordering applies here in the usual sense — this is UI wiring over already-
 correct business logic, not new domain rules. The ordering principle instead follows dependency:
@@ -27,7 +27,7 @@ buttons (they render; nothing in the main pane responds to them until step 4).
 
 ## Step 2 — `TimesheetPanel` gains `docked`
 
-**Touches:** `components/TimesheetPanel.tsx`.
+**Touches:** `components/time/TimesheetPanel.tsx`.
 
 Four changes, each mirroring the corresponding line in `MyWorkPanel.tsx`:
 
@@ -52,7 +52,7 @@ to, which the existing WG1 scenario already covers.
 
 ## Step 3 — `Inbox` gains `docked`
 
-**Touches:** `components/Inbox.tsx`.
+**Touches:** `components/comms/Inbox.tsx`.
 
 The same shape as step 2, with one real difference worth naming rather than glossing over:
 `Inbox` today is ONE component that is both the trigger (the bell button) and the content (the

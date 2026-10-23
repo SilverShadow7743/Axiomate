@@ -35,7 +35,7 @@
     ],
     "files": [
       { "path": "lib/types.ts", "workstream": "filter-logic" },
-      { "path": "lib/tree.ts", "workstream": "filter-logic" },
+      { "path": "lib/planning/tree.ts", "workstream": "filter-logic" },
       { "path": "lib/filterPresentation.ts", "workstream": "filter-logic" },
       { "path": "lib/projectBoundary.ts", "workstream": "stakeholder-logic" },
       { "path": "lib/workspace.ts", "workstream": "preference-storage" },

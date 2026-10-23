@@ -50,7 +50,7 @@
     "steps": [
       {
         "n": 1,
-        "title": "app/api/mail/file/route.ts: set status 409 on the dedupe-conflict response, status 409 on create-refused, status 404 on issue-not-found, status 409 on attach-refused. Confirm components/InboxPanel.tsx reads data.ok from the parsed body, not res.ok/status.",
+        "title": "app/api/mail/file/route.ts: set status 409 on the dedupe-conflict response, status 409 on create-refused, status 404 on issue-not-found, status 409 on attach-refused. Confirm components/comms/InboxPanel.tsx reads data.ok from the parsed body, not res.ok/status.",
         "workstream": "mail-file",
         "verify_command": "npx tsc --noEmit && npm run validate:scenarios",
         "risk": "low",

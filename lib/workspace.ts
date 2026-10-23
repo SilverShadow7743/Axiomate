@@ -18,8 +18,8 @@
  * trail exists for — so it goes through the same reducer and lands in the same History.
  */
 
-import type { Blueprint } from './blueprint'
-import { dueOccurrence, subjectFor, type Recurrence } from './recurrence'
+import type { Blueprint } from './commercial/blueprint'
+import { dueOccurrence, subjectFor, type Recurrence } from './planning/recurrence'
 import type { RichDoc } from './richText'
 import { isEmptyRichDoc, richDocsEqual, richTextToPlainText, wrapPlainText } from './richText'
 import type {
@@ -46,7 +46,7 @@ export type { NodeKind }
 import type { EvidenceItem, EvidenceKind, SnapshotPurpose } from './evidence'
 import { DEFAULT_NOTE_TYPE, type IssueNote, type NoteType } from './notes'
 import { ACTION_PERMISSIONS, MACHINE_ROLE_ID, accessProblems, can, directoryIdByName, directoryPersonFor, isStaffedOn, permissionForAction, rolesFor, rolesGrant, type AccessPolicy, type PermissionKey } from './access'
-import { rateProblem, type PersonRate, type RateKind } from './rates'
+import { rateProblem, type PersonRate, type RateKind } from './commercial/rates'
 import {
   LOG_FOR_OTHERS,
   backdated,
@@ -57,8 +57,8 @@ import {
   timePolicyProblem,
   type TimePolicy,
   type WeekState,
-} from './timeWindow'
-import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './skills'
+} from './time/timeWindow'
+import { checkPersonSkill, type PersonSkill, type Requirement, type Skill, type SkillLevel, type SkillSource } from './capacity/skills'
 import { checkCustomFieldDef, type CustomFieldDef, type CustomFieldType } from './customFields'
 import {
   duplicateOf,
@@ -83,7 +83,7 @@ import {
   nextSequence,
   type AcceptanceState,
   type Milestone,
-} from './milestone'
+} from './planning/milestone'
 import { takeSnapshot, type Snapshot } from './snapshot'
 import {
   checkApplication,
@@ -100,7 +100,7 @@ import {
   type Invoice,
   type InvoiceLineItem,
   type InvoiceStatus,
-} from './invoice'
+} from './commercial/invoice'
 import { checkChecklistItem, nextChecklistSequence, type ChecklistItem } from './checklist'
 import {
   checkChange,
@@ -108,7 +108,7 @@ import {
   decideChangeProblem,
   statusAfterDecision,
   type ChangeRequest,
-} from './changeRequest'
+} from './commercial/changeRequest'
 import {
   isFrozen,
   frozenMessage,
@@ -121,19 +121,19 @@ import {
   statusAfter,
   type Attester,
   type Timesheet,
-} from './timesheet'
+} from './time/timesheet'
 import { canEditNote } from './permissions'
 import {
   checkTransition,
   policyProblems,
   type StatusPolicy,
-} from './statusPolicy'
-import { checkEntry, type TimeActivity, type TimeEntry } from './time'
-import { overlapProblem, type Version } from './versioning'
-import { memberProblem, type ProjectMember, type ProjectRole } from './staffing'
-import { eventProblem, type PersonalEvent } from './personalEvents'
-import { actionProblem, type PersonalAction } from './personalActions'
-import type { InboundMail } from './intake'
+} from './planning/statusPolicy'
+import { checkEntry, type TimeActivity, type TimeEntry } from './time/time'
+import { overlapProblem, valueAt, stamp, type Version } from './versioning'
+import { memberProblem, type ProjectMember, type ProjectRole } from './capacity/staffing'
+import { eventProblem, type PersonalEvent } from './personal/personalEvents'
+import { actionProblem, type PersonalAction } from './personal/personalActions'
+import type { InboundMail } from './comms/intake'
 import {
   allocationPolicyProblem,
   capacityFor,
@@ -141,18 +141,19 @@ import {
   checkAllocation,
   defaultProfile,
   describeCapacity,
+  WORKING_PATTERN,
   type Allocation,
   type AllocationPolicy,
   type Commitment,
   type CommitmentKind,
   type ResourceProfile,
-} from './capacity'
+} from './capacity/capacity'
 import {
   availabilityForAssignment,
   availabilityNote,
   refusesAssignment,
-} from './assignment'
-import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './sow'
+} from './capacity/assignment'
+import { checkSow, LIVE_SOW_STATUSES, type Sow, type SowStatus } from './commercial/sow'
 import type { ClientMilestoneLine } from './clientBoundary'
 import { deriveEvents, type DomainEvent, type EventType } from './events'
 import type { WatchPolicy } from './watch'
@@ -166,9 +167,9 @@ import {
   type WatchDiff,
 } from './watch'
 import { planActions, type AutomationRule, type RuleMiss } from './automation'
-import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './notifications'
-import { mentionsIn } from './mentions'
-import { raidProblem } from './raid'
+import { deliveryFor, modeFor, notificationPrefProblem, type Channel, type Delivery, type Notification, type NotificationKind, type NotificationMode } from './comms/notifications'
+import { mentionsIn } from './comms/mentions'
+import { raidProblem } from './planning/raid'
 import { reviewStateOf, type DocumentReview, type ReviewVerdict } from './proofing'
 import {
   approvalsFor,
@@ -187,12 +188,12 @@ import {
   type EstimateRevision,
   type IssueEstimate,
   type SizeBand,
-} from './estimation'
-import { blankEngagement, type EngagementDetail } from './engagement'
+} from './commercial/estimation'
+import { blankEngagement, type EngagementDetail } from './commercial/engagement'
 import { addWorkingDays, daysBetween, formatIso, workingDaysBetween } from './dates'
-import { meetingProblem, type Meeting, type MeetingScopeKind } from './meetings'
-import { commitmentCounts } from './availability'
-import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './schedule'
+import { meetingProblem, type Meeting, type MeetingScopeKind } from './personal/meetings'
+import { commitmentCounts } from './capacity/availability'
+import { BLOCKED_STATUSES, isTerminal, STATUS_PROGRESS } from './planning/schedule'
 import type { Actor } from './actor'
 import { type IntakeForm,
   KIND_LABEL_KEY,
@@ -238,7 +239,7 @@ import { type IntakeForm,
   nextCareerOptionId,
   nextEmployeeId,
 } from './config'
-import { MEASURES, type Goal } from './goals'
+import { MEASURES, type Goal } from './planning/goals'
 
 /* ================================================================== *
  * Record shapes
@@ -295,6 +296,15 @@ export interface IssueRecord {
   /** A real Application this issue is about, when one has been recorded. Additive to `module`
    *  above, never a replacement — see `./application`. */
   applicationId: string | null
+  /**
+   * Which milestone this issue's effort counts toward, when the SOW it is attributed to (via
+   * its project's `sowId`) has more than one. Null means "not attributed to a specific
+   * milestone" — the default for every issue and for any SOW with only one milestone, where
+   * the distinction carries no information. Set by `setIssueMilestone`, which refuses a
+   * milestone belonging to a different SOW than the one the issue's project already names. See
+   * docs/plans/2026-09-20-milestone-issue-attribution-design.md.
+   */
+  milestoneId: string | null
   /** What this piece of work needs — read by `candidatesFor` (`./skills`) to answer "who could
    *  do this." Empty is the honest default; typing one is a person's judgement, never inferred. */
   requiredSkills: Requirement[]
@@ -321,7 +331,7 @@ export interface IssueRecord {
    */
   needsTriage?: boolean
   /** A risk's judged halves, 1–5 each; null = not yet judged, never a default. Exposure is
-   *  computed from these and NEVER stored — see `lib/raid.ts`. */
+   *  computed from these and NEVER stored — see `lib/planning/raid.ts`. */
   riskLikelihood?: number | null
   riskImpact?: number | null
   /** A decision's recorded outcome. Meaningful on Decision-typed records; plain text. */
@@ -402,7 +412,7 @@ export interface WorkspaceState {
   estimateRevisions: Record<string, EstimateRevision>
   /** Hours spent, against the work they were spent on. See `./time`. */
   timeEntries: Record<string, TimeEntry>
-  /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/timesheet.ts. */
+  /** Weeks presented for approval. The hours stay in `timeEntries`; see lib/time/timesheet.ts. */
   timesheets: Record<string, Timesheet>
   /**
    * What people cost and are charged at.
@@ -753,6 +763,8 @@ export function initWorkspace(
       discipline: i.discipline ?? '',
       // Null, not guessed — same reasoning as discipline. The seed predates this field.
       applicationId: i.applicationId ?? null,
+      // Null, not guessed — same reasoning again. The seed predates milestone attribution too.
+      milestoneId: null,
       // Empty, not guessed — same reasoning as discipline. The seed predates this field too.
       requiredSkills: [],
       // Empty, not guessed — same reasoning again. The seed predates custom fields entirely.
@@ -1251,7 +1263,7 @@ export type Action =
       now: string
     }
   | { t: 'removeMilestone'; id: string; now: string }
-  /** Say the work has landed. Deliberately separate from accepting it — see `lib/milestone.ts`. */
+  /** Say the work has landed. Deliberately separate from accepting it — see `lib/planning/milestone.ts`. */
   | { t: 'deliverMilestone'; id: string; now: string }
   | {
       t: 'decideMilestone'
@@ -1372,6 +1384,9 @@ export type Action =
   | { t: 'archiveSow'; id: string; now: string }
   /** Which SOW a project is delivered under. `sowId: null` detaches it. */
   | { t: 'attributeToSow'; nodeId: string; sowId: string | null; now: string }
+  /** Which milestone an issue's effort counts toward, one level finer than `attributeToSow`.
+   *  See `docs/plans/2026-09-20-milestone-issue-attribution-design.md`. */
+  | { t: 'setIssueMilestone'; issueId: string; milestoneId: string | null; now: string }
   /** A point-in-time copy of a project or engagement's planned dates and cost. See `./snapshot`. */
   | { t: 'takeSnapshot'; nodeId: string; now: string }
   /* ---- CAPACITY ---- */
@@ -1618,7 +1633,7 @@ export type ConfigOp =
   /** Which projects a defined field is actually live on. Replaces the list wholesale. */
   | { k: 'setCustomFieldProjects'; id: string; projectIds: string[] }
   | { k: 'setSla'; patch: Partial<SlaPolicy> }
-  /** The engagement health score's weights and RAG thresholds — see `lib/portfolio.ts`'s
+  /** The engagement health score's weights and RAG thresholds — see `lib/planning/portfolio.ts`'s
    *  `healthScore` and the F&O page-grammar design. Configuration, not code, on purpose.
    *  Partial at both levels, which is what the reducer already merges: one weight field
    *  blurring in Configuration sends one weight, not the whole table. */
@@ -1906,9 +1921,9 @@ function frozenProblem(state: WorkspaceState, person: string, date: string): str
 }
 
 /**
- * That person's week, as `lib/timeWindow.ts` names the states.
+ * That person's week, as `lib/time/timeWindow.ts` names the states.
  *
- * A translation and nothing more. `isFrozen` in `lib/timesheet.ts` remains the one place that
+ * A translation and nothing more. `isFrozen` in `lib/time/timesheet.ts` remains the one place that
  * decides whether a week is frozen — this only renames its answer for a module that describes
  * the same fact with a different vocabulary. Two modules deciding it would be two rules.
  */
@@ -1954,7 +1969,7 @@ function dayWarning(state: WorkspaceState, person: string, date: string, adding:
 /**
  * What the timesheet rules need to know about whoever is asking.
  *
- * The permissions are resolved here and passed in, so `lib/timesheet.ts` stays pure and can be
+ * The permissions are resolved here and passed in, so `lib/time/timesheet.ts` stays pure and can be
  * driven from a scenario without an operating model. `name` is the display name, because that is
  * what `TimeEntry.person` and `Timesheet.person` hold — the same name join the rest of the
  * product uses until people have keys.
@@ -2356,6 +2371,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
           // Not settable on create — an application link is added afterwards, through
           // `updateIssue`, the same way `discipline` usually is.
           applicationId: null,
+          // Same reasoning again: milestone attribution needs a SOW to already be in place,
+          // which a brand-new issue's project may not have yet — added afterwards, through
+          // `setIssueMilestone`.
+          milestoneId: null,
           // Same reasoning: nobody types a required skill in the same breath as raising the
           // work — it is added afterwards, through `updateIssue`.
           requiredSkills: [],
@@ -2636,6 +2655,9 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         // description.
         discipline: original.discipline,
         applicationId: original.applicationId,
+        // Carried, same reasoning as applicationId/discipline above: a duplicate is still the
+        // same kind of work, counting toward whatever it was already counting toward.
+        milestoneId: original.milestoneId,
         requiredSkills: original.requiredSkills,
         customFields: original.customFields,
         // Created here, so there is no earlier classification to preserve — as in `create`.
@@ -4307,13 +4329,13 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       }
 
       /*
-       * The time entry window. `lib/timeWindow.ts` was built, proven and had no production
+       * The time entry window. `lib/time/timeWindow.ts` was built, proven and had no production
        * consumer at all; this is the step the work-management design names as carrying the most
        * regression risk, because it puts refusals in front of an arm that always succeeded and
        * lands on a consultant at the end of a week.
        *
        * It replaces the freeze check that used to sit here — the verdict carries it, phrased by
-       * `lib/timesheet.ts` either way, so `addTime`, `updateTime` and `removeTime` still refuse
+       * `lib/time/timesheet.ts` either way, so `addTime`, `updateTime` and `removeTime` still refuse
        * a frozen week in the same words. What it ADDS is two refusals that nothing enforced:
        * a closed issue, and a date before the work existed to be worked on.
        *
@@ -4570,7 +4592,7 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
      * Present a week for approval.
      *
      * The sheet carries no hours. It says a person claims their week is complete, and the freeze
-     * below is what stops the entries moving underneath that claim — see lib/timesheet.ts for why
+     * below is what stops the entries moving underneath that claim — see lib/time/timesheet.ts for why
      * copying the lines onto the sheet was turned down.
      *
      * Resubmission reuses the same row rather than minting a second: a week has one timesheet,
@@ -5949,6 +5971,10 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
         decidedAt: null,
         decidedBy: null,
         reason: null,
+        // A submitted (or resubmitted) week has not been approved, so it has nothing stamped —
+        // an approved week is frozen and can never reach this arm, so `existing` here is always
+        // one that was never stamped in the first place.
+        workingPatternStamp: null,
       }
       /* The approvers hear a week is waiting — resubmissions included, since a returned week
        * coming back is exactly what a decider is waiting on. Counter continues from THIS
@@ -6015,12 +6041,28 @@ export function apply(state: WorkspaceState, a: Action, actor: Actor): OpResult 
       const problem = decideProblem(sheet, a.decision, a.reason, attester, directoryPersonFor(state.model, actor)?.id ?? null)
       if (problem) return { state, error: problem }
 
+      /*
+       * Frozen at approval, read at the week's own Monday rather than at `a.now` — the pattern
+       * that governed the work, not whatever the timeline says on whatever day somebody got
+       * round to deciding it. A rejection commits nothing, so it keeps whatever stamp the sheet
+       * already carried rather than clearing it. See
+       * docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
+       */
+      const workingPatternStamp =
+        a.decision === 'approved'
+          ? stamp(
+              sheet!.personId ? valueAt(Object.values(state.versions), WORKING_PATTERN, sheet!.personId, sheet!.weekStarting) : null,
+              a.now,
+            )
+          : sheet!.workingPatternStamp
+
       const next: Timesheet = {
         ...sheet!,
         status: statusAfter(a.decision),
         decidedAt: a.now,
         decidedBy: by,
         reason: a.decision === 'rejected' ? (a.reason ?? '').trim() : null,
+        workingPatternStamp,
       }
       /* The submitter hears the answer, rejection reason included — a timesheet reason is a
        * working instruction, not a private fact like a leave reason. */
@@ -6888,6 +6930,42 @@ Question: ${review.question}`),
           }),
         },
         message: a.sowId ? 'Attributed.' : 'Detached from the statement of work.',
+      }
+    }
+
+    case 'setIssueMilestone': {
+      const issue = state.issues[a.issueId]
+      if (!issue) return { state, error: 'That record no longer exists.' }
+      if (a.milestoneId) {
+        const milestone = state.milestones[a.milestoneId]
+        if (!milestone) return { state, error: 'That milestone no longer exists.' }
+        /*
+         * The issue's own SOW attribution — via its project's `sowId`, one level up, the same
+         * way `attributeToSow` itself works — has to match the milestone's SOW, or a variance
+         * figure would count effort against a contract that never named it.
+         */
+        const projectId = projectOf(state, a.issueId)
+        const projectSowId = projectId ? (state.nodes[projectId]?.sowId ?? null) : null
+        if (milestone.sowId !== projectSowId) {
+          return { state, error: 'That milestone belongs to a different statement of work than this issue is attributed to.' }
+        }
+      }
+      const was = issue.milestoneId ? (state.milestones[issue.milestoneId]?.name ?? issue.milestoneId) : ''
+      const now = a.milestoneId ? state.milestones[a.milestoneId]!.name : ''
+      return {
+        state: {
+          ...state,
+          issues: { ...state.issues, [a.issueId]: { ...issue, milestoneId: a.milestoneId } },
+          audit: log(actor, state, {
+            rowId: a.issueId,
+            field: 'milestone',
+            from: was,
+            to: now,
+            at: a.now,
+            by,
+          }),
+        },
+        message: a.milestoneId ? 'Attributed to the milestone.' : 'Detached from the milestone.',
       }
     }
 
@@ -9176,7 +9254,7 @@ function applyConfig(state: WorkspaceState, op: ConfigOp, now: string, actor: Ac
       * and a window that runs backwards matches nothing. All three would render as a goal sitting
       * at zero, which reads as "we are failing" rather than "this is misconfigured".
       *
-      * There is deliberately no `progress` field to write. See `lib/goals.ts`.
+      * There is deliberately no `progress` field to write. See `lib/planning/goals.ts`.
       */
      case 'upsertGoal': {
        const id = op.id ?? `GOAL_${m.seq}`

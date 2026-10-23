@@ -100,18 +100,18 @@ The home page becomes an F&O **operational workspace**: a *Summary* section of c
 *tabbed list* section, and *related links*. The tiles are the counts strip made clickable — "8
 overdue", "6 blocked", "11 done", "75 unscheduled" — each opening the list filtered to exactly
 those records, which is what an F&O tile is (a count with a query behind it). No tile carries a
-number that is not already computed by a shipped pure function (`lib/mywork.ts`, `lib/tree.ts`'s
-counts, `lib/portfolio.ts`'s concerns).
+number that is not already computed by a shipped pure function (`lib/personal/mywork.ts`, `lib/planning/tree.ts`'s
+counts, `lib/planning/portfolio.ts`'s concerns).
 
 Portfolio becomes a workspace too: one tile per engagement carrying its **health score** — the
-part of this design that reverses `lib/portfolio.ts`'s own header, and is treated below at the
+part of this design that reverses `lib/planning/portfolio.ts`'s own header, and is treated below at the
 length that reversal deserves.
 
 ### 5. The engagement health score
 
 **Decision 3 (Nishant, 10 Sep): a health score exists, because clients expect one in the packs.**
 
-`lib/portfolio.ts:17` says "There is no health score, and there will not be one," and gives its
+`lib/planning/portfolio.ts:17` says "There is no health score, and there will not be one," and gives its
 reason: *"a score is a sentence about weights nobody can see, and the weights are exactly what a
 partner would want to argue with."* That objection is not overruled here — it is the design
 constraint. A score is admissible on exactly these terms:
@@ -134,7 +134,7 @@ constraint. A score is admissible on exactly these terms:
 - **The score is derived at render, never stored** — the rule every report in `lib/reports/`
   already follows, so it cannot drift from the tree behind it.
 
-`lib/portfolio.ts`'s header is rewritten to record this: the refusal, the reason it was reopened
+`lib/planning/portfolio.ts`'s header is rewritten to record this: the refusal, the reason it was reopened
 (client packs), and the conditions under which a score was admitted. The `mywork` lesson the
 header tells — a "no priority score" that silently weighted severity at zero — is exactly why the
 weights are printed.

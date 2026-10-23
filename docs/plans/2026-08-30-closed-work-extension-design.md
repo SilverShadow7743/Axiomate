@@ -3,7 +3,7 @@
 **Status: approved 2026-08-30** (one AskUserQuestion decision; small enough that this doc
 carries its own plan). Closes TW1's last stop: the window's refusal has always promised that
 "hours genuinely spent on closed work can still be recorded, with a reason and an approval to
-reopen the window — that is what the extension is for" (lib/timeWindow.ts:232), and no UI or
+reopen the window — that is what the extension is for" (lib/time/timeWindow.ts:232), and no UI or
 reducer path delivered it. The 2026-08-22 grace design deferred it as "a separate mechanism,
 register-worthy on its own"; the user chose the smaller honest reading instead.
 
@@ -28,7 +28,7 @@ person the rule asks for").
    Every other refusal kind stays a refusal — `'issue-closed'` is the ONLY extendable kind.
 2. **`updateTime`**: the destination window check gets the same exception when the edited
    entry carries a justification — the two-step stays shut for the unjustified.
-3. **components/TimeTab.tsx**: `needsReason` also fires when the issue's status is terminal,
+3. **components/time/TimeTab.tsx**: `needsReason` also fires when the issue's status is terminal,
    with its own hint wording, so the reason box appears before the refusal rather than after.
 4. **TW1** extends: closed + reason → accepted through the reducer with the justification
    stored and the warning carried; closed + no reason → still refused; the edit two-step with

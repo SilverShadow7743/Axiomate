@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { logAuthRefusal } from '@/lib/authLog'
 import { getPersonalGraphToken } from '@/lib/db/personalGraphTokens'
-import { describeGraphRefusal, sendChatMessage, startOneOnOneChat } from '@/lib/personalGraph'
+import { describeGraphRefusal, sendChatMessage, startOneOnOneChat } from '@/lib/personal/personalGraph'
 
 export const dynamic = 'force-dynamic'
 

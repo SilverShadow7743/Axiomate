@@ -40,7 +40,7 @@ import {
   type ChatReply,
   type IssueIndexEntry,
   type Proposal,
-} from '@/lib/chat'
+} from '@/lib/comms/chat'
 
 export const runtime = 'nodejs'
 /** Never cached: every turn depends on the catalogue the client just posted. */

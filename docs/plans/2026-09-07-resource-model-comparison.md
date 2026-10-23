@@ -20,14 +20,14 @@ links are not joined.
 | --- | --- | --- | --- |
 | **Person** (the human) | `Person` — id, name, email, manager, client scope | `lib/config.ts` | Exists, matches |
 | **User Account** (auth, access, permissions) | *Not separate* — `Person.roleIds` sits on the same record as name/email/manager | `lib/config.ts` | **Missing as its own object** — see below |
-| **Resource Profile** (capability, delivery shape) | Split across three records, not one: `ResourceProfile` (working pattern only — hours/day, days/week, billable target), `PersonSkill` (skill + level + source + last-used, per skill), `PersonRate` (cost/bill rate, dated) | `lib/capacity.ts`, `lib/skills.ts`, `lib/rates.ts` | Exists, differently shaped |
-| **Resource Allocation** (the assignment) | Two records, not one, answering two different questions on purpose: `Allocation` (how much time, capacity math) and `ProjectMember` (may this person be here at all, access) | `lib/capacity.ts`, `lib/staffing.ts` | Exists, deliberately split — see below |
+| **Resource Profile** (capability, delivery shape) | Split across three records, not one: `ResourceProfile` (working pattern only — hours/day, days/week, billable target), `PersonSkill` (skill + level + source + last-used, per skill), `PersonRate` (cost/bill rate, dated) | `lib/capacity/capacity.ts`, `lib/capacity/skills.ts`, `lib/commercial/rates.ts` | Exists, differently shaped |
+| **Resource Allocation** (the assignment) | Two records, not one, answering two different questions on purpose: `Allocation` (how much time, capacity math) and `ProjectMember` (may this person be here at all, access) | `lib/capacity/capacity.ts`, `lib/capacity/staffing.ts` | Exists, deliberately split — see below |
 
 ## Where the shapes genuinely differ, and why that might be right
 
 **Resource Profile is three records, not one, and the split is load-bearing, not accidental.**
 `ResourceProfile` itself carries a `source: 'stated' | 'default'` flag with real teeth —
-`profileAt` (`lib/capacity.ts`) returns a working pattern for a date even when nobody has
+`profileAt` (`lib/capacity/capacity.ts`) returns a working pattern for a date even when nobody has
 recorded one, and every consumer of a capacity figure can tell whether it rests on a confirmed
 number or an assumed one (`CapacityPosition.basis`). A merged "Resource Profile" object combining
 working pattern, skills and rates into one record would either lose that provenance distinction

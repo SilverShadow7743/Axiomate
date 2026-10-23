@@ -89,7 +89,7 @@ Steps 1-4 as one commit: the field, the two helpers, the reducer line, and the s
 proves them are one unit — the helpers have no other caller yet, so a subset doesn't do anything
 observable on its own.
 
-## 5. `components/PeopleDirectory.tsx` — `ID` column
+## 5. `components/capacity/PeopleDirectory.tsx` — `ID` column
 
 - New `<th>ID</th>` in the header row (~241, before `Title` — the id is the first thing a
   director-of-record view of a roster wants), and a matching `<td className="mono">{p.employeeId
@@ -101,9 +101,9 @@ observable on its own.
   sort key nobody requested is exactly the scope creep the design doc's "what this doesn't do"
   section is there to keep out.
 
-**Verified by:** `npx tsc --noEmit`; `npx eslint components/PeopleDirectory.tsx`.
+**Verified by:** `npx tsc --noEmit`; `npx eslint components/capacity/PeopleDirectory.tsx`.
 
-## 6. `components/ProfilePanel.tsx` — Overview row
+## 6. `components/personal/ProfilePanel.tsx` — Overview row
 
 - One new line inside the `Overview` section's `profile-facts` block (~203-206, alongside `Work
   address`/`Title`/`Phone`/`Joined`): `<Fact label="Employee ID" editable={false} value={person.
@@ -113,7 +113,7 @@ observable on its own.
   required prop; it is never invoked because `editable` is always false, so `() => true` is a
   type-satisfying no-op, not dead logic worth naming a real handler for.
 
-**Verified by:** `npx tsc --noEmit`; `npx eslint components/ProfilePanel.tsx`.
+**Verified by:** `npx tsc --noEmit`; `npx eslint components/personal/ProfilePanel.tsx`.
 
 ### Commit 2
 

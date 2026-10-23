@@ -33,7 +33,7 @@ it does not bypass governance." E0–E2 are complete and live.
 
 ## The domain, named
 
-**Discussion**, not "chat": `lib/chat.ts` is the ASSISTANT (find/propose, never writes) and
+**Discussion**, not "chat": `lib/comms/chat.ts` is the ASSISTANT (find/propose, never writes) and
 stays untouched; its `ChatMessage` wire type must not be imported by anything here.
 
 - `DiscussionThread` — tenantId, id, scopeKind (`'issue' | 'project'`), scopeId, createdAt,
@@ -88,7 +88,7 @@ gains `'chat'` with its prefs row in the Inbox (the hand-maintained list — E2'
   carries it.
 - **Mail conversation view**: the record's detail shows its mail exchange threaded by
   `conversationId` (inbound rows, and outbound replies where recorded), read-only;
-  `components/MailLog.tsx` groups by conversation with the flat list as the fallback for rows
+  `components/comms/MailLog.tsx` groups by conversation with the flat list as the fallback for rows
   with no conversationId.
 - Inbox routing: ruleId `discussion-message` routes to the record (issue scope) or project;
   rides the E2 routing branch.

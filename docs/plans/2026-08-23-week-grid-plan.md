@@ -8,7 +8,7 @@ the arms this panel dispatches all exist and are already proven.
 
 ## Steps
 
-**1. `weekGrid` + WG1 — `lib/timesheet.ts` (check endings first), `scripts/scenario-validation.ts` (CRLF).**
+**1. `weekGrid` + WG1 — `lib/time/timesheet.ts` (check endings first), `scripts/scenario-validation.ts` (CRLF).**
 `weekGrid(entries, person, week, personId?)` → `{ rows: { issueId, byDay: number[7],
 total }[], byDay: number[7], total }`, rounding as `weekTotal` rounds, delegating filtering
 to `entriesInWeek`. WG1: two issues with quarter-hour entries across days; an archived
@@ -19,7 +19,7 @@ individually in `decideProblem`'s words and still Submitted after.
 *Verify:* `npm run validate:scenarios` → 91 scenarios, 0 FAIL parsed from JSON (python,
 utf-8); WG1 PASS.
 
-**2. The panel — `components/TimesheetPanel.tsx` (new, LF).**
+**2. The panel — `components/time/TimesheetPanel.tsx` (new, LF).**
 Overlay with `useOverlay` + Escape like ArchivePanel. Props: `state`, `actor`, `today`,
 `onSubmitWeek`, `onDecideWeek` (both exist on DetailPanel's signature), `onDecideMany:
 (ids: string[]) => void` for the batch, `onOpen(issueId)`, `onClose`. My-week half: week

@@ -36,7 +36,7 @@ is the actual law, not a convention that happens to usually hold.
    under `issue`; `milestone` (the flag) under `issue` or `activity`; `issue` under another
    `issue` or any configured tier.
 3. **Lifecycle** — status comes from the configurable transition graph
-   (`lib/statusPolicy.ts`'s `DEFAULT_STATUS_POLICY`, `allowedNext`), never a free-text field.
+   (`lib/planning/statusPolicy.ts`'s `DEFAULT_STATUS_POLICY`, `allowedNext`), never a free-text field.
 4. **Ownership/completion** — via the responsibility-types/assignment model
    (`axiomate-project-allocation`'s Assignment layer), not a bespoke owner field.
 

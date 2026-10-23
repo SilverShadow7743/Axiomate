@@ -4,7 +4,7 @@
 
 ## What exists, and what this changes
 
-Notifications are records with honest delivery states (`lib/notifications.ts`): in-app is
+Notifications are records with honest delivery states (`lib/comms/notifications.ts`): in-app is
 delivered the moment it is written because the inbox is the delivery; email is written
 `pending` and drained by the scheduled pass through the same Graph client as client mail,
 stamped with what actually happened. There are three mint sites: the `notify` arm
@@ -31,7 +31,7 @@ too coarse to be called preferences.
 
 `model.notificationPrefs: Record<personId, Partial<Record<NotificationKind, NotificationMode>>>`
 — keyed by directory id, absent meaning `in-app` for every kind, so a future kind defaults
-to today's behaviour rather than crashing. Declared in `lib/notifications.ts` beside the
+to today's behaviour rather than crashing. Declared in `lib/comms/notifications.ts` beside the
 records they govern:
 
 - `NOTIFICATION_KINDS = ['assignment', 'intake-arrival', 'automation']`

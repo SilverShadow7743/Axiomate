@@ -90,7 +90,7 @@ export interface ProjectMember {
 }
 ```
 
-Shaped deliberately like `Allocation` (`lib/capacity.ts:219`), because it answers a sibling
+Shaped deliberately like `Allocation` (`lib/capacity/capacity.ts:219`), because it answers a sibling
 question about the same node — capacity asks "how much of this person's time", membership asks
 "may this person be here at all" — and keeping the two records structurally alike is what makes
 the backfill migration able to read one to seed the other (see below).

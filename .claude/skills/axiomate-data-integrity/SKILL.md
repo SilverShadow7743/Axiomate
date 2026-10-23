@@ -11,7 +11,7 @@ read-only, against the real tenant. `npm run audit:persistence` (`scripts/persis
 is a different, older concern — whether a written value survives a round trip through Postgres
 unchanged (mapper fidelity), not whether a stored reference still points at something live. One
 correction from the original proposal: risk #6 (status reachable via the transition graph) is
-narrowed to "is this a status value the type recognises at all" — `lib/statusPolicy.ts`'s own
+narrowed to "is this a status value the type recognises at all" — `lib/planning/statusPolicy.ts`'s own
 header comment says the graph "governs changes, not the past," and imported history legitimately
 sits in combinations it would never produce; checking full reachability would false-positive on
 exactly that known-good data.
@@ -36,7 +36,7 @@ exactly that known-good data.
    downstream (`axiomate-utilisation-analysis`).
 5. **Date consistency** — `Allocation.startDate <= endDate`, `Commitment.startDate <= endDate`,
    `Issue.plannedStart <= plannedEnd` where both are set — the same class of check
-   `lib/schedule.ts`'s `validateChange` already runs at write-time for issue dates; an integrity
+   `lib/planning/schedule.ts`'s `validateChange` already runs at write-time for issue dates; an integrity
    audit checks whether anything bypassed it (a migration, a direct write) rather than
    re-implementing the rule.
 6. **Corrupted status** — not "reachable per the transition graph from history" (`lib/

@@ -5,14 +5,14 @@ import type { DependencyType } from './types'
 import { ACTIVITY_PHASES } from './types'
 import { SNAPSHOT_PURPOSES } from './evidence'
 import { NOTE_TYPES } from './notes'
-import { NOTIFICATION_KINDS, NOTIFICATION_MODES } from './notifications'
-import { TIME_ACTIVITIES } from './time'
-import { COMMITMENT_KINDS } from './capacity'
-import { SKILL_ORDER, SKILL_SOURCES } from './skills'
+import { NOTIFICATION_KINDS, NOTIFICATION_MODES } from './comms/notifications'
+import { TIME_ACTIVITIES } from './time/time'
+import { COMMITMENT_KINDS } from './capacity/capacity'
+import { SKILL_ORDER, SKILL_SOURCES } from './capacity/skills'
 import { DOCUMENT_SUBJECTS, STORE_KINDS } from './documents'
-import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './milestone'
+import { BILLING_TRIGGERS, DELIVERY_STATES, MILESTONE_BASES } from './planning/milestone'
 import { APPLICATION_STATUSES, INTEGRATION_STATUSES } from './application'
-import { INVOICE_STATUSES } from './invoice'
+import { INVOICE_STATUSES } from './commercial/invoice'
 import { SCOPE_KINDS, SCOPE_SOURCES } from './scope'
 
 /**
@@ -245,7 +245,7 @@ const textOrNull: Check = (v) => (v === null ? null : text(v))
  * much can carry `1e999`, which parses to `Infinity`. An infinite `hours` or `percentage`
  * propagates through every sum that touches it and turns a whole capacity report into `Infinity`
  * — a corruption with no single record to point at. Ranges are the reducer's business
- * (`lib/capacity.ts` decides what an over-allocation is); finiteness is a type property and
+ * (`lib/capacity/capacity.ts` decides what an over-allocation is); finiteness is a type property and
  * belongs here.
  */
 const num: Check = (v) =>
@@ -699,6 +699,7 @@ const SHAPES = {
   upsertSow: { id: req(idOrNull), engagementId: req(id), patch: req(plainObject), now },
   archiveSow: { id: req(id), now },
   attributeToSow: { nodeId: req(id), sowId: req(idOrNull), now },
+  setIssueMilestone: { issueId: req(id), milestoneId: req(idOrNull), now },
   takeSnapshot: { nodeId: req(id), now },
   /* ---- CAPACITY ---- */
   upsertAllocation: {
@@ -777,7 +778,7 @@ const SHAPES = {
   },
   updatePersonalEvent: { id: req(id), patch: req(plainObject), now },
   removePersonalEvent: { id: req(id), now },
-  /* ---- PERSONAL ACTIONS — see lib/personalActions.ts; the arms validate text and ownership ---- */
+  /* ---- PERSONAL ACTIONS — see lib/personal/personalActions.ts; the arms validate text and ownership ---- */
   addPersonalAction: {
     text: req(text),
     dueDate: opt(text),

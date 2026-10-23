@@ -12,10 +12,10 @@ that revert if it's ever needed.
 Verified against the current files while writing this (all three line ranges below were
 confirmed by reading the actual file, not assumed from the design doc's estimates):
 
-- `lib/mywork.ts:185` — `myWork(state, actor, today)`, resolves via
+- `lib/personal/mywork.ts:185` — `myWork(state, actor, today)`, resolves via
   `directoryPersonFor(state.model, actor)` (imported line 81 from `./access`).
   `REASON_ORDER` at line 88.
-- `components/MyWorkPanel.tsx:80-87` — the `list.unrecognised` banner (80-85) sits directly
+- `components/personal/MyWorkPanel.tsx:80-87` — the `list.unrecognised` banner (80-85) sits directly
   above the reason-grouped `.evi-list` (87). The Today section's insertion point is between
   them.
 - `components/IssueWorkspace.tsx:696-707` — the landing effect. Current text, confirmed:
@@ -47,7 +47,7 @@ confirmed by reading the actual file, not assumed from the design doc's estimate
 
 ## Steps
 
-### Step 1 — `todaysMeetings` in `lib/mywork.ts`, plus its scenario
+### Step 1 — `todaysMeetings` in `lib/personal/mywork.ts`, plus its scenario
 
 Add, beside `myWork` (after it, same file — it shares the person-resolution pattern at
 line 186 and belongs next to the function it complements):
@@ -64,7 +64,7 @@ export function todaysMeetings(state: WorkspaceState, actor: Actor, today: strin
 
 (`today` is already a `YYYY-MM-DD` string throughout this codebase — `startAt.slice(0, 10)`
 matches that convention rather than parsing a `Date`, consistent with how the rest of
-`lib/mywork.ts` and `lib/schedule.ts` compare dates as strings.) Import `Meeting` from
+`lib/personal/mywork.ts` and `lib/planning/schedule.ts` compare dates as strings.) Import `Meeting` from
 `./meetings`.
 
 Add one new scenario to `scripts/scenario-validation.ts`, driving `todaysMeetings` directly
@@ -85,7 +85,7 @@ before moving on: nothing that was PASS may stop being PASS).
 **Commit 1** — this step alone. It is fully self-provable (a pure function plus the scenario
 that pins it) before anything depends on it, per the ordering principle.
 
-### Step 2 — the Today section in `components/MyWorkPanel.tsx`
+### Step 2 — the Today section in `components/personal/MyWorkPanel.tsx`
 
 Between the `list.unrecognised` block (ends line 85) and the `.evi-list` div (starts line 87),
 add:
@@ -178,13 +178,13 @@ the code path works, not that real users have real meetings recorded):
 
 - **Date comparison** — `today` is a `YYYY-MM-DD` string; `Meeting.startAt` is a full ISO
   datetime. Compare via `startAt.slice(0, 10) === today`, not a `Date` parse/compare — matching
-  the string-comparison convention already used throughout `lib/mywork.ts`/`lib/schedule.ts`.
+  the string-comparison convention already used throughout `lib/personal/mywork.ts`/`lib/planning/schedule.ts`.
   A `Date`-based comparison risks a timezone-shift bug this codebase has deliberately avoided
   elsewhere.
 - **`attendeeIds` holds directory ids, not names** — match against `person.id`
   (`directoryPersonFor`'s return), never `person.name`. This is the opposite convention from
-  `myWork()`'s own name-based join (`lib/mywork.ts:187-188`) — don't copy that pattern here by
-  reflex; `Meeting.attendeeIds` was deliberately built id-first (per `lib/meetings.ts`'s own
+  `myWork()`'s own name-based join (`lib/personal/mywork.ts:187-188`) — don't copy that pattern here by
+  reflex; `Meeting.attendeeIds` was deliberately built id-first (per `lib/personal/meetings.ts`'s own
   comment: "Real invitations — each lands on that person's My calendar").
 - **The unresolved-person case returns `[]`, not an error** — `MyWorkPanel` already shows the
   `list.unrecognised` banner from `myWork()`'s own resolution; `todaysMeetings` returning an

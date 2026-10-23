@@ -114,7 +114,7 @@ function normalizeNode(n: RichNode): RichNode {
 
 /**
  * A person lookup for rendering plain text. Optional and array-shaped, matching
- * `mentionSegments`'s own `{id, name}[]` convention in lib/mentions.ts — a caller that does not
+ * `mentionSegments`'s own `{id, name}[]` convention in lib/comms/mentions.ts — a caller that does not
  * care about resolving a real name (Step 4's search index, the auto-estimator) can omit it and
  * get the honest "unresolved" fallback instead of a lookup it would otherwise have to fake.
  */
@@ -179,7 +179,7 @@ export function isEmptyRichDoc(doc: RichDoc): boolean {
 
 /**
  * Every person named by a `mention` node, deduplicated — the doc-walking counterpart to
- * `mentionsIn` (lib/mentions.ts), which parses `@Name` out of a plain string. That function is
+ * `mentionsIn` (lib/comms/mentions.ts), which parses `@Name` out of a plain string. That function is
  * untouched: other plain-string fields in this codebase may still use it. This is a new,
  * parallel function for the two fields that stop being plain strings, not a replacement of the
  * old one everywhere.

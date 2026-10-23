@@ -25,7 +25,7 @@ Facts constraining the choice, read 2026-09-05:
 | Fact | Where |
 | --- | --- |
 | `addProjectMember` refuses a live duplicate by `(projectId, personId, !removedAt)`, mints `projmem-<seq>` from `state.seq`, stamps `addedBy` from the reducer's `by`, writes an audit entry | `lib/workspace.ts:6991-7040`, guard at `:7010-7013` |
-| Membership is soft-ended; the same pair legitimately has more than one row after a remove and re-add | `lib/staffing.ts:26-28` |
+| Membership is soft-ended; the same pair legitimately has more than one row after a remove and re-add | `lib/capacity/staffing.ts:26-28` |
 | No unique on `(tenantId, projectId, personId)`, only an index | `prisma/schema.prisma:669` |
 | `persistActions` sets `app.tenant_id` first in `runBatch`'s transaction; stops at the first refusal keeping earlier writes | `lib/db/persist.ts:94, :170, :85-92` |
 | `addProjectMember` needs `project.staff`; `ROLE_AUTOMATION` does not hold it and the grant is deliberately narrow | `lib/access.ts:595, :245` |

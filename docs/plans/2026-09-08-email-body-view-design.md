@@ -10,7 +10,7 @@ in a proper way."*
   `subject,from,receivedDateTime,body`; returns `contentType: 'html' | 'text'` and `content`
   (never storing either). `401`/`403` from Graph maps to `reconnect: true`, matching the
   existing inbox route's convention exactly.
-- `components/InboxPanel.tsx` — the subject in each row is now a button (`openMessage`), plus an
+- `components/comms/InboxPanel.tsx` — the subject in each row is now a button (`openMessage`), plus an
   explicit "Open…" action for discoverability; both open the same modal. Fetches on click, not
   eagerly for the list. `html` content renders inside `<iframe sandbox="" srcDoc=...>` — bare
   `sandbox`, not `allow-same-origin` (caught in advisor review before push: `allow-same-origin`

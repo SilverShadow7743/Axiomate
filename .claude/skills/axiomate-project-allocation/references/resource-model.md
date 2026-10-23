@@ -1,7 +1,7 @@
 # The Real Resource Model
 
-Grounded in `prisma/schema.prisma`, `lib/workspace.ts`, `lib/availability.ts`,
-`lib/timeWindow.ts`, `lib/timesheet.ts` as of 2026-08-31.
+Grounded in `prisma/schema.prisma`, `lib/workspace.ts`, `lib/capacity/availability.ts`,
+`lib/time/timeWindow.ts`, `lib/time/timesheet.ts` as of 2026-08-31.
 
 ## Allocation — project capacity
 
@@ -43,13 +43,13 @@ project is reached only by walking the issue's tier ancestry, never stored direc
 `status: Submitted | Approved | Rejected` (a String by design — "the vocabulary is the
 product's," not a fixed enum).
 
-**The freeze rule is live, not planned:** `lib/timeWindow.ts`'s `checkEntry` is called from
-`addTime` (`lib/workspace.ts:3851`); `isFrozen`/`frozenMessage` (`lib/timesheet.ts:202,213`)
+**The freeze rule is live, not planned:** `lib/time/timeWindow.ts`'s `checkEntry` is called from
+`addTime` (`lib/workspace.ts:3851`); `isFrozen`/`frozenMessage` (`lib/time/timesheet.ts:202,213`)
 refuse further entries against an already-submitted week.
 
 ## Capacity — the real formula
 
-`lib/availability.ts` is, per its own header comment, "the ONE place 'who has time, when' is
+`lib/capacity/availability.ts` is, per its own header comment, "the ONE place 'who has time, when' is
 computed":
 
 ```
@@ -57,14 +57,14 @@ available = pattern-derived gross − approved leave/commitments − holidays �
 remaining = available − allocations
 ```
 
-`lib/capacity.ts` holds `WORKING_PATTERN` defaults (`hoursPerDay: 7.5, daysPerWeek: 5,
+`lib/capacity/capacity.ts` holds `WORKING_PATTERN` defaults (`hoursPerDay: 7.5, daysPerWeek: 5,
 billableTargetPct: 80`). Working pattern itself is versioned through the generic `Version`
 model (`subjectKind`/`subjectId`/`validFrom`/`validTo`/`value` JSON), read via `valueAt` — a
 person's pattern can change over time and old records still resolve against what was true then.
 
 ## Utilisation — the data and formula exist; the analysis surface doesn't yet
 
-`lib/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
+`lib/capacity/availability.ts:203` — `utilisationPct = (allocatedHours / availableHours) * 100`.
 `TimeEntry.billable` is real. Two agents are DECLARED but not built in `lib/config.ts`:
 `AGENT_UTILIZATION` (billable/non-billable/internal/training/leave/available time and trend) and
 `AGENT_BILLING_READY` (billing readiness from approved time/billable work/milestones/change
@@ -75,7 +75,7 @@ calculation.
 ## Scheduling — allocation dates and work-execution dates are genuinely separate
 
 `Allocation.startDate`/`endDate` (a project percentage window) share no field and no derivation
-with `Issue.plannedStartDate`/`plannedEndDate`/`actualEndDate` (`lib/schedule.ts`'s
+with `Issue.plannedStartDate`/`plannedEndDate`/`actualEndDate` (`lib/planning/schedule.ts`'s
 `ScheduleRow` type). The product owner's "allocation date vs. work execution date" distinction
 is real and already structurally enforced — a feature that tries to derive one from the other is
 inventing a relationship the schema doesn't have.

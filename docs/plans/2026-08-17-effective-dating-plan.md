@@ -111,9 +111,9 @@ Six call sites, and they are not equal:
 | Where | What it needs |
 |---|---|
 | `lib/workspace.ts:898` `profileFor(state, person)` | The single funnel for both reducer call sites (`:2794`, `:2881`). Make it take a date. Fixing it here covers both arms. |
-| `lib/availability.ts:155` | Reads `state.model.resourceProfiles[match.id]` directly, then calls `capacityFor` at `:171`. It already has a window — use `window.from`. |
+| `lib/capacity/availability.ts:155` | Reads `state.model.resourceProfiles[match.id]` directly, then calls `capacityFor` at `:171`. It already has a window — use `window.from`. |
 | `lib/watch.ts:183` | Passes the **whole map** to `planCheck`. See below. |
-| `components/CapacityPanel.tsx:119` | Has `today` in scope. |
+| `components/capacity/CapacityPanel.tsx:119` | Has `today` in scope. |
 | `scripts/scenario-validation.ts:503-504` | Fixture, updated with the rest. |
 
 **`planCheck` takes a `Record<personId, ResourceProfile>`, not one profile.** Do not change its

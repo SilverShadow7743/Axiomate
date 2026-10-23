@@ -1,17 +1,17 @@
 /**
  * A client's own technology landscape — what they run, and how it connects.
  *
- * Pure — no clock, no I/O, same discipline as `lib/milestone.ts`. See
+ * Pure — no clock, no I/O, same discipline as `lib/planning/milestone.ts`. See
  * `docs/plans/2026-09-07-application-suite-design.md` for why this exists and what it
  * deliberately does not do (no live telemetry, no cost tracking, no AI reasoning).
  *
  * ---------------------------------------------------------------------------
  * Health is named concerns, not a score
  *
- * `lib/portfolio.ts` already settled this argument for engagements, and the reasoning carries
+ * `lib/planning/portfolio.ts` already settled this argument for engagements, and the reasoning carries
  * over unchanged: "name the concerns, count them, and let the reader do the weighing." An
  * application with none says so. This module does not invent a second answer to a question
- * `lib/portfolio.ts` already answered once.
+ * `lib/planning/portfolio.ts` already answered once.
  */
 
 export const APPLICATION_STATUSES = ['Planned', 'Live', 'Decommissioned'] as const
@@ -90,7 +90,7 @@ export function defaultApplication(id: string, clientNodeId: string): Applicatio
 }
 
 /** Next `app-N`, counting withdrawn applications too — same reasoning as `nextSequence` in
- *  `lib/milestone.ts`: reusing a removed application's position would put a new one where an
+ *  `lib/planning/milestone.ts`: reusing a removed application's position would put a new one where an
  *  old one sits in an audit trail somebody may be reading beside it. Applications don't have
  *  their own visible sequence today, so this mints the id itself rather than a display number. */
 export function nextApplicationId(applications: Record<string, Application>): string {
@@ -164,7 +164,7 @@ interface ConcernIssueLike {
  * `openHigh` leads — `Severity` here is `'High' | 'Medium' | 'Low'` (`lib/types.ts`; there is no
  * `Critical`), so High is the top real signal, and a High-severity issue against a live system
  * is the one that shouldn't wait for a weekly read. `overdue` next, the same "a broken
- * commitment outranks a live one" ordering `lib/portfolio.ts` uses for engagements.
+ * commitment outranks a live one" ordering `lib/planning/portfolio.ts` uses for engagements.
  * `integrationsInactive` last: an inactive integration is often a deliberate, already-known
  * state (deprecated, replaced), weaker evidence than either of the other two.
  */

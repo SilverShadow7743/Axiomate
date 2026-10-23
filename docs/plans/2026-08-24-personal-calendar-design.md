@@ -7,7 +7,7 @@ for one calendar aggregating meetings, due dates, milestones, leave, holidays, a
 personal events. Two of those turned out not to be real data anywhere in this app — there is no
 meeting/event entity or calendar integration (`AGENT_MEETING_ACTIONS` is *declared*, `runtime:
 'declared'`, with no implementation — the same "declared, no runtime" honesty this codebase
-already applies elsewhere), and `Milestone` (`lib/milestone.ts:64`) carries no person field at
+already applies elsewhere), and `Milestone` (`lib/planning/milestone.ts:64`) carries no person field at
 all, only a `sowId` — "my milestones" is not a well-defined question the data can answer.
 
 Resolved, not glossed over: `PersonalEvent` is a new, minimal, manually-entered record (no sync,
@@ -18,10 +18,10 @@ calendar entirely, the same reasoning that kept them out of the project-membersh
 ## What this is
 
 A new record, `PersonalEvent` — title, start, end, an all-day flag, a note, attendees as free
-text, owned by exactly one person. A new pure aggregation (`lib/myCalendar.ts`) combining, for
+text, owned by exactly one person. A new pure aggregation (`lib/personal/myCalendar.ts`) combining, for
 one person: their `PersonalEvent`s, their `Commitment`s (Leave / Public holiday / Internal /
 Training), their live `Allocation`s, and their own due-date work (the same id-aware ownership
-join `lib/mywork.ts`'s `isMine` already uses). A new view-switcher entry, **"My calendar"**,
+join `lib/personal/mywork.ts`'s `isMine` already uses). A new view-switcher entry, **"My calendar"**,
 distinct in name and content from the existing **"Calendar"** (the work-item schedule everyone
 already sees, unchanged).
 
@@ -102,7 +102,7 @@ gets an empty map, correctly — there is no "whose" for an unrecognised sign-in
 
 ## The aggregation and the screen
 
-`lib/myCalendar.ts` is new rather than an extension of `lib/calendar.ts`'s `calendarMonth`, for
+`lib/personal/myCalendar.ts` is new rather than an extension of `lib/personal/calendar.ts`'s `calendarMonth`, for
 the same reason `projectView` is a separate function from `clientView`: the two answer different
 questions and happen to both produce a month grid, and a function that does both today is the
 kind of convenient collapse that breaks the day one of them needs to change alone.

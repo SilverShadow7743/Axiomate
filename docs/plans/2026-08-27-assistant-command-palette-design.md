@@ -2,8 +2,8 @@
 
 ## Problem
 
-`components/ChatPanel.tsx` is one component behind two engines. `app/api/chat/route.ts` runs
-Claude in a multi-turn tool loop when `ANTHROPIC_API_KEY` is set, and `lib/chat.ts`'s
+`components/comms/ChatPanel.tsx` is one component behind two engines. `app/api/chat/route.ts` runs
+Claude in a multi-turn tool loop when `ANTHROPIC_API_KEY` is set, and `lib/comms/chat.ts`'s
 `offlineReply` — a deterministic parser — when it is not. This deployment will not have a key
 (confirmed this session, see `boot().assistant.engine` and the header badge shipped as backlog
 item #8). Offline is not a degraded fallback here; it is the permanent mode.
@@ -105,13 +105,13 @@ the subset of aliases that map onto `SearchArgs` (`status`, `severity`, `owner`,
 equivalent. Recognized `field=value` tokens are stripped from the query and passed as facets;
 whatever text remains becomes the free-text term list, exactly as today. `status=Open
 severity=High` and `payroll status=Open` (mixed free text and facets) both become real filters.
-This is a change to `lib/chat.ts`, reachable by both the palette UI and the raw API (the grammar
+This is a change to `lib/comms/chat.ts`, reachable by both the palette UI and the raw API (the grammar
 gets more capable, not just differently presented) — worth calling out explicitly since it is the
 one piece of this design that is not purely presentational.
 
 ## Voice
 
-`VoiceInput` (`components/VoiceInput.tsx`) stays, wired to the single-line input in place of the
+`VoiceInput` (`components/comms/VoiceInput.tsx`) stays, wired to the single-line input in place of the
 textarea — dictating a search phrase or a new issue's subject is still useful hands-free. The
 "Read replies aloud" toggle and its `speechSynthesis` call (`ChatPanel.tsx`'s `send()`, the
 `speakReplies` branch) are removed for the offline presentation: reading a match list or a

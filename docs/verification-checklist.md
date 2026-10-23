@@ -382,7 +382,7 @@ Click **Calendar** in the switcher.
 1. The header sentence states the split — how many scheduled items fall in this month, and how
    many records carry no planned date. **This number is larger than the toolbar's `unscheduled`
    count, and both are right**: the toolbar counts the health label, and `computeHealth` gives
-   Blocked precedence over Unscheduled (lib/schedule.ts:70-71), so a blocked record with no date
+   Blocked precedence over Unscheduled (lib/planning/schedule.ts:70-71), so a blocked record with no date
    is in the calendar's figure but not the toolbar's. The check that must hold is the calendar's
    own: dated + undated = every record shown. On 19 Aug 2026 that was 1 + 137 = 138, beside a
    toolbar reading of 124 unscheduled + 14 blocked.

@@ -9,7 +9,7 @@ check.
 
 ---
 
-## 1. `lib/timesheet.ts` — the rules, with nothing attached
+## 1. `lib/time/timesheet.ts` — the rules, with nothing attached
 
 Pure. No clock, no database, no `Date.now()`. Every function takes what it needs.
 
@@ -26,7 +26,7 @@ Pure. No clock, no database, no `Date.now()`. Every function takes what it needs
 it is — "awaiting approval" and "already approved" call for different next moves from the person
 reading it.
 
-`TimeEntry` comes from `lib/time.ts`, which already exists and already refuses future dates,
+`TimeEntry` comes from `lib/time/time.ts`, which already exists and already refuses future dates,
 entries over twelve hours, and non-quarter-hours. None of that moves.
 
 **Verified by:** `npx tsc --noEmit` clean, then step 2.
@@ -123,7 +123,7 @@ Two checks in `scripts/persistence-proof.ts`:
 
 **Verified by:** `npm run audit:persistence` at 28 of 28.
 
-## 7. `components/TimeTab.tsx`
+## 7. `components/time/TimeTab.tsx`
 
 No new screen. The existing tab gains the week's total, its status, a Submit control, and — for
 somebody holding `time.approve` — Approve and Return. A returned week shows its reason.

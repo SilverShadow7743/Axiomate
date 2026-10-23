@@ -16,7 +16,7 @@
  * ---------------------------------------------------------------------------
  * Why this is not a live rule
  *
- * `duplicateGroups` (`lib/intake.ts`) matches on client + parent node + a subject with its
+ * `duplicateGroups` (`lib/comms/intake.ts`) matches on client + parent node + a subject with its
  * `Re:`/`Fw:`/`Fwd:` prefix stripped — exactly the signal the design document explicitly
  * warns against trusting for a live decision, because subjects get edited, translated and reused.
  * It is safe here only because a person reads the report before anything is linked, and because
@@ -36,7 +36,7 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
-import { duplicateGroups } from '../lib/intake'
+import { duplicateGroups } from '../lib/comms/intake'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import type { Actor } from '../lib/actor'

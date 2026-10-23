@@ -42,8 +42,8 @@ loadEnv()
 
 import { loadWorkspace } from '../lib/db/repo'
 import { persistActions } from '../lib/db/persist'
-import { proposeEstimate, assumptionsFor, type EstimateDomain } from '../lib/estimator'
-import { deriveEffort, emptyEstimate } from '../lib/estimation'
+import { proposeEstimate, assumptionsFor, type EstimateDomain } from '../lib/commercial/estimator'
+import { deriveEffort, emptyEstimate } from '../lib/commercial/estimation'
 import type { Action } from '../lib/workspace'
 import type { TenantId } from '../lib/tenant'
 import { ESTIMATION_ACTOR, type Actor } from '../lib/actor'

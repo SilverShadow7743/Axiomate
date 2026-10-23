@@ -25,7 +25,7 @@ than trusting the sketch:
    **existing** slug (`blocked`/`ontrack`/`completed`) instead of deriving a new one. This
    removes `app/globals.css` from this plan's touched files entirely.
 
-## Step 1 — `leafRollupStatus` in `lib/schedule.ts`, provable alone
+## Step 1 — `leafRollupStatus` in `lib/planning/schedule.ts`, provable alone
 
 Add, beside `TERMINAL_STATUSES`/`BLOCKED_STATUSES` (~line 41):
 
@@ -101,7 +101,7 @@ scheduleHealth: ScheduleHealth
 statusRollup: 'Blocked' | 'In Progress' | 'Closed' | null
 ```
 
-Two real construction sites in `lib/tree.ts`, confirmed by reading the file rather than assuming
+Two real construction sites in `lib/planning/tree.ts`, confirmed by reading the file rather than assuming
 the RAID log's own count carried over unchanged:
 
 1. `blank()` (~lines 307–341) — the shared default-row seed every row starts from. Add
@@ -112,7 +112,7 @@ the RAID log's own count carried over unchanged:
    directly after `row.status = issue.status` (line 139), so it reads next to the field it
    summarizes. `state.issues` is already in scope (`buildTree`'s own parameter).
 
-Import `leafRollupStatus` by adding it to the existing `from './schedule'` import in `lib/tree.ts`
+Import `leafRollupStatus` by adding it to the existing `from './schedule'` import in `lib/planning/tree.ts`
 (line 6), which already pulls `computeDurations`, `computeHealth`, `isTerminal`,
 `pausedCalendarDays`, `rollUp`, `STATUS_PROGRESS` — one more name, no new import line.
 
@@ -234,7 +234,7 @@ browser check above is not optional for this reason.
 3. **`deletedAt` filtering applies at every level of the walk, not just the leaves.** A
    soft-deleted intermediate issue (a Deliverable, say) must not be walked into at all — its own
    live children become effectively unreachable through it, which matches how `childIssues()` in
-   `lib/tree.ts` (line 46–49) already treats archived issues everywhere else in this file.
+   `lib/planning/tree.ts` (line 46–49) already treats archived issues everywhere else in this file.
 4. **Both UI surfaces must import the same `ROLLUP_SLUG`, never re-derive their own.** Two
    independent `.toLowerCase()`-style mappings in `DetailPanel.tsx` and `TreeGrid.tsx` would be
    exactly the kind of forked reading of the same fact the RAID log design's own "what would send

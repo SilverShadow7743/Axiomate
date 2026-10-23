@@ -36,46 +36,46 @@ import { runRecurrences,
   type WorkspaceState,
 } from '../lib/workspace'
 import { applicationConcerns, checkApplication, checkIntegrationLink } from '../lib/application'
-import { invoicePosition } from '../lib/invoice'
+import { invoicePosition } from '../lib/commercial/invoice'
 import { checkChecklistItem, checklistFor } from '../lib/checklist'
 import { byAgeBucket, byClient, byOwner, bySeverityAndStatus } from '../lib/analytics'
-import { inboxFor, undelivered } from '../lib/notifications'
-import { mentionsIn } from '../lib/mentions'
-import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/raid'
+import { inboxFor, undelivered } from '../lib/comms/notifications'
+import { mentionsIn } from '../lib/comms/mentions'
+import { exposure, raidKindOf, RISK_TYPE_ID, DECISION_TYPE_ID } from '../lib/planning/raid'
 import {
   blastRadius, labelSource, agentEnabledSource, requiredSource,
   resolveLabel, resolveAgentEnabled, ROOT_SCOPE, LABEL_KEYS,
   wouldCreateManagerCycle, directReportsOf, holidaySetOf, tiersOf, externalPartyKinds, resolveLabels, type Person,
   initModel, mergeModel, customFieldsFor, DEFAULT_HEALTH_SCORE,
 } from '../lib/config'
-import { describePosition, sowPosition } from '../lib/sow'
-import { issuesUnder } from '../lib/engagement'
-import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity'
-import { myCalendarMonth } from '../lib/myCalendar'
-import { personalEventsFor, type PersonalEvent } from '../lib/personalEvents'
+import { describePosition, sowPosition, milestoneEffortPosition, type Sow } from '../lib/commercial/sow'
+import { issuesUnder } from '../lib/commercial/engagement'
+import { capacityFor, planCheck, type Allocation, type Commitment } from '../lib/capacity/capacity'
+import { myCalendarMonth } from '../lib/personal/myCalendar'
+import { personalEventsFor, type PersonalEvent } from '../lib/personal/personalEvents'
 import { directoryIdByName, isUnresolvedOwnerName, rolesFor, canOnProject, isExempt, can, isStaffedOn, MACHINE_ROLE_ID, ADMIN_ROLE_ID, type PermissionKey } from '../lib/access'
 import { projectView, memberProjectIdsFor, clientFilterScopeFor } from '../lib/projectBoundary'
-import type { ProjectMember } from '../lib/staffing'
+import type { ProjectMember } from '../lib/capacity/staffing'
 import { ownerChoicesFor, ownerOptionValues } from '../lib/ownerChoices'
 import { SCHEDULE_ACTOR } from '../lib/actor'
 import { EMPTY_OBSERVATION } from '../lib/watch'
 import { planCalendarActions } from '../lib/automation'
-import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/intake'
+import { classify, alreadyReceived, matchingIssue, normalizeSubject, duplicateGroups, openDuplicateGroups, type InboundMail } from '../lib/comms/intake'
 import { open as openCookie, seal as sealCookie } from '../lib/auth/seal'
 import { split, keyProblem, MAX_KEY_LENGTH, type SubmittedAction } from '../lib/idempotency'
 import { verdictFor, shouldResume, resumeDelayMs } from '../lib/queue'
 import { actionProblem, validatedKinds } from '../lib/actionShape'
 import { valueAt, overlapProblem, correctionImpact, stamp, type Version } from '../lib/versioning'
-import { availabilityForAssignment } from '../lib/assignment'
-import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/availability'
-import { forecastFor, describeForecast } from '../lib/forecast'
-import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/discussion'
-import { meetingHours } from '../lib/availability'
-import { suggestDays } from '../lib/scheduling'
-import type { Meeting } from '../lib/meetings'
-import { narrationFigures, suggestRequest } from '../lib/assist'
-import { validateCreate, type IssueIndexEntry } from '../lib/chat'
-import type { DiscussionMessage } from '../lib/discussion'
+import { availabilityForAssignment } from '../lib/capacity/assignment'
+import { availabilityFor, ownerLeaveCaveat, redactLeaveReasons } from '../lib/capacity/availability'
+import { forecastFor, describeForecast } from '../lib/planning/forecast'
+import { autoFollowsAt, groupByConversation, issueMailTimeline, recipientsFor, type MailEntry } from '../lib/comms/discussion'
+import { meetingHours } from '../lib/capacity/availability'
+import { suggestDays } from '../lib/planning/scheduling'
+import type { Meeting } from '../lib/personal/meetings'
+import { narrationFigures, suggestRequest } from '../lib/comms/assist'
+import { validateCreate, type IssueIndexEntry } from '../lib/comms/chat'
+import type { DiscussionMessage } from '../lib/comms/discussion'
 import {
   backdated,
   dailyCap,
@@ -88,7 +88,7 @@ import {
   BACKDATING_ALLOWANCE_DAYS,
   type WindowIssue,
   type WindowPerson,
-} from '../lib/timeWindow'
+} from '../lib/time/timeWindow'
 
 /**
  * The last recorded persistence run, or null.
@@ -113,14 +113,14 @@ function readProof(): ProofRun | null {
 }
 import { describeSave } from '../lib/autosave'
 import { classifySecret } from '../lib/secretRules'
-import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/tree'
+import { buildTree, facetsOf, matchesFilters, visibleRows, type ClientFilterScope } from '../lib/planning/tree'
 import { boardLanes, dropOutcome, bulkDropOutcome, bulkStatusChoices } from '../lib/board'
-import type { StatusPolicy } from '../lib/statusPolicy'
-import { calendarMonth, describeCalendar } from '../lib/calendar'
-import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/recurrence'
-import { classifyForm } from '../lib/intake'
-import { applyBlueprint, extractBlueprint, type Blueprint } from '../lib/blueprint'
-import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/outbound'
+import type { StatusPolicy } from '../lib/planning/statusPolicy'
+import { calendarMonth, describeCalendar } from '../lib/personal/calendar'
+import { dueOccurrence, occurrenceOnOrBefore, subjectFor, type Recurrence } from '../lib/planning/recurrence'
+import { classifyForm } from '../lib/comms/intake'
+import { applyBlueprint, applyTemplateBlueprint, extractBlueprint, type Blueprint } from '../lib/commercial/blueprint'
+import { alreadySent, isOutboundRefusal, outboundNoteBody, outboundSubjectFor, recipientOf, sendingMailboxFor } from '../lib/comms/outbound'
 import { coversDocument, describeReview, versionChainOf } from '../lib/proofing'
 import { clientView } from '../lib/clientBoundary'
 import { accessProblems } from '../lib/access'
@@ -136,26 +136,26 @@ import {
   pausedCalendarDays,
   proposeTargetDate,
   validateChange,
-} from '../lib/schedule'
-import { planSlaDates } from '../lib/sla'
+} from '../lib/planning/schedule'
+import { planSlaDates } from '../lib/planning/sla'
 import { buildDailyIms } from '../lib/reports/dailyIms'
 import { clientScopeIdFor, buildWeeklyClientPack, buildMonthlyGovernancePack } from '../lib/reports/clientPack'
 import { buildFinanceReport } from '../lib/reports/finance'
 import { buildLeaveReport } from '../lib/reports/leave'
 import { buildSignatureHtml, plainTextToHtml } from '../lib/signature'
-import { personalActionsFor } from '../lib/personalActions'
+import { personalActionsFor } from '../lib/personal/personalActions'
 import { decryptSecret, deriveTokenKey, encryptSecret } from '../lib/tokenCrypto'
 import { resolveModelId } from '../lib/modelChoice'
 import { searchWorkspace } from '../lib/search'
 import { firstRunState, firstRunVisible, adminFirstRunState, adminFirstRunVisible } from '../lib/firstRun'
-import { mapGraphMessage, cleanSubject } from '../lib/mailFile'
+import { mapGraphMessage, cleanSubject } from '../lib/comms/mailFile'
 import { claimDelivery, deliveryDue, parseReportDelivery, DEFAULT_REPORT_DELIVERY, type ReportDeliveryConfig } from '../lib/reports/delivery'
 import { resolutionNotices } from '../lib/reports/resolutionNotice'
 import { renderImsPdf, renderWeeklyPackPdf, renderMonthlyPackPdf } from '../lib/reports/pdf'
 import type { DailyIms } from '../lib/reports/dailyIms'
 import type { OrganizationIdentity } from '../lib/config'
 import type { WeeklyClientPack, MonthlyGovernancePack } from '../lib/reports/clientPack'
-import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time'
+import { effortVariance, hoursOn, summariseTime, type TimeEntry } from '../lib/time/time'
 import {
   summarise,
   totalComplexity,
@@ -168,8 +168,8 @@ import {
   DEFAULT_SIZE_BANDS,
   MAX_COMPLEXITY,
   NORMALISED_MAX,
-} from '../lib/estimation'
-import { proposeEstimate } from '../lib/estimator'
+} from '../lib/commercial/estimation'
+import { proposeEstimate } from '../lib/commercial/estimator'
 import {
   emptyRichDoc,
   wrapPlainText,
@@ -182,7 +182,7 @@ import {
 } from '../lib/richText'
 import { PERMISSION_KEYS, defaultAccessPolicy } from '../lib/access'
 import { publicOrigin } from '../lib/auth/origin'
-import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/rates'
+import { rateAt, rateProblem, costOf, sowCostOf, describeCost, type PersonRate } from '../lib/commercial/rates'
 import { takeSnapshot } from '../lib/snapshot'
 import {
   candidatesFor,
@@ -193,18 +193,18 @@ import {
   type Requirement,
   type Skill,
   type SkillLevel,
-} from '../lib/skills'
+} from '../lib/capacity/skills'
 import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from '../lib/documents'
-import { htmlToText } from '../lib/intake'
-import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/mywork'
-import { waitingItems } from '../lib/inbox'
-import { meetingSuggestions } from '../lib/timesheetSuggestions'
-import { replanningFor } from '../lib/replanning'
+import { htmlToText } from '../lib/comms/intake'
+import { decisionItems, describeWork, myWork, todaysMeetings } from '../lib/personal/mywork'
+import { waitingItems } from '../lib/comms/inbox'
+import { meetingSuggestions } from '../lib/time/timesheetSuggestions'
+import { replanningFor } from '../lib/planning/replanning'
 import { runIntegrityChecks } from '../lib/dataIntegrity'
 import { addDays } from '../lib/dates'
-import { CONCERN_ORDER, describePortfolio, healthScore, portfolio, type PortfolioLine } from '../lib/portfolio'
+import { CONCERN_ORDER, describePortfolio, healthScore, portfolio, type PortfolioLine } from '../lib/planning/portfolio'
 import { capabilityStates, describeCapabilities, reconciliationPlan } from '../lib/capabilities'
-import { describeGoals, goalProgress } from '../lib/goals'
+import { describeGoals, goalProgress } from '../lib/planning/goals'
 import {
   checkScopeItem,
   effortProblem,
@@ -223,7 +223,7 @@ import {
   milestoneValue,
   scheduleProblem,
   type Milestone,
-} from '../lib/milestone'
+} from '../lib/planning/milestone'
 import {
   contractedPosition,
   decideChangeProblem,
@@ -232,14 +232,14 @@ import {
   changeRequestFor,
   type ChangeRequest,
   type ChangeStatus,
-} from '../lib/changeRequest'
+} from '../lib/commercial/changeRequest'
 import { applicableApprovalRules, issueApprovalGate } from '../lib/approval'
-import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity'
+import { profileAt, profilesAt, describeCapacity, actualHoursByPerson } from '../lib/capacity/capacity'
 import {
   weekStarting, weekLabel, weekTotal, weekGrid, isFrozen, frozenMessage, submitProblem, decideProblem, statusAfter,
   issueWeekCells, daysOfWeek,
   type Timesheet, type Attester,
-} from '../lib/timesheet'
+} from '../lib/time/timesheet'
 import { DEFAULT_SLA } from '../lib/types'
 import type { Actor } from '../lib/actor'
 import { reapplyable } from '../lib/reapplyPendingAction'
@@ -566,6 +566,24 @@ scenario(
   'The same defect is reported twice',
   'The duplicate is detected, linked to the original, and does not become a second stream of work.',
   () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say "detection
+     * is still manual: the duplicate-detection agent is a registry record with no runtime" —
+     * true of that one agent record, but not a fair account of the capability: `duplicateGroups`
+     * (lib/comms/intake.ts, proven independently by IT6/IT7/IT9) is a real, working detection function,
+     * surfaced live at Configuration → Duplicates for a person to review and confirm. This
+     * scenario never actually called it, so it never earned the claim either way. It does now,
+     * against a same-shape pair built locally (BASE itself is untouched, shared by every other
+     * scenario) — a reply-prefixed subject on the second report, same client, same parent.
+     */
+    const dupIssues: Record<string, IssueRecord> = {
+      'OAPIL-1': { ...BASE.issues['OAPIL-1'], subject: 'Batch posting failure', lastActivity: '2026-08-03' },
+      'OAPIL-2': { ...BASE.issues['OAPIL-2'], subject: 'Re: Batch posting failure', lastActivity: '2026-08-05' },
+    }
+    const groups = duplicateGroups(dupIssues)
+    const detected = groups.length === 1 && groups[0].canonical === 'OAPIL-2' &&
+      groups[0].duplicates.length === 1 && groups[0].duplicates[0] === 'OAPIL-1'
+
     const s = ok(BASE, {
       t: 'link', sourceIssueId: 'OAPIL-2', targetIssueId: 'OAPIL-1',
       relationshipType: 'Duplicate of', note: 'Same batch failure.', now: NOW,
@@ -576,11 +594,13 @@ scenario(
       reason: 'Duplicate of OAPIL-1 — same batch failure, same root cause.',
     } as Action)
     return {
-      verdict: linked ? 'PARTIAL' : 'FAIL',
-      actual: `The link and the Superseded status both work, closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. Detection is still manual: the duplicate-detection agent is a registry record with no runtime.`,
-      stops: 'at detection — a person must notice',
-      severity: 'P2',
-      impact: 'Duplicates are found late, after two people have worked the same fault.',
+      verdict: detected && linked ? 'PASS' : linked ? 'PARTIAL' : 'FAIL',
+      actual: `${detected ? 'Detected: duplicateGroups groups the pair (client + parent + reply-stripped subject) and names OAPIL-2 canonical as the more recently active — the exact candidate a reviewer would confirm.' : 'duplicateGroups did not group the pair — detection itself has regressed.'} The link and the Superseded status both work, closing sets actualEnd to ${superseded.issues['OAPIL-2'].actualEnd}, and the transition graph makes the duplicate call an explained one — Superseded needs a reason, which is now on the trail. What is still manual, correctly: a person reviews Configuration → Duplicates and confirms the link — the function surfaces a candidate, it does not merge records on its own, which is the right division of labour for a data-correcting action. The narrower real gap is that this is a pull screen, not a push: nothing notifies anyone when a new group appears: a duplicate sits undetected until someone opens Configuration → Duplicates.`,
+      stops: detected && linked ? '' : 'at detection — a person must notice',
+      severity: detected && linked ? 'P3' : 'P2',
+      impact: detected && linked
+        ? 'Detection is real and proven; the residual gap is that reviewing it is not prompted, only available.'
+        : 'Duplicates are found late, after two people have worked the same fault.',
     }
   },
 )
@@ -1041,7 +1061,7 @@ scenario(
      * This scenario used to test something else entirely — an issue's own date rolling up to
      * its process area — while its `stops` text talked about milestones. That was accurate once
      * (Milestone had no plannedDate/sowId/billing at all), and stopped being accurate when
-     * lib/milestone.ts grew a full commercial model (checked directly while fixing this: sowId,
+     * lib/planning/milestone.ts grew a full commercial model (checked directly while fixing this: sowId,
      * plannedDate, delivery/acceptance states, billOn triggers). It was never revisited. This
      * now tests the thing its own title names.
      */
@@ -1201,12 +1221,162 @@ scenario(
     return {
       verdict: good ? 'PARTIAL' : 'FAIL',
       actual: `${v.actual}h spent against ${v.estimated}h agreed — ${v.varianceHours! > 0 ? '+' : ''}${v.varianceHours}h, ${Math.round(v.variancePct!)}%. An unestimated issue reports its variance as unknown rather than as an overrun against zero, and an overrun against a draft is labelled as such: a number nobody agreed is not a commitment anybody broke.`,
-      stops: 'here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW\'s baselined issues, shown in CommercialPanel. Milestone-level attribution stays open — `Milestone` carries no relationship to individual issues today, and inventing one would be its own design, not a rollup detail.',
+      stops: 'here, at the issue — this scenario is per-issue by design. The rollup itself exists now, proven by `RT1`: `SowPosition.varianceHours`/`varianceIssueCount` sum this exact fact across a SOW\'s baselined issues, shown in CommercialPanel. Milestone-level attribution is no longer open either — see `K2`, which proves `setIssueMilestone` and `milestonePosition` directly, the finer read this scenario used to say would be its own design.',
       severity: 'P2',
-      impact: 'A consultant can see the overrun on the record, and — proven at SOW level elsewhere — so can a partner on the engagement. Milestone-level visibility remains a real, separate gap.',
+      impact: 'A consultant can see the overrun on the record, and — proven at SOW level elsewhere and now at milestone level too (`K2`) — so can a partner on the engagement.',
     }
   },
 )
+
+scenario(
+  'K2',
+  "An issue is attributed to a milestone, one level finer than the SOW it already belongs to",
+  'Attributing works only within the issue\'s own SOW, refuses across SOWs, and clears cleanly — through the reducer, not assumed from the model alone.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    /*
+     * The issue's own project and SOW, with two milestones to attribute between. Only OAPIL-1
+     * moves into it — OAPIL-3 stays exactly where BASE put it, under a module with no project
+     * ancestor at all, deliberately: that is check 4's fixture, not a separate setup.
+     */
+    let s = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'K2 project' }, now: NOW } as Action)
+    const projectId = Object.values(s.nodes).find((n) => n.kind === 'project' && n.name === 'K2 project')!.id
+    s = ok(s, { t: 'create', parentId: projectId, kind: 'module', draft: { name: 'K2 module' }, now: NOW } as Action)
+    const k2ModuleId = Object.values(s.nodes).find((n) => n.kind === 'module' && n.name === 'K2 module')!.id
+    s = ok(s, { t: 'move', id: 'OAPIL-1', newParentId: k2ModuleId, now: NOW } as Action)
+    s = ok(s, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-K2', title: 'K2 proof', effortHours: 40, value: 32_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const sowId = Object.values(s.sows).find((x) => x.reference === 'SOW-K2')!.id
+    s = ok(s, { t: 'attributeToSow', nodeId: projectId, sowId, now: NOW } as Action)
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId,
+      patch: { name: 'Phase 1', sequence: 1, basis: 'amount', amount: 16_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+    const milestoneA = Object.values(s.milestones).find((m) => m.name === 'Phase 1')!.id
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId,
+      patch: { name: 'Phase 2', sequence: 2, basis: 'amount', amount: 16_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-11-01', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+
+    /* A second, unrelated SOW and milestone — what attribution must refuse to cross into. */
+    s = ok(s, {
+      t: 'upsertSow', id: null, engagementId,
+      patch: { reference: 'SOW-K2-RIVAL', title: 'A different contract', effortHours: 10, value: 8_000, status: 'Signed' },
+      now: NOW,
+    } as Action)
+    const rivalSowId = Object.values(s.sows).find((x) => x.reference === 'SOW-K2-RIVAL')!.id
+    s = ok(s, {
+      t: 'upsertMilestone', id: null, sowId: rivalSowId,
+      patch: { name: 'Rival milestone', sequence: 1, basis: 'amount', amount: 8_000, currency: 'USD', billOn: 'delivery', plannedDate: '2026-10-15', delivery: 'Planned' },
+      now: NOW,
+    } as Action)
+    const rivalMilestoneId = Object.values(s.milestones).find((m) => m.name === 'Rival milestone')!.id
+
+    /* 1. Attributed, within the issue's own SOW. */
+    const attributed = ok(s, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: milestoneA, now: NOW } as Action)
+    const landed = attributed.issues['OAPIL-1'].milestoneId === milestoneA
+
+    /* 2. Refused across SOWs — OAPIL-1 belongs to SOW-K2, not SOW-K2-RIVAL. */
+    const crossSow = act(s, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: rivalMilestoneId, now: NOW } as Action)
+
+    /* 3. Cleared. */
+    const cleared = ok(attributed, { t: 'setIssueMilestone', issueId: 'OAPIL-1', milestoneId: null, now: NOW } as Action)
+    const clearedOk = cleared.issues['OAPIL-1'].milestoneId === null
+
+    /* 4. Refused when the issue's project has no SOW at all — OAPIL-3 was never attributed. */
+    const noSow = act(s, { t: 'setIssueMilestone', issueId: 'OAPIL-3', milestoneId: milestoneA, now: NOW } as Action)
+
+    const good =
+      landed &&
+      Boolean(crossSow.error) &&
+      clearedOk &&
+      Boolean(noSow.error)
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Attributing OAPIL-1 to Phase 1 lands (milestoneId="${attributed.issues['OAPIL-1'].milestoneId}") and is audited. Attributing it to a milestone on a different SOW is refused — "${crossSow.error}" — because ${crossSow.error ? 'the issue\'s own project names SOW-K2, not SOW-K2-RIVAL' : 'nothing stopped it'}. Clearing the attribution back to null succeeds. Attributing an issue whose project carries no SOW at all (OAPIL-3) is refused the same way — "${noSow.error}" — there is no SOW for the milestone to belong to in common with.`,
+      stops: '',
+      severity: 'P2',
+      impact: 'Milestone-level attribution is real, refuses the cases that would make a variance figure count effort against the wrong contract, and cannot silently orphan an issue against a milestone its own SOW never priced.',
+    }
+  },
+)
+
+scenario(
+  'K3',
+  'milestoneEffortPosition sums only its own milestone\'s issues, and does not disagree with the SOW-level figure it is a slice of',
+  'Two milestones under one SOW, one issue each — each milestone counts only its own, and the two together equal the SOW total for the same issues.',
+  () => {
+    const bands = BASE.model.sizeBands
+    const sow: Sow = {
+      id: 'sow-k3', engagementId: 'eng-k3', reference: 'SOW-K3', title: 'K3 proof',
+      effortHours: 100, value: 50_000, currency: 'USD', status: 'Signed',
+      signedAt: NOW, createdBy: A.name, createdAt: NOW, deletedAt: null,
+    } as unknown as Sow
+    const milestoneA: Milestone = {
+      id: 'ms-a', sowId: sow.id, name: 'A', description: '', sequence: 1,
+      basis: 'amount', percentage: null, amount: 25_000, currency: 'USD', billOn: 'delivery',
+      plannedDate: null, delivery: 'Planned', deliveredAt: null, deliveredBy: null,
+      acceptance: 'Pending', acceptedAt: null, acceptedBy: null, rejectionNote: null,
+      acceptedValue: null, evidenceDocumentId: null,
+    } as unknown as Milestone
+    const milestoneB: Milestone = { ...milestoneA, id: 'ms-b', name: 'B', sequence: 2 }
+
+    let s = ok(BASE, {
+      t: 'setEstimate', issueId: 'OAPIL-1',
+      patch: { scores: { business: 2, technical: 2, integration: 1, testing: 2, data: 1 } }, now: NOW,
+    } as Action)
+    s = ok(s, { t: 'baselineEstimate', issueId: 'OAPIL-1', now: NOW } as Action)
+    s = ok(s, {
+      t: 'setEstimate', issueId: 'OAPIL-2',
+      patch: { scores: { business: 1, technical: 1, integration: 1, testing: 1, data: 1 } }, now: NOW,
+    } as Action)
+    s = ok(s, { t: 'baselineEstimate', issueId: 'OAPIL-2', now: NOW } as Action)
+    s = ok(s, {
+      t: 'addTime', issueId: 'OAPIL-1', person: A.name, date: '2026-08-11',
+      hours: 4, activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    s = ok(s, {
+      t: 'addTime', issueId: 'OAPIL-2', person: A.name, date: '2026-08-12',
+      hours: 2, activity: 'Resolution', billable: true, now: NOW, note: '',
+    } as Action)
+
+    // milestonePosition takes issueIds directly, the same pre-filtered-by-the-caller contract
+    // sowPosition already uses — the attribution itself (issue.milestoneId, set through the
+    // reducer) is K2's job to prove, not this one's.
+    const bothIds = ['OAPIL-1', 'OAPIL-2']
+
+    const posA = milestoneEffortPosition(milestoneA, ['OAPIL-1'], s.estimates, s.timeEntries, bands)
+    const posB = milestoneEffortPosition(milestoneB, ['OAPIL-2'], s.estimates, s.timeEntries, bands)
+    const sowWhole = sowPosition(sow, bothIds, s.estimates, s.timeEntries, bands)
+
+    const onlyItsOwn = posA.issueIds.length === 1 && posA.issueIds[0] === 'OAPIL-1' &&
+      posB.issueIds.length === 1 && posB.issueIds[0] === 'OAPIL-2'
+    const sumsAgree =
+      round2(posA.plannedHours + posB.plannedHours) === round2(sowWhole.plannedHours) &&
+      round2(posA.actualHours + posB.actualHours) === round2(sowWhole.actualHours)
+
+    const good = onlyItsOwn && sumsAgree
+
+    return {
+      verdict: good ? 'PASS' : 'FAIL',
+      actual: `Milestone A (OAPIL-1 only) plans ${posA.plannedHours}h, ${posA.actualHours}h spent; Milestone B (OAPIL-2 only) plans ${posB.plannedHours}h, ${posB.actualHours}h spent. Summed: ${posA.plannedHours + posB.plannedHours}h planned, ${posA.actualHours + posB.actualHours}h actual — matching sowPosition's own ${sowWhole.plannedHours}h / ${sowWhole.actualHours}h for the identical two issues exactly. Neither milestone's figure leaks the other's issue.`,
+      stops: '',
+      severity: 'P3',
+      impact: 'A milestone-level variance figure can be trusted precisely because it never disagrees with the coarser SOW-level figure it is a slice of.',
+    }
+  },
+)
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 /* ================================================================== *
  * 5 — Scope and change control
@@ -1320,7 +1490,7 @@ scenario(
     /*
      * Priced: a statement of work to vary, and the same movement raised against it as a
      * ChangeRequest — CommercialPanel's own raise form now offers exactly this issue as the
-     * link, since `issueId` was always on the model (see lib/changeRequest.ts) and only the
+     * link, since `issueId` was always on the model (see lib/commercial/changeRequest.ts) and only the
      * UI never set it.
      */
     const engagementId = Object.values(s.nodes).find((n) => n.kind === 'engagement')!.id
@@ -2145,10 +2315,10 @@ scenario(
     ].filter(Boolean)
     return {
       verdict: applied ? 'PARTIAL' : 'FAIL',
-      actual: `Adopting "${template.name}" at a scope works and carries ${carries.join(', ') || 'nothing'}. It creates no work items, applies no SLA of its own and configures no notifications — a template is a set of defaults, not a project setup.`,
-      stops: 'at everything the template does not carry',
+      actual: `Adopting "${template.name}" at a scope works and carries ${carries.join(', ') || 'nothing'} — proven here exactly as before. A template that also names a blueprint now builds real structure too: see TPL5, which proves that path end to end. What neither path carries yet: an issue built from a blueprint entry does not reference an IssueTemplate, so it arrives with no starting checklist. SLA and automation-rule notifications are not separately proven for blueprint-created issues — they run through the same create action every issue does, which is reason to expect they apply the same way, but "reason to expect" is not a scenario, so it's named rather than claimed.`,
+      stops: 'at checklists for blueprint-built issues, and at an explicit proof that SLA/notifications reach them the same way they reach any other issue',
       severity: 'P2',
-      impact: 'Mobilising a project is still manual; only the operating-model defaults are inherited.',
+      impact: 'Mobilising a project from a blueprint-linked template now creates real structure and inherited defaults together; the remaining gap is narrower than before, not gone.',
     }
   },
 )
@@ -2311,9 +2481,9 @@ scenario(
         f6: entry('f6', 'Sam', samId, '2026-08-19', 4, true), // rejected, not re-submitted
       },
       timesheets: {
-        t1: { id: 't1', person: 'Priya', personId: priyaId, weekStarting: '2026-08-10', status: 'Approved', submittedAt: 'x', submittedBy: 'Priya', decidedAt: 'x', decidedBy: 'Lead', reason: null },
-        t2: { id: 't2', person: 'Priya', personId: priyaId, weekStarting: '2026-08-17', status: 'Submitted', submittedAt: 'x', submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null },
-        t3: { id: 't3', person: 'Sam', personId: samId, weekStarting: '2026-08-17', status: 'Rejected', submittedAt: 'x', submittedBy: 'Sam', decidedAt: 'x', decidedBy: 'Lead', reason: 'Wrong issue.' },
+        t1: { id: 't1', person: 'Priya', personId: priyaId, weekStarting: '2026-08-10', status: 'Approved', submittedAt: 'x', submittedBy: 'Priya', decidedAt: 'x', decidedBy: 'Lead', reason: null, workingPatternStamp: null },
+        t2: { id: 't2', person: 'Priya', personId: priyaId, weekStarting: '2026-08-17', status: 'Submitted', submittedAt: 'x', submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null, workingPatternStamp: null },
+        t3: { id: 't3', person: 'Sam', personId: samId, weekStarting: '2026-08-17', status: 'Rejected', submittedAt: 'x', submittedBy: 'Sam', decidedAt: 'x', decidedBy: 'Lead', reason: 'Wrong issue.', workingPatternStamp: null },
       },
       rates: { r1: { id: 'r1', amount: 77123.45, person: 'Priya' } as never },
       commitments: {
@@ -2986,13 +3156,26 @@ scenario(
   'The assistant proposes a change with low confidence',
   'It recommends rather than acts, and a person decides.',
   () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. The scenario used to say autonomy
+     * levels have "no runtime that reads them" — false: canPropose() (lib/comms/chat.ts) and the
+     * config route (app/api/chat/route.ts) both read and enforce the configured level live.
+     * What is actually missing is narrower and different in kind: no field anywhere in the
+     * chat/agent domain carries a confidence score, so "low confidence" has nothing to test
+     * against. That is a spec gap, not an unwired field, and NOT IMPLEMENTED is checked the
+     * way every other such verdict here is — by grepping the domain's own files, not assumed.
+     */
     const gated = mentions(/proposal|applyProposal|cards\[/).length
+    const CHAT_DOMAIN = ['lib/comms/chat.ts', 'app/api/chat/route.ts', 'components/comms/ChatPanel.tsx', 'lib/config.ts']
+    const noConfidenceConcept = !SRC.some(
+      (f) => CHAT_DOMAIN.includes(f) && /confidence/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')),
+    )
     return {
-      verdict: 'NOT TESTABLE',
-      actual: `One live agent exists behind a chat route, and its proposals are rendered as cards a person accepts or rejects (${gated} files participate). Confidence thresholds and autonomy levels are registry fields with no runtime that reads them. Driving it needs a model key this script does not have.`,
-      stops: 'at the autonomy fields — declared, unread',
-      severity: 'P1',
-      impact: '37 of 38 agents are records. The one that runs is gated correctly, but the gate is code, not the configured policy.',
+      verdict: noConfidenceConcept ? 'NOT IMPLEMENTED' : 'PARTIAL',
+      actual: `Autonomy level (off/suggest/propose/act) is read and enforced live — canPropose() gates whether the one live agent may render a proposal card at all (${gated} files participate) — and 'act' behaves identically to 'propose' in the code today: every proposal still needs a human click on Apply regardless of the configured level, so recommend-rather-than-act already holds unconditionally. ${noConfidenceConcept ? 'No confidence field exists on ChatConfig, AgentRecord, or the chat route' : 'A confidence-shaped field now exists in the chat/agent domain'} — there is nothing to threshold "low confidence" against, because nobody has specified what it would mean here.`,
+      stops: 'at the premise — no confidence signal exists anywhere in the assistant/agent-registry domain to test',
+      severity: 'P3',
+      impact: 'The recommend-not-act guarantee this scenario names already holds unconditionally, by construction, at every autonomy level. A confidence-gated downgrade on top of it would be new scope — resolved 20 Sep 2026 as not-yet-specified rather than left open indefinitely as an unwired field.',
     }
   },
   'X',
@@ -3190,7 +3373,7 @@ scenario(
   'The week is presented for approval, and approval freezes exactly what was approved.',
   () => {
     /*
-     * Driven against lib/timesheet.ts directly, before anything calls it. If the rules are wrong
+     * Driven against lib/time/timesheet.ts directly, before anything calls it. If the rules are wrong
      * this is where it costs nothing to find out — which is the reason the plan puts the
      * scenarios before the reducer arms rather than after them.
      */
@@ -3223,6 +3406,7 @@ scenario(
     const submitted: Timesheet = {
       id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
 
     /* Twice is refused, and says which state it is already in. */
@@ -3282,6 +3466,7 @@ scenario(
     const submitted: Timesheet = {
       id: 'ts-1', person: 'Priya', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
 
     /* The rule that has no configuration switch: the asker may never be the decider. */
@@ -3964,13 +4149,27 @@ scenario(
   'AA',
   'An integration fails',
   'The failure is contained, retried where safe, surfaced, and never leaves records half-written.',
-  () => ({
-    verdict: 'NOT IMPLEMENTED',
-    actual: `No outbound integration exists. The only network call the product makes is to the model behind the chat route; ${absent(/DevOps|sharepoint|graph\.microsoft|jira/i) ? 'no DevOps, SharePoint or Teams client appears in source' : 'an integration client exists'}.`,
-    stops: 'at the integration',
-    severity: 'P2',
-    impact: 'Nothing to fail yet — but the write path has no idempotency key, so retries will need one before the first integration lands. See FL4.',
-  }),
+  () => {
+    /*
+     * Re-checked directly rather than assumed, 20 Sep 2026. This used to open "No outbound
+     * integration exists" and close, in the very same sentence, with the self-check reporting
+     * the opposite — the leading claim was a literal that never got updated once the check it
+     * sat beside actually found one. Read the real files instead of trusting either half.
+     */
+    const graphClients = mentions(/graph\.microsoft\.com/)
+    const mailHandlesFailure = mentions(/A refusal is terminal for this notification/).length > 0
+    const documentsUseIdempotency = mentions(/from '@\/lib\/idempotency'/).some((f) => f.includes('documents'))
+    const teamsOutbound = !absent(/graph\.microsoft\.com\/v1\.0\/(teams|chats)/)
+    return {
+      verdict: teamsOutbound ? 'PASS' : 'PARTIAL',
+      actual: `Two real outbound Graph integrations exist, in ${graphClients.length} files — client mail (send and read, lib/comms/mail.ts) and the document store (SharePoint, app/api/documents). Both are genuinely fail-contained, not just present: mail ${mailHandlesFailure ? 'stamps every send delivered/failed/pending with a reason rather than throwing, and treats a refusal as terminal on purpose — "retrying the same refusal every morning would only bury it" — while a merely-not-yet-possible case (no directory email, no mailbox configured) stays pending for a natural retry once fixed' : 'has no visible failure containment'}; the document route ${documentsUseIdempotency ? 'sits behind the same idempotency-key write path every other action uses, and rolls back an orphaned stored file on a failure after the upload but before the record' : 'has no visible idempotency guard'}. What genuinely does not exist: an outbound Teams integration — no Graph Teams/chat call appears anywhere, matching W's own finding that Teams notifications have nowhere to go.`,
+      stops: teamsOutbound ? '' : 'at Teams — the one Graph-adjacent surface with no outbound call at all',
+      severity: 'P2',
+      impact: teamsOutbound
+        ? 'Every outbound integration is fail-contained.'
+        : 'Mail and documents are production-grade on failure handling. Teams is the one integration this finding can still honestly call missing, not merely untested.',
+    }
+  },
 )
 
 scenario(
@@ -4071,10 +4270,24 @@ scenario(
   'What was true is preserved with its period, and a later correction cannot move a figure already computed.',
   () => {
     /*
-     * Driven against lib/versioning.ts directly, before it has a caller. Boundary arithmetic is
-     * where this kind of code goes wrong and it goes wrong quietly, so it is proven here rather
-     * than inferred from a capacity figure looking plausible.
+     * Driven against lib/versioning.ts directly first — boundary arithmetic is where this kind
+     * of code goes wrong and it goes wrong quietly, so it is proven on its own terms before
+     * anything about a caller is asked. Then, below, through the reducer for real: record a
+     * pattern, approve a week, correct the pattern, and check the approved week's own figure
+     * held — the same shift scenario `E` made this session, from a pure function proven alone
+     * to the reducer path that actually uses it.
+     *
+     * Re-checked directly, 20 Sep 2026: this scenario used to say "no version has been stored,
+     * and nothing in the application stamps anything yet" — false about storage and reading.
+     * `recordVersion`/`correctVersion` were already wired end to end (a real UI call site,
+     * `onRecordPattern` in IssueWorkspace.tsx; full persistence via the Prisma `Version` model);
+     * `lib/capacity/capacity.ts` was already reading `valueAt` for real capacity figures. The one caller
+     * that genuinely did not exist — `stamp()`, called nowhere in the application — is built in
+     * the same change that corrected this scenario: `decideTimesheet`'s approval arm now stamps
+     * `Timesheet.workingPatternStamp`. See docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
      */
+    const storageWired = mentions(/onRecordPattern/).length > 0 && mentions(/versionFromRow/).length > 0
+    const capacityReadsIt = mentions(/valueAt\(versions, WORKING_PATTERN/).length > 0
     const v = (id: string, from: string, to: string | null, hours: number): Version<number> => ({
       id, subjectKind: 'person.workingPattern', subjectId: 'P1', validFrom: from, validTo: to,
       value: hours, recordedAt: NOW, by: 'Operator', reason: 'Recorded for the test',
@@ -4127,13 +4340,70 @@ scenario(
       affected.length === 1 &&
       stillSevenAndAHalf
 
+    /*
+     * The round trip, for real: record a pattern, approve a week against it, correct the
+     * pattern, and check the approved week's own figure held. Priya and Sam are both already
+     * seeded in BASE — Sam deliberately gets no pattern recorded, proving the null case reaches
+     * all the way through the reducer, not only through `valueAt` in isolation.
+     */
+    // `submitTimesheet` is refused unless the submitter is the person named on it
+    // ("A timesheet is submitted by the person whose week it is") — `A` (Validator) isn't
+    // Priya or Sam, so that one step needs an actor whose name actually matches.
+    const okAs = (st: WorkspaceState, a: Action, who: Actor): WorkspaceState => {
+      const r = apply(st, a, who)
+      if (r.error) throw new Error(`${a.t} refused: ${r.error}`)
+      return r.state
+    }
+    const priyaId = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!.id
+    const samId = Object.values(BASE.model.people).find((p) => p.name === 'Sam')!.id
+    const priyaActor: Actor = { id: priyaId, name: 'Priya' }
+    const samActor: Actor = { id: samId, name: 'Sam' }
+    const patterned = ok(BASE, {
+      t: 'recordVersion', subjectKind: 'person.workingPattern', subjectId: priyaId,
+      validFrom: '2026-08-01', validTo: null, value: { hoursPerDay: 7.5 },
+      reason: 'Standard week, recorded for the test.', now: NOW,
+    } as Action)
+    const versionId = Object.values(patterned.versions).find((ver) => ver.subjectId === priyaId)!.id
+    const withHours = ok(patterned, {
+      t: 'addTime', issueId: 'OAPIL-1', person: 'Priya', date: '2026-08-10', hours: 4,
+      activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const submitted = okAs(withHours, { t: 'submitTimesheet', person: 'Priya', weekStarting: '2026-08-10', now: NOW } as Action, priyaActor)
+    const sheetId = Object.values(submitted.timesheets).find((t) => t.person === 'Priya')!.id
+    const approved = ok(submitted, { t: 'decideTimesheet', id: sheetId, decision: 'approved', now: NOW } as Action)
+    const patternStamp = approved.timesheets[sheetId].workingPatternStamp
+    const stampCaptured =
+      patternStamp?.stampedFrom === versionId &&
+      (patternStamp.value as { hoursPerDay: number }).hoursPerDay === 7.5
+
+    /* The correction that must not move an already-approved figure. */
+    const corrected = ok(approved, {
+      t: 'correctVersion', id: versionId, patch: { value: { hoursPerDay: 6 } },
+      reason: 'Moved to a four-day week from August, recorded for the test.', now: NOW,
+    } as Action)
+    const stampAfterCorrection = corrected.timesheets[sheetId].workingPatternStamp
+    const stampUnmoved =
+      stampAfterCorrection?.stampedFrom === versionId &&
+      (stampAfterCorrection.value as { hoursPerDay: number }).hoursPerDay === 7.5
+
+    /* Approving a week for somebody with no recorded pattern stamps nothing — not a default. */
+    const noPatternHours = ok(BASE, {
+      t: 'addTime', issueId: 'OAPIL-2', person: 'Sam', date: '2026-08-10', hours: 3,
+      activity: 'Resolution', billable: true, note: '', now: NOW,
+    } as Action)
+    const noPatternSubmitted = okAs(noPatternHours, { t: 'submitTimesheet', person: 'Sam', weekStarting: '2026-08-10', now: NOW } as Action, samActor)
+    const noPatternSheetId = Object.values(noPatternSubmitted.timesheets).find((t) => t.person === 'Sam')!.id
+    const noPatternApproved = ok(noPatternSubmitted, { t: 'decideTimesheet', id: noPatternSheetId, decision: 'approved', now: NOW } as Action)
+    const stampNullWhenNoPattern = noPatternApproved.timesheets[noPatternSheetId].workingPatternStamp === null
+
+    const roundTrip = stampCaptured && stampUnmoved && stampNullWhenNoPattern
+
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it: the stamp still holds ${held?.value}h from ${held?.stampedFrom}. What is not proven is the round trip — no version has been stored, and nothing in the application stamps anything yet, because the first thing that will is an approved timesheet.`,
-      stops: 'at storage, and at a stamp made by the application rather than by this scenario',
+      verdict: good && storageWired && capacityReadsIt && roundTrip ? 'PASS' : 'FAIL',
+      actual: `A date before any period returns null rather than a default, and so does a person nobody has a pattern for — which is the property the rest rests on, because a fallback would still return a plausible number. \`validTo\` is exclusive: 30 June answers ${dayBefore?.value}h and 1 July answers ${onBoundary?.value}h, so two periods can abut without overlapping. An overlap is refused — "${(overlapping ?? '').slice(0, 70)}…" — while a gap is allowed, because somebody who left and rejoined has one and forcing contiguity would invent employment. Correcting a period against itself is permitted. A correction reports the ${affected.length} record computed from that version and moves none of it. That last property is now proven through the reducer, not only through \`stamp()\` in isolation: recording a pattern, logging time, submitting and approving the week stamps the timesheet with ${patternStamp && (patternStamp.value as { hoursPerDay: number }).hoursPerDay}h from the version just recorded; correcting that same pattern to 6h afterwards leaves the approved week reading ${stampAfterCorrection && (stampAfterCorrection.value as { hoursPerDay: number }).hoursPerDay}h — unmoved, exactly as designed. Approving a week for somebody with no recorded pattern (Sam) stamps null, not a default.`,
+      stops: '',
       severity: 'P2',
-      impact:
-        'The rules hold. Until they are wired to capacity and persisted, a working pattern is still a single value that a change destroys.',
+      impact: 'The rules hold, are wired to capacity, and a correction cannot move an already-approved week’s figure — proven through the reducer, the whole way from recording a pattern to an approval that outlives a later correction to it.',
     }
   },
 )
@@ -4144,7 +4414,7 @@ scenario(
   'The overrun warns and never refuses; only a closed issue shuts the window, and a derived opening date says it was derived.',
   () => {
     /*
-     * Driven against lib/timeWindow.ts directly, before `addTime` consults it. That is
+     * Driven against lib/time/timeWindow.ts directly, before `addTime` consults it. That is
      * deliberate: this rule is the first thing that will ever refuse a time entry, and the
      * person it lands on is a consultant at the end of a week with hours to record. A refusal
      * that fires on the common case — every issue that runs past its due date — would turn the
@@ -4341,6 +4611,16 @@ scenario(
     const atAllowance = backdated('2026-08-01', '2026-08-08')
     const pastAllowance = backdated('2026-08-01', '2026-08-09')
 
+    /*
+     * Re-checked directly, 20 Sep 2026: this scenario used to close saying "no cap is applied
+     * by anything, and no working pattern has been recorded as a version by the application" —
+     * false. `dayWarning` (lib/workspace.ts) calls exactly this pair — `dailyCap` then
+     * `dailyCapWarning` — live, inside `addTime`'s own success message, on every entry. Checked
+     * rather than assumed, the same discipline a NOT IMPLEMENTED verdict elsewhere in this
+     * suite already follows.
+     */
+    const wiredLive = mentions(/dailyCapWarning\(dailyCap\(/).length > 0
+
     const good =
       beforeAnything.kind === 'unenforced' &&
       beforeAnything.hoursPerDay === null &&
@@ -4368,12 +4648,12 @@ scenario(
       pastAllowance.approvalRequired
 
     return {
-      verdict: good ? 'PARTIAL' : 'FAIL',
-      actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. No cap is applied by anything, and no working pattern has been recorded as a version by the application.`,
+      verdict: good && wiredLive ? 'PASS' : good ? 'PARTIAL' : 'FAIL',
+      actual: `A date before any pattern, a person nobody has a pattern for, and a version whose value carries no hours per day all answer unenforced with a null cap — three ways of not knowing, none of them eight. An unenforced cap warns about nothing, so an eleven-hour day is recorded rather than argued with. Where a pattern exists the cap is read at the work date, not at today: 30 June is ${june.hoursPerDay}h from ${june.fromVersion} and 1 July is ${july.hoursPerDay}h from ${july.fromVersion}, so hours logged in June are checked against June even after a move to a four-day week. Eleven hours against a ${june.hoursPerDay}h day warns and does not refuse — long days happen, and refusing one produces hours booked to the wrong day rather than fewer hours worked. Backdating turns at exactly ${BACKDATING_ALLOWANCE_DAYS} days: ${atAllowance.days} days late needs nothing, ${pastAllowance.days} days late needs a justification and an approval. ${wiredLive ? 'This is not just proven arithmetic: `addTime` calls exactly this pair, live, on every entry — a real cap, applied by the real application, not merely available in a library.' : 'The cap is proven correct but has no application caller yet.'}`,
       stops: 'at the action\'s own entry point, not at storage. `TimeEntry` has carried `personId` since the identity-ids migration (2026-08-22) — every entry it counts, and the `Version` it reads the cap from, are both id-first. What still resolves by name is the one thing that has no id yet: the incoming `addTime` action itself, which — like every write action in this codebase — arrives with only a free-text `person` field, never a `personId`. So the entry point looks the person up by name before anything id-first can begin, and a name that does not currently resolve gets no cap and therefore no warning. It fails to a missing remark rather than a wrong refusal, which is why it was acceptable to wire at all.',
-      severity: 'P2',
+      severity: 'P3',
       impact:
-        'The honest answer is available. Until patterns are versioned and the cap is called, a daily total is unchecked — which is better than checked against a number nobody entered.',
+        'The cap is proven correct and applied live on every recorded entry. The one accepted, deliberate residual: a name that cannot be resolved to a directory id gets no cap rather than a wrong one — a missing remark, never a wrong refusal, and not something this finding treats as open work.',
     }
   },
 )
@@ -4583,7 +4863,7 @@ scenario(
     const abutting = rateProblem(rates, { personId: P, kind: 'bill', validFrom: '2025-06-01', validTo: '2026-01-01' })
 
     /*
-     * Real worked hours, gathered by lib/rates.ts's sowCostOf and lib/sow.ts's variance rollup —
+     * Real worked hours, gathered by lib/commercial/rates.ts's sowCostOf and lib/commercial/sow.ts's variance rollup —
      * the wiring this scenario used to say was still missing.
      */
     const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
@@ -4922,7 +5202,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `Asked for Intercompany at practitioner and X++ at working: ${m.qualified.length} person meets both (${names(m.qualified).join(', ')}) and ${m.partial.length} meet part of it (${names(m.partial).join(', ')}). Jaya holds Intercompany at Aware, below the floor, so she is not on the list; Priya's row is withdrawn and Tarun's skill has been retired from the catalogue, so neither produces a candidate. Dharmendra last used it in 2021 and nobody has said when Michael last used his — both are marked stale rather than dropped, because a firm may have nobody fresher and hiding them would answer a different question. Nothing is ranked and no best match is returned: the result carries the four things it cannot see — ${m.blind.slice(0, 2).join('; ')} — and describeMatch says so in the sentence. Read by somebody without skill.view, the same data yields ${blind.qualified.length} candidates and reports ${blind.unreadable} unreadable rows, so a shortlist shortened by a permission announces itself instead of looking like an empty firm; Amolak reading it still finds himself, because a person's own rows are never withheld from them.`,
-      stops: 'at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers "who could do this" only once somebody states what "this" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity.ts refuses to make.',
+      stops: 'at demand. Nothing yet asks a deliverable what skills it needs, so the requirements above are constructed here rather than read off a work item — this answers "who could do this" only once somebody states what "this" needs. It is also deliberately not joined to availability or cost: both now exist, and combining them into one ranked answer is the delivery decision lib/capacity/capacity.ts refuses to make.',
       severity: '—',
       impact:
         'Capacity could say whether a plan was possible and never who should be on it. This closes one of the three gaps capacity.ts names — skill — and leaves the other two, client relationship and who was on the call last week, absent and stated as absent rather than quietly assumed away.',
@@ -5582,7 +5862,7 @@ scenario(
     return {
       verdict: good ? 'PASS' : 'FAIL',
       actual: `Six lines of scope: four agreed, two recorded and not yet agreed. Only the agreed work counts toward the total — ${matched.approvedEffortHours}h, with the unagreed ${matched.totalEffortHours - matched.approvedEffortHours}h reported beside it rather than added in, because a line somebody typed while reading a draft is not scope and its hours must not reach a figure that gets compared with a contract. That comparison is made and never enforced: against a 1,000h contract it says "${(effortProblem(short) ?? '').slice(-42)}", and against 500h it says the agreed scope is more than was sold. Both are findings for a person, not refusals — a firm entering forty deliverables passes through every intermediate total on the way. An assumption cannot carry hours ("${effortOnStatement}"). Scope is one level deep: a criterion hangs off the deliverable it judges and reads directly beneath it, and hanging one off another criterion is refused, which is what stops a scope list quietly becoming a work breakdown.`,
-      stops: 'at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.',
+      stops: 'at delivery. This answers whether a line is in the agreed scope; it does not yet answer whether it has been delivered or accepted. Those are the two axes `lib/planning/milestone.ts` already implements, and adding a second copy before deciding how a delivered deliverable relates to an accepted milestone would duplicate the model rather than reuse it — the baseline decision in the operating-model document. `source: extracted` also has no producer: SOW intelligence needs a document library that is one consent short.',
       severity: '—',
       impact:
         'What a contract says it will deliver was a paragraph of free text. It is now a list somebody can agree line by line, compare against the contracted effort, and hang acceptance criteria from.',
@@ -6844,7 +7124,7 @@ scenario(
   'actualHoursByPerson counts what is logged in-window, and capacityFor sums allocations across projects',
   'an entry inside [from, to] counts, one before or after does not, one deleted does not; a person allocated to two different projects has capacityFor sum both, not just one -- the firm-wide claim this design rests on',
   () => {
-    const entry = (over: Partial<import('../lib/time').TimeEntry>): [string, import('../lib/time').TimeEntry] => {
+    const entry = (over: Partial<import('../lib/time/time').TimeEntry>): [string, import('../lib/time/time').TimeEntry] => {
       const e = {
         id: `rsc-${Math.random()}`, issueId: 'OAPIL-1', person: 'Priya', personId: 'PERSON_PRIYA',
         date: '2026-09-10', hours: 4, activity: 'Resolution' as const, billable: true, note: '',
@@ -6863,8 +7143,8 @@ scenario(
     const onlyInWindowCounts = hours['PERSON_PRIYA'] === 4
 
     const base = rowsOf(BASE).find((r) => r.kind === 'issue')!
-    const commitments: import('../lib/capacity').Commitment[] = []
-    const allocations: import('../lib/capacity').Allocation[] = [
+    const commitments: import('../lib/capacity/capacity').Commitment[] = []
+    const allocations: import('../lib/capacity/capacity').Allocation[] = [
       {
         id: 'rsc-alloc-1', person: 'Priya', personId: 'PERSON_PRIYA', projectId: base.parentId ?? base.id,
         startDate: '2026-09-01', endDate: '2026-09-30', percentage: 50, note: '',
@@ -7430,6 +7710,45 @@ scenario(
   },
 )
 
+scenario(
+  'BP4',
+  'An Outcome-tier node survives the blueprint round-trip, holding a module the same as a project would',
+  'CF3 (docs/plans/2026-09-20-project-template-cf3-plan.md, Slice 1): extractBlueprint used to stop at project/module, dropping any outcome sitting between them. It now carries the tier through unchanged — extracted as a structural entry, applied as a real outcome node, still parenting the module beneath it.',
+  () => {
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+
+    let src = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Finance transformation' }, now: NOW } as Action)
+    const projectId = Object.values(src.nodes).find((n) => n.kind === 'project' && n.name === 'Finance transformation')!.id
+    src = ok(src, { t: 'create', parentId: projectId, kind: 'outcome', draft: { name: 'Faster month-end close' }, now: NOW } as Action)
+    const outcomeId = Object.values(src.nodes).find((n) => n.kind === 'outcome')!.id
+    src = ok(src, { t: 'create', parentId: outcomeId, kind: 'module', draft: { name: 'Close automation' }, now: NOW } as Action)
+
+    const proposal = extractBlueprint(src, engagementId)
+    const outcomeEntry = proposal.entries.find((e) => e.kind === 'outcome' && e.name === 'Faster month-end close')
+    const moduleEntry = proposal.entries.find((e) => e.kind === 'module' && e.name === 'Close automation')
+    const extracted = Boolean(outcomeEntry) && moduleEntry?.parentEntryId === outcomeEntry?.id
+
+    const bp: Blueprint = {
+      id: 'BP_T4', name: 'Outcome shape', sourceEngagementId: engagementId, version: 1,
+      entries: proposal.entries, links: proposal.links, applications: [],
+    }
+    const keep = new Set(bp.entries.map((e) => e.id))
+    const run = applyBlueprint(src, bp, clientId, '2026-09-01', A, keep, NOW)
+
+    const newOutcomeId = run.mapping.get(outcomeEntry?.id ?? '')
+    const newModuleId = run.mapping.get(moduleEntry?.id ?? '')
+    const outcomeApplied = Boolean(newOutcomeId) && run.state.nodes[newOutcomeId ?? '']?.kind === 'outcome'
+    const moduleUnderOutcome = Boolean(newModuleId) && run.state.nodes[newModuleId ?? '']?.parentId === newOutcomeId
+    const noRefusals = run.refusals.length === 0
+
+    const okAll = extracted && outcomeApplied && moduleUnderOutcome && noRefusals
+    return okAll
+      ? { verdict: 'PASS', actual: 'The outcome and its module both survive extraction as structural entries, and both are recreated on apply — the module parented under the newly created outcome, not the client the blueprint was applied to', stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `extracted=${extracted} outcomeApplied=${outcomeApplied} moduleUnderOutcome=${moduleUnderOutcome} noRefusals=${noRefusals}(${run.refusals[0]?.error ?? ''})`, stops: 'the outcome tier is dropped somewhere in the extract/apply round-trip', severity: 'P2', impact: 'a template built from an engagement using the Outcome tier would silently flatten it on reuse' } as const
+  },
+)
+
 /* ================================================================== *
  * Outbound mail (design 2026-08-19)
  * ================================================================== */
@@ -7529,7 +7848,7 @@ scenario(
 scenario(
   'PF3',
   'healthScore sums count × configured weight per concern, bands at the thresholds (amber inclusive), prints every non-zero term, treats stale as presence not days, honours an exclusion list, and setHealthScore validates and merges',
-  "lib/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
+  "lib/planning/portfolio.ts's header refused a score because its weights were a sentence nobody could read; this is the score admitted on that objection's terms. Weights are configuration (setHealthScore, a copy of setSla's shape); every rendering prints `terms`; `excluded` names what was left out. Stale contributes as presence with its days on the term — a duration times a weight would let a fortnight of quiet outweigh three broken commitments, the reverse of CONCERN_ORDER's own argument.",
   () => {
     const line = (concerns: PortfolioLine['concerns']): PortfolioLine =>
       ({ nodeId: 'E', name: 'E', client: 'C', status: '', issues: 0, open: 0, projects: 0, high: 0, concerns, lastActivity: null })
@@ -8322,6 +8641,7 @@ scenario(
     const submittedSheet: Timesheet = {
       id: 'ts-tg3', person: 'Priya', personId: 'P-1', weekStarting: week, status: 'Submitted',
       submittedAt: NOW, submittedBy: 'Priya', decidedAt: null, decidedBy: null, reason: null,
+      workingPatternStamp: null,
     }
     const validCells = [{ date: '2026-08-11', hours: 4 }]
     const frozenResult = gridSaveProblem(validCells, [submittedSheet], 'Priya', week, '2026-08-12', 7)
@@ -9881,6 +10201,7 @@ function itIssue(over: Partial<IssueRecord> & { id: string; lastActivity: string
     parentId: 'module:OAPIL:Inventory', client: 'OAPIL', module: 'Inventory',
     subject: 'x', description: emptyRichDoc(), type: 'Defect', sourceType: '', discipline: '',
     applicationId: null,
+    milestoneId: null,
     requiredSkills: [],
     customFields: {},
     severity: 'Medium', status: 'Open', owner: 'Priya', raisedBy: 'Client',
@@ -11552,7 +11873,7 @@ scenario(
  * data — never a second stakeholder set, never a change to the read gate. CD4 pins BR9-BR12 of
  * ART-20260905-023 on a fixture the real reducer built, through clientFilterScopeFor (the one
  * constructor, delegating to memberProjectIdsFor and projectOf) and the three filter functions
- * in lib/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
+ * in lib/planning/tree.ts, over the UNREDACTED state: whatever narrows here is the scope's doing, with
  * projectView never called on the path.
  */
 
@@ -11680,7 +12001,7 @@ scenario(
     const good = fixtureHolds && seats && a && b && c && d && e && f && g
     return good
       ? { verdict: 'PASS', actual: `${liveCount} live issues: ${i1} under P1, ${i2} under P2 (both OAPIL), ${i3} under P3 (Rival Ltd), ${ungated} directly under the Rival Ltd node (projectOf null). Priya (Technical, on P1): 'All' lists [${issueIds(allRows)}] with P2 and P3 absent; facets [${scopedClients}] vs unscoped [${unscopedClients}]; 'OAPIL' lists [${issueIds(chosen)}]. Null person: [${issueIds(noneRows)}], facets [${facetsOf(st, none).clients.join(',')}]. Sam (ROLE_ADMIN, exempt=${isExempt(st.model, sam)}, on P1) over the unredacted state: 'All' lists [${issueIds(samRows)}], 'OAPIL' lists [${issueIds(samChosen)}]. Dev (on nothing): [${issueIds(visibleRows(all, UNFILTERED, new Set(), external, devScope))}]. isExempt and can() over ${PERMISSION_KEYS.length} keys read the same before and after for both actors; projectView not called.`, stops: '', severity: 'P1', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
+      : { verdict: 'FAIL', actual: `fixtureHolds=${fixtureHolds} (live=${liveCount}) seats=${seats} a=${a} (all=[${issueIds(allRows)}] p2=${ids(allRows).has(p2)} p3=${ids(allRows).has(p3)}) b=${b} (scoped=[${scopedClients}] unscoped=[${unscopedClients}]) c=${c} (chosen=[${issueIds(chosen)}]) d=${d} (none=[${issueIds(noneRows)}] facets=[${facetsOf(st, none).clients.join(',')}]) e=${e} (samAll=[${issueIds(samRows)}] samChosen=[${issueIds(samChosen)}]) f=${f} g=${g}`, stops: "at clientFilterScopeFor or lib/planning/tree.ts's scope test — the filter either lists a project the person is not a member of, drops an ungated record, treats an explicit client or an exempt seat as unscoped, reads a null person as no scope, or has changed what an actor may do", severity: 'P0', impact: "a person would see another project's work under 'All' or under its client's name, an unresolved actor would see the whole firm, an exempt seat would keep the whole firm as a default the ADR says it does not have, or a view default would have become an authorisation change" } as const
   },
 )
 
@@ -11975,7 +12296,7 @@ scenario(
  * F1 of ART-20260906-026 (medium, confirmed): components/IssueWorkspace.tsx built the Client
  * filter's scope (clientFilterScopeFor) for every reader, internal or not. clientView zeroes
  * projectMembers for a client/guest seat (CD8's own 'withheld' above), so that seat's
- * stakeholder set — and its scope — was always empty, and withinScope in lib/tree.ts then
+ * stakeholder set — and its scope — was always empty, and withinScope in lib/planning/tree.ts then
  * silently dropped any client-visible issue sitting under a real project-tier node from that
  * client's own already-authorised view (BR8 forbids narrowing a client's own view this way).
  * The fix gates scope construction on internal.view, the same boundary redactForReader itself
@@ -12074,7 +12395,7 @@ scenario(
     const good = closesF1 && internalSeatUnaffected
     return good
       ? { verdict: 'PASS', actual: `clientView(oapilId) keeps both ${i1} and ${i2} (real project ancestors, both clientVisible). Casey (ROLE_CLIENT_USER): internal.view=${isInternalCasey}; the unconditional scope this fix removes finds memberProjectIds.size=${regressedScope.memberProjectIds.size}, visibleRows lists [${regressedIds || '(none)'}] and facetsOf lists [${regressedClients || '(none)'}]; gated on internal.view, scope is undefined, visibleRows lists [${fixedIds}] and facetsOf lists [${fixedClients}]. Priya (Technical, on Harbour only): internal.view=${isInternalPriya}, scope built as before, visibleRows lists [${priyaIds}] — Quay's issue absent.`, stops: '', severity: 'P1', impact: 'none' } as const
-      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
+      : { verdict: 'FAIL', actual: `bothSurviveClientView=${bothSurviveClientView} isInternalCasey=${isInternalCasey} regressedScope.size=${regressedScope.memberProjectIds.size} regressedIds=[${regressedIds}] regressedClients=[${regressedClients}] fixedIds=[${fixedIds}] fixedClients=[${fixedClients}] internalSeatUnaffected=${internalSeatUnaffected} (priyaIds=[${priyaIds}])`, stops: 'at the isInternal gate on the scope memo in components/IssueWorkspace.tsx, or at withinScope/facetsOf in lib/planning/tree.ts', severity: 'P1', impact: "a client seat would keep losing its own client-visible work (and its Client dropdown) whenever that work happens to sit under a real project node, or gating the scope on internal.view would have widened or narrowed an internal seat's own project-scoped view" } as const
   },
 )
 
@@ -12085,7 +12406,7 @@ scenario(
  * `components/FilterBar.tsx` — neither on the proof workstream's owns list, and neither
  * importable here anyway (React hooks, not pure functions) — so each reimplements the one
  * small, already-quoted contract it pins, verbatim from the source comment or line cited, and
- * drives it with the real reducer and the real `lib/tree.ts`/`lib/projectBoundary.ts`
+ * drives it with the real reducer and the real `lib/planning/tree.ts`/`lib/projectBoundary.ts`
  * derivations exactly as CD1-CD9 do. A change to the quoted contract without a matching change
  * here is exactly the drift `absent()` guards against for a NOT IMPLEMENTED verdict elsewhere in
  * this file — nothing enforces it for these three beyond the citation, so keep the mirrored
@@ -12809,7 +13130,7 @@ scenario(
     return {
       verdict: passed ? 'PASS' : 'FAIL',
       actual: `refused=${JSON.stringify(refused.error)} emptyLines=${JSON.stringify(emptyLines.error)}`,
-      stops: passed ? '' : 'at checkRaiseInvoice in lib/invoice.ts',
+      stops: passed ? '' : 'at checkRaiseInvoice in lib/commercial/invoice.ts',
       severity: 'P1',
       impact: passed ? 'none' : 'an invoice could be raised against work nobody has agreed is billable, or with no lines at all',
     }
@@ -12877,7 +13198,7 @@ scenario(
     return {
       verdict: passed ? 'PASS' : 'FAIL',
       actual: `afterRaise=${JSON.stringify(positionAfterRaise)} afterCancel=${JSON.stringify(positionAfterCancel)}`,
-      stops: passed ? '' : 'at invoicePosition in lib/invoice.ts',
+      stops: passed ? '' : 'at invoicePosition in lib/commercial/invoice.ts',
       severity: 'P2',
       impact: passed ? 'none' : "a SOW's still-to-invoice figure is wrong, or a cancelled invoice is still counted as money billed",
     }
@@ -13296,6 +13617,66 @@ scenario(
   },
 )
 
+scenario(
+  'TPL5',
+  'Adopting a template that names a blueprint builds the blueprint too',
+  'CF3 (docs/plans/2026-09-20-project-template-cf3-plan.md, Slice 2): a template names at most one blueprint (20 Sep 2026 review). Adopting it still sets agent/workflow defaults exactly as before — adoptTemplate itself is unchanged — and now also builds the blueprint’s structure under the same scope, in one composed call.',
+  () => {
+    const clientId = Object.values(BASE.nodes).find((n) => n.kind === 'client')!.id
+    const engagementId = Object.values(BASE.nodes).find((n) => n.kind === 'engagement')!.id
+
+    let src = ok(BASE, { t: 'create', parentId: engagementId, kind: 'project', draft: { name: 'Shape source' }, now: NOW } as Action)
+    const projectId = Object.values(src.nodes).find((n) => n.kind === 'project' && n.name === 'Shape source')!.id
+    src = ok(src, { t: 'create', parentId: projectId, kind: 'outcome', draft: { name: 'Go-live readiness' }, now: NOW } as Action)
+    const outcomeId = Object.values(src.nodes).find((n) => n.kind === 'outcome')!.id
+    src = ok(src, { t: 'create', parentId: outcomeId, kind: 'module', draft: { name: 'Cutover' }, now: NOW } as Action)
+
+    const proposal = extractBlueprint(src, engagementId)
+    const stored = ok(src, {
+      t: 'config',
+      op: { k: 'upsertBlueprint', id: null, patch: { name: 'Mobilisation shape', sourceEngagementId: engagementId, entries: proposal.entries, links: proposal.links } },
+      now: NOW,
+    } as Action)
+    const bp = Object.values(stored.model.blueprints).find((b) => b.name === 'Mobilisation shape')!
+
+    /* No upsertProjectTemplate op exists (ProjectTemplate is seed-only today) — the fixture
+       links a real seed template to the stored blueprint directly, the same direct-override
+       pattern other scenarios already use to reach a precondition the reducer has no action
+       for. adoptTemplate itself never needs to know or care how a template came to name one. */
+    const lightTouch = Object.values(stored.model.templates).find((t) => t.id === 'TPL_LIGHT_TOUCH')!
+    const withLink: typeof stored = {
+      ...stored,
+      model: {
+        ...stored.model,
+        templates: { ...stored.model.templates, [lightTouch.id]: { ...lightTouch, blueprintId: bp.id } },
+      },
+    }
+
+    // Both counted, not just nodes: the source engagement's own pre-existing issues ride along
+    // in the extracted blueprint too (extractBlueprint takes the whole subtree, not just the
+    // three structural entries this scenario added), and an issue entry lands in `.issues`,
+    // never `.nodes` — counting only one would read as a shortfall that never happened.
+    const beforeNodes = Object.keys(withLink.nodes).length
+    const beforeIssues = Object.keys(withLink.issues).length
+    const result = applyTemplateBlueprint(withLink, clientId, lightTouch.id, A, NOW)
+
+    const adopted = result.state.model.overrides[clientId]?.templateId === lightTouch.id
+    const newNodes = Object.keys(result.state.nodes).length - beforeNodes
+    const newIssues = Object.keys(result.state.issues).length - beforeIssues
+    const structureBuilt = newNodes + newIssues === bp.entries.length
+    const noRefusals = result.blueprintRefusals.length === 0
+    const newProject = Object.values(result.state.nodes).find((n) => n.kind === 'project' && n.name === 'Shape source' && n.parentId === clientId)
+    const newOutcome = newProject && Object.values(result.state.nodes).find((n) => n.kind === 'outcome' && n.parentId === newProject.id)
+    const newModule = newOutcome && Object.values(result.state.nodes).find((n) => n.kind === 'module' && n.parentId === newOutcome.id)
+    const chainIntact = Boolean(newProject && newOutcome && newModule)
+
+    const okAll = adopted && structureBuilt && noRefusals && chainIntact
+    return okAll
+      ? { verdict: 'PASS', actual: `Adopting "${lightTouch.name}" at the client both sets the template override and builds all ${bp.entries.length} blueprint entries under it — project → outcome → module reproduced as a real, freshly-created chain, not a copy of the source`, stops: '', severity: 'P2', impact: 'none' } as const
+      : { verdict: 'FAIL', actual: `adopted=${adopted} structureBuilt=${structureBuilt}(nodes+${newNodes} issues+${newIssues} of ${bp.entries.length} entries) noRefusals=${noRefusals}(${result.blueprintRefusals[0]?.error ?? ''}) chainIntact=${chainIntact}`, stops: 'adopting a blueprint-linked template does not reliably build its structure', severity: 'P2', impact: 'a template naming a blueprint would silently stay defaults-only' } as const
+  },
+)
+
 /* ================================================================== *
  * Holiday- and weekend-aware scheduling (design 2026-09-08)
  * ================================================================== */
@@ -13468,7 +13849,7 @@ scenario(
 scenario(
   'HOL4',
   "The Overview due date carries a visible caveat when the owner is on approved leave inside the window — the date itself is never touched",
-  "ownerLeaveCaveat (lib/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
+  "ownerLeaveCaveat (lib/capacity/availability.ts) finds the owner's approved leave overlapping [today, plannedEnd] and returns its own recorded range. A Requested (not yet approved) leave is excluded — same posture E1A/E1B already established for capacity — and a leave entirely outside the window returns nothing. The due date itself is read, never written, by this function.",
   () => {
     const priya = Object.values(BASE.model.people).find((p) => p.name === 'Priya')!
     let s = ok(BASE, { t: 'setDates', id: 'OAPIL-1', start: '2026-08-10', end: '2026-08-20', now: NOW } as Action)
@@ -14045,8 +14426,13 @@ for (const f of findings.filter((x) => x.verdict !== 'PASS')) {
   console.log(`  ${pad(f.id, 5)}${f.stops}`)
 }
 
-/* Machine-readable, so the report page and any future regression gate read the same run. */
+/* Machine-readable, so the report page and any future regression gate read the same run.
+ * `asAt` is when this run happened, not the fixture clock — TODAY is a fixed date the
+ * scenarios' own math depends on for reproducibility and must not move; the report's
+ * currency and the fixtures' stability are two different things and were wrongly sharing
+ * one constant, which left every report reading '2026-08-15' regardless of when it ran. */
+const RUN_DATE = new Date().toISOString().slice(0, 10)
 const out = path.join(ROOT, 'data', 'validation.json')
-fs.writeFileSync(out, JSON.stringify({ asAt: TODAY, findings }, null, 2) + '\n')
+fs.writeFileSync(out, JSON.stringify({ asAt: RUN_DATE, findings }, null, 2) + '\n')
 console.log('')
 console.log(`Written to ${path.relative(ROOT, out)} — ${findings.length} scenarios.`)

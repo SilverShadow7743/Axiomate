@@ -30,7 +30,7 @@ SOW-to-projects direction.
 
 **Verified by:** `npx tsc --noEmit` and `npx eslint` on the three touched files, clean.
 
-## 3. `components/CommercialRegister.tsx`
+## 3. `components/commercial/CommercialRegister.tsx`
 
 New component, same shell conventions `ResourcingPanel.tsx` established (`.evi.mywork`,
 `.evi-head`, quick filter, `.cfg-table`). Sub-tabs (`.subtabs`-equivalent — check
@@ -44,7 +44,7 @@ just the cost/margin columns — checked once at the top (`if (!mayViewRate.allo
 so a reader without the grant never receives SOW value or status either. This is the design's
 own named risk, restated here as the specific line not to get backwards.
 
-**Verified by:** `npx tsc --noEmit` and `npx eslint components/CommercialRegister.tsx` clean;
+**Verified by:** `npx tsc --noEmit` and `npx eslint components/commercial/CommercialRegister.tsx` clean;
 `npm run validate:scenarios` re-run, byte-identical (no new pure logic beyond step 1's); a
 manual pass — each sub-tab's row count matches a hand count against the fixture data, the
 margin threshold input actually changes which rows the At-risk tab shows.

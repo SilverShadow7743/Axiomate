@@ -9,19 +9,19 @@ import type { IssueNote } from '@/lib/notes'
 import { wrapPlainText } from '@/lib/richText'
 import { ownerChoicesFor, ownerOptionValues, UNASSIGNED } from '@/lib/ownerChoices'
 import { bulkStatusChoices } from '@/lib/board'
-import MyWorkPanel from './MyWorkPanel'
-import MyCalendarPanel from './MyCalendarPanel'
-import MyTodosPanel from './MyTodosPanel'
+import MyWorkPanel from './personal/MyWorkPanel'
+import MyCalendarPanel from './personal/MyCalendarPanel'
+import MyTodosPanel from './personal/MyTodosPanel'
 import FactBoxBlade from './FactBoxBlade'
-import MailLog from './MailLog'
-import PortfolioPanel from './PortfolioPanel'
-import ResourcingPanel from './ResourcingPanel'
-import CommercialRegister from './CommercialRegister'
-import ClientMilestonesPanel from './ClientMilestonesPanel'
+import MailLog from './comms/MailLog'
+import PortfolioPanel from './planning/PortfolioPanel'
+import ResourcingPanel from './capacity/ResourcingPanel'
+import CommercialRegister from './commercial/CommercialRegister'
+import ClientMilestonesPanel from './commercial/ClientMilestonesPanel'
 import ApplicationLandscape from './ApplicationLandscape'
 import AnalyticsView from './AnalyticsView'
-import PeopleDirectory from './PeopleDirectory'
-import { myWork } from '@/lib/mywork'
+import PeopleDirectory from './capacity/PeopleDirectory'
+import { myWork } from '@/lib/personal/mywork'
 import { can, directoryPersonFor } from '@/lib/access'
 import { DEFAULT_SLA, EMPTY_FILTERS, isGroupRow, NO_CLIENT_CHOSEN } from '@/lib/types'
 import { COLUMNS, DEFAULT_FROZEN, DEFAULT_VISIBLE, labelColumn } from '@/lib/columns'
@@ -54,49 +54,49 @@ import {
   type SeedIssueInput,
   type WorkspaceState,
 } from '@/lib/workspace'
-import type { IssueIndexEntry, Proposal } from '@/lib/chat'
-import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/tree'
+import type { IssueIndexEntry, Proposal } from '@/lib/comms/chat'
+import { buildTree, facetsOf, matchesFilters, parentIds, visibleRows } from '@/lib/planning/tree'
 import { clientFilterScopeFor } from '@/lib/projectBoundary'
 import { clientPackProblem, emptyGridReason, scopeLabelFor } from '@/lib/filterPresentation'
 import { applySavedFilters } from '@/lib/savedViews'
 import { sortTree } from '@/lib/sort'
-import { availabilityForAssignment, refusesAssignment } from '@/lib/assignment'
+import { availabilityForAssignment, refusesAssignment } from '@/lib/capacity/assignment'
 import UserMenu from './UserMenu'
 import { addDays, maxIso, minIso } from '@/lib/dates'
-import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/schedule'
+import { criticalResolutionPath, proposeTargetDate, validateChange } from '@/lib/planning/schedule'
 import { DOMAIN_PAD_DAYS, ROW_H } from '@/lib/layout'
 import type { PanelState } from '@/lib/panel'
-import { buildScale } from '@/lib/timeline'
+import { buildScale } from '@/lib/planning/timeline'
 import { buildDailyIms, renderImsCsv, renderImsText } from '@/lib/reports/dailyIms'
 import { buildWeeklyClientPack, buildMonthlyGovernancePack, clientScopeIdFor, type WeeklyClientPack, type MonthlyGovernancePack } from '@/lib/reports/clientPack'
-import ClientPackView from './ClientPackView'
-import FinanceReportDialog from './FinanceReportDialog'
-import LeaveReportDialog from './LeaveReportDialog'
+import ClientPackView from './commercial/ClientPackView'
+import FinanceReportDialog from './commercial/FinanceReportDialog'
+import LeaveReportDialog from './time/LeaveReportDialog'
 import FirstRunCard from './FirstRunCard'
 import AdminFirstRunCard from './AdminFirstRunCard'
 import SearchResults from './SearchResults'
 import { searchWorkspace, type SearchHit } from '@/lib/search'
-import { planSlaDates, slaReason } from '@/lib/sla'
+import { planSlaDates, slaReason } from '@/lib/planning/sla'
 import FilterBar from './FilterBar'
 import TreeGrid from './TreeGrid'
-import BoardView from './BoardView'
+import BoardView from './planning/BoardView'
 import CalendarView from './CalendarView'
 import { loadStoredView, saveView, type WorkspaceView } from '@/lib/viewChoice'
-import { applyBlueprint } from '@/lib/blueprint'
+import { applyBlueprint } from '@/lib/commercial/blueprint'
 import type { RowActions } from './RowMenu'
-import GanttChart from './GanttChart'
+import GanttChart from './planning/GanttChart'
 import DetailPanel, { type Tab as DetailTab } from './DetailPanel'
-import UnifiedInbox from './UnifiedInbox'
+import UnifiedInbox from './comms/UnifiedInbox'
 import AuthNotice from './AuthNotice'
 import SelectionToolbar from './SelectionToolbar'
 import DetailDrawer from './DetailDrawer'
 import SnapshotDrawer from './SnapshotDrawer'
 import AppSidebar from './AppSidebar'
 import FiltersHeader from './FiltersHeader'
-import { unreadCount } from '@/lib/notifications'
+import { unreadCount } from '@/lib/comms/notifications'
 import type { DialogState } from './Dialogs'
 import type { AddEvidenceInput } from './EvidencePanel'
-import type { ApplyOutcome } from './ChatPanel'
+import type { ApplyOutcome } from './comms/ChatPanel'
 
 /*
  * Dynamically imported rather than bundled in with everything above.
@@ -110,13 +110,13 @@ import type { ApplyOutcome } from './ChatPanel'
  */
 const Dialogs = dynamic(() => import('./Dialogs'), { ssr: false })
 const EvidencePanel = dynamic(() => import('./EvidencePanel'), { ssr: false })
-const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false })
+const ChatPanel = dynamic(() => import('./comms/ChatPanel'), { ssr: false })
 const ConfigWorkspace = dynamic(() => import('./ConfigWorkspace'), { ssr: false })
 const ArchivePanel = dynamic(() => import('./ArchivePanel'), { ssr: false })
-const TimesheetPanel = dynamic(() => import('./TimesheetPanel'), { ssr: false })
-const SlaPlanPanel = dynamic(() => import('./SlaPlanPanel'), { ssr: false })
-const ProfilePanel = dynamic(() => import('./ProfilePanel'), { ssr: false })
-const StuckChangesPanel = dynamic(() => import('./StuckChangesPanel'), { ssr: false })
+const TimesheetPanel = dynamic(() => import('./time/TimesheetPanel'), { ssr: false })
+const SlaPlanPanel = dynamic(() => import('./planning/SlaPlanPanel'), { ssr: false })
+const ProfilePanel = dynamic(() => import('./personal/ProfilePanel'), { ssr: false })
+const StuckChangesPanel = dynamic(() => import('./planning/StuckChangesPanel'), { ssr: false })
 import { useAutosave } from './useAutosave'
 import {
   describeSave,
@@ -960,7 +960,7 @@ export default function IssueWorkspace({
    *  gets the same scope (BR12). Undefined for a client/guest seat (F1 of ART-20260906-026): a
    *  client's stakeholder set is always empty (`clientView` zeroes `projectMembers`), so building
    *  a scope for one silently dropped any client-visible issue nested under a real project-tier
-   *  node — `withinScope` in `lib/tree.ts` treats no scope as today's unchanged, content-only
+   *  node — `withinScope` in `lib/planning/tree.ts` treats no scope as today's unchanged, content-only
    *  visibility, which is what a client or guest seat must get. */
   const scope = useMemo(
     () => (isInternal ? clientFilterScopeFor(state, personId) : undefined),
@@ -1392,7 +1392,7 @@ export default function IssueWorkspace({
           // wrap description explicitly rather than casting the whole object, so a plain string
           // can never reach the RichDoc column silently. The `as` on the rest is unavoidable
           // (the assistant's patch is a loose string bag validated against IssueRecord's other
-          // fields upstream in lib/chat.ts, not re-derivable here), but description gets no cast.
+          // fields upstream in lib/comms/chat.ts, not re-derivable here), but description gets no cast.
           const { description, ...rest } = p.patch
           const patch: Partial<IssueRecord> = {
             ...(rest as Partial<IssueRecord>),
@@ -2657,7 +2657,7 @@ export default function IssueWorkspace({
       ) : view === 'resourcing' ? (
         <ResourcingPanel state={state} today={today} onOpenProfile={setOpenProfileId} docked />
       ) : view === 'commercial' ? (
-        <CommercialRegister state={state} today={today} docked />
+        <CommercialRegister state={state} today={today} onSelect={revealIssue} docked />
       ) : view === 'milestones' ? (
         <ClientMilestonesPanel state={state} docked />
       ) : view === 'applications' ? (
@@ -2677,7 +2677,15 @@ export default function IssueWorkspace({
           docked
         />
       ) : view === 'analytics' ? (
-        <AnalyticsView state={state} today={today} docked />
+        <AnalyticsView
+          state={state}
+          today={today}
+          onDrillDown={(patch) => {
+            setFilters({ ...filters, ...patch })
+            setView('tree')
+          }}
+          docked
+        />
       ) : view === 'people' && isInternal ? (
         <PeopleDirectory state={state} actor={actor} onOpenProfile={setOpenProfileId} onConfig={applyConfigOp} docked />
       ) : view === 'calendar' ? (
@@ -3101,6 +3109,9 @@ export default function IssueWorkspace({
           }
           onAttributeToSow={(nodeId, sowId) =>
             dispatch({ t: 'attributeToSow', nodeId, sowId, now: new Date().toISOString() })
+          }
+          onSetIssueMilestone={(issueId, milestoneId) =>
+            dispatch({ t: 'setIssueMilestone', issueId, milestoneId, now: new Date().toISOString() })
           }
           onRequestApproval={(subjectId, ruleId, note) =>
             dispatch({ t: 'requestApproval', subjectId, ruleId, note, now: new Date().toISOString() })

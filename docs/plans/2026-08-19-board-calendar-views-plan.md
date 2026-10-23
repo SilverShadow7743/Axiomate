@@ -11,10 +11,10 @@ fault in a new costume."*
 
 ## Steps
 
-**1. Pure view models — `lib/board.ts` and `lib/calendar.ts` (new).**
+**1. Pure view models — `lib/board.ts` and `lib/personal/calendar.ts` (new).**
 `boardLanes(state, filters)` groups filtered issues into lanes ordered as `ISSUE_STATUSES`
 (lib/types.ts) with counts; `dropOutcome(policy, issue, toStatus)` wraps
-`checkTransition`/`allowedNext` from `lib/statusPolicy.ts` and returns one of
+`checkTransition`/`allowedNext` from `lib/planning/statusPolicy.ts` and returns one of
 `{ ok } | { needs: 'reason'|'evidence' } | { refused: message }` — the message taken verbatim
 from the policy result, never composed here. `calendarMonth(state, filters, monthIso)` returns
 placed spans plus the unscheduled list and both counts; `scheduled + unscheduled` must equal the
@@ -24,18 +24,18 @@ filtered total by construction.
 **2. Scenario coverage before any UI — `scripts/scenario-validation.ts`.**
 Two scenarios from the design: (a) `dropOutcome` on an illegal move returns the policy's own
 message, and on `Closed - no defect` returns `needs: 'reason'` (per `requireReason`,
-lib/statusPolicy.ts:95); (b) `calendarMonth` counts reconcile with the register under an active
+lib/planning/statusPolicy.ts:95); (b) `calendarMonth` counts reconcile with the register under an active
 filter. Also assert the board never invents a lane: every lane key ∈ `ISSUE_STATUSES`.
 *Verify:* `npm run validate:scenarios` — count rises by 2, nothing previously passing regresses.
 
-**3. `components/BoardView.tsx` (new) — render only.**
+**3. `components/planning/BoardView.tsx` (new) — render only.**
 Lanes from step 1, cards opening the existing detail panel via the same `onSelect` the grid
 uses. No drag yet. Persist the view choice with the columns-preference pattern
 (components/IssueWorkspace.tsx:1419 — "opening a tab never persists a preference the user did
 not choose").
 *Verify:* `npx tsc --noEmit`; `npm run build`.
 
-**4. The drop handler — `components/BoardView.tsx` + wiring in `IssueWorkspace.tsx`.**
+**4. The drop handler — `components/planning/BoardView.tsx` + wiring in `IssueWorkspace.tsx`.**
 **The step carrying the most regression risk, and it is not close.** It puts `checkTransition`
 in front of a gesture on a screen where every prior interaction succeeded. Three outcomes, all
 through `dropOutcome`: ok → dispatch the ordinary `updateIssue` (the same callback TreeGrid
@@ -64,7 +64,7 @@ production and recorded in "What has actually been opened in a browser."
 ## Details most likely to be got wrong
 
 - The refusal message comes from `checkTransition`'s result, which "notes which requirement
-  failed so a caller can ask for the missing thing" (lib/statusPolicy.ts:101) — do not compose a
+  failed so a caller can ask for the missing thing" (lib/planning/statusPolicy.ts:101) — do not compose a
   new message in the component.
 - `allowedNext(policy, from)` takes `IssueStatus | null` — a brand-new issue has null status;
   the board must place it without crashing.

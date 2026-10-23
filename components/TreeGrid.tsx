@@ -7,9 +7,9 @@ import type { ColumnDef } from '@/lib/columns'
 import { formatIso } from '@/lib/dates'
 import { ROW_H } from '@/lib/layout'
 import { editableColumns, editorFor, type EditorSpec } from '@/lib/editing'
-import { severityGlyph } from '@/lib/severity'
-import { exposure } from '@/lib/raid'
-import type { StatusPolicy } from '@/lib/statusPolicy'
+import { severityGlyph } from '@/lib/planning/severity'
+import { exposure } from '@/lib/planning/raid'
+import type { StatusPolicy } from '@/lib/planning/statusPolicy'
 import RowMenu, { type RowActions } from './RowMenu'
 import StatusCellEditor from './StatusCellEditor'
 import QuickEditPopover from './QuickEditPopover'
@@ -949,7 +949,7 @@ function Cell({
     case 'severity':
       return row.severity ? (
         <span className={`chip sev-${row.severity}`}>
-          {/* A shape, not just the dot's color, carries the level — see lib/severity.ts. */}
+          {/* A shape, not just the dot's color, carries the level — see lib/planning/severity.ts. */}
           <span className="sev-glyph" aria-hidden="true">{severityGlyph(row.severity)}</span>
           {row.severity}
         </span>

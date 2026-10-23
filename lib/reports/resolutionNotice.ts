@@ -21,7 +21,7 @@ import type { AuditEntry } from '../types'
  */
 
 export interface ResolutionNotice {
-  /** == IssueRecord.id, already the display string (e.g. `OAPIL-42`) — see lib/tree.ts:122. */
+  /** == IssueRecord.id, already the display string (e.g. `OAPIL-42`) — see lib/planning/tree.ts:122. */
   issueId: string
   subject: string
   clientName: string

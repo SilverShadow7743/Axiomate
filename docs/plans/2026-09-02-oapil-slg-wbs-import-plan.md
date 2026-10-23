@@ -137,7 +137,7 @@ regresses.
 
 ## Step 4 — `meetingProblem`/`upsertMeeting`: scoped validation relaxation (code)
 
-`lib/meetings.ts`: `meetingProblem(m, opts?: { requireAttendees?: boolean })` — the
+`lib/personal/meetings.ts`: `meetingProblem(m, opts?: { requireAttendees?: boolean })` — the
 `attendeeIds.length` check (line 52) becomes `if ((opts?.requireAttendees ?? true) &&
 !m.attendeeIds.length)`. The title and time checks are unchanged and unconditional — both
 sampled Meeting rows have real dates, so nothing about this import needs the time check relaxed,

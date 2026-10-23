@@ -6,8 +6,8 @@ then approved to build once the two questions below were resolved.
 ## The answer, sourced from this codebase's own doctrine
 
 A due date is a commitment, not a derived fact, and this codebase already says so in its own
-words. `lib/sla.ts`'s header, on why an SLA proposal never auto-writes: *"A date already here
-is a commitment somebody made. Never overwritten."* `lib/scheduling.ts`'s leave posture, on why
+words. `lib/planning/sla.ts`'s header, on why an SLA proposal never auto-writes: *"A date already here
+is a commitment somebody made. Never overwritten."* `lib/planning/scheduling.ts`'s leave posture, on why
 approved leave never silently reschedules anything it touches: leave "blocks nothing... a named
 conflict" surfaces instead of a silent change.
 
@@ -21,7 +21,7 @@ fact to act on, not an automatic rewrite.
 ## Whose leave counts
 
 The issue's **current `owner`** only — not every person who might touch it before the due date.
-Future assignment is speculation this codebase already refuses elsewhere (`lib/skills.ts`'s
+Future assignment is speculation this codebase already refuses elsewhere (`lib/capacity/skills.ts`'s
 `candidatesFor` returns candidates and refuses to guess a best one, for the same reason: a
 claim about the future beyond what is actually known). The owner is the one concrete,
 recorded fact today; if ownership changes, the caveat recomputes at read time like everything
@@ -31,7 +31,7 @@ else here; it does not need to anticipate a change that has not happened.
 
 A pure function, `ownerLeaveCaveat(issue, commitments, today)` or similar, checking whether any
 `Commitment` with `kind: 'Leave'` for the owner's directory id, passing `commitmentCounts` (the
-existing approved-only predicate, `lib/availability.ts:110`), overlaps `[today, plannedEndDate]`.
+existing approved-only predicate, `lib/capacity/availability.ts:110`), overlaps `[today, plannedEndDate]`.
 Returns a sentence or `null` — the same "computed string or null" shape `milestoneRisk` and
 `describeGoals` already use, not a new pattern.
 
@@ -56,7 +56,7 @@ visibly separate rather than being merged into one number.
 
 ## Build summary
 
-- `lib/availability.ts` — `ownerLeaveCaveat(ownerId, commitments, from, to)`: pure function,
+- `lib/capacity/availability.ts` — `ownerLeaveCaveat(ownerId, commitments, from, to)`: pure function,
   returns the earliest approved (non-Requested, non-`deletedAt`) Leave commitment for the owner
   overlapping `[from, to]`, or `null`. Reuses the existing `commitmentCounts` predicate.
 - `components/DetailPanel.tsx` — threads `today` into `<OverviewTab>` (a new required prop;

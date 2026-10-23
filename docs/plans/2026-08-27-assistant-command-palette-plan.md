@@ -6,7 +6,7 @@ full command-palette reskin over a copy-only fix or a form-builder, overlay+`Ctr
 keeping the docked panel, keep-scrollback over single-result, keep voice/drop TTS, extend search
 to real facets).
 
-No test runner exists for `lib/chat.ts` today. `npm run validate:scenarios`
+No test runner exists for `lib/comms/chat.ts` today. `npm run validate:scenarios`
 (`scripts/scenario-validation.ts`) is a static source-inspection harness — it greps file text for
 patterns ("mentions"/"absent" checks), it does not call `offlineReply`/`searchIndex` with real
 input. Confirmed by grep: zero matches for `offlineReply`, `searchIndex`, or `chat` as a function
@@ -18,7 +18,7 @@ a gap in the codebase, not something in scope to fix here.
 
 ## Step 1 — Real facets in the search branch
 
-**Files:** `lib/chat.ts` only.
+**Files:** `lib/comms/chat.ts` only.
 
 Pure logic, no React, no callers yet — the design's own instruction to prove this before anything
 depends on it.
@@ -63,7 +63,7 @@ own.
 
 ## Step 2 — Extract a shared command classifier
 
-**Files:** `lib/chat.ts` only.
+**Files:** `lib/comms/chat.ts` only.
 
 Second piece of pure logic, needed before Step 4's hint line can reuse `offlineReply`'s own
 grammar rather than duplicating it — the design doc's other named risk.
@@ -92,7 +92,7 @@ ID_RE`, no `export`).
 
 **Verify:** extend the Step 1 script (or a new `scripts/tmp-verify-classifier.ts`, `npx tsx
 scripts/tmp-verify-classifier.ts`) to run `classifyCommand` and full `offlineReply` side by side
-against `examplesFor()`'s own real example strings from `components/ChatPanel.tsx` (`'find
+against `examplesFor()`'s own real example strings from `components/comms/ChatPanel.tsx` (`'find
 overdue inventory issues'`, `'OAPIL-010 status = In Progress'`, `'new issue OAPIL/Inventory: GRN
 posting fails'`) plus a few partial/incomplete strings the hint line will actually see keystroke
 by keystroke — `'n'`, `'new'`, `'new i'`, `'OAPIL-'`, `'OAPIL-01'` — confirming `classifyCommand`
@@ -105,7 +105,7 @@ outside the verification script until Step 4.
 
 ## Step 3 — Engine-aware branch, overlay shell, and the basic command loop
 
-**Files:** `components/ChatPanel.tsx`, `components/IssueWorkspace.tsx`, `app/globals.css`.
+**Files:** `components/comms/ChatPanel.tsx`, `components/IssueWorkspace.tsx`, `app/globals.css`.
 
 This is the step carrying the most regression risk in this plan. `ChatPanel`'s existing render —
 docked panel, bubbles, textarea, voice, TTS toggle — is a code path that works correctly today for
@@ -186,12 +186,12 @@ nothing.
 
 ## Step 4 — The live hint line
 
-**Files:** `components/ChatPanel.tsx`, `app/globals.css`.
+**Files:** `components/comms/ChatPanel.tsx`, `app/globals.css`.
 
 Depends on Step 2's `classifyCommand` and Step 3's shell existing; adds to both without touching
 either's tested behavior.
 
-- The offline input's `onChange` calls `classifyCommand` (imported from `lib/chat.ts`) on every
+- The offline input's `onChange` calls `classifyCommand` (imported from `lib/comms/chat.ts`) on every
   keystroke and renders its result as a small hint line below the input: `'create'` → "New issue",
   `'update'` → "Change `<ID>`" (only once `ID_RE` actually matches — before that, the neutral
   "this reads as a search" state), `'search'` → the same neutral state. Before any typing, the
@@ -211,7 +211,7 @@ own before autocomplete exists), and reverting it if wrong would not touch Step 
 
 ## Step 5 — Autocomplete
 
-**Files:** `components/ChatPanel.tsx`, `app/globals.css`.
+**Files:** `components/comms/ChatPanel.tsx`, `app/globals.css`.
 
 - Trigger 1: once the input contains an uppercase-looking id fragment (reuse `ID_RE`, matched
   against a partial prefix), show a small dropdown of matching ids from `props.index` (already a
@@ -237,7 +237,7 @@ Stands alone — additive to Step 4, no behavior of Steps 3/4 depends on it exis
 
 ## Step 6 — Voice: keep input, drop read-aloud
 
-**Files:** `components/ChatPanel.tsx`.
+**Files:** `components/comms/ChatPanel.tsx`.
 
 Most isolated step in this plan — touches neither the grammar (Steps 1–2) nor the shell/hint/
 autocomplete (Steps 3–5) in any way that those depend on.

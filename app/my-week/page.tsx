@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { boot } from '@/lib/db/boot'
-import MyWeek from '@/components/MyWeek'
+import MyWeek from '@/components/personal/MyWeek'
 
 export const dynamic = 'force-dynamic'
 

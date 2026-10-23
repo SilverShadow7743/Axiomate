@@ -17,13 +17,13 @@ Zero-Entry Timesheet's suggestions worked because a real fact existed to derive 
 from — a meeting's actual duration. **No equivalent fact exists here.** Which of a person's
 allocations to reduce, and by how much, is a business judgment nobody has recorded anywhere.
 Proposing one "optimal" split (even something as neutral-sounding as "reduce every allocation
-proportionally") would mean inventing a business rule — the same refusal `lib/portfolio.ts`'s
+proportionally") would mean inventing a business rule — the same refusal `lib/planning/portfolio.ts`'s
 own header comment states about scores: *"name the concerns, count them, and let the reader do
 the weighing."* This feature names the concern (a deficit, and where the hours currently sit)
 and stops there.
 
 A second finding, load-bearing for scope: `DEFAULT_ALLOCATION_POLICY` is `{ cap: 'hard' }`
-(`lib/capacity.ts`) — under the shipped default, `upsertAllocation` refuses outright, no
+(`lib/capacity/capacity.ts`) — under the shipped default, `upsertAllocation` refuses outright, no
 override, the instant a write would push someone over capacity. So this feature is not
 guarding against a bypass; the state it reacts to arises legitimately, after the fact — a
 person's working pattern moves to fewer days, a new commitment or holiday shrinks their
@@ -54,7 +54,7 @@ same person's numbers. Composes:
 
 - `availabilityFor()` for the deficit (`-remainingHours`, only meaningful when `overallocated`).
 - A new small helper built on `overlapWorkingDays()` (already exported from
-  `lib/availability.ts`) to get each overlapping `Allocation`'s own hours contribution in the
+  `lib/capacity/availability.ts`) to get each overlapping `Allocation`'s own hours contribution in the
   window — the same per-allocation arithmetic `availabilityFor` already sums internally
   (`days * hoursPerDay * percentage/100`), exposed per-row instead of only as a total.
 

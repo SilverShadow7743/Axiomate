@@ -10,7 +10,7 @@ slowest to diagnose.
 Two things the design doc left to confirm during planning, now grounded against real code:
 
 - **"`issuesUnder` is the identical code path for a project or an engagement root"** — confirmed.
-  Read in full (`lib/engagement.ts:156-171`): a generic parent-chain BFS from `nodeId`, no
+  Read in full (`lib/commercial/engagement.ts:156-171`): a generic parent-chain BFS from `nodeId`, no
   `n.kind` branch anywhere in the walk, ending in `Object.values(state.issues).filter(...)`.
   Does not send the design back.
 - **"Embedded JSON array, not a normalized table"** — confirmed as reasonable. The precedent
@@ -54,11 +54,11 @@ export function takeSnapshot(
 
 Composes three existing functions, does not reimplement any of them:
 
-1. `issuesUnder(state, nodeId)` (`lib/engagement.ts:156`) — returns `IssueRecord[]`.
+1. `issuesUnder(state, nodeId)` (`lib/commercial/engagement.ts:156`) — returns `IssueRecord[]`.
 2. Map each to a `SnapshotEntry`: `{ issueId: i.id, subject: i.subject, plannedStart:
    i.plannedStart, plannedEnd: i.plannedEnd }` — `plannedStart`/`plannedEnd` read straight off
    `IssueRecord` (`lib/workspace.ts:301-302`), no new computation.
-3. `sowCostOf(rates, issueIds, state.timeEntries)` (`lib/rates.ts:204-208`, `issueIds` being the
+3. `sowCostOf(rates, issueIds, state.timeEntries)` (`lib/commercial/rates.ts:204-208`, `issueIds` being the
    same issue list's `.map(i => i.id)`) — its `CostOfWork` output stored verbatim as `cost`.
 
 The node's current `name` and its `kind` (`'project'` or `'engagement'`, read from

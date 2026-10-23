@@ -11,7 +11,7 @@ before `waitingItems`, the component, or the mount depend on it being right.
 Verified against the current files while writing this — two things shifted from the design
 doc's estimates, both confirmed by reading the actual code, not assumed:
 
-- `lib/mywork.ts`'s decide block is now lines **203-289** inside `myWork()` (shifted +1 from the
+- `lib/personal/mywork.ts`'s decide block is now lines **203-289** inside `myWork()` (shifted +1 from the
   design doc's 202-288 estimate — the `todaysMeetings` addition earlier today added a line
   above it). Five sub-blocks: approvals 206-222, timesheets-to-approve 224-237,
   milestones-to-accept 239-255, changes-to-decide 257-270, scope-to-agree 272-289.
@@ -28,7 +28,7 @@ doc's estimates, both confirmed by reading the actual code, not assumed:
 
 ## Steps
 
-### Step 1 — `decisionItems()` extraction, `lib/mywork.ts`
+### Step 1 — `decisionItems()` extraction, `lib/personal/mywork.ts`
 
 ⚠ **The step carrying the most regression risk in this plan.** `myWork()`'s decide block
 closes over `person`, `name`, `mine`, `isMe`, `isMine`, `holds`, and `roles` — all defined at
@@ -80,7 +80,7 @@ proof. Total scenario count: 193 → 194.
 **Commit 1** — this step alone, exactly per the ordering principle: provable correct in
 isolation before `waitingItems`, the component, or the mount depend on `decisionItems` existing.
 
-### Step 2 — `waitingItems()` and `unifiedInbox()`, new file `lib/inbox.ts`
+### Step 2 — `waitingItems()` and `unifiedInbox()`, new file `lib/comms/inbox.ts`
 
 ```ts
 export function waitingItems(state: WorkspaceState, actor: Actor): WorkItem[] {
@@ -115,7 +115,7 @@ regardless of who raised it (a `PASS` scenario documenting the honest exclusion,
 `decisionItems` not needing to change; nothing after this step depends on `waitingItems`'s
 internals beyond its return shape.
 
-### Step 3 — `components/UnifiedInbox.tsx`
+### Step 3 — `components/comms/UnifiedInbox.tsx`
 
 Three sections in one docked view:
 

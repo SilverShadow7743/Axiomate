@@ -133,7 +133,7 @@ internal tool. Run the script with `--admin-consent`, or use
 axiocloudsolutions.com** on the API permissions page. This needs Cloud Application Administrator,
 Application Administrator or Global Administrator. Privileged Role Administrator is needed for
 *application* permissions — and this registration does hold two, contrary to what this line
-said until 12 Sep 2026: `Mail.Send` for the firm mailbox (`lib/mail.ts`) and
+said until 12 Sep 2026: `Mail.Send` for the firm mailbox (`lib/comms/mail.ts`) and
 `Sites.ReadWrite.All` for the document library (`lib/storage/graph.ts`), both app-only under the
 same client secret as sign-in. The 12 Sep audit (H12) recommends moving those to a second
 registration with a certificate. After consent, nobody is prompted at all.

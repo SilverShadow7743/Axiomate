@@ -11,7 +11,7 @@
 import { NextResponse } from 'next/server'
 import { databaseConfigured, describeDbError, isPermanentDbError } from '@/lib/db/client'
 import { persistActions } from '@/lib/db/persist'
-import { sendAsMailbox } from '@/lib/mail'
+import { sendAsMailbox } from '@/lib/comms/mail'
 import { currentTenantId } from '@/lib/tenant'
 import { getSession, identityEstablished } from '@/lib/principal'
 import { logAuthRefusal } from '@/lib/authLog'

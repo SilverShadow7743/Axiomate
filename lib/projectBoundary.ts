@@ -1,5 +1,5 @@
 import { projectOf, type WorkspaceState } from './workspace'
-import type { ClientFilterScope } from './tree'
+import type { ClientFilterScope } from './planning/tree'
 
 /**
  * The project boundary's withholding, as a pure function — what an internal reader who isn't

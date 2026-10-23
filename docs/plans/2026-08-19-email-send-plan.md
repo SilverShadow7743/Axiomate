@@ -11,7 +11,7 @@ send-as-anyone-in-the-tenant"*.
 
 ## Steps
 
-**1. `lib/outbound.ts` (new) — the pure half.**
+**1. `lib/comms/outbound.ts` (new) — the pure half.**
 `sendingMailboxFor(state, issueId)`: walk `scopeChainOf(state, issue.parentId)`
 (lib/workspace.ts:664) from the issue upward; the first enabled `IntakeMailbox` whose
 `scopeId` appears in the chain wins (nearest first); none → a stated refusal string.

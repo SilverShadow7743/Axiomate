@@ -20,7 +20,7 @@ a reuse.
 
 ## Steps
 
-### Step 1 — `lib/timesheetSuggestions.ts`, new file
+### Step 1 — `lib/time/timesheetSuggestions.ts`, new file
 
 ```ts
 import type { Meeting } from './meetings'
@@ -118,7 +118,7 @@ the existing `../lib/mywork` and `../lib/inbox` imports.
 **Verify:** `npx tsc --noEmit` → `npm run validate:scenarios`: `ZE1` `PASS`, count 196 → 197,
 0 FAIL.
 
-### Step 3 — `components/MyWeek.tsx` wiring
+### Step 3 — `components/personal/MyWeek.tsx` wiring
 
 A new section, **"From your calendar"**, inserted between the existing `<p className="mw-total">`
 block (ends line 222) and the `<section className="mw-form" aria-label="Record hours">` block
@@ -145,7 +145,7 @@ per the design's own Testing section, the pure function is what's proven; this i
 an already-proven function, matching how `todaysMeetings()`'s panel wiring went unscenario'd
 earlier this session.
 
-### Step 4 — `components/TimeTab.tsx` wiring ⚠ riskiest step in this plan
+### Step 4 — `components/time/TimeTab.tsx` wiring ⚠ riskiest step in this plan
 
 Not the reorder-shaped risk Project Pulse had — this is the step that reads and writes existing
 `useState` (`drafts`) and sits beside an existing effect that already owns resetting it
@@ -198,7 +198,7 @@ markup and text, unlike Project Pulse, which had none) → `npm run build`.
 
 ## Commit boundaries
 
-- **Commit 1** — Steps 1–2: `lib/timesheetSuggestions.ts` + `ZE1`. Self-contained and
+- **Commit 1** — Steps 1–2: `lib/time/timesheetSuggestions.ts` + `ZE1`. Self-contained and
   meaningful alone — a provably-correct function with no caller yet, exactly the shape the
   ordering principle asks for.
 - **Commit 2** — Step 3: `MyWeek.tsx` wiring alone. Low risk, easy to read as its own diff.
@@ -219,7 +219,7 @@ markup and text, unlike Project Pulse, which had none) → `npm run build`.
   reintroducing exactly the bug the original reset effect exists to prevent.
 - **`m.startAt.slice(0, 10)`** is a string slice, not a timezone-aware date derivation — correct
   only because `Meeting.startAt` is documented as "stored as entered (single-timezone firm)"
-  (`lib/meetings.ts`'s own header comment) and `TD1`'s fixtures already rely on the same slicing
+  (`lib/personal/meetings.ts`'s own header comment) and `TD1`'s fixtures already rely on the same slicing
   working. Do not swap in a `Date`-object-based derivation, which would reintroduce a timezone
   the rest of this module deliberately has none of.
 - **Suggestions must never fire for a cell `issueWeekCells`/`entriesInWeek` would call filled** —

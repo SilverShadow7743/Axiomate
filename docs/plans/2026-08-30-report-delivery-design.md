@@ -51,7 +51,7 @@ including the packs' disclosure line and Progress block.
 
 ## Mail and configuration
 
-- `sendAsMailbox` (lib/mail.ts) gains an optional **trailing** `attachments` parameter
+- `sendAsMailbox` (lib/comms/mail.ts) gains an optional **trailing** `attachments` parameter
   (Graph `fileAttachment`, base64) — additive; every existing call and its wire body stay
   byte-identical when absent.
 - Configuration gains a **Report delivery** card: per-report toggles, the IMS recipient list,

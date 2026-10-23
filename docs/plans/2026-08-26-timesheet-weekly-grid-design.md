@@ -6,7 +6,7 @@
 billable, note, Record. Somebody who worked the same ticket for most of a week has to
 repeat that five times. Everything the week needs already exists underneath — one
 `TimeEntry` per `{person, date, activity, hours, billable, note}`, and a week-level
-submit/approve flow in `lib/timesheet.ts` (`weekStarting`, `weekLabel`, `weekTotal`,
+submit/approve flow in `lib/time/timesheet.ts` (`weekStarting`, `weekLabel`, `weekTotal`,
 `sheetFor`, `submitProblem`, `decideProblem`) already wired into `sheetPanel`. What's
 missing is a way to fill several days at once against that same model.
 

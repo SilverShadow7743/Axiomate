@@ -4,7 +4,7 @@ Approved by Nishant, 12 Sep 2026. Scoped down from the original ask ("increase
 person-to-person collaboration") after finding the Notes composer already has full
 @mention and #issue-reference autocomplete (`components/RichTextExtensions.tsx`, a real
 Tiptap node built on `@tiptap/suggestion` — dropdown, keyboard nav, live-resolved names).
-What Discussion (`components/DiscussionTab.tsx`) actually lacks, confirmed by reading the
+What Discussion (`components/comms/DiscussionTab.tsx`) actually lacks, confirmed by reading the
 component: its composer is a bare `<input>`, not Tiptap, so a person must blindly type an
 exact full name with the placeholder's only guidance being "@name to summon somebody" —
 no dropdown, no feedback on a typo. Two contained pieces close this gap.
@@ -28,7 +28,7 @@ ProseMirror node) that doesn't apply to a bare input. If a second plain-text men
 appears later, this is the point to extract a shared one, not before.
 
 - Track the active "@query" (start offset + typed text since the `@`) as the draft
-  changes, the same detection shape `lib/mentions.ts`'s own parser uses (an `@` not
+  changes, the same detection shape `lib/comms/mentions.ts`'s own parser uses (an `@` not
   preceded by a word character, no whitespace since).
 - A dropdown positioned below the input, visually matching Notes' own
   (`.rte-suggest-popup`/`.rte-suggest-list`/`.rte-suggest-label` — the same CSS classes,
@@ -40,7 +40,7 @@ appears later, this is the point to extract a shared one, not before.
   input, which must check for an open dropdown first; Escape closes it without sending.
 - Picking a candidate splices the full directory name into `draft` at the query's offset,
   followed by a space, and closes the dropdown. Nothing else changes: the actual
-  mention-detection and notification mint (`lib/mentions.ts`'s `mentionsIn`, already
+  mention-detection and notification mint (`lib/comms/mentions.ts`'s `mentionsIn`, already
   wired into `lib/db/discussion.ts`'s `postMessage` via `recipientsFor`) is untouched —
   this is a typing aid over an existing, already-correct parse, not a change to what
   counts as a mention or who gets told.
@@ -57,7 +57,7 @@ implementation plan should call out explicitly, not something to get right by ac
 ## Testing
 
 The mention-detection and notification logic this reuses is already proven elsewhere
-(`lib/mentions.ts`, `lib/db/discussion.ts`'s `recipientsFor`) and untouched here, so no
+(`lib/comms/mentions.ts`, `lib/db/discussion.ts`'s `recipientsFor`) and untouched here, so no
 new scenario is needed for that half. The dropdown/keyboard wiring itself is UI behaviour
 no scenario in this codebase drives — verified by typecheck, eslint, and a manual pass,
 the same limit every other click/keyboard change in this session has lived with.

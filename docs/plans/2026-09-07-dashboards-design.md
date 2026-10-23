@@ -10,7 +10,7 @@
 > does not already produce, and any score whose weights a reader cannot see. The per-person
 > `DashboardLayout` arrangement proposed below was **not** built; it is superseded by the two
 > workspaces. See `docs/plans/2026-09-10-fno-page-grammar-design.md` §5 and
-> `lib/portfolio.ts`'s header for the reversal and its conditions.
+> `lib/planning/portfolio.ts`'s header for the reversal and its conditions.
 
 *7 September 2026. From the Hive gap survey's "Dashboards" line. The obvious shape — tiles with
 traffic-light colours and a blended score — is exactly what this codebase has refused twice
@@ -18,13 +18,13 @@ already, in writing.*
 
 ## The conflict, precisely
 
-`lib/portfolio.ts`'s module comment is unambiguous, and it is quoted here rather than
+`lib/planning/portfolio.ts`'s module comment is unambiguous, and it is quoted here rather than
 paraphrased because paraphrasing is how a rule like this gets softened by accident:
 
 > *"There is no health score, and there will not be one... A score is an argument about weights
 > nobody can see, and the weights are the part worth arguing with."*
 
-`lib/goals.ts` makes the same argument from a different angle — a goals dashboard's usual shape
+`lib/planning/goals.ts` makes the same argument from a different angle — a goals dashboard's usual shape
 (a ring chart at 73%) is precisely the drifting, untraceable number both files already rejected.
 A conventional "Dashboards" feature — configurable tiles, each a KPI reduced to one number or one
 colour — is not an extension of this codebase's reporting surface, it is the thing the reporting
@@ -63,7 +63,7 @@ model DashboardLayout {
 
 **The load-bearing constraint: `widgetKind` can only ever name a function that already exists and
 already returns named counts.** Adding a dashboard widget can never itself define a new metric —
-that has to happen in `lib/portfolio.ts`, `lib/analytics.ts` or wherever the real computation
+that has to happen in `lib/planning/portfolio.ts`, `lib/analytics.ts` or wherever the real computation
 belongs, subject to those files' own doctrine, and only then does it become choosable here. This
 file has no write path to a number; it only arranges panels that already refuse to lie.
 

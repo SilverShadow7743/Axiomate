@@ -10,7 +10,7 @@ remaining — five of the eight leftover pitch items are blocked on Anthropic cr
 The pitch's "Zero-Entry Timesheet" imagines a week that mostly fills itself, so a consultant
 isn't reconstructing five days from memory on Friday. Built literally — filling hours from
 *plans* (Allocation percentages, Assignment) — this would mean inventing a claim nobody
-attested to, which is precisely what `lib/timeWindow.ts` and `lib/timesheet.ts` go out of their
+attested to, which is precisely what `lib/time/timeWindow.ts` and `lib/time/timesheet.ts` go out of their
 way to refuse everywhere else in this codebase: `dailyCap` reports **unenforced** rather than
 defaulting to eight hours; `windowOpening` refuses to infer a start date; `TimeEntry` is
 documented as "the actual-level record, never a projection" (CLAUDE.md). A timesheet is an
@@ -18,7 +18,7 @@ attestation — "I claim this week is complete and correct" — and a system tha
 nobody confirmed doing would be inventing the thing it exists to record honestly.
 
 There is exactly one real signal in this codebase that names a *specific issue* without
-guessing: a `Meeting` can carry `scopeKind: 'issue'` + `scopeId` (`lib/meetings.ts`) — a real,
+guessing: a `Meeting` can carry `scopeKind: 'issue'` + `scopeId` (`lib/personal/meetings.ts`) — a real,
 dated, attendee-scoped record of "this meeting was about that issue." Everything else
 (Allocation, Assignment) is project-or-issue-level *capacity or ownership*, not a record of a
 particular day's actual work, and turning either into a specific day's hours means guessing
@@ -38,7 +38,7 @@ explicitly deferred; there is no design yet for which issue an allocation-only d
    for them.
 3. **Surfaces: both My Week and the per-issue Time tab.** `TimesheetPanel.tsx` is explicitly
    gather-only ("it GATHERS and it decides; it never edits") and stays untouched.
-4. **Architecture: one new pure module**, `lib/timesheetSuggestions.ts`, called from both
+4. **Architecture: one new pure module**, `lib/time/timesheetSuggestions.ts`, called from both
    surfaces — not duplicated per-component logic, and not bolted onto `weekGrid`/
    `issueWeekCells`, whose contract is deliberately aggregate-only.
 
@@ -47,7 +47,7 @@ explicitly deferred; there is no design yet for which issue an allocation-only d
 `meetingSuggestions(meetings, entries, person, personId, week, issueId?)` returns one candidate
 per (issue, day) where:
 
-- The person attended (`attends()`, id-first per `lib/meetings.ts`) a meeting with
+- The person attended (`attends()`, id-first per `lib/personal/meetings.ts`) a meeting with
   `scopeKind: 'issue'` on that day, in the given week.
 - No `TimeEntry` already exists for that issue on that day — an already-filled cell is never
   touched, matching `issueWeekCells`'s own "the grid never edits a day that already has hours on

@@ -7,7 +7,7 @@ availability engine." E0–E3 are complete and live.
 
 ## The debt this pays
 
-`lib/availability.ts` has carried its own IOU since E1: *"meetings (ZERO until E4 — no
+`lib/capacity/availability.ts` has carried its own IOU since E1: *"meetings (ZERO until E4 — no
 meetings exist yet; stated, not hidden)"*. E4 makes the term real:
 
     available = pattern gross − approved commitments − holidays − MEETINGS − allocations
@@ -49,7 +49,7 @@ tenantId, scrub entries in both proofs; the migration stands alone (no DML).
 
 ## The engine's fourth term
 
-- `meetingHours(meetings, person, personId, from, to)` in `lib/availability.ts`: for each
+- `meetingHours(meetings, person, personId, from, to)` in `lib/capacity/availability.ts`: for each
   live meeting the person attends, the duration falling inside the window, summed —
   hour-granular inside the day-granular engine (a 90-minute meeting subtracts 1.5h). The
   attendee join is the standard one: directory id when both sides have one, trimmed-name
@@ -77,7 +77,7 @@ tenantId, scrub entries in both proofs; the migration stands alone (no DML).
 
 ## Find-a-slot
 
-`lib/scheduling.ts`, pure: `suggestDays(args: { attendeeIds, durationHours, from, to,
+`lib/planning/scheduling.ts`, pure: `suggestDays(args: { attendeeIds, durationHours, from, to,
 meetings, commitments, holidays, profiles })` → the earliest N working days where EVERY
 attendee's free hours (pattern day − that day's meeting hours − zeroed by leave/holiday)
 clear the duration, each candidate carrying its named blockers ("Fri 4 Sep: Sam on leave").

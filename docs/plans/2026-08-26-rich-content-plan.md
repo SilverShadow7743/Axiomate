@@ -5,14 +5,14 @@ below are that design's constraints, not restated from memory.
 
 ## A correction found while grounding this plan
 
-The design doc's downstream-consumer list names `lib/outbound.ts:110`
+The design doc's downstream-consumer list names `lib/comms/outbound.ts:110`
 (`outboundNoteBody`) as reading an existing rich note's body to compose a client email —
 that's wrong, checked directly rather than carried forward. `outboundNoteBody(resolved,
 text)`'s `text` parameter is fresh plain text typed into the separate "reply to client"
 box (`app/api/mail/send/route.ts:49`, `const text = (body.text ?? '').trim()`), never a
 stored `IssueNote.body`. What actually happens: the route composes a plain string
 (`noteBody`) and constructs an `addNote` **action** directly with `body: noteBody`
-(line 155) — bypassing the UI form entirely. `lib/outbound.ts` itself needs no change;
+(line 155) — bypassing the UI form entirely. `lib/comms/outbound.ts` itself needs no change;
 `app/api/mail/send/route.ts` does, because it writes a note with a plain string in a
 field that is about to stop being one. This is folded into Step 3 below, not treated as
 a downstream reader.
@@ -79,7 +79,7 @@ Functions, all pure:
   truncation and mail-send composition.
 - `mentionedPeopleIn(doc: RichDoc): string[]` — collects every `mention` node's
   `personId`, deduplicated. Replaces `mentionsIn(body, people)`'s role in `addNote`/
-  `updateNote` for notification-minting. `lib/mentions.ts`'s existing string-based
+  `updateNote` for notification-minting. `lib/comms/mentions.ts`'s existing string-based
   `mentionsIn`/`mentionSegments` are untouched — they may still serve other plain-string
   fields elsewhere in the app; this is a new, parallel function, not a replacement of
   the old one everywhere.
@@ -171,7 +171,7 @@ migration.
 **Files:** `lib/workspace.ts` (`addNote` at 3217, `updateNote` at 3344, `updateIssue` at
 2217), `components/OverviewTab.tsx` (`save()` ~154-176), `components/NotesTab.tsx` (the
 two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
-`app/api/intake/form/route.ts` (lines 56, 91, 112), `lib/chat.ts` (362-364),
+`app/api/intake/form/route.ts` (lines 56, 91, 112), `lib/comms/chat.ts` (362-364),
 `app/api/mail/send/route.ts` (line 155), `scripts/persistence-proof.ts`,
 `scripts/attribution-proof.ts`.
 
@@ -202,7 +202,7 @@ two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
   project's own patterns (see `outboundNoteBody`'s own doc comment: "one function...
   so the two can never drift into comparing against a string the record was never
   actually written with") argue against.
-- **`lib/chat.ts:362-364`**: the assistant's draft flow wraps whatever plain
+- **`lib/comms/chat.ts:362-364`**: the assistant's draft flow wraps whatever plain
   `description` it produces the same way, at the same two lines.
 - **`app/api/mail/send/route.ts:155`**: `body: noteBody` → `body: wrapPlainText(noteBody)`.
   `noteBody` itself (`outboundNoteBody`'s output, composed at line 113) stays a plain
@@ -220,7 +220,7 @@ two guard conditions), `app/api/intake/route.ts` (lines 200, 242, 273),
 **Verify:** `npx tsc --noEmit` clean across the whole tree (this is the step where every
 error Step 2 introduced gets resolved — the count going to zero here is real signal, not
 assumed), then `npm run validate:scenarios` — full suite `0 FAIL`, and specifically
-confirm by name that `TV1`-`TV6` (fed by `lib/tree.ts`'s search string, itself fed by
+confirm by name that `TV1`-`TV6` (fed by `lib/planning/tree.ts`'s search string, itself fed by
 `description`), any existing note/mention scenarios, and `EZ5` (estimator, which reads
 `description`) still pass rather than silently stop exercising what they did before.
 
@@ -252,11 +252,11 @@ intermediate state, not a smaller safe one.
 
 ## Step 4 — Downstream read consumers
 
-**Files:** `lib/estimator.ts:242`, `lib/tree.ts:380`.
+**Files:** `lib/commercial/estimator.ts:242`, `lib/planning/tree.ts:380`.
 
-- `lib/estimator.ts`: `` `${issue.subject} ${issue.description} ${issue.module}`.toLowerCase() ``
+- `lib/commercial/estimator.ts`: `` `${issue.subject} ${issue.description} ${issue.module}`.toLowerCase() ``
   → `` `${issue.subject} ${richTextToPlainText(issue.description)} ${issue.module}`.toLowerCase() ``.
-- `lib/tree.ts`: the same swap in the search-string builder (line 380).
+- `lib/planning/tree.ts`: the same swap in the search-string builder (line 380).
 
 Small and mechanical once Step 1's extractor exists — the only reason this is its own
 step rather than folded into Step 3 is that Step 3 is already large enough to be its own

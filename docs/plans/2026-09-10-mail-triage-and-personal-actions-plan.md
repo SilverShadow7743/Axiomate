@@ -6,7 +6,7 @@ either the intake pipeline or any UI depends on them; the intake pipeline's one 
 next since nothing downstream can be exercised without it; the UI — the filter chip, the triage
 actions, and the new "My to-dos" screen — comes last. This mirrors the leave-report plan's own
 ordering principle and, more directly, an already-shipped precedent inside this very codebase:
-`PersonalEvent` (`lib/personalEvents.ts`) is a near-exact structural match for the new
+`PersonalEvent` (`lib/personal/personalEvents.ts`) is a near-exact structural match for the new
 `PersonalAction` entity — private to its owner, no exception for anyone including `ADMIN` — so
 most of this plan is "copy that pattern, renamed and re-typed," not new design.
 
@@ -43,9 +43,9 @@ type (step 1) is written here too, because the mappers need it to compile.
 rises by one and the new mapper must stamp `tenantId` — the audit checks exactly that),
 `npx tsx scripts/scenario-validation.ts` (count unchanged), `npm run build`.
 
-**1. `lib/personalActions.ts` (new) — the entity, pure.**
+**1. `lib/personal/personalActions.ts` (new) — the entity, pure.**
 
-Structural copy of `lib/personalEvents.ts` in full: the interface, a validation function, and the
+Structural copy of `lib/personal/personalEvents.ts` in full: the interface, a validation function, and the
 redaction function — same shape, same absolute-privacy header comment (adjusted for the field
 names), same reasoning for why it is a separate pure function rather than inline in `boot.ts`.
 
@@ -142,16 +142,16 @@ optional and has no paired field to be out of order with, unlike `PersonalEvent`
 **Verify:** `npx tsx scripts/scenario-validation.ts` — `PA2 PASS`, `PA3 PASS`, `TRG1 PASS`,
 scenario count +3, no regressions.
 
-**4. `lib/types.ts` / `lib/tree.ts` — the filter chip's plumbing.**
+**4. `lib/types.ts` / `lib/planning/tree.ts` — the filter chip's plumbing.**
 
 - `TreeRow`: add `needsTriage: boolean` beside `raidKind` (`lib/types.ts` ~251); default `false`
-  at row construction (`lib/tree.ts` ~319, beside `raidKind: null`).
+  at row construction (`lib/planning/tree.ts` ~319, beside `raidKind: null`).
 - Row population: `row.needsTriage = issue.needsTriage === true`, right beside
-  `row.raidKind = raidKindOf(...)` (`lib/tree.ts:147`).
+  `row.raidKind = raidKindOf(...)` (`lib/planning/tree.ts:147`).
 - `FilterState`: add `triageOnly: boolean`; `EMPTY_FILTERS.triageOnly = false` (`lib/types.ts`,
   the `raidOnly` neighborhood).
 - `matchesFilters`: `if (f.triageOnly && !row.needsTriage) return false`, right beside the
-  existing `raidOnly` line (`lib/tree.ts:442`).
+  existing `raidOnly` line (`lib/planning/tree.ts:442`).
 
 **Verify:** `npx tsc --noEmit`.
 

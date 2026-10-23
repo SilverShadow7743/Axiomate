@@ -1,9 +1,9 @@
 import type { WorkspaceState } from '../workspace'
 import { clientView } from '../clientBoundary'
 import { DEFAULT_HEALTH_SCORE, externalPartyKinds, tiersOf, type ConcernKind } from '../config'
-import { healthScore, portfolio, type HealthScore } from '../portfolio'
-import { isTerminal } from '../schedule'
-import { buildTree } from '../tree'
+import { healthScore, portfolio, type HealthScore } from '../planning/portfolio'
+import { isTerminal } from '../planning/schedule'
+import { buildTree } from '../planning/tree'
 
 /**
  * Weekly and monthly packs handed to a client — built on `clientView()`, never re-deriving what
@@ -111,7 +111,7 @@ export interface PackProgress {
 }
 
 /**
- * The client-facing health score, per engagement — see `lib/portfolio.ts`'s 10 Sep header and
+ * The client-facing health score, per engagement — see `lib/planning/portfolio.ts`'s 10 Sep header and
  * the F&O page-grammar design §5. Computed over the SAME `clientView()` subset every other
  * number in the pack is computed over, with `capacity` excluded by name: the boundary withholds
  * allocations and project membership, so that concern cannot be computed for a client, and the
@@ -196,7 +196,7 @@ export function underScopeOf(
  *
  * Only fields carried directly on `Milestone` itself are exposed — never a resolved dollar
  * value pulled from `ContractedPosition`/`milestoneValue()`, and never anything from
- * `lib/rates.ts`. A milestone's own `amount`/`percentage`/`currency` is the figure the client
+ * `lib/commercial/rates.ts`. A milestone's own `amount`/`percentage`/`currency` is the figure the client
  * already agreed to in the SOW; the firm's cost or margin against it is a different question
  * this function does not answer.
  */

@@ -13,7 +13,7 @@ batch as the raise, and only when the raise succeeded."*
 
 ## Steps
 
-**1. `lib/recurrence.ts` (new) — the cadence arithmetic, no clock, no I/O.**
+**1. `lib/planning/recurrence.ts` (new) — the cadence arithmetic, no clock, no I/O.**
 `Recurrence` interface per the design (`id, name, scopeId, cadence, type, severity, owner,
 enabled, lastRaisedOn`). `occurrenceOnOrBefore(cadence, date)` — the latest occurrence on or
 before the date, with monthly `day` clamped to the month's length (31 becomes 28/29 in
@@ -44,7 +44,7 @@ makes forgetting it a compile error.
 *Verify:* `npx tsc --noEmit`; scenario RW2 upserts a rule through the real reducer and asserts
 a scope that cannot hold an issue is refused with the message naming it.
 
-**4. The pass integration — `lib/db/schedule.ts` plus a raise helper in `lib/recurrence.ts`.
+**4. The pass integration — `lib/db/schedule.ts` plus a raise helper in `lib/planning/recurrence.ts`.
 THE STEP CARRYING THE MOST REGRESSION RISK.**
 Inside `runScheduledPass`'s Serializable transaction, after `runWatch`: for each enabled rule
 with a due occurrence, dispatch

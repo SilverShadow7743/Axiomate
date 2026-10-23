@@ -13,13 +13,13 @@ and `npm run audit:tenancy` all clean. Built exactly as designed — nothing cha
 
 ## What already exists, and is the actual foundation
 
-`lib/milestone.ts` already answers "is this billable" precisely, from the firm's own negotiated
+`lib/planning/milestone.ts` already answers "is this billable" precisely, from the firm's own negotiated
 terms rather than inferred:
 
-- **`isBillable(m: Milestone): boolean`** (`lib/milestone.ts:240-245`) — true when the milestone's
+- **`isBillable(m: Milestone): boolean`** (`lib/planning/milestone.ts:240-245`) — true when the milestone's
   own `billOn` trigger (`acceptance` | `signature` | `delivery`) has been met, false on
   `Rejected` regardless of trigger.
-- **`milestonePosition(sowId, milestones, contracted)`** (`lib/milestone.ts:173-226`) — already
+- **`milestonePosition(sowId, milestones, contracted)`** (`lib/planning/milestone.ts:173-226`) — already
   aggregates `billableValue` (sum of everything billable) and `acceptedValue` (sum of everything
   accepted) per SOW, in the SOW's own currency, distinguishing "no milestones" (a retainer) from
   "no progress" so neither reads as the other.
@@ -133,7 +133,7 @@ section listing what's been raised per SOW, reusing `milestonePosition`'s `billa
 
 Tax/VAT — no rate, no jurisdiction logic; `amount` is what's billed, full stop. No PDF generation,
 no email delivery, no external accounting-system integration (Xero, QuickBooks) — this records
-that an invoice was raised, in the same spirit `lib/mail.ts`'s outward door records that a mail
+that an invoice was raised, in the same spirit `lib/comms/mail.ts`'s outward door records that a mail
 was sent, not a replacement for the systems that actually run a firm's books. No payment
 processing. No multi-currency conversion — an invoice inherits its SOW's currency, unconverted,
 the same rule `milestonePosition` already applies.

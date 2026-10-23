@@ -11,7 +11,7 @@
 
   Deliberately kept to a trigger and one HTTP call. Every rule about what the message becomes —
   which scope it is filed under, which routing rules fire, what severity was guessed rather than
-  decided — lives in `lib/intake.ts`, where it is testable and where a consultant can read it.
+  decided — lives in `lib/comms/intake.ts`, where it is testable and where a consultant can read it.
   A connector that classified mail would be a second, invisible copy of that logic.
 
   ---------------------------------------------------------------------------

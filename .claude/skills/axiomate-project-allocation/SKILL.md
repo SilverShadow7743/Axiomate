@@ -37,8 +37,8 @@ Full spec, real field names, and the reducer arms behind each: `references/resou
    models carries the dual-field seam (see `axiomate-domain-analysis`). Never write a feature
    that assumes `personId` is always populated on `Allocation`, `Commitment`, or `TimeEntry`.
 3. If the feature computes availability or remaining capacity, hand off to
-   `axiomate-capacity-planning` — the formula already exists (`lib/availability.ts`); don't
+   `axiomate-capacity-planning` — the formula already exists (`lib/capacity/availability.ts`); don't
    re-derive it.
-4. Timesheet features specifically: the freeze mechanism is LIVE (`lib/timeWindow.ts`, wired
-   into `addTime`; `lib/timesheet.ts`'s `isFrozen`/`frozenMessage`) — a submitted week already
+4. Timesheet features specifically: the freeze mechanism is LIVE (`lib/time/timeWindow.ts`, wired
+   into `addTime`; `lib/time/timesheet.ts`'s `isFrozen`/`frozenMessage`) — a submitted week already
    refuses further entries. Don't assume this needs building; check first.

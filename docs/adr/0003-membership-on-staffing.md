@@ -28,7 +28,7 @@ The design is open on three axes:
 | Axis | Options in play |
 | --- | --- |
 | Mechanism | The reducer arms; a rule in `lib/automation.ts`; the scheduled pass |
-| Provenance | How an automatic row is distinguished from a deliberate one without storing a derived value. The request's "Allocation's stated/derived pattern" names a field `Allocation` does not have; the vocabulary is `CapacityProfile.source` `'stated' \| 'default'` (`lib/capacity.ts:65`) and `Activity.origin` `'generated' \| 'user'` (`lib/workspace.ts:337`) |
+| Provenance | How an automatic row is distinguished from a deliberate one without storing a derived value. The request's "Allocation's stated/derived pattern" names a field `Allocation` does not have; the vocabulary is `CapacityProfile.source` `'stated' \| 'default'` (`lib/capacity/capacity.ts:65`) and `Activity.origin` `'generated' \| 'user'` (`lib/workspace.ts:337`) |
 | Log storage | `ScheduleAudit` is prose from/to, loaded newest-`auditWindow()` (5000) rows tenant-wide at boot (`lib/db/repo.ts:101-103, 213`), and absent for the backfill rows, so it cannot be the sole source |
 
 Three facts verified on 2026-09-05 constrain the shape:

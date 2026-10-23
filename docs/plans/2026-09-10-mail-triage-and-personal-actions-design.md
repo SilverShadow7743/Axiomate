@@ -9,9 +9,9 @@ work, just note it for myself." Not built.
 ## What was ruled out first, and why it matters
 
 **Not a rendering bug.** The original complaint sounded like the I16 HTML-body iframe
-(`components/InboxPanel.tsx`, `app/api/mail/message/[id]/route.ts`) was broken. It isn't — the
+(`components/comms/InboxPanel.tsx`, `app/api/mail/message/[id]/route.ts`) was broken. It isn't — the
 CSS, the fetch, the sandboxed iframe are all intact. The real complaint was about a different
-screen entirely: the Mail log (`components/MailLog.tsx`), which lists every intake message but
+screen entirely: the Mail log (`components/comms/MailLog.tsx`), which lists every intake message but
 offers no way to act on one.
 
 **Not missing entirely.** One piece of what was asked for already exists: a person's own M365

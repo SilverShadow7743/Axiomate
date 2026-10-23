@@ -33,9 +33,11 @@
 //    a single table where it does not hold is a table two tenants can collide in.
 //
 //    What this does NOT do is enforce isolation. Nothing here stops a query that forgets its
-//    `where`; the compiler does that (see `TenantId` in lib/tenant.ts), and row-level
-//    security would do it properly — but RLS needs a database role per request, which needs
-//    identity, which this application does not yet have. Stated rather than implied.
+//    `where`; the compiler does that (see `TenantId` in lib/tenant.ts). Row-level security
+//    would do it properly, and identity to build it on now exists (Entra, via
+//    lib/principal.ts) — but it is a deliberate, accepted risk, not merely deferred: a
+//    20 Sep 2026 review confirmed single-tenant-per-deployment as this product's permanent
+//    model, so the scenario RLS protects against does not apply here. See lib/tenant.ts.
 //
 // 3. DERIVED VALUES ARE NOT STORED AS FACT.
 //    `duration`, `scheduleHealth` and `projectedCompletionDate` used to have columns here.
@@ -145,6 +147,7 @@ model Tenant {
   documentReviews DocumentReview[]
   milestones    Milestone[]
   scopeItems    ScopeItem[]
+  catalogueEntries  CatalogueEntry[]
   discussionThreads  DiscussionThread[]
   discussionMessages DiscussionMessage[]
   discussionFollows  DiscussionFollow[]
@@ -206,6 +209,11 @@ model HierarchyNode {
   /// tiers (see `isExternalPartyKind` in lib/config.ts) — usually 'client', never checked
   /// against that literal string. Empty on every other tier.
   applications Application[] @relation("ApplicationClient")
+  /// Provenance only — the D365 Business Process Catalogue row this node (level process-area
+  /// only, enforced at the write path) was imported from. Never consulted by canParent/
+  /// parentProblem. See ADR 0006.
+  catalogueEntryId String?
+  catalogueEntry   CatalogueEntry? @relation(fields: [tenantId, catalogueEntryId], references: [tenantId, id], onDelete: Restrict)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -213,6 +221,7 @@ model HierarchyNode {
   @@index([tenantId, parentId])
   @@index([tenantId, deletedAt])
   @@index([tenantId, sowId])
+  @@index([tenantId, catalogueEntryId])
 }
 
 model Issue {
@@ -265,6 +274,15 @@ model Issue {
   /// docs/plans/2026-09-07-application-suite-design.md.
   applicationId String?
   application   Application? @relation(fields: [tenantId, applicationId], references: [tenantId, id])
+
+  /// Which milestone this issue's effort counts toward, when the SOW it is attributed to (via
+  /// its project's `sowId`) has more than one. No FK -- same convention as
+  /// `InvoiceLineItem.milestoneId`: a milestone later renegotiated or withdrawn must not orphan
+  /// or cascade-delete work with real hours logged against it. Null means "not attributed to a
+  /// specific milestone" -- the default for every issue today and for any SOW with only one
+  /// milestone, where the distinction carries no information. See
+  /// docs/plans/2026-09-20-milestone-issue-attribution-design.md.
+  milestoneId String?
 
   severity    Severity
   /// Free text rather than an enum: the seven statuses come from the source log, and the
@@ -323,7 +341,7 @@ model Issue {
   /// responsibility type id. The three seeded types keep their own columns above.
   assignments Json @default("{}")
 
-  /// {skillId, level}[] — what this piece of work needs, read by candidatesFor (lib/skills.ts)
+  /// {skillId, level}[] — what this piece of work needs, read by candidatesFor (lib/capacity/skills.ts)
   /// to answer "who could do this." Empty is the honest default: the imported log names no
   /// requirement, and typing one is a person's judgement, never inferred from module or type.
   requiredSkills Json @default("[]")
@@ -730,7 +748,7 @@ model PersonalEvent {
 }
 
 /// A person's own to-do — converted from mail that turned out not to be project work, or typed
-/// in. Private to its owner unconditionally, exactly as PersonalEvent: see lib/personalActions.ts
+/// in. Private to its owner unconditionally, exactly as PersonalEvent: see lib/personal/personalActions.ts
 /// and docs/plans/2026-09-10-mail-triage-and-personal-actions-design.md. dueDate is a plain
 /// 'YYYY-MM-DD' string like every other date-only field in this schema.
 model PersonalAction {
@@ -770,7 +788,7 @@ model PersonalGraphToken {
 }
 
 /// Every message intake has ever seen, accepted or refused — the reader classify()'s own
-/// discard never had. See lib/intake.ts's InboundMail. issueId and refusalReason are mutually
+/// discard never had. See lib/comms/intake.ts's InboundMail. issueId and refusalReason are mutually
 /// exclusive; internal.view-gated only, not narrowed further.
 model InboundMail {
   tenantId String
@@ -823,7 +841,7 @@ model Commitment {
 
   /// Leave only (E1): Requested | Approved | Returned. NULL MEANS APPROVED — rows written
   /// before approval existed are history recorded under the old rules, and
-  /// lib/availability.ts's commitmentCounts is the one place that rule is interpreted.
+  /// lib/capacity/availability.ts's commitmentCounts is the one place that rule is interpreted.
   /// Always null on non-Leave kinds.
   status String?
   /// Leave only (E1): why, for the approver. Withheld server-side from every reader except
@@ -986,7 +1004,7 @@ model DiscussionThread {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   id        String @default(cuid())
-  /// 'issue' | 'project' — the closed vocabulary lives in lib/discussion.ts.
+  /// 'issue' | 'project' — the closed vocabulary lives in lib/comms/discussion.ts.
   scopeKind String
   /// The issue id or the project node id. A reference, not a foreign key — the same posture
   /// Notification.aboutId took in 20260830000002.
@@ -1306,6 +1324,13 @@ model Timesheet {
   /// its own, "no" is not.
   reason String? @db.Text
 
+  /// A Stamped<{hoursPerDay, daysPerWeek}> (lib/versioning.ts), frozen at approval so a later
+  /// correction to the pattern cannot retroactively move an already-approved week's figures.
+  /// Null on a rejected sheet, and null on an approval for a person with no pattern recorded —
+  /// both real states, not gaps. See
+  /// docs/plans/2026-09-20-timesheet-approval-pattern-stamp-design.md.
+  workingPatternStamp Json?
+
   @@id([tenantId, id])
   @@unique([tenantId, person, weekStarting])
   @@index([tenantId, status])
@@ -1380,7 +1405,7 @@ model ChangeRequest {
 /// make every reader of any dated fact a reader of everybody's pay. Rates are a separate
 /// collection with a separate permission, redacted in `boot()` for anyone without `rate.view`.
 ///
-/// The arithmetic is still shared — `lib/rates.ts` delegates every period question to
+/// The arithmetic is still shared — `lib/commercial/rates.ts` delegates every period question to
 /// `lib/versioning.ts`, so the exclusive `validTo` and the overlap refusal are the proven ones
 /// rather than a second implementation.
 ///
@@ -1428,7 +1453,7 @@ model PersonRate {
 /// withdrawn, and it grows with the directory rather than with the firm's taxonomy.
 ///
 /// `level` and `source` are stored non-null and always populated. The nullable version of those
-/// fields exists only on the copy that crosses the boundary, where `lib/skills.ts` strips them
+/// fields exists only on the copy that crosses the boundary, where `lib/capacity/skills.ts` strips them
 /// for a reader without `skill.view` — see the note there. Nothing in this table is ever
 /// withheld from the reducer, which needs every row to refuse a duplicate.
 ///
@@ -1608,9 +1633,57 @@ model ScopeItem {
   recordedAt DateTime
   deletedAt  DateTime?
 
+  /// Provenance only — the D365 Business Process Catalogue row this scope item (level process |
+  /// scenario | configuration-deliverable only, enforced at the write path) was imported from.
+  /// Never consulted by checkScopeItem. See ADR 0006.
+  catalogueEntryId String?
+  catalogueEntry   CatalogueEntry? @relation(fields: [tenantId, catalogueEntryId], references: [tenantId, id], onDelete: Restrict)
+
   @@id([tenantId, id])
   @@index([tenantId, sowId, sequence])
   @@index([tenantId, parentId])
+  @@index([tenantId, catalogueEntryId])
+}
+
+/// A row from the Microsoft D365 Business Process Catalogue, imported by
+/// `scripts/import-d365-catalogue.ts` — see ADR 0006 / ART-20260914-003. Reference data only:
+/// never a tier of the tree, never consulted by `canParent`/`checkScopeItem`/`parentProblem`.
+/// `HierarchyNode.catalogueEntryId` and `ScopeItem.catalogueEntryId` reference this table for
+/// provenance; nothing here is ever written by the reducer.
+///
+/// Keyed on the catalogue's own hierarchical id alone (e.g. `99.10.010.100`), following this
+/// schema's universal `@@id([tenantId, id])` pattern — not on (id, workbookVersion), which would
+/// mint a new row per quarterly release and orphan every existing reference (ADR 0006 point 2).
+/// `workbookVersion` is an ordinary attribute, updated in place on re-import (last-write-wins).
+/// No `deletedAt`: the app never deletes a `CatalogueEntry`.
+model CatalogueEntry {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// The catalogue's own hierarchical id, verbatim from the workbook.
+  id    String
+  /// process-area | process | scenario | configuration-deliverable.
+  level String
+  name  String
+
+  /// live | deprecated | deleted.
+  status String
+
+  /// Present on a Deprecated row that names its replacement — recorded verbatim from the
+  /// workbook, never used to re-point an existing HierarchyNode/ScopeItem reference (ADR 0006 /
+  /// BR3).
+  alternateId String?
+  /// The workbook version/release this row was last confirmed against. Updated in place on
+  /// re-import, not part of the key.
+  workbookVersion String?
+
+  hierarchyNodes HierarchyNode[]
+  scopeItems     ScopeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, id])
 }
 
 /// What was promised against a statement of work, when it lands, and what it is worth.
@@ -1619,7 +1692,7 @@ model ScopeItem {
 /// upfront, 50% credited vs implementation" alongside "fixed fee — 4 milestones (25/35/25/15)",
 /// and the first bills before anything is delivered. One lane cannot hold that, and collapsing
 /// the two also destroys the question the product was built to answer: delivered but not
-/// accepted. See `lib/milestone.ts`.
+/// accepted. See `lib/planning/milestone.ts`.
 ///
 /// A statement of work legitimately has NO milestones — six of this firm's services are monthly
 /// retainers — so the absence of rows here is a fact about the contract, not a gap in the data.
@@ -1664,7 +1737,7 @@ model Milestone {
 
   /// What it was worth when it was accepted.
   ///
-  /// A derived value deliberately stored, and the exception is argued in `lib/milestone.ts`:
+  /// A derived value deliberately stored, and the exception is argued in `lib/planning/milestone.ts`:
   /// a later approved change request must not retroactively move what a client already signed
   /// off. Null until accepted, and null forever on one that never is.
   acceptedValue Decimal? @db.Decimal(14, 2)
