@@ -122,7 +122,7 @@ The script:
 
 ## Display
 
-- **People list** (`components/PeopleDirectory.tsx`): a new `ID` column, monospace like the
+- **People list** (`components/capacity/PeopleDirectory.tsx`): a new `ID` column, monospace like the
   existing `Joined` column, showing `p.employeeId` or an em dash for anyone not yet assigned
   (client contacts, or an internal person somehow still mid-backfill).
 - **Profile Overview** (`components/ProfilePanel.tsx`): a new read-only row using the existing
@@ -146,7 +146,7 @@ The script:
 - `lib/config.ts` — `Person.employeeId?: string`, `nextEmployeeId`.
 - `lib/access.ts` — `rolesGrant`.
 - `lib/workspace.ts` — `case 'upsertPerson':` gains the lazy-assignment lines.
-- `components/PeopleDirectory.tsx` — `ID` column.
+- `components/capacity/PeopleDirectory.tsx` — `ID` column.
 - `components/ProfilePanel.tsx` — Overview `Fact` row.
 - `scripts/` — one-off backfill script (not part of the app bundle; run manually once).
 - `scripts/scenario-validation.ts` — a scenario covering: new internal hire gets an id; new

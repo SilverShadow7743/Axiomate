@@ -104,7 +104,7 @@ byte-diff discipline every prior commit this session has held to.
 **Verified by:** `npx tsc --noEmit` and `npx eslint components/AppSidebar.tsx
 components/IssueWorkspace.tsx` clean.
 
-## 4. `components/ResourcingPanel.tsx` — the step no scenario can check
+## 4. `components/capacity/ResourcingPanel.tsx` — the step no scenario can check
 
 New component: summary tiles, quick filter, sortable table over `resourcingRows(state, from, to)`
 (`from`/`to` local state, defaulting to `today`→`addDays(today, 90)` — the exact default
@@ -117,7 +117,7 @@ counts of "the same thing" computed two different ways is exactly the class of d
 codebase's own design docs warn about elsewhere (the type-scale/spacing drift in
 `axiomate-design-system.md`).
 
-**Verified by:** `npx tsc --noEmit` and `npx eslint components/ResourcingPanel.tsx` clean;
+**Verified by:** `npx tsc --noEmit` and `npx eslint components/capacity/ResourcingPanel.tsx` clean;
 `npm run validate:scenarios` re-run to confirm still byte-identical (this step adds no new
 pure logic); a manual pass — the tiles' four counts sum to the directory's active-person
 count minus nobody (every person lands in exactly one of staffed/under/over/bench), filtering

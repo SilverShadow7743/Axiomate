@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useOverlay } from './useOverlay'
-import { useQuickFilterFocus } from './useQuickFilterFocus'
+import { useOverlay } from '../useOverlay'
+import { useQuickFilterFocus } from '../useQuickFilterFocus'
 import { can } from '@/lib/access'
 import { formatIso } from '@/lib/dates'
 import { liveRoles } from '@/lib/config'

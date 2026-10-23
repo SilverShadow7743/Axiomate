@@ -73,7 +73,7 @@
       "scripts/backfill-project-members.ts",
       "scripts/integrity-audit.ts",
       "scripts/scenario-validation.ts",
-      "components/ProjectMembersPanel.tsx",
+      "components/capacity/ProjectMembersPanel.tsx",
       "components/DetailPanel.tsx",
       "components/IssueWorkspace.tsx",
       "docs/adr/0003-membership-on-staffing.md"

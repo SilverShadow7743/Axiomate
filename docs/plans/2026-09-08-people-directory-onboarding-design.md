@@ -22,7 +22,7 @@ identifying the user major details."*
   exactly what changed (dropped from the manager picker) rather than the three pickers an earlier
   draft claimed — Owner, Allocate-to-project and Next-action assignment are not wired to `status`
   in this build; see §2.
-- `components/PeopleDirectory.tsx` (new) — the missing front door: a filterable, broadly-readable
+- `components/capacity/PeopleDirectory.tsx` (new) — the missing front door: a filterable, broadly-readable
   table over `state.model.people` (Active first, then alphabetical), each name opening the
   existing `ProfilePanel`. Reads no new data and applies no new redaction.
 - `lib/viewChoice.ts`, `components/AppSidebar.tsx`, `components/IssueWorkspace.tsx` — wired in as

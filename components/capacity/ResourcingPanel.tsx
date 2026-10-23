@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { useOverlay } from './useOverlay'
-import { useQuickFilterFocus } from './useQuickFilterFocus'
+import { useOverlay } from '../useOverlay'
+import { useQuickFilterFocus } from '../useQuickFilterFocus'
 import { addDays } from '@/lib/dates'
 import { capacityFor, profilesAt, actualHoursByPerson } from '@/lib/capacity/capacity'
 import type { WorkspaceState } from '@/lib/workspace'

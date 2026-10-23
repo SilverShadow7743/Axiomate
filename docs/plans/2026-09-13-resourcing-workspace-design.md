@@ -7,7 +7,7 @@ opening one project's Capacity tab, and nothing shows who is free across the pra
 
 ## What already does the work
 
-`components/CapacityPanel.tsx` already computes exactly the number this page needs, and
+`components/capacity/CapacityPanel.tsx` already computes exactly the number this page needs, and
 already computes it firm-wide by accident of its own inputs: its `positions` (`:170-183`)
 calls `capacityFor(person, profile, Object.values(state.commitments), Object.values(state.allocations), from, to)`
 — the **unfiltered** `state.allocations`, every project, not just the one the panel is open
@@ -74,7 +74,7 @@ the window, `bench` when that list is empty.
   `if (view === 'resourcing' && !can(state.model, actor, 'capacity.allocate').allowed)
   setView('mywork')` — nav hiding stops choosing it, this stops a stale/forced choice from
   rendering it, the exact reasoning the existing comment there already gives for `people`.
-- New component `components/ResourcingPanel.tsx`, rendered in the same view-ternary chain as
+- New component `components/capacity/ResourcingPanel.tsx`, rendered in the same view-ternary chain as
   `portfolio`/`applications`, `docked` the same way.
 
 ## Page structure (per the wireframe, now precise)
