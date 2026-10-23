@@ -81,7 +81,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "lib/tree.ts visibleRows",
+      "reference": "lib/planning/tree.ts visibleRows",
       "clientImpact": ""
     },
     {
@@ -419,7 +419,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "components/ChatPanel.tsx",
+      "reference": "components/comms/ChatPanel.tsx",
       "clientImpact": ""
     },
     {
@@ -1017,7 +1017,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "lib/tree.ts buildTree, lib/types.ts ScheduleRow.type",
+      "reference": "lib/planning/tree.ts buildTree, lib/types.ts ScheduleRow.type",
       "clientImpact": ""
     },
     {
@@ -1303,7 +1303,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "lib/timeline.ts buildScale, components/IssueWorkspace.tsx ganttWidth",
+      "reference": "lib/planning/timeline.ts buildScale, components/IssueWorkspace.tsx ganttWidth",
       "clientImpact": ""
     },
     {
@@ -1355,7 +1355,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "lib/types.ts FilterState.showCompleted, lib/tree.ts matchesFilters",
+      "reference": "lib/types.ts FilterState.showCompleted, lib/planning/tree.ts matchesFilters",
       "clientImpact": ""
     },
     {
@@ -1615,7 +1615,7 @@
       "evidenceDate": "",
       "verification": "Verified in build",
       "source": "Axiomate build log",
-      "reference": "lib/sla.ts, components/SlaPlanPanel.tsx",
+      "reference": "lib/planning/sla.ts, components/planning/SlaPlanPanel.tsx",
       "clientImpact": ""
     },
     {
@@ -1694,7 +1694,7 @@
       "clientImpact": "",
       "subject": "Nothing recorded how big a piece of work was, or how long it would take",
       "description": "A record carried dates and a severity but no estimate, so the two questions every delivery conversation actually turns on — how much work is this, and when does it land — had no home except somebody’s memory. The Estimation tab answers both, and deliberately keeps them apart. Effort comes from five complexity parameters scored 1–5, which map through a centrally configured T-shirt calibration to story points and hours; the calibration lives in configuration because two firms running an identical complexity model will disagree about what an L costs, and the screen is forbidden from hardcoding it. Timeline is effort divided by capacity — hours per day, people, allocation — with the longest dependency chain as a floor beneath it, because steps that must follow one another take as long as they take no matter how many people are added. An earlier version of the arithmetic let four resources compress a strictly sequential week into 1.75 days; `npm run audit:estimation` now asserts that 1, 2, 4 and 8 resources all finish on the same day, and that independent work still divides. The tab states what it does not know rather than implying it does: capacity, waiting time and holidays are typed rather than derived, and estimated-versus-actual effort is absent because nothing in the product records hours.",
-      "reference": "lib/estimation.ts, components/EstimationTab.tsx, scripts/estimation-proof.ts"
+      "reference": "lib/commercial/estimation.ts, components/commercial/EstimationTab.tsx, scripts/estimation-proof.ts"
     },
     {
       "id": "AXM-066",
@@ -1798,7 +1798,7 @@
       "clientImpact": "",
       "subject": "An issue could move from any status to any other in one step",
       "description": "Open to Closed - confirmed, with no investigation, no client involvement, no evidence and no comment, was one click in the grid and the workspace accepted it silently. The product looked as though it had a lifecycle because it had one in two other senses — a plan of activities and a pipeline of agents — and neither governs the status field, so nothing did. The first validation run recorded this as workflow definitions that no code path consults; that was wrong in an interesting way, because those definitions are agent pipelines and were never a state machine. There was no transition model at all. There is now: a graph over the fixed status vocabulary, held in the operating model rather than in code, because the vocabulary is fixed (progress is derived from it) while the route through it is a delivery process that differs between firms. The rule worth arguing about is that Closed - confirmed is reachable only from Awaiting client confirmation: it is the only status whose name asserts something about the client, and reaching it directly means a consultant confirmed on the client’s behalf. Two requirements ride on the same object — a confirmed closure needs evidence on the record, and the two \"we are not doing this\" outcomes need a reason, which lands on the audit entry for the status field alone rather than on every field in the same save. Enforcement is itself configuration and defaults to on, because an unenforced default would reproduce the exact defect: configuration that describes a process and changes nothing. The graph governs changes, not history, so 600 imported records sitting in combinations it would never produce are not made read-only by a rule written afterwards. Every control that offers a status now offers only the reachable ones and says what is missing, because offering a value the reducer will refuse is worse than not offering it.",
-      "reference": "lib/statusPolicy.ts, lib/workspace.ts updateIssue, ConfigWorkspace Transitions"
+      "reference": "lib/planning/statusPolicy.ts, lib/workspace.ts updateIssue, ConfigWorkspace Transitions"
     },
     {
       "id": "AXM-070",
@@ -1850,7 +1850,7 @@
       "clientImpact": "",
       "subject": "Nothing recorded hours, so five different figures could not be computed at all",
       "description": "Actual effort, effort variance, cost, utilisation and how much of a fixed-price engagement had been consumed are all functions of one record that did not exist. The Estimation tab said so in as many words rather than showing a zero, which was the right answer while it held. Time entries exist now, and the entry is the record rather than the timesheet: a timesheet is a week of entries presented for approval, and treating the container as the record is exactly how an entry edited after approval silently changes an approved total. Hours are Decimal(5,2) in the schema, not Float — quarter hours summed across a month feed an invoice, and binary floating point cannot hold 0.25 three times over accurately enough to argue about with a client. Four things are refused: a day that has not happened, more than twelve hours in one entry, precision finer than a quarter hour, and logging in somebody else’s name without the grant for it. That last one is the same rule notes follow — hours are a person’s account of their own day — and a project manager who holds the grant may log on their behalf, with the entry keeping their name and the trail recording who typed it. Recording time also moves the issue’s activity date, because somebody spending four hours on an issue is activity on it. What this does not reach is money: cost needs a rate, and there is no rate anywhere in this application — not on a person, not on a role, not on an engagement. The tab says that too, rather than inventing a default hourly figure.",
-      "reference": "lib/time.ts, components/TimeTab.tsx, prisma TimeEntry, EstimationTab effort variance"
+      "reference": "lib/time/time.ts, components/time/TimeTab.tsx, prisma TimeEntry, EstimationTab effort variance"
     },
     {
       "id": "AXM-072",
@@ -1902,7 +1902,7 @@
       "clientImpact": "",
       "subject": "Routing rules were records with no engine, so every configured rule was inert",
       "description": "Nothing evaluated them and nothing could fail, which is not the same as working — and the configuration screen implied otherwise. There is now an engine, and the decision that makes it safe to switch on is that a rule acts by dispatching ordinary actions. It does not write to state: it produces the same Action values a person’s click produces, and those go through the same reducer, the same permission check, the same transition graph and the same audit trail. So a rule cannot do anything a person could not — it cannot close work with no evidence or move a record along a route the graph forbids, because the same code refuses it — everything it does is attributed with the rule that caused it, and a failure is partial and visible rather than silent and total, because each action is whole on its own. Events are derived by comparing the state before an action with the state after, rather than emitted by each reducer arm: an arm that forgets to emit is invisible, because the action still works. A comparison cannot forget, and an event is true by construction. Notifications are records with a delivery outcome rather than calls to a mail server, because the interesting question is not whether a message was composed but whether it arrived and whether anybody knows it did not. In-app is delivered because the inbox is the delivery; every other channel is recorded as pending, and the count of undelivered messages is shown to everybody rather than hidden behind a setting. What is deliberately absent is a schedule: every rule reacts to something that happened, so an issue going at-risk — which is time passing against a date nobody moved — has no event to subscribe to. That is now the honest reason the SLA watch stays declared, and it is a clock that is missing rather than a channel.",
-      "reference": "lib/events.ts, lib/automation.ts, lib/notifications.ts, applyWithRules, components/Inbox.tsx"
+      "reference": "lib/events.ts, lib/automation.ts, lib/comms/notifications.ts, applyWithRules, components/comms/Inbox.tsx"
     },
     {
       "id": "AXM-074",
@@ -1928,7 +1928,7 @@
       "clientImpact": "",
       "subject": "Scope leakage was undetectable by construction, because nothing was contracted",
       "description": "The statement of work was a text field on the engagement — a string naming a document nothing could be computed against — so there was no boundary for a request to be outside of, and the product could not do the thing a delivery firm most needs it for. A SOW is now a record under an engagement carrying a baseline: agreed effort and agreed value, both, because they answer different questions and move independently. A fixed-price piece of work can be on budget and badly over on effort, which is the case a firm needs to see before pricing the next one the same way. Against that baseline two figures are real rather than notional, because both of their sources now exist: planned consumption from the estimates on the work, and actual consumption from the recorded hours. The difference is scope position, and it is arithmetic. Attribution is by project rather than per record, following the domain model — a SOW sits between the engagement and the project, and work inherits it by where it lives. Per-record attribution would let two issues in one project belong to different contracts, which does not happen, and would make consumption a question with no reliable answer. Three refusals fell out of it: a draft SOW cannot have work delivered under it, a SOW cannot be archived while projects still point at it, and a project cannot be attributed to a SOW from another engagement. What the screen deliberately does not do is read a scope statement and pronounce on whether a request is inside it. That is a commercial judgement, and a machine answer would be wrong occasionally and confidently. It shows the consequence instead — agreed, planned, spent, left — and names the work its forecast could not see, because a forecast that treats unestimated records as zero is why a project looks fine until the week it does not.",
-      "reference": "lib/sow.ts, components/CommercialPanel.tsx, prisma Sow, HierarchyNode.sowId"
+      "reference": "lib/commercial/sow.ts, components/commercial/CommercialPanel.tsx, prisma Sow, HierarchyNode.sowId"
     },
     {
       "id": "AXM-075",
@@ -1954,7 +1954,7 @@
       "clientImpact": "",
       "subject": "A plan could not be checked against the people who had to deliver it",
       "description": "Nothing knew whether forty hours of estimated work had forty hours of anybody behind it. The estimator could describe effort and the schedule could describe dates, and no record connected either to a person’s week. Three entities now do, and the reason there are three is that the subtraction is the point: gross capacity is hours per day multiplied by working days, which is a number nobody can deliver against. A resource profile says what a person’s week looks like and lives on the operating model beside the directory, because it is a fact about employment rather than about delivery. A commitment is leave, a public holiday or internal work — the time a consulting firm actually runs on and never counts. An allocation is that person, committed to a project, for a period, at a share of their time. Available capacity is gross minus commitments; remaining is available minus allocations; and an overallocation is the case worth refusing. It is refused with the arithmetic rather than a shrug, and it can be overridden — short-term overallocation is a decision a delivery manager makes with their eyes open, and the difference between that and an accident is whether anybody said so, which is why the override is recorded as a reason on the audit entry. The override is offered only after a refusal, because a checkbox shown before anybody has been told there is a problem gets ticked as a matter of course. A four-day week is honoured, and the panel says so rather than assuming everybody is full-time. The plan check puts two numbers side by side that come from opposite ends of the product and were never otherwise compared: what the work is estimated to need, and what has been set aside for it. A firm finds that gap in week six; it was visible in week one. What the model deliberately does not do is schedule anybody — an optimiser reassigning work on capacity grounds would be making delivery decisions from a model that cannot see skill, client relationship, or who was on the call last week.",
-      "reference": "lib/capacity.ts, components/CapacityPanel.tsx, prisma Allocation and Commitment"
+      "reference": "lib/capacity/capacity.ts, components/capacity/CapacityPanel.tsx, prisma Allocation and Commitment"
     },
     {
       "id": "AXM-076",
@@ -1980,7 +1980,7 @@
       "clientImpact": "",
       "subject": "Mailboxes and routing rules were configuration nothing read",
       "description": "A firm could describe its intake in detail — which address, which scope, which rule routes what to whom — and every word of it was inert. That is worse than an empty screen, because the screen implied a pipeline existed. The pipeline exists now, minus its first mile: a message goes in, the configured mailboxes and rules are applied in their configured order, and a work item comes out under the right scope, created through the same reducer as a person’s, so the transition graph, permissions, automation and audit all apply to it unchanged. Three decisions worth keeping. The classifier reports its guesses as guesses: severity inferred from words like \"blocking\" and \"production\" comes back marked guessed rather than stated, and the provenance note on the record says which fields to distrust — an intake that silently decides a client’s problem is High severity is one wrong guess away from an SLA nobody agreed to. A machine may file work and may not decide it is being worked on, so records arrive Open whatever the wording suggested. And the endpoint refuses everything unless a shared secret is configured, because an open endpoint that creates records from the internet is exactly the thing that ships with \"we will add auth later\". What it deliberately is not is a mail server: nothing connects to a mailbox, holds credentials or polls anything. Something has to receive the mail and POST it, and that last mile is a connector — a forwarding rule, a Graph subscription, a webhook from whatever already handles the firm’s mail — kept outside the application because a half-built poller with no credentials would be the same inert configuration this replaces.",
-      "reference": "lib/intake.ts, app/api/intake/route.ts"
+      "reference": "lib/comms/intake.ts, app/api/intake/route.ts"
     },
     {
       "id": "AXM-077",
@@ -2006,7 +2006,7 @@
       "clientImpact": "",
       "subject": "A voice agent, built as a modality rather than a second assistant",
       "description": "Speech becomes text, the text goes to the same chat route, and the reply comes back as the same proposal cards a person accepts or rejects. There is deliberately no path from a spoken sentence to a changed record that skips somebody reading what is about to happen — recognition is wrong often enough that it must not exist. \"Close OAPIL-14\" and \"close OAPIL-40\" differ by one syllable, and a delivery tool that acted on the difference would be closing the wrong client’s work on a bad line. The transcript is therefore editable before it is sent, which turns a recognition error from a wrong action into a typo; the rejected alternative, sending on silence, is faster and produces exactly the failure this cannot afford. Push-to-talk rather than always-listening, because a microphone that stays open in a room where consultants discuss client matters is a liability and a wake word would make it a permanent one. Reading replies aloud is off until asked for, and remembered for the session rather than stored, because it is a fact about the room somebody is sitting in today. One honesty the interface carries rather than burying: this application never stores or uploads audio, and on Chrome and Edge the browser itself sends it to its own speech service, which the application can neither see nor prevent. Firefox does not implement the API at all, and says so instead of failing silently. Proposals are announced aloud as a count rather than read field by field — a spoken list of changed fields is unlistenable, and the person has to look at the cards to accept them anyway.",
-      "reference": "lib/voice.ts, components/VoiceInput.tsx, ChatPanel"
+      "reference": "lib/comms/voice.ts, components/comms/VoiceInput.tsx, ChatPanel"
     },
     {
       "id": "AXM-078",
